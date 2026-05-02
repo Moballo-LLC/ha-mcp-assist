@@ -6,6 +6,7 @@ import base64
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 from aiohttp import ClientSession
 import yarl
@@ -1460,6 +1461,78 @@ async def test_analyze_history_counts_calendar_yesterday_transitions(
     text = result["content"][0]["text"]
     assert "Recorded opened events during yesterday: 35" in text
     assert "Counted using recorder state: on" in text
+
+
+@pytest.mark.asyncio
+async def test_get_entity_history_timeline_keeps_newest_states_first(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Timeline history should keep the recorder's newest-first ordering."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set(
+        "binary_sensor.front_door",
+        "off",
+        {"friendly_name": "Front Door"},
+    )
+    await hass.async_block_till_done()
+
+    newest = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+    middle = newest - timedelta(minutes=15)
+    oldest = newest - timedelta(minutes=30)
+    history_rows = [
+        SimpleNamespace(state="open", last_changed=newest, last_updated=newest),
+        SimpleNamespace(state="closed", last_changed=middle, last_updated=middle),
+        SimpleNamespace(state="jammed", last_changed=oldest, last_updated=oldest),
+    ]
+
+    server._fetch_entity_history_states = AsyncMock(return_value=history_rows)
+    marker_by_time = {
+        newest: "newest",
+        middle: "middle",
+        oldest: "oldest",
+    }
+    server._format_relative_absolute_time = lambda when: marker_by_time[when]
+
+    result = await server.tool_get_entity_history(
+        {
+            "entity_id": "binary_sensor.front_door",
+            "hours": 24,
+            "limit": 3,
+        }
+    )
+
+    text = result["content"][0]["text"]
+    timeline_lines = [line for line in text.splitlines() if line.startswith("• ")]
+    assert timeline_lines == [
+        "• newest → open",
+        "• middle → closed",
+        "• oldest → jammed",
+    ]
+    server._fetch_entity_history_states.assert_awaited_once()
+    fetch_kwargs = server._fetch_entity_history_states.await_args.kwargs
+    assert fetch_kwargs["descending"] is True
+    assert fetch_kwargs["limit"] == 3
+
+
+def test_format_relative_absolute_time_uses_local_timezone(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Relative/absolute time formatting should render recorder timestamps in local time."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    original_tz = dt_util.DEFAULT_TIME_ZONE
+    frozen_now = datetime(2026, 5, 1, 2, 0, tzinfo=timezone.utc)
+    historical_when = datetime(2026, 5, 1, 1, 15, tzinfo=timezone.utc)
+
+    try:
+        dt_util.set_default_time_zone(ZoneInfo("America/Los_Angeles"))
+        with patch.object(mcp_server_module.dt_util, "utcnow", return_value=frozen_now):
+            formatted = server._format_relative_absolute_time(historical_when)
+    finally:
+        dt_util.set_default_time_zone(original_tz)
+
+    assert formatted == "45 minutes ago at 6:15 PM PDT today"
 
 
 @pytest.mark.asyncio
