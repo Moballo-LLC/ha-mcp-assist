@@ -1,3 +1,4 @@
+# CI pins the current Home Assistant test harness; these are not runtime support bounds.
 pytest-homeassistant-custom-component==0.13.340
 ruff>=0.11,<1.0
 voluptuous-openapi==0.3.0

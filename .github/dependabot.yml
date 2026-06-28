@@ -35,10 +35,6 @@ updates:
       day: "saturday"
       time: "03:45"
       timezone: "America/Los_Angeles"
-    cooldown:
-      semver-major-days: 30
-      semver-minor-days: 7
-      semver-patch-days: 3
     groups:
       actions-minor-updates:
         applies-to: "version-updates"
