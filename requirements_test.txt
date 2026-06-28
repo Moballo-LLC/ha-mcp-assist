@@ -1,5 +1,5 @@
 # CI pins the current Home Assistant test harness; these are not runtime support bounds.
-pytest-homeassistant-custom-component==0.13.340
+pytest-homeassistant-custom-component==0.13.341
 ruff>=0.15.20,<1.0
 voluptuous-openapi==0.3.0
 hassil>=3.4.0
