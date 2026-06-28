@@ -1,5 +1,7 @@
 # MCP Assist for Home Assistant
 
+This is the Moballo-maintained fork of [mike-nott/mcp-assist](https://github.com/mike-nott/mcp-assist). Full credit to the upstream project for the original MCP Assist integration; this fork keeps that lineage while maintaining releases, support, and HACS installation from [Moballo-LLC/ha-mcp-assist](https://github.com/Moballo-LLC/ha-mcp-assist).
+
 A Home Assistant conversation agent that uses MCP (Model Context Protocol) for efficient entity discovery, achieving **95% token reduction** compared to traditional methods. Works with LM Studio, llama.cpp, Ollama, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
 
 ## Key Features
@@ -69,17 +71,17 @@ MCP Assist supports **21 languages** with localized configuration interfaces, la
 
 ## Requirements
 
-- Home Assistant 2024.1+
+- Home Assistant 2026.6+
 - One of:
   - **Local LLMs**: LM Studio v0.3.17+, llama.cpp, Ollama, Moltbot, or vLLM
   - **Cloud LLMs**: OpenAI, Google Gemini, Anthropic Claude, or OpenRouter (API key required)
-- Python 3.11+
+- Python 3.14.2+
 
 ## Installation
 
 ### Add to HACS
 
-[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mike-nott&repository=mcp-assist&category=integration)
+[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Moballo-LLC&repository=ha-mcp-assist&category=integration)
 
 ### Option A: HACS (Recommended)
 1. Click the badge above to add this repository to HACS, or manually add it as a custom repository
@@ -463,6 +465,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/mike-nott/mcp-assist/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/mike-nott/mcp-assist/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Moballo-LLC/ha-mcp-assist/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Moballo-LLC/ha-mcp-assist/discussions)
+- **Sponsor**: [Jason-Morcos on GitHub Sponsors](https://github.com/sponsors/Jason-Morcos)
 - **Home Assistant Community**: [Community Forum](https://community.home-assistant.io/)

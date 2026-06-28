@@ -919,7 +919,7 @@ async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> lis
         timeout = aiohttp.ClientTimeout(total=10)
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://github.com/mike-nott/mcp-assist",
+            "HTTP-Referer": "https://github.com/Moballo-LLC/ha-mcp-assist",
             "X-Title": "MCP Assist for Home Assistant",
         }
 

@@ -1,13 +1,13 @@
 {
   "domain": "mcp_assist",
   "name": "MCP Assist",
-  "codeowners": ["@mike-nott"],
+  "codeowners": ["@Jason-Morcos"],
   "config_flow": true,
   "dependencies": ["conversation", "recorder"],
-  "documentation": "https://github.com/mike-nott/mcp-assist",
+  "documentation": "https://github.com/Moballo-LLC/ha-mcp-assist",
   "integration_type": "service",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/mike-nott/mcp-assist/issues",
+  "issue_tracker": "https://github.com/Moballo-LLC/ha-mcp-assist/issues",
   "requirements": ["aiohttp>=3.8.0", "pyyaml>=6.0", "duckduckgo-search>=6.0.0", "websockets>=12.0", "cryptography>=41.0.0"],
   "version": "0.16.2"
 }

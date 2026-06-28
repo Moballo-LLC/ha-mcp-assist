@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements_test.txt
 
@@ -53,7 +53,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements_test.txt
 
@@ -62,11 +62,10 @@ jobs:
           python -m pip install --upgrade pip wheel
           pip install -r requirements_test.txt
 
-      - name: Collect tests
-        run: pytest --collect-only -q tests
-
       - name: Run full pytest suite
-        run: pytest -ra --junitxml=test-results/pytest.xml tests
+        run: |
+          mkdir -p test-results
+          pytest -ra --junitxml=test-results/pytest.xml tests
 
       - name: Upload pytest results
         if: always()
@@ -74,4 +73,4 @@ jobs:
         with:
           name: pytest-results
           path: test-results/pytest.xml
-          if-no-files-found: error
+          if-no-files-found: warn

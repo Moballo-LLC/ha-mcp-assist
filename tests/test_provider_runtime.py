@@ -56,7 +56,7 @@ def test_build_provider_auth_headers_supports_openrouter_and_local_profiles() ->
     local_headers = build_provider_auth_headers(SERVER_TYPE_OLLAMA, "")
 
     assert openrouter_headers["Authorization"] == "Bearer openrouter-key"
-    assert openrouter_headers["HTTP-Referer"] == "https://github.com/mike-nott/mcp-assist"
+    assert openrouter_headers["HTTP-Referer"] == "https://github.com/Moballo-LLC/ha-mcp-assist"
     assert openrouter_headers["X-Title"] == "MCP Assist for Home Assistant"
     assert local_headers == {}
 
