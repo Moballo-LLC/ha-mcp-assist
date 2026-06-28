@@ -71,11 +71,11 @@ MCP Assist supports **21 languages** with localized configuration interfaces, la
 
 ## Requirements
 
-- Home Assistant 2026.6+
+- Home Assistant 2024.1+
 - One of:
   - **Local LLMs**: LM Studio v0.3.17+, llama.cpp, Ollama, Moltbot, or vLLM
   - **Cloud LLMs**: OpenAI, Google Gemini, Anthropic Claude, or OpenRouter (API key required)
-- Python 3.14.2+
+- Python 3.11+
 
 ## Installation
 
