@@ -1,0 +1,6 @@
+[allowlist]
+description = "False positives for Home Assistant config constant names"
+regexes = [
+  '''CONF_BRAVE_API_KEY''',
+  '''DEFAULT_BRAVE_API_KEY''',
+]
