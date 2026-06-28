@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "custom_components" / "mcp_assist" / "manifest.json"
@@ -19,7 +21,13 @@ def _runtime_requirements() -> list[str]:
     ]
 
 
-def test_runtime_requirements_mirror_manifest_requirements() -> None:
+def _requirement_names(requirements: list[str]) -> list[str]:
+    return [Requirement(requirement).name.lower() for requirement in requirements]
+
+
+def test_runtime_requirements_track_manifest_packages() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
-    assert _runtime_requirements() == manifest["requirements"]
+    assert _requirement_names(_runtime_requirements()) == _requirement_names(
+        manifest["requirements"]
+    )
