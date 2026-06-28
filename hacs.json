@@ -1,5 +1,7 @@
 {
   "name": "MCP Assist",
+  "render_readme": true,
   "content_in_root": false,
+  "country": "US",
   "homeassistant": "2024.1.0"
 }

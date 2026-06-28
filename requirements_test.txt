@@ -1,5 +1,7 @@
-pytest-homeassistant-custom-component==0.13.316
+# CI pins the current Home Assistant test harness; these are not runtime support bounds.
+pytest-homeassistant-custom-component==0.13.340
 ruff>=0.11,<1.0
-voluptuous-openapi==0.2.0
+voluptuous-openapi==0.3.0
 hassil>=3.4.0
-home-assistant-intents>=2026.2.0
+# Keep CI on a current Home Assistant-era intents package without capping forward support.
+home-assistant-intents>=2026.6.0

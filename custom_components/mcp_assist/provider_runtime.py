@@ -128,7 +128,7 @@ def build_provider_auth_headers(server_type: str, api_key: str) -> dict[str, str
     if server_type == SERVER_TYPE_OPENROUTER:
         return {
             "Authorization": f"Bearer {normalized_key}",
-            "HTTP-Referer": "https://github.com/mike-nott/mcp-assist",
+            "HTTP-Referer": "https://github.com/Moballo-LLC/ha-mcp-assist",
             "X-Title": "MCP Assist for Home Assistant",
         }
 
