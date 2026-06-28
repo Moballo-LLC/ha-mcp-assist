@@ -461,7 +461,7 @@ The integration only discovers entities that are exposed to the "conversation" a
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details. The fork preserves the original upstream copyright notice and adds copyright coverage for Moballo-maintained changes.
 
 ## Support
 

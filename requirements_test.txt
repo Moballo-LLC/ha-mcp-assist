@@ -3,5 +3,5 @@ pytest-homeassistant-custom-component==0.13.340
 ruff>=0.11,<1.0
 voluptuous-openapi==0.3.0
 hassil>=3.4.0
-# Keep aligned with the Home Assistant 2026.6 test target.
-home-assistant-intents>=2026.6.0,<2026.7.0
+# Keep CI on a current Home Assistant-era intents package without capping forward support.
+home-assistant-intents>=2026.6.0

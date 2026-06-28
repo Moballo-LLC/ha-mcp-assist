@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to package and publish"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Build HACS package
+        run: |
+          mkdir -p dist
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          component = Path("custom_components/mcp_assist")
+          archive = Path("dist/mcp_assist.zip")
+
+          with ZipFile(archive, "w", ZIP_DEFLATED) as zip_file:
+              for path in sorted(component.rglob("*")):
+                  if (
+                      path.is_file()
+                      and "__pycache__" not in path.parts
+                      and path.suffix not in {".pyc", ".pyo"}
+                  ):
+                      zip_file.write(path, path.relative_to("custom_components"))
+          PY
+          unzip -t dist/mcp_assist.zip
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: dist/mcp_assist.zip
