@@ -49,6 +49,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_WEB_SEARCH,
     CONF_CHAT_LOG_MODE,
     CONF_DEBUG_MODE,
+    DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TECHNICAL_PROMPT,
     DOMAIN,
     CONTEXT_MODE_LIGHT,
@@ -1221,8 +1222,10 @@ def test_agent_does_not_expose_provider_specific_transport_helpers() -> None:
 
 def test_default_prompt_uses_tools_without_extra_confirmation() -> None:
     """Routine voice-friendly home checks should happen in one assistant turn."""
+    assert "use MCP tools before replying" in DEFAULT_SYSTEM_PROMPT
     assert "call the needed tools in the same turn" in DEFAULT_TECHNICAL_PROMPT
     assert "Do not ask the user to confirm" in DEFAULT_TECHNICAL_PROMPT
+    assert "Do not reply only with a plan" in DEFAULT_TECHNICAL_PROMPT
     assert "Treat the tool-call budget as limited" in DEFAULT_TECHNICAL_PROMPT
 
 
@@ -1460,6 +1463,126 @@ async def test_tool_budget_skips_extra_calls_and_finishes_without_tools(
     skipped_content = json.loads(final_tool_result_blocks[1]["content"])
     assert skipped_content["budget_exhausted"] is True
     assert "configured tool-call budget" in skipped_content["error"]
+
+
+@pytest.mark.asyncio
+async def test_ollama_toolless_check_preamble_retries_with_tool_call(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Ollama-style pre-tool narration should self-correct in the same turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_MAX_ITERATIONS: 1,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_name": "discover_entities",
+                "content": "No upstairs lights are on.",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "I'll check if there are any lights on upstairs for you.",
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": {
+                                    "domain": "light",
+                                    "floor": "upstairs",
+                                    "state": "on",
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "No upstairs lights are on.",
+                }
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_http(
+        [{"role": "user", "content": "Are there any lights on upstairs?"}]
+    )
+
+    assert result == "No upstairs lights are on."
+    assert len(posts) == 3
+    assert "tools" in posts[0]["json"]
+    assert "tools" in posts[1]["json"]
+    assert "tools" not in posts[2]["json"]
+
+    retry_messages = posts[1]["json"]["messages"]
+    assert retry_messages[-2] == {
+        "role": "assistant",
+        "content": "I'll check if there are any lights on upstairs for you.",
+    }
+    assert retry_messages[-1]["role"] == "system"
+    assert "no MCP tool call was made" in retry_messages[-1]["content"]
+
+    execute_mock.assert_awaited_once()
+    executed_calls = execute_mock.await_args.args[0]
+    assert [call["function"]["name"] for call in executed_calls] == [
+        "discover_entities"
+    ]
+    assert executed_calls[0]["function"]["arguments"] == {
+        "domain": "light",
+        "floor": "upstairs",
+        "state": "on",
+    }
 
 
 def test_format_tool_result_for_llm_preserves_structured_results_without_binary(
