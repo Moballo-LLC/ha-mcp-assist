@@ -2758,47 +2758,66 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 # Import get_system_entry
-                from . import get_system_entry
+                from . import get_system_entry, _async_apply_shared_mcp_settings
 
+                shared_settings_applied = True
                 # Update system entry with shared MCP settings
                 system_entry = get_system_entry(self.hass)
                 if system_entry:
+                    previous_system_data = dict(system_entry.data)
+                    new_system_data = {**previous_system_data, **user_input}
                     self.hass.config_entries.async_update_entry(
-                        system_entry, data={**system_entry.data, **user_input}
+                        system_entry, data=new_system_data
                     )
-                    _LOGGER.info("Updated system entry with shared MCP settings")
+                    try:
+                        await _async_apply_shared_mcp_settings(self.hass)
+                    except Exception as err:
+                        self.hass.config_entries.async_update_entry(
+                            system_entry, data=previous_system_data
+                        )
+                        shared_settings_applied = False
+                        errors["base"] = "mcp_apply_failed"
+                        _LOGGER.warning(
+                            "Failed to apply shared MCP settings live: %s",
+                            type(err).__name__,
+                        )
+                    if shared_settings_applied:
+                        _LOGGER.info("Updated system entry with shared MCP settings")
                 else:
                     _LOGGER.error("System entry not found when saving shared settings")
+                    shared_settings_applied = False
+                    errors["base"] = "mcp_apply_failed"
 
-                # Update profile entry with per-profile settings only
-                # Update entry title if profile name changed
-                new_profile_name = self.profile_options.get(CONF_PROFILE_NAME)
-                old_profile_name = self.config_entry.options.get(
-                    CONF_PROFILE_NAME, self.config_entry.data.get(CONF_PROFILE_NAME)
-                )
-                if new_profile_name and new_profile_name != old_profile_name:
-                    server_type = self.config_entry.data.get(
-                        CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
+                if shared_settings_applied:
+                    # Update profile entry with per-profile settings only
+                    # Update entry title if profile name changed
+                    new_profile_name = self.profile_options.get(CONF_PROFILE_NAME)
+                    old_profile_name = self.config_entry.options.get(
+                        CONF_PROFILE_NAME, self.config_entry.data.get(CONF_PROFILE_NAME)
                     )
-                    server_display_map = {
-                        SERVER_TYPE_LMSTUDIO: "LM Studio",
-                        SERVER_TYPE_LLAMACPP: "llama.cpp",
-                        SERVER_TYPE_OLLAMA: "Ollama",
-                        SERVER_TYPE_OPENAI: "OpenAI",
-                        SERVER_TYPE_GEMINI: "Gemini",
-                        SERVER_TYPE_ANTHROPIC: "Claude",
-                        SERVER_TYPE_OPENROUTER: "OpenRouter",
-                        SERVER_TYPE_OPENCLAW: "OpenClaw",
-                        SERVER_TYPE_VLLM: "vLLM",
-                    }
-                    server_display = server_display_map.get(server_type, "LM Studio")
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        title=f"{server_display} - {new_profile_name}",
-                    )
+                    if new_profile_name and new_profile_name != old_profile_name:
+                        server_type = self.config_entry.data.get(
+                            CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
+                        )
+                        server_display_map = {
+                            SERVER_TYPE_LMSTUDIO: "LM Studio",
+                            SERVER_TYPE_LLAMACPP: "llama.cpp",
+                            SERVER_TYPE_OLLAMA: "Ollama",
+                            SERVER_TYPE_OPENAI: "OpenAI",
+                            SERVER_TYPE_GEMINI: "Gemini",
+                            SERVER_TYPE_ANTHROPIC: "Claude",
+                            SERVER_TYPE_OPENROUTER: "OpenRouter",
+                            SERVER_TYPE_OPENCLAW: "OpenClaw",
+                            SERVER_TYPE_VLLM: "vLLM",
+                        }
+                        server_display = server_display_map.get(server_type, "LM Studio")
+                        self.hass.config_entries.async_update_entry(
+                            self.config_entry,
+                            title=f"{server_display} - {new_profile_name}",
+                        )
 
-                # Save profile settings only (not shared settings)
-                return self.async_create_entry(title="", data=self.profile_options)
+                    # Save profile settings only (not shared settings)
+                    return self.async_create_entry(title="", data=self.profile_options)
 
         # Get current values from system entry
         from . import get_system_entry
