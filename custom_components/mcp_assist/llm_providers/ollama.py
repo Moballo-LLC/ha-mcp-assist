@@ -6,18 +6,48 @@ import json
 from typing import Any
 
 from ..const import (
+    CONF_LMSTUDIO_URL,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
+    DEFAULT_OLLAMA_URL,
     DEFAULT_OLLAMA_KEEP_ALIVE,
     DEFAULT_OLLAMA_NUM_CTX,
+    SERVER_TYPE_OLLAMA,
 )
-from .base import LLMProvider, StreamParseResult, parse_tool_arguments
+from .base import (
+    LLMProvider,
+    ProviderConfigField,
+    StreamParseResult,
+    parse_tool_arguments,
+)
 
 
 class OllamaProvider(LLMProvider):
     """Ollama native chat transport."""
 
     transport_name = "ollama_chat"
+    provider_type = SERVER_TYPE_OLLAMA
+    provider_display_name = "Ollama"
+    default_base_url = DEFAULT_OLLAMA_URL
+    connection_fields = (
+        ProviderConfigField(CONF_LMSTUDIO_URL, default=DEFAULT_OLLAMA_URL),
+    )
+    provider_options_fields = (
+        ProviderConfigField(
+            CONF_OLLAMA_NUM_CTX,
+            default=DEFAULT_OLLAMA_NUM_CTX,
+            required=False,
+            kind="integer",
+        ),
+        ProviderConfigField(
+            CONF_OLLAMA_KEEP_ALIVE,
+            default=DEFAULT_OLLAMA_KEEP_ALIVE,
+            required=False,
+        ),
+    )
+    model_fetch_error = "cannot_connect"
+    model_fetch_timeout = 5
+    model_fetch_delay = 0.5
 
     @classmethod
     def options_from_entry(cls, entry: Any) -> dict[str, Any]:

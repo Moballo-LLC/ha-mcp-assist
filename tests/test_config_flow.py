@@ -54,6 +54,7 @@ from custom_components.mcp_assist.config_flow import (
 from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
+from custom_components.mcp_assist.llm_providers.ollama import OllamaProvider
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
     CONF_ALLOWED_IPS,
@@ -331,7 +332,7 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_model()
@@ -387,7 +388,7 @@ async def test_model_step_prompt_overrides_are_optional(hass) -> None:
     flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_model()
@@ -992,7 +993,7 @@ async def test_options_step_groups_profile_settings_into_sections(
     flow.handler = entry.entry_id
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.lmstudio.LMStudioProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_init()
@@ -1024,7 +1025,7 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     flow.handler = entry.entry_id
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_init()
@@ -1047,7 +1048,9 @@ async def test_options_step_for_ollama_uses_provider_default_url_when_missing(
     """Older Ollama entries without a stored URL should use Ollama's default."""
     flow = MCPAssistOptionsFlow()
     flow.hass = hass
-    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA})
+    entry = profile_entry_factory(
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA, CONF_LMSTUDIO_URL: ""}
+    )
     hass.config_entries.async_update_entry(
         entry,
         data={
@@ -1060,12 +1063,15 @@ async def test_options_step_for_ollama_uses_provider_default_url_when_missing(
 
     fetch_models = AsyncMock(return_value=["qwen3"])
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         fetch_models,
     ):
         result = await flow.async_step_init()
 
-    fetch_models.assert_awaited_once_with(hass, DEFAULT_OLLAMA_URL)
+    fetch_models.assert_awaited_once()
+    provider_values = fetch_models.await_args.args[1]
+    assert OllamaProvider.model_base_url(provider_values) == DEFAULT_OLLAMA_URL
+    assert OllamaProvider.model_base_url({CONF_LMSTUDIO_URL: ""}) == DEFAULT_OLLAMA_URL
     assert CONNECTION_SECTION_KEY in result["data_schema"].schema
     connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
     assert CONF_LMSTUDIO_URL in _section_field_names(connection_section)
@@ -1090,15 +1096,16 @@ async def test_options_step_for_openai_fetches_models_from_custom_base_url(
 
     fetch_models = AsyncMock(return_value=["proxy-model"])
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_openai",
+        "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
         fetch_models,
     ):
         result = await flow.async_step_init()
 
-    fetch_models.assert_awaited_once_with(
-        hass,
-        "sk-test",
-        "https://proxy.example.com/v1",
+    fetch_models.assert_awaited_once()
+    assert fetch_models.await_args.args[1][CONF_API_KEY] == "sk-test"
+    assert (
+        fetch_models.await_args.args[1][CONF_LMSTUDIO_URL]
+        == "https://proxy.example.com/v1"
     )
     assert CONNECTION_SECTION_KEY in result["data_schema"].schema
     connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]

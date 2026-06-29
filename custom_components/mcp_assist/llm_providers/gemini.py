@@ -2,13 +2,70 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+import aiohttp
+
+from ..const import CONF_API_KEY, SERVER_TYPE_GEMINI
+from .base import ProviderConfigField, _redacted_log_snippet
 from .openai_compatible import OpenAICompatibleProvider
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class GeminiProvider(OpenAICompatibleProvider):
     """Gemini's OpenAI-compatible chat transport and metadata handling."""
+
+    provider_type = SERVER_TYPE_GEMINI
+    provider_display_name = "Gemini"
+    connection_fields = (ProviderConfigField(CONF_API_KEY, kind="password"),)
+    model_fetch_error = "invalid_api_key"
+    default_temperature = 1.0
+
+    @classmethod
+    async def fetch_models(cls, hass: Any, values: dict[str, Any]) -> list[str]:
+        """Fetch models from Gemini's native model-list endpoint."""
+        del hass
+        api_key = str(cls.config_value(values, CONF_API_KEY, "") or "")
+        if not api_key:
+            return []
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=cls.model_fetch_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": api_key},
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        _LOGGER.warning(
+                            "Gemini model fetch returned HTTP %d: %s",
+                            resp.status,
+                            _redacted_log_snippet(error_text),
+                        )
+                        return []
+
+                    data = await resp.json()
+                    model_ids = []
+                    for model in data.get("models", []):
+                        if not isinstance(model, dict):
+                            continue
+                        model_name = str(model.get("name") or "")
+                        if model_name.startswith("models/"):
+                            model_ids.append(model_name.removeprefix("models/"))
+                    return sorted(
+                        (
+                            model_id
+                            for model_id in model_ids
+                            if "gemini" in model_id.lower()
+                        ),
+                        reverse=True,
+                    )
+        except Exception as err:
+            _LOGGER.error("Gemini model fetch failed: %s", err)
+            return []
 
     def update_stream_metadata(self, current: Any, delta: dict[str, Any]) -> Any:
         """Capture Gemini thought signatures from streamed tool-call deltas."""

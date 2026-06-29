@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import json
+import logging
+import re
 from typing import Any
 
+import aiohttp
+
+from ..const import CONF_API_KEY, CONF_LMSTUDIO_URL
 from ..provider_runtime import (
     build_openai_compatible_endpoint,
     build_provider_auth_headers,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -26,6 +34,18 @@ class ProviderSettings:
     provider_options: dict[str, Any]
     display_name: str
     is_remote_service: bool
+
+
+@dataclass(frozen=True)
+class ProviderConfigField:
+    """Provider-owned config metadata consumed by config and options flows."""
+
+    key: str
+    default: Any = None
+    required: bool = True
+    kind: str = "text"
+    minimum: int | float | None = None
+    maximum: int | float | None = None
 
 
 @dataclass(frozen=True)
@@ -122,6 +142,19 @@ class LLMProvider:
 
     transport_name = "openai_chat"
     supports_streaming = True
+    provider_type = ""
+    provider_display_name = ""
+    default_base_url: str | None = None
+    connection_fields: tuple[ProviderConfigField, ...] = ()
+    provider_options_fields: tuple[ProviderConfigField, ...] = ()
+    model_fetch_error: str | None = None
+    model_fetch_timeout = 10
+    model_fetch_delay = 0.0
+    uses_config_model_step = True
+    default_temperature: float | None = None
+    default_config_model_name = ""
+    default_config_system_prompt = ""
+    default_config_technical_prompt = ""
 
     def __init__(self, settings: ProviderSettings) -> None:
         """Initialize the provider transport."""
@@ -132,6 +165,107 @@ class LLMProvider:
         """Return provider-specific options from a config entry."""
         del entry
         return {}
+
+    @classmethod
+    def config_display_name(cls) -> str:
+        """Return the provider display name for UI surfaces."""
+        return cls.provider_display_name or cls.__name__.removesuffix("Provider")
+
+    @classmethod
+    def config_value(
+        cls,
+        values: dict[str, Any],
+        key: str,
+        default: Any = None,
+        *,
+        blank_as_default: bool = False,
+    ) -> Any:
+        """Read a provider config value with optional blank-string fallback."""
+        value = values.get(key, default)
+        if value is None:
+            return default
+        if blank_as_default and isinstance(value, str) and not value.strip():
+            return default
+        return value
+
+    @classmethod
+    def model_base_url(cls, values: dict[str, Any]) -> str:
+        """Return the base URL to use for OpenAI-compatible model listing."""
+        base_url = cls.config_value(
+            values,
+            CONF_LMSTUDIO_URL,
+            cls.default_base_url or "",
+            blank_as_default=True,
+        )
+        return str(base_url or "").strip().rstrip("/")
+
+    @classmethod
+    def model_request_headers(cls, values: dict[str, Any]) -> dict[str, str]:
+        """Return headers for model-list requests."""
+        if not cls.provider_type:
+            return {}
+        api_key = str(cls.config_value(values, CONF_API_KEY, "") or "")
+        return build_provider_auth_headers(cls.provider_type, api_key)
+
+    @classmethod
+    def filter_model_ids(
+        cls,
+        model_ids: list[str],
+        *,
+        base_url: str,
+    ) -> list[str]:
+        """Filter and sort provider model IDs for UI display."""
+        del base_url
+        models = [model_id for model_id in model_ids if model_id]
+        return sorted(models)
+
+    @classmethod
+    async def fetch_models(cls, hass: Any, values: dict[str, Any]) -> list[str]:
+        """Fetch models for providers with an OpenAI-compatible model endpoint."""
+        del hass
+        if cls.model_fetch_error is None:
+            return []
+
+        base_url = cls.model_base_url(values)
+        if not base_url:
+            return []
+
+        models_url = build_openai_compatible_endpoint(base_url, "models")
+        _LOGGER.info("Starting %s model fetch from %s", cls.config_display_name(), base_url)
+        try:
+            if cls.model_fetch_delay > 0:
+                await asyncio.sleep(cls.model_fetch_delay)
+
+            timeout = aiohttp.ClientTimeout(total=cls.model_fetch_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    models_url,
+                    headers=cls.model_request_headers(values),
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        _LOGGER.warning(
+                            "%s model fetch returned HTTP %d: %s",
+                            cls.config_display_name(),
+                            resp.status,
+                            _redacted_log_snippet(error_text),
+                        )
+                        return []
+
+                    data = await resp.json()
+                    model_ids = [
+                        str(model.get("id") or "")
+                        for model in data.get("data", [])
+                        if isinstance(model, dict)
+                    ]
+                    return cls.filter_model_ids(model_ids, base_url=base_url)
+        except Exception as err:
+            _LOGGER.error(
+                "%s model fetch failed: %s",
+                cls.config_display_name(),
+                _redacted_log_snippet(err),
+            )
+            return []
 
     @property
     def server_type(self) -> str:
@@ -300,3 +434,25 @@ class LLMProvider:
         """Return provider-specific guidance for missing or unavailable models."""
         del error_text
         return None
+
+
+def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
+    """Return a short provider log snippet with common secrets redacted."""
+    text = str(value or "")
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)([\"']?(?:api[_-]?key|api\s+key|password|secret|token|key)[\"']?"
+        r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)",
+        r"\1[redacted]\2",
+        text,
+    )
+    text = re.sub(r"(?i)([?&]key=)[^&\s]+", r"\1[redacted]", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
