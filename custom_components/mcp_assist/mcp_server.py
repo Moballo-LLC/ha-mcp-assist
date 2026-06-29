@@ -11,7 +11,7 @@ import mimetypes
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Dict, List, Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from datetime import timedelta
 
 import aiohttp
@@ -114,6 +114,14 @@ _LOGGER = logging.getLogger(__name__)
 _MAX_INLINE_IMAGE_BYTES = 6 * 1024 * 1024
 _HTTP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _MAX_IMAGE_FETCH_REDIRECTS = 5
+_HASS_IMAGE_URL_PATH_PREFIXES = (
+    "/api/camera_proxy/",
+    "/api/image_proxy/",
+    "/api/image/serve/",
+    "/api/media_player_proxy/",
+    "/local/",
+    "/media/local/",
+)
 
 _SKIP_NON_SERIALIZABLE = object()
 
@@ -2284,7 +2292,13 @@ class MCPServer(
             raise ValueError("Image URL is required.")
 
         if raw_reference.startswith("/"):
-            return yarl.URL(self._get_hass_base_url()).origin(), yarl.URL(raw_reference)
+            raw_path, _separator, raw_query = raw_reference.partition("?")
+            raw_path = raw_path.split("#", 1)[0]
+            self._validate_hass_image_request_path(raw_path)
+            target_url = yarl.URL(self._sanitize_http_request_path(raw_path))
+            if raw_query:
+                target_url = target_url.with_query(raw_query.split("#", 1)[0])
+            return yarl.URL(self._get_hass_base_url()).origin(), target_url
 
         parsed_url = yarl.URL(raw_reference)
         if parsed_url.scheme not in {"http", "https"} or not parsed_url.host:
@@ -2298,6 +2312,9 @@ class MCPServer(
         normalized_url = str(parsed_url)
 
         if network_helper.is_hass_url(self.hass, normalized_url):
+            self._validate_hass_image_request_path(
+                urlparse(raw_reference).path or "/"
+            )
             return yarl.URL(self._get_hass_base_url()).origin(), parsed_url
 
         allowlisted_base = self._get_allowlisted_external_base_url(parsed_url)
@@ -2327,6 +2344,19 @@ class MCPServer(
         if target_url.query_string:
             request_path = f"{request_path}?{target_url.query_string}"
         return request_path
+
+    def _validate_hass_image_request_path(self, path: str) -> None:
+        """Validate that a Home Assistant-local image URL uses an image-serving path."""
+        request_path = self._sanitize_http_request_path(unquote(path))
+        if ".." in PurePosixPath(request_path).parts:
+            raise ValueError("Home Assistant image URLs must not contain parent path segments.")
+        if not any(
+            request_path == prefix.rstrip("/") or request_path.startswith(prefix)
+            for prefix in _HASS_IMAGE_URL_PATH_PREFIXES
+        ):
+            raise ValueError(
+                "Home Assistant image URLs must use a supported image-serving path."
+            )
 
     def _sanitize_http_request_path(self, path: str) -> str:
         """Normalize an HTTP request path so it cannot replace the trusted authority.
