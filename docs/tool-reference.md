@@ -112,10 +112,14 @@ Calculator tools are useful when exact arithmetic matters.
 | `sqrt`, `power`, `round_number` | Common math operations |
 | `average`, `min_value`, `max_value` | Aggregate numbers |
 | `evaluate_expression` | Evaluate a bounded math expression |
-| `convert_unit` | Convert common units |
+| `convert_unit` | Convert common units, including cooking volumes |
 
 Calculator and unit conversion are separate tool families so profiles can expose
 one without the other.
+
+Kitchen conversions support `cup`, `tablespoon`, `teaspoon`, `ml`, and `pint`.
+Fractional values such as `1/8` and `1 1/2` can be passed as the conversion
+value.
 
 ## Memory
 
