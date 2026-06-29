@@ -6,6 +6,8 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from custom_components.mcp_assist.discovery import SmartDiscovery
 
 
@@ -133,3 +135,31 @@ def test_format_smart_results_page_includes_paging_metadata(hass) -> None:
     assert page["items"][0]["entity_id"] == "_summary"
     assert page["items"][0]["next_offset"] == 2
     assert len(page["items"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_entity_details_includes_script_fields(hass) -> None:
+    """Script entity details should include callable field metadata."""
+    hass.states.async_set("script.good_morning", "off")
+    discovery = SmartDiscovery(hass)
+    hass.data["script"] = SimpleNamespace(
+        get_entity=lambda entity_id: SimpleNamespace(
+            fields={
+                "message": {"description": "Announcement text"},
+                "urgent": {},
+            }
+        )
+        if entity_id == "script.good_morning"
+        else None
+    )
+
+    with patch(
+        "custom_components.mcp_assist.discovery.async_should_expose",
+        return_value=True,
+    ):
+        details = await discovery.get_entity_details(["script.good_morning"])
+
+    assert details["script.good_morning"]["fields"] == {
+        "message": {"description": "Announcement text"},
+        "urgent": {},
+    }
