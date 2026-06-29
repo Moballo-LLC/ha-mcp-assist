@@ -173,6 +173,11 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 500) -> str:
     text = str(value or "")
     text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
     text = re.sub(
+        r"(?i)([\"']?(?:api[_-]?key|authorization|password|secret|token)[\"']?\s*[:=]\s*[\"'])([^\"'\s,;}]+)([\"']?)",
+        r"\1[redacted]\3",
+        text,
+    )
+    text = re.sub(
         r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
         r"\1[redacted]",
         text,

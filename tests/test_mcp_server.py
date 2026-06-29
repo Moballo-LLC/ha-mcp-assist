@@ -504,9 +504,12 @@ async def test_handle_tool_call_logs_metadata_without_arguments_or_results(
 
     assert result["content"][0]["text"] == "tool-result-secret"
     assert "private_tool_status" in caplog.text
-    assert "argument_keys=entity_id, password" in caplog.text
-    assert "context_keys=profile_entry_id" in caplog.text
+    assert "argument_count=2" in caplog.text
+    assert "context_count=1" in caplog.text
     assert "argument_bytes=" in caplog.text
+    assert "entity_id" not in caplog.text
+    assert "password" not in caplog.text
+    assert "profile_entry_id" not in caplog.text
     assert "light.private" not in caplog.text
     assert "super-secret" not in caplog.text
     assert "profile-private" not in caplog.text

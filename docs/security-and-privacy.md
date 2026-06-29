@@ -131,7 +131,7 @@ misconfiguration and package collisions.
 
 Debug Mode is useful while diagnosing tool calls, but it is intended to log
 operational metadata such as selected tools, status codes, latency, argument key
-names, and payload sizes. It should not log full prompts, user messages,
+counts, and payload sizes. It should not log full prompts, user messages,
 provider payloads, raw tool arguments, or tool results.
 
 Chat Log Mode stores recent conversation records in Home Assistant storage. It

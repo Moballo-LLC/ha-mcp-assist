@@ -95,7 +95,7 @@ or "thanks".
 
 - **Debug Mode** writes operational metadata to the Home Assistant log,
   including provider status, request sizes, latency, selected tools, and
-  argument key names.
+  argument counts.
 - **Chat Log Mode** stores recent conversation records in Home Assistant
   storage. Records can include user text, assistant replies, tool names,
   arguments, results, and errors. Keep it off unless you are actively

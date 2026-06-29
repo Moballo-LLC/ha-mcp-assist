@@ -205,14 +205,9 @@ def _json_size_bytes(value: Any) -> int:
     return len(serialized.encode("utf-8"))
 
 
-def _mapping_key_summary(value: Any, *, max_keys: int = 10) -> str:
-    """Return a compact key-only summary for dictionaries."""
-    if not isinstance(value, dict) or not value:
-        return "none"
-    keys = sorted(str(key) for key in value)
-    visible = keys[:max_keys]
-    suffix = f", +{len(keys) - max_keys} more" if len(keys) > max_keys else ""
-    return ", ".join(visible) + suffix
+def _mapping_count(value: Any) -> int:
+    """Return the number of keys in a mapping for metadata-only logs."""
+    return len(value) if isinstance(value, dict) else 0
 
 
 class MCPServer(
@@ -2042,10 +2037,10 @@ class MCPServer(
         context = params.get("context") or {}
 
         _LOGGER.debug(
-            "Calling tool: %s (argument_keys=%s, context_keys=%s, argument_bytes=%d)",
+            "Calling tool: %s (argument_count=%d, context_count=%d, argument_bytes=%d)",
             _sanitize_log_value(tool_name),
-            _mapping_key_summary(arguments),
-            _mapping_key_summary(context),
+            _mapping_count(arguments),
+            _mapping_count(context),
             _json_size_bytes(arguments),
         )
 
@@ -2778,12 +2773,10 @@ class MCPServer(
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
-                        error_text = await response.text()
                         _LOGGER.warning(
-                            "Image analysis provider error: provider=%s status=%s body=%s",
+                            "Image analysis provider error: provider=%s status=%s",
                             _sanitize_log_value(server_type),
                             response.status,
-                            _sanitize_log_value(error_text),
                         )
                         raise ValueError(
                             f"Image analysis failed for {server_type}: HTTP {response.status}"
@@ -2814,12 +2807,10 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
-                    error_text = await response.text()
                     _LOGGER.warning(
-                        "Image analysis provider error: provider=%s status=%s body=%s",
+                        "Image analysis provider error: provider=%s status=%s",
                         _sanitize_log_value(server_type),
                         response.status,
-                        _sanitize_log_value(error_text),
                     )
                     raise ValueError(
                         f"Image analysis failed for {server_type}: HTTP {response.status}"
@@ -2872,12 +2863,10 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
-                    error_text = await response.text()
                     _LOGGER.warning(
-                        "Image generation provider error: provider=%s status=%s body=%s",
+                        "Image generation provider error: provider=%s status=%s",
                         _sanitize_log_value(server_type),
                         response.status,
-                        _sanitize_log_value(error_text),
                     )
                     raise ValueError(
                         f"Image generation failed for {server_type}: HTTP {response.status}"
@@ -3755,11 +3744,11 @@ class MCPServer(
             }
 
         _LOGGER.info(
-            "🎯 Performing action: %s.%s (target_keys=%s, data_keys=%s, target_bytes=%d, data_bytes=%d)",
+            "🎯 Performing action: %s.%s (target_count=%d, data_count=%d, target_bytes=%d, data_bytes=%d)",
             _sanitize_log_value(domain),
             _sanitize_log_value(action),
-            _mapping_key_summary(target),
-            _mapping_key_summary(data),
+            _mapping_count(target),
+            _mapping_count(data),
             _json_size_bytes(target),
             _json_size_bytes(data),
         )
@@ -4053,9 +4042,9 @@ class MCPServer(
         full_script_id = f"script.{script_name}"
 
         _LOGGER.info(
-            "📜 Running script: %s (variable_keys=%s, variable_bytes=%d)",
+            "📜 Running script: %s (variable_count=%d, variable_bytes=%d)",
             _sanitize_log_value(full_script_id),
-            _mapping_key_summary(variables),
+            _mapping_count(variables),
             _json_size_bytes(variables),
         )
 
@@ -4130,9 +4119,9 @@ class MCPServer(
             automation_id = f"automation.{automation_id}"
 
         _LOGGER.info(
-            "🤖 Triggering automation: %s (variable_keys=%s, variable_bytes=%d, skip_conditions=%s)",
+            "🤖 Triggering automation: %s (variable_count=%d, variable_bytes=%d, skip_conditions=%s)",
             _sanitize_log_value(automation_id),
-            _mapping_key_summary(variables),
+            _mapping_count(variables),
             _json_size_bytes(variables),
             _sanitize_log_value(skip_conditions),
         )
@@ -4507,9 +4496,9 @@ class MCPServer(
         """Call a native Home Assistant Assist tool safely."""
         tool_input = llm.ToolInput(tool_name=tool_name, tool_args=arguments)
         _LOGGER.debug(
-            "Calling native Assist tool: %s (argument_keys=%s, argument_bytes=%d)",
+            "Calling native Assist tool: %s (argument_count=%d, argument_bytes=%d)",
             _sanitize_log_value(tool_input.tool_name),
-            _mapping_key_summary(tool_input.tool_args),
+            _mapping_count(tool_input.tool_args),
             _json_size_bytes(tool_input.tool_args),
         )
 
@@ -4660,8 +4649,8 @@ class MCPServer(
 
         resolved_target = {"entity_id": sorted(resolved_entities)}
         _LOGGER.debug(
-            "Resolved target selector_keys=%s to entity_count=%d",
-            _mapping_key_summary(target),
+            "Resolved target selector_count=%d to entity_count=%d",
+            _mapping_count(target),
             len(resolved_target["entity_id"]),
         )
         return resolved_target

@@ -1220,7 +1220,8 @@ def test_format_tool_result_for_llm_preserves_structured_results_without_binary(
 def test_redacted_log_snippet_removes_common_secret_markers() -> None:
     """Log snippets should redact common secret-bearing field names."""
     snippet = agent_module._redacted_log_snippet(
-        "Authorization: Bearer abc123 api_key=secret-token password=hunter2",
+        'Authorization: Bearer abc123 api_key=secret-token password=hunter2 '
+        '{"api_key":"quoted-secret","token":"quoted-token"}',
     )
 
     assert "Authorization" not in snippet
@@ -1230,6 +1231,8 @@ def test_redacted_log_snippet_removes_common_secret_markers() -> None:
     assert "abc123" not in snippet
     assert "secret-token" not in snippet
     assert "hunter2" not in snippet
+    assert "quoted-secret" not in snippet
+    assert "quoted-token" not in snippet
     assert "[redacted]" in snippet
 
 

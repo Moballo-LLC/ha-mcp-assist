@@ -187,7 +187,7 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
         text,
     )
     text = re.sub(
-        r"(?i)([?&]key=)[^&\\s]+",
+        r"(?i)([?&]key=)[^&\s]+",
         r"\1[redacted]",
         text,
     )

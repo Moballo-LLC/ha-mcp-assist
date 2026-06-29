@@ -14,7 +14,7 @@ tool selection, MCP requests, or tool execution failures in the Home Assistant
 log.
 
 Debug Mode is intended to log operational metadata such as request sizes,
-latency, status codes, selected tools, and argument key names. It should not log
+latency, status codes, selected tools, and argument counts. It should not log
 full prompts, user messages, provider payloads, tool arguments, or tool results.
 Turn it off after troubleshooting to keep logs quiet.
 
