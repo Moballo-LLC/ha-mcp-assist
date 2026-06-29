@@ -71,7 +71,11 @@ class OllamaProvider(LLMProvider):
         if not models_url:
             return []
 
-        _LOGGER.info("Starting %s model fetch from %s", cls.config_display_name(), base_url)
+        _LOGGER.info(
+            "Starting %s model fetch from %s",
+            cls.config_display_name(),
+            _redacted_log_snippet(base_url),
+        )
         try:
             if cls.model_fetch_delay > 0:
                 await asyncio.sleep(cls.model_fetch_delay)

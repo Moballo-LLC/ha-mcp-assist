@@ -239,7 +239,11 @@ class LLMProvider:
         if not models_url:
             return []
 
-        _LOGGER.info("Starting %s model fetch from %s", cls.config_display_name(), base_url)
+        _LOGGER.info(
+            "Starting %s model fetch from %s",
+            cls.config_display_name(),
+            _redacted_log_snippet(base_url),
+        )
         try:
             if cls.model_fetch_delay > 0:
                 await asyncio.sleep(cls.model_fetch_delay)
@@ -457,6 +461,7 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
         r"\1[redacted]",
         text,
     )
+    text = re.sub(r"://[^/\s:@]+:[^@\s/]+@", "://[redacted]@", text)
     text = re.sub(
         r"(?i)([\"']?(?:api[_-]?key|api\s+key|password|secret|token|key)[\"']?"
         r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)",

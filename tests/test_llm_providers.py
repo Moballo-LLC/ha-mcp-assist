@@ -38,6 +38,7 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_VLLM,
 )
+from custom_components.mcp_assist.llm_providers import base as base_module
 from custom_components.mcp_assist.llm_providers import gemini as gemini_module
 from custom_components.mcp_assist.llm_providers import ollama as ollama_module
 from custom_components.mcp_assist.llm_providers import (
@@ -354,6 +355,56 @@ async def test_ollama_provider_fetches_models_from_native_tags_endpoint(
 
     assert calls == ["http://ollama.example.invalid/api/tags"]
     assert models == ["llama3.2", "qwen3"]
+
+
+async def test_openai_model_fetch_redacts_base_url_userinfo(
+    monkeypatch,
+    caplog,
+) -> None:
+    """Provider model-fetch logs should not expose credentials embedded in URLs."""
+
+    class ModelsResponse:
+        status = 200
+
+        async def __aenter__(self) -> "ModelsResponse":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def json(self) -> dict[str, list[dict[str, str]]]:
+            return {"data": [{"id": "gpt-5-mini"}]}
+
+    class ModelsSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "ModelsSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, *args: object, **kwargs: object) -> ModelsResponse:
+            return ModelsResponse()
+
+    monkeypatch.setattr(base_module.aiohttp, "ClientSession", ModelsSession)
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="custom_components.mcp_assist.llm_providers.base",
+    ):
+        models = await OpenAIProvider.fetch_models(
+            None,
+            {
+                CONF_LMSTUDIO_URL: "https://user:pass@proxy.example.invalid/v1",
+                CONF_API_KEY: "sk-test",
+            },
+        )
+
+    assert models == ["gpt-5-mini"]
+    assert "user:pass" not in caplog.text
+    assert "https://[redacted]@proxy.example.invalid/v1" in caplog.text
 
 
 @pytest.mark.parametrize(
