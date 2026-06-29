@@ -3,10 +3,10 @@
   "id": "music_assistant",
   "name": "Music Assistant",
   "description": "Built-in Music Assistant search, queue, library, and playback tools.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "entrypoint": "tool:MusicAssistantPackageTool",
   "capabilities": [
-    "Searches, browses, and controls Home Assistant Music Assistant instances and players."
+    "Searches and browses Music Assistant tracks, albums, artists, playlists, radio, audiobooks, and podcasts, and controls Music Assistant players."
   ],
   "built_in_toggle": {
     "tool_names": [

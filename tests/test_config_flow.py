@@ -48,6 +48,7 @@ from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
+    CONF_ALLOWED_IPS,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
     CONF_ENABLE_GAP_FILLING,
@@ -66,6 +67,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    CONF_CONTEXT_MODE,
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
@@ -454,6 +456,7 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     assert PERFORMANCE_SECTION_KEY in result["data_schema"].schema
     performance_section = result["data_schema"].schema[PERFORMANCE_SECTION_KEY]
     tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    assert CONF_CONTEXT_MODE in _section_field_names(performance_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(performance_section)
     assert isinstance(tools_section, section)
 
@@ -607,6 +610,7 @@ async def test_options_mcp_step_requires_google_maps_api_key_when_enabled(
 ) -> None:
     """Shared options should reject Google Maps tools without an API key."""
     system_entry_factory()
+
     flow = MCPAssistOptionsFlow()
     flow.hass = hass
     entry = profile_entry_factory()
@@ -646,6 +650,65 @@ async def test_options_mcp_step_preserves_google_maps_api_key_default(
     maps_default = tool_markers[CONF_GOOGLE_MAPS_API_KEY].default
     resolved_default = maps_default() if callable(maps_default) else maps_default
     assert resolved_default == "saved-maps-key"
+
+
+async def test_options_mcp_step_applies_shared_settings_to_running_server(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Saving shared MCP settings should apply them without a full HA restart."""
+    system_entry = system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+    apply_mock = AsyncMock()
+
+    with patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock):
+        result = await flow.async_step_mcp_server(
+            {
+                CONF_MCP_PORT: 8124,
+                CONF_ALLOWED_IPS: "192.168.1.25",
+                _builtin_shared_key("search"): False,
+                CONF_SEARCH_PROVIDER: "none",
+            }
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert system_entry.data[CONF_MCP_PORT] == 8124
+    assert system_entry.data[CONF_ALLOWED_IPS] == "192.168.1.25"
+    apply_mock.assert_awaited_once_with(hass)
+
+
+async def test_options_mcp_step_rolls_back_shared_settings_when_apply_fails(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A failed live apply should not persist an unusable shared MCP port."""
+    system_entry = system_entry_factory(
+        data={CONF_MCP_PORT: 8090, CONF_ALLOWED_IPS: "10.0.0.0/24"}
+    )
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+    apply_mock = AsyncMock(side_effect=OSError("address in use"))
+
+    with patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock):
+        result = await flow.async_step_mcp_server(
+            {
+                CONF_MCP_PORT: 8124,
+                CONF_ALLOWED_IPS: "192.168.1.25",
+                _builtin_shared_key("search"): False,
+                CONF_SEARCH_PROVIDER: "none",
+            }
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "mcp_apply_failed"
+    assert system_entry.data[CONF_MCP_PORT] == 8090
+    assert system_entry.data[CONF_ALLOWED_IPS] == "10.0.0.0/24"
+    apply_mock.assert_awaited_once_with(hass)
 
 
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
@@ -745,6 +808,21 @@ def test_provider_section_translations_cover_provider_specific_fields() -> None:
         assert expected_provider_fields <= set(provider_section["data_description"])
 
 
+def test_performance_translations_cover_context_mode() -> None:
+    """Context mode should have labels in setup and options performance sections."""
+    strings = json.loads(
+        Path("custom_components/mcp_assist/strings.json").read_text(encoding="utf-8")
+    )
+
+    for root, step, section_key in (
+        ("config", "advanced", PERFORMANCE_SECTION_KEY),
+        ("options", "init", ADVANCED_SECTION_KEY),
+    ):
+        performance_section = strings[root]["step"][step]["sections"][section_key]
+        assert CONF_CONTEXT_MODE in performance_section["data"]
+        assert CONF_CONTEXT_MODE in performance_section["data_description"]
+
+
 async def test_options_step_groups_profile_settings_into_sections(
     hass, profile_entry_factory
 ) -> None:
@@ -768,6 +846,7 @@ async def test_options_step_groups_profile_settings_into_sections(
     assert ADVANCED_SECTION_KEY in top_level_keys
     assert TOOLS_SECTION_KEY in top_level_keys
     advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    assert CONF_CONTEXT_MODE in _section_field_names(advanced_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(advanced_section)
 
 

@@ -87,6 +87,7 @@
           "temperature": "Temperature",
           "max_tokens": "Max Response Tokens",
           "max_history": "Max History Messages",
+          "context_mode": "Context Mode",
           "max_iterations": "Max Tool Iterations",
           "control_home_assistant": "Control Home Assistant",
           "response_mode": "Response Mode",
@@ -126,6 +127,7 @@
               "temperature": "Temperature",
               "max_tokens": "Max Response Tokens",
               "max_history": "Max History Messages",
+              "context_mode": "Context Mode",
               "max_iterations": "Max Tool Iterations",
               "timeout": "Response Time Out",
               "debug_mode": "Debug Mode",
@@ -135,6 +137,7 @@
               "temperature": "Controls response randomness. Lower values are more deterministic.",
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
+              "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
               "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",
@@ -304,6 +307,7 @@
       "invalid_json": "Invalid JSON format. Please check your MCP servers configuration.",
       "searxng_url_required": "SearXNG URL is required when SearXNG search is enabled.",
       "google_maps_api_key_required": "Google Maps API key is required when Google Places and Routes is enabled.",
+      "mcp_apply_failed": "Could not apply shared MCP server settings. Check the port and allowed IPs, then try again.",
       "invalid_api_key": "Invalid API key. Please check and try again.",
       "auth_failed": "Authentication failed. Please verify your API key.",
       "unknown": "An unknown error occurred.",
@@ -331,6 +335,7 @@
           "temperature": "Temperature",
           "max_tokens": "Max Response Tokens",
           "max_history": "Max History Messages",
+          "context_mode": "Context Mode",
           "max_iterations": "Max Tool Iterations",
           "control_home_assistant": "Control Home Assistant",
           "response_mode": "Response Mode",
@@ -352,7 +357,8 @@
         "data_description": {
           "model_name": "The LLM model this profile should use.",
           "system_prompt": "Prefilled with the current effective system prompt. Edit it to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
-          "technical_prompt": "Prefilled with the current effective technical instructions. Edit them to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code."
+          "technical_prompt": "Prefilled with the current effective technical instructions. Edit them to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
+          "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models."
         },
         "sections": {
           "profile": {
@@ -446,6 +452,7 @@
               "temperature": "Temperature",
               "max_tokens": "Max Response Tokens",
               "max_history": "Max History Messages",
+              "context_mode": "Context Mode",
               "max_iterations": "Max Tool Iterations",
               "timeout": "Response Time Out",
               "debug_mode": "Debug Mode",
@@ -455,6 +462,7 @@
               "temperature": "Controls response randomness. Lower values are more deterministic.",
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
+              "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
               "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",

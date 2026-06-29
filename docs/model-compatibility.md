@@ -42,6 +42,19 @@ actions. More complex requests usually need stronger tool-calling behavior:
 Treat model recommendations as starting points, not guarantees. Models,
 quantizations, provider APIs, and local server behavior change over time.
 
+### Small Context Local Models
+
+If Ollama or another local provider rejects a request because it exceeds the
+model context window, try **Context Mode: Light** on that conversation profile.
+Light mode keeps at most two prior conversation turns, skips MCP Assist's
+optional tool-family prompt instructions, and advertises only core Home
+Assistant discovery/control tools to the model.
+
+Light mode is best for direct local-control profiles. Use Standard mode for
+profiles that need optional tools such as recorder history, weather, web search,
+memory, Music Assistant, or external custom tools. If the model and hardware can
+handle it, increasing the provider context-window setting can also help.
+
 ## Instruct vs Reasoning Models
 
 Instruct models often respond quickly and can be a good fit for simple voice

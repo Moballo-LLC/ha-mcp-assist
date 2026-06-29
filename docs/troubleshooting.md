@@ -44,6 +44,21 @@ For cloud providers:
 - Check account quota, billing, and rate limits.
 - Check network connectivity from Home Assistant.
 
+### Ollama Request Exceeds Context Window
+
+If Ollama returns an error like `request (...) tokens exceed`, the prompt,
+history, and advertised tool schemas are larger than the selected model's
+context window.
+
+Try:
+
+- Set the profile's **Context Mode** to **Light**.
+- Reduce **Max History Messages**.
+- Disable optional tool families the profile does not need.
+- Increase the Ollama **Context Window** setting if the model and hardware
+  support it.
+- Keep custom prompts short.
+
 ## Tools Are Not Being Called
 
 Symptoms:
