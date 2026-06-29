@@ -54,6 +54,7 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_MAX_TOKENS,
     CONF_MAX_HISTORY,
+    CONF_CONTEXT_MODE,
     CONF_MAX_ITERATIONS,
     CONF_DEBUG_MODE,
     CONF_CHAT_LOG_MODE,
@@ -118,11 +119,14 @@ from .const import (
     DEFAULT_TECHNICAL_PROMPT,
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
+    CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD,
     DEFAULT_CONTROL_HA,
     DEFAULT_RESPONSE_MODE,
     DEFAULT_TEMPERATURE,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_HISTORY,
+    DEFAULT_CONTEXT_MODE,
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_DEBUG_MODE,
     DEFAULT_CHAT_LOG_MODE,
@@ -175,6 +179,19 @@ def _prompt_mode_selector() -> SelectSelector:
             options=[PROMPT_MODE_DEFAULT, PROMPT_MODE_CUSTOM],
             mode=SelectSelectorMode.DROPDOWN,
             translation_key="prompt_source_mode",
+        )
+    )
+
+
+def _context_mode_selector() -> SelectSelector:
+    """Build a model context-size selector."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                {"value": CONTEXT_MODE_STANDARD, "label": "Standard"},
+                {"value": CONTEXT_MODE_LIGHT, "label": "Light"},
+            ],
+            mode=SelectSelectorMode.DROPDOWN,
         )
     )
 
@@ -1661,6 +1678,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     int
                 ),
                 vol.Required(
+                    CONF_CONTEXT_MODE, default=DEFAULT_CONTEXT_MODE
+                ): _context_mode_selector(),
+                vol.Required(
                     CONF_MAX_ITERATIONS, default=DEFAULT_MAX_ITERATIONS
                 ): vol.Coerce(int),
                 vol.Required(CONF_TIMEOUT, default=DEFAULT_TIMEOUT): vol.All(
@@ -2572,6 +2592,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         ),
                     ),
                 ): vol.Coerce(int),
+                vol.Required(
+                    CONF_CONTEXT_MODE,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_CONTEXT_MODE,
+                        options.get(
+                            CONF_CONTEXT_MODE,
+                            data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
+                        ),
+                    ),
+                ): _context_mode_selector(),
                 vol.Required(
                     CONF_MAX_ITERATIONS,
                     default=_get_form_value(

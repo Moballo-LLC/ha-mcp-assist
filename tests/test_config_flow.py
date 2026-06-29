@@ -65,6 +65,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    CONF_CONTEXT_MODE,
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
@@ -451,6 +452,7 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     assert PERFORMANCE_SECTION_KEY in result["data_schema"].schema
     performance_section = result["data_schema"].schema[PERFORMANCE_SECTION_KEY]
     tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    assert CONF_CONTEXT_MODE in _section_field_names(performance_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(performance_section)
     assert isinstance(tools_section, section)
 
@@ -677,6 +679,21 @@ def test_provider_section_translations_cover_provider_specific_fields() -> None:
         assert expected_provider_fields <= set(provider_section["data_description"])
 
 
+def test_performance_translations_cover_context_mode() -> None:
+    """Context mode should have labels in setup and options performance sections."""
+    strings = json.loads(
+        Path("custom_components/mcp_assist/strings.json").read_text(encoding="utf-8")
+    )
+
+    for root, step, section_key in (
+        ("config", "advanced", PERFORMANCE_SECTION_KEY),
+        ("options", "init", ADVANCED_SECTION_KEY),
+    ):
+        performance_section = strings[root]["step"][step]["sections"][section_key]
+        assert CONF_CONTEXT_MODE in performance_section["data"]
+        assert CONF_CONTEXT_MODE in performance_section["data_description"]
+
+
 async def test_options_step_groups_profile_settings_into_sections(
     hass, profile_entry_factory
 ) -> None:
@@ -700,6 +717,7 @@ async def test_options_step_groups_profile_settings_into_sections(
     assert ADVANCED_SECTION_KEY in top_level_keys
     assert TOOLS_SECTION_KEY in top_level_keys
     advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    assert CONF_CONTEXT_MODE in _section_field_names(advanced_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(advanced_section)
 
 
