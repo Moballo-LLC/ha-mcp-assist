@@ -377,6 +377,56 @@ def test_duckduckgo_search_sync_preserves_duckduckgo_backend_on_news_fallback(
     assert results[0]["title"] == "Iran fallback"
 
 
+def test_duckduckgo_search_sync_preserves_legacy_text_backend(monkeypatch, hass) -> None:
+    """Legacy duckduckgo_search fallback should keep its supported text backend."""
+
+    class _FakeDDGS:
+        def text(self, query, **kwargs):
+            assert query == "bus"
+            assert kwargs["backend"] == "auto"
+            return [
+                {"title": "Route 372", "href": "https://example.com/372", "body": "ETA"}
+            ]
+
+    monkeypatch.setattr(ddg_module, "DDGS", _FakeDDGS)
+    monkeypatch.setattr(ddg_module, "_USES_RENAMED_DDGS", False)
+    tool = ddg_module.DuckDuckGoSearchTool(hass)
+
+    results = tool._search_sync("bus", 3, "web")
+
+    assert results[0]["title"] == "Route 372"
+
+
+def test_duckduckgo_search_sync_omits_legacy_news_backend(monkeypatch, hass) -> None:
+    """Legacy duckduckgo_search fallback news calls should omit unsupported backend."""
+
+    class _FakeDDGS:
+        def news(self, query, **kwargs):
+            assert query == "Iran latest"
+            assert "backend" not in kwargs
+            return [
+                {
+                    "title": "Iran update",
+                    "url": "https://example.com/iran",
+                    "body": "Top development",
+                    "source": "Reuters",
+                    "date": "2026-04-12",
+                }
+            ]
+
+        def text(self, query, **kwargs):
+            del query, kwargs
+            raise AssertionError("news mode should not call text()")
+
+    monkeypatch.setattr(ddg_module, "DDGS", _FakeDDGS)
+    monkeypatch.setattr(ddg_module, "_USES_RENAMED_DDGS", False)
+    tool = ddg_module.DuckDuckGoSearchTool(hass)
+
+    results = tool._search_sync("Iran latest", 2, "news")
+
+    assert results[0]["title"] == "Iran update"
+
+
 @pytest.mark.asyncio
 async def test_duckduckgo_search_returns_error_payload_on_failure(
     hass, monkeypatch
