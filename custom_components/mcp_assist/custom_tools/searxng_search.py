@@ -111,8 +111,8 @@ class SearXNGSearchTool:
         query_to_send = self._query_for_mode(query, mode)
 
         _LOGGER.debug(
-            "SearXNG Search: '%s' (count: %s, mode: %s)",
-            query_to_send,
+            "SearXNG Search request: query_chars=%d count=%s mode=%s",
+            len(str(query_to_send or "")),
             count,
             mode,
         )
@@ -137,19 +137,16 @@ class SearXNGSearchTool:
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
                     if response.status != 200:
-                        error = await response.text()
                         _LOGGER.error(
-                            "SearXNG Search error %s: %s",
+                            "SearXNG Search error: status=%s",
                             response.status,
-                            error,
                         )
                         return {
                             "content": [
                                 {
                                     "type": "text",
                                     "text": (
-                                        f"❌ Search failed (HTTP {response.status}): "
-                                        f"{error[:200]}"
+                                        f"❌ Search failed (HTTP {response.status})"
                                     ),
                                 }
                             ]
@@ -206,12 +203,12 @@ class SearXNGSearchTool:
                 ]
             }
         except Exception as err:
-            _LOGGER.error("SearXNG Search exception: %s", err)
+            _LOGGER.error("SearXNG Search exception: %s", type(err).__name__)
             return {
                 "content": [
                     {
                         "type": "text",
-                        "text": f"❌ Search error: {err}",
+                        "text": f"❌ Search error: {type(err).__name__}",
                     }
                 ]
             }

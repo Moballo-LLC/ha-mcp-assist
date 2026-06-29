@@ -47,6 +47,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_WEB_SEARCH,
     CONF_CHAT_LOG_MODE,
+    CONF_DEBUG_MODE,
     DOMAIN,
     CONTEXT_MODE_LIGHT,
     DEFAULT_CONTEXT_MODE,
@@ -80,6 +81,7 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     snippet = agent_module._provider_log_snippet(
         'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
         '"error":"Incorrect API key: sk-live-secret1234567890",'
+        '"details":"API key provided: sk-prose-secret",'
         '"google":"AIzaSyExampleKeyValue1234567890",'
         '"local":"API key: my-local-secret",'
         '"message":"'
@@ -92,6 +94,7 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     assert "secret-value" not in snippet
     assert "sk-leaked-value" not in snippet
     assert "sk-live-secret1234567890" not in snippet
+    assert "sk-prose-secret" not in snippet
     assert "AIzaSyExampleKeyValue1234567890" not in snippet
     assert "my-local-secret" not in snippet
     assert 'api_key":"[redacted]' in snippet
@@ -1452,6 +1455,92 @@ def test_format_tool_result_for_llm_preserves_structured_results_without_binary(
     assert "camera.driveway" in formatted
 
 
+def test_redacted_log_snippet_removes_common_secret_markers() -> None:
+    """Log snippets should redact common secret-bearing field names."""
+    snippet = agent_module._redacted_log_snippet(
+        'Authorization: Bearer abc123 api_key=secret-token password=hunter2 '
+        '{"api_key":"quoted-secret","token":"quoted-token"} '
+        '{"error":"API key provided: sk-prose-secret"}',
+    )
+
+    assert "Authorization" not in snippet
+    assert "Bearer" not in snippet
+    assert "api_key" not in snippet
+    assert "password" not in snippet
+    assert "abc123" not in snippet
+    assert "secret-token" not in snippet
+    assert "hunter2" not in snippet
+    assert "quoted-secret" not in snippet
+    assert "quoted-token" not in snippet
+    assert "sk-prose-secret" not in snippet
+    assert "[redacted]" in snippet
+
+
+def test_friendly_error_message_uses_sanitized_provider_token_details(
+    hass, profile_entry_factory
+) -> None:
+    """Provider errors should keep token-limit context after body redaction."""
+    entry = profile_entry_factory()
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    message = agent._get_friendly_error_message(
+        Exception(
+            'ollama API error 400: {"error":{"message":"request (12772 tokens) '
+            'exceed maximum context length","api_key":"[redacted]"}}'
+        )
+    )
+
+    assert "12772 token limit" in message
+    assert "api_key" not in message
+
+
+def test_follow_up_pattern_debug_logs_do_not_include_response_tail(
+    hass, profile_entry_factory, caplog
+) -> None:
+    """Follow-up detection should log metadata without response content."""
+    entry = profile_entry_factory(data={CONF_DEBUG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    with caplog.at_level(logging.INFO, logger=agent_module._LOGGER.name):
+        assert agent._detect_follow_up_patterns(
+            "Please do not log private-token-123?"
+        )
+
+    assert "Pattern detection - Full response length" in caplog.text
+    assert "Checking trailing response window" in caplog.text
+    assert "private-token-123" not in caplog.text
+
+
+def test_tool_call_log_summary_omits_argument_values(hass, profile_entry_factory) -> None:
+    """Streaming tool-call debug logs should keep metadata without raw arguments."""
+    entry = profile_entry_factory(data={CONF_DEBUG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    summary = agent._tool_call_log_summary(
+        [
+            {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                    "name": "read_url",
+                    "arguments": (
+                        '{"url":"https://private.example/path?api_key=sk-secret",'
+                        '"entity_id":"light.private","api_key":"sk-secret"}'
+                    ),
+                },
+            }
+        ]
+    )
+
+    log_text = str(summary)
+
+    assert summary[0]["name"] == "read_url"
+    assert summary[0]["argument_keys"] == "api_key, entity_id, url"
+    assert summary[0]["argument_bytes"] > 0
+    assert "https://private.example" not in log_text
+    assert "light.private" not in log_text
+    assert "sk-secret" not in log_text
+
+
 @pytest.mark.asyncio
 async def test_call_mcp_tool_includes_profile_context(
     hass, profile_entry_factory, system_entry_factory, monkeypatch
@@ -1512,6 +1601,115 @@ async def test_call_mcp_tool_includes_profile_context(
         "profile_entry_id": entry.entry_id,
         "profile_name": "Kitchen Profile",
     }
+
+
+@pytest.mark.asyncio
+async def test_call_mcp_tool_logs_metadata_without_arguments_or_results(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, caplog
+) -> None:
+    """MCP exchange logs should not include raw arguments or result content."""
+    system_entry_factory()
+    entry = profile_entry_factory(data={CONF_PROFILE_NAME: "Kitchen Profile"})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    class _FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [{"type": "text", "text": "super-secret-result"}],
+                    "isError": False,
+                },
+            }
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json):
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    with caplog.at_level(logging.DEBUG, logger=agent_module._LOGGER.name):
+        result = await agent._call_mcp_tool(
+            "sample_tool_status",
+            {"entity_id": "light.private", "password": "super-secret"},
+        )
+
+    assert result["content"][0]["text"] == "super-secret-result"
+    assert "sample_tool_status" in caplog.text
+    assert "argument_keys=entity_id, password" in caplog.text
+    assert "payload_bytes=" in caplog.text
+    assert "light.private" not in caplog.text
+    assert "super-secret" not in caplog.text
+    assert "super-secret-result" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_call_mcp_tool_non_200_returns_status_without_raw_body(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, caplog
+) -> None:
+    """MCP HTTP failures should not send raw response bodies back to the model."""
+    system_entry_factory()
+    entry = profile_entry_factory(data={CONF_PROFILE_NAME: "Kitchen Profile"})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    class _FakeResponse:
+        status = 500
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def text(self):
+            return "provider token secret-body"
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json):
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    with caplog.at_level(logging.ERROR, logger=agent_module._LOGGER.name):
+        result = await agent._call_mcp_tool("sample_tool_status", {"query": "private"})
+
+    assert result == {"error": "Tool execution failed with HTTP 500"}
+    assert "secret-body" not in result["error"]
+    assert "secret-body" not in caplog.text
+    assert "token" not in caplog.text
+    assert "[redacted]" in caplog.text
 
 
 @pytest.mark.asyncio

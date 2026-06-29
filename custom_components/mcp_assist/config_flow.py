@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -179,6 +180,39 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
+_SENSITIVE_LOG_FIELD_RE = re.compile(
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
+)
+
+
+def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
+    """Return a short config-flow log snippet with common secrets redacted."""
+    text = str(value or "")
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = re.sub(r"://[^/\s:@]+:[^@\s/]+@", "://[redacted]@", text)
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
+    text = re.sub(
+        r"(?i)([?&]key=)[^&\s]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
 
 
 def _prompt_mode_selector() -> SelectSelector:
@@ -953,7 +987,10 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
 
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info("📡 FETCH: Sending request to %s/v1/models", url)
+            _LOGGER.info(
+                "📡 FETCH: Sending request to %s/v1/models",
+                _redacted_log_snippet(url),
+            )
             async with session.get(f"{url}/v1/models") as resp:
                 _LOGGER.info("📥 FETCH: Got response with status %d", resp.status)
                 if resp.status != 200:
@@ -970,7 +1007,10 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
                 )
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: Exception during fetch: %s", err, exc_info=True)
+        _LOGGER.error(
+            "💥 FETCH: Exception during fetch: %s",
+            _redacted_log_snippet(err),
+        )
         return []
 
 
@@ -1003,7 +1043,7 @@ async def fetch_models_from_openai(
                     _LOGGER.warning(
                         "⚠️ FETCH: OpenAI API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -1023,7 +1063,7 @@ async def fetch_models_from_openai(
                 _LOGGER.info("✨ FETCH: Found %d OpenAI chat models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: OpenAI fetch failed: %s", err)
+        _LOGGER.error("💥 FETCH: OpenAI fetch failed: %s", _redacted_log_snippet(err))
         return []
 
 
@@ -1046,7 +1086,7 @@ async def fetch_models_from_gemini(hass: HomeAssistant, api_key: str) -> list[st
                     _LOGGER.warning(
                         "⚠️ FETCH: Gemini API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -1068,7 +1108,7 @@ async def fetch_models_from_gemini(hass: HomeAssistant, api_key: str) -> list[st
                 _LOGGER.info("✨ FETCH: Found %d Gemini models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: Gemini fetch failed: %s", err)
+        _LOGGER.error("💥 FETCH: Gemini fetch failed: %s", _redacted_log_snippet(err))
         return []
 
 
@@ -1094,7 +1134,7 @@ async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> lis
                     _LOGGER.warning(
                         "⚠️ FETCH: OpenRouter API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -1107,7 +1147,10 @@ async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> lis
                 _LOGGER.info("✨ FETCH: Found %d OpenRouter models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: OpenRouter fetch failed: %s", err)
+        _LOGGER.error(
+            "💥 FETCH: OpenRouter fetch failed: %s",
+            _redacted_log_snippet(err),
+        )
         return []
 
 

@@ -153,6 +153,52 @@ _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
 )
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
+_SENSITIVE_LOG_FIELD_RE = re.compile(
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
+)
+
+
+def _json_size_bytes(value: Any) -> int:
+    """Return UTF-8 JSON size for logs without logging the JSON itself."""
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        serialized = str(value)
+    return len(serialized.encode("utf-8"))
+
+
+def _mapping_key_summary(value: Any, *, max_keys: int = 10) -> str:
+    """Return a compact key-only summary for dictionaries."""
+    if not isinstance(value, dict) or not value:
+        return "none"
+    keys = sorted(str(key) for key in value)
+    visible = keys[:max_keys]
+    suffix = f", +{len(keys) - max_keys} more" if len(keys) > max_keys else ""
+    return ", ".join(visible) + suffix
+
+
+def _redacted_log_snippet(value: Any, *, max_chars: int = 500) -> str:
+    """Return a short log snippet with common secret fields redacted."""
+    text = str(value or "")
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
+    text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
 
 
 def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -> str:
@@ -1326,6 +1372,29 @@ class MCPAssistConversationEntity(ConversationEntity):
             return parsed if isinstance(parsed, dict) else {}
         return {}
 
+    def _tool_call_log_summary(
+        self, tool_calls: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Summarize tool calls for logs without exposing argument values."""
+        summaries: List[Dict[str, Any]] = []
+        for tool_call in tool_calls:
+            function = tool_call.get("function")
+            if not isinstance(function, dict):
+                function = {}
+
+            raw_arguments = function.get("arguments")
+            parsed_arguments = self._parse_tool_arguments(raw_arguments)
+            summaries.append(
+                {
+                    "id": tool_call.get("id"),
+                    "type": tool_call.get("type"),
+                    "name": function.get("name"),
+                    "argument_keys": _mapping_key_summary(parsed_arguments),
+                    "argument_bytes": _json_size_bytes(raw_arguments),
+                }
+            )
+        return summaries
+
     def _normalize_tool_call_arguments(
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -1518,7 +1587,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         Called by the base ConversationEntity.async_process which manages
         ChatSession and ChatLog lifecycle automatically.
         """
-        _LOGGER.info("🎤 Voice request started - Processing: %s", user_input.text)
+        _LOGGER.info(
+            "🎤 Voice request started: text_chars=%d",
+            len(str(user_input.text or "")),
+        )
 
         # Store ChatLog for tool execution methods to access
         self._current_chat_log = chat_log_instance
@@ -1580,7 +1652,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                 _LOGGER.info(
                     f"📝 System prompt built, length: {len(system_prompt)} chars"
                 )
-                _LOGGER.info(f"📝 System prompt preview: {system_prompt[:200]}...")
 
             # Build conversation messages
             messages = self._build_messages(system_prompt, user_input.text, history)
@@ -1652,7 +1723,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not client:
             raise RuntimeError("OpenClaw client not available — check integration setup")
 
-        _LOGGER.info(f"📡 Sending to OpenClaw (session: {self.session_key})...")
+        _LOGGER.info("📡 Sending to OpenClaw gateway")
         response_text = await client.send_message(user_input.text, self.session_key)
         _LOGGER.info(
             "✅ OpenClaw response received, length: %d", len(response_text)
@@ -1673,16 +1744,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         response_text, thinking_content = self._strip_thinking_tags(response_text)
         if thinking_content and self.debug_mode:
             _LOGGER.info(
-                f"🧠 Thinking content (stripped): {thinking_content[:500]}..."
+                "🧠 Thinking content stripped: %d chars",
+                len(thinking_content),
             )
 
-        if self.debug_mode:
-            _LOGGER.info(f"💬 Full response (repr): {repr(response_text)}")
-        else:
-            preview = (
-                response_text[:500] if len(response_text) > 500 else response_text
-            )
-            _LOGGER.info(f"💬 Full response preview: {preview}")
+        _LOGGER.info("💬 Response text ready, length: %d", len(response_text))
 
         # Parse response and execute any Home Assistant actions
         actions_taken = await self._execute_actions(response_text, user_input)
@@ -1829,7 +1895,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.info(
                 f"🔍 Pattern detection - Full response length: {len(text)} chars"
             )
-            _LOGGER.info(f"🔍 Pattern detection - Last 200 chars: {text[-200:]}")
+            _LOGGER.info("🔍 Pattern detection - Checking trailing response window")
 
         # Check last 200 characters for efficiency
         check_text = text[-200:].lower()
@@ -2453,7 +2519,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         user_input: ConversationInput | None = None,
     ) -> Dict[str, Any]:
         """Execute a single MCP tool and return the result."""
-        _LOGGER.info(f"🔧 Executing MCP tool: {tool_name} with args: {arguments}")
+        _LOGGER.info(
+            "🔧 Executing MCP tool: %s (argument_keys=%s, argument_bytes=%d)",
+            tool_name,
+            _mapping_key_summary(arguments),
+            _json_size_bytes(arguments),
+        )
 
         if not self._is_tool_enabled_for_profile(tool_name):
             return {
@@ -2490,7 +2561,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "id": request_id,
             }
 
-            _LOGGER.debug(f"MCP request: {json.dumps(payload, indent=2)}")
+            _LOGGER.debug(
+                "MCP request prepared: id=%s tool=%s argument_keys=%s context_keys=%s payload_bytes=%d",
+                request_id,
+                tool_name,
+                _mapping_key_summary(arguments),
+                _mapping_key_summary(payload["params"].get("context")),
+                _json_size_bytes(payload),
+            )
 
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -2498,12 +2576,22 @@ class MCPAssistConversationEntity(ConversationEntity):
                     if response.status != 200:
                         error_text = await response.text()
                         _LOGGER.error(
-                            f"MCP tool call failed: {response.status} - {error_text}"
+                            "MCP tool call failed: status=%s error=%s",
+                            response.status,
+                            _redacted_log_snippet(error_text),
                         )
-                        return {"error": f"Tool execution failed: {error_text}"}
+                        return {
+                            "error": f"Tool execution failed with HTTP {response.status}"
+                        }
 
                     data = await response.json()
-                    _LOGGER.debug(f"MCP response: {json.dumps(data, indent=2)}")
+                    _LOGGER.debug(
+                        "MCP response received: id=%s has_result=%s has_error=%s response_bytes=%d",
+                        request_id,
+                        "result" in data,
+                        "error" in data,
+                        _json_size_bytes(data),
+                    )
 
                     if "result" in data:
                         return self._normalize_mcp_tool_response(data["result"])
@@ -2864,13 +2952,20 @@ class MCPAssistConversationEntity(ConversationEntity):
                     _LOGGER.info(
                         f"✅ Basic streaming connected! Status: {response.status}"
                     )
-                    _LOGGER.info(f"📋 Headers: {dict(response.headers)}")
+                    _LOGGER.info(
+                        "📋 Header keys: %s",
+                        _mapping_key_summary(dict(response.headers)),
+                    )
 
                     # Try to read first few lines
                     line_count = 0
                     async for line in response.content:
-                        line_str = line.decode("utf-8").strip()
-                        _LOGGER.info(f"📨 Line {line_count}: {line_str[:100]}")
+                        line_length = len(line.decode("utf-8", errors="replace"))
+                        _LOGGER.info(
+                            "📨 Streaming probe line %d: %d chars",
+                            line_count,
+                            line_length,
+                        )
                         line_count += 1
                         if line_count >= 3:
                             break
@@ -3188,8 +3283,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
+                        error_snippet = _provider_log_snippet(error_text)
+                        _LOGGER.warning(
+                            "Anthropic API error: status=%s body=%s",
+                            response.status,
+                            error_snippet,
+                        )
                         raise Exception(
-                            f"anthropic API error {response.status}: {error_text}"
+                            f"anthropic API error {response.status}: {error_snippet}"
                         )
                     data = await response.json()
 
@@ -3288,11 +3389,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                     role = msg.get("role")
                     has_tool_calls = "tool_calls" in msg
                     tool_call_id = msg.get("tool_call_id", "")
-                    content_preview = (
-                        str(msg.get("content", ""))[:100] if msg.get("content") else ""
-                    )
+                    content = msg.get("content", "")
+                    content_len = len(str(content)) if content else 0
                     _LOGGER.info(
-                        f"  Msg {i}: {role}, tool_calls={has_tool_calls}, tool_call_id={tool_call_id}, content={content_preview}"
+                        "  Msg %d: %s, tool_calls=%s, tool_call_id=%s, content_chars=%d",
+                        i,
+                        role,
+                        has_tool_calls,
+                        tool_call_id,
+                        content_len,
                     )
 
             # Clean messages for streaming compatibility
@@ -3337,14 +3442,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     role = msg.get("role")
                     content = msg.get("content", "")
                     content_len = len(str(content)) if content else 0
-                    if role == "tool":
-                        # Show first 200 chars of tool responses
-                        preview = str(content)[:200] if content else ""
-                        _LOGGER.info(
-                            f"  [{i}] {role}: {content_len} chars - {preview}..."
-                        )
-                    else:
-                        _LOGGER.info(f"  [{i}] {role}: {content_len} chars")
+                    _LOGGER.info("  [%d] %s: %d chars", i, role, content_len)
 
             # Only clean if needed (performance optimization)
             clean_payload = payload
@@ -3410,7 +3508,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
                         if self.debug_mode:
                             _LOGGER.debug(
-                                f"📋 Response headers: {dict(response.headers)}"
+                                "📋 Response header keys: %s",
+                                _mapping_key_summary(dict(response.headers)),
                             )
 
                         if response.status != 200:
@@ -3667,7 +3766,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                         f"📝 Discarding intermediate narration: {len(response_text)} chars"
                     )
                     _LOGGER.debug(
-                        f"📊 Tool calls structure: {json.dumps(current_tool_calls, indent=2)}"
+                        "📊 Tool calls structure: %s",
+                        json.dumps(
+                            self._tool_call_log_summary(current_tool_calls),
+                            indent=2,
+                        ),
                     )
 
                 # Add assistant message with tool calls
@@ -3842,9 +3945,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
+                        error_snippet = _provider_log_snippet(error_text)
+                        _LOGGER.warning(
+                            "%s API error: status=%s body=%s",
+                            self.server_type,
+                            response.status,
+                            error_snippet,
+                        )
                         raise Exception(
-                            f"{self.server_type} API error {response.status}: "
-                            f"{_provider_log_snippet(error_text)}"
+                            f"{self.server_type} API error {response.status}: {error_snippet}"
                         )
 
                     data = await response.json()
@@ -3961,7 +4070,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                         _LOGGER.info(
                             f"💬 Final response received (length: {len(final_content)})"
                         )
-                        _LOGGER.info(f"💬 Full response: {final_content}")
                         return final_content
 
         # If we hit max iterations, return what we have

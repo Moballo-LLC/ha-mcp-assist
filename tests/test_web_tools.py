@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import ipaddress
+import logging
 import socket
 import sys
 import types
@@ -307,7 +308,9 @@ async def test_searxng_search_returns_timeout_error(hass, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_duckduckgo_search_formats_executor_results(hass, monkeypatch) -> None:
+async def test_duckduckgo_search_formats_executor_results(
+    hass, monkeypatch, caplog
+) -> None:
     """DuckDuckGo search should format normalized executor results."""
     tool = ddg_module.DuckDuckGoSearchTool(hass)
 
@@ -327,12 +330,16 @@ async def test_duckduckgo_search_formats_executor_results(hass, monkeypatch) -> 
 
     monkeypatch.setattr(tool, "_search_sync", _search_sync)
 
-    result = await tool.handle_call("search", {"query": "mariners", "count": 2})
+    with caplog.at_level(logging.DEBUG, logger=ddg_module._LOGGER.name):
+        result = await tool.handle_call("search", {"query": "mariners", "count": 2})
 
     assert "Schedule" in result["content"][0]["text"]
     assert "https://example.com/schedule" in result["content"][0]["text"]
     assert result["structuredContent"]["mode"] == "web"
     assert result["structuredContent"]["results"][0]["url"] == "https://example.com/schedule"
+    assert "DuckDuckGo Search request" in caplog.text
+    assert "query_chars=8" in caplog.text
+    assert "mariners" not in caplog.text
 
 
 def test_duckduckgo_search_sync_normalizes_ddgs_results(monkeypatch, hass) -> None:
@@ -504,7 +511,7 @@ async def test_duckduckgo_search_returns_error_payload_on_failure(
 
     result = await tool.handle_call("search", {"query": "mariners"})
 
-    assert result["content"][0]["text"] == "❌ Search error: search backend failed"
+    assert result["content"][0]["text"] == "❌ Search error: RuntimeError"
 
 
 @pytest.mark.asyncio
@@ -566,6 +573,41 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
         fake_session.client_session_kwargs[0]["connector"],
         read_url_module.aiohttp.TCPConnector,
     )
+
+
+@pytest.mark.asyncio
+async def test_read_url_debug_logs_shape_without_sensitive_query(
+    hass, monkeypatch, caplog
+) -> None:
+    """Read URL debug logs should not include raw paths or query values."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            text="safe response",
+        )
+    )
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    with caplog.at_level(logging.DEBUG, logger=read_url_module._LOGGER.name):
+        result = await tool.handle_call(
+            "read_url",
+            {"url": "https://example.com/private/path?api_key=secret-token"},
+        )
+
+    assert "safe response" in result["content"][0]["text"]
+    assert "scheme=https" in caplog.text
+    assert "host=example.com" in caplog.text
+    assert "query_present=True" in caplog.text
+    assert "private/path" not in caplog.text
+    assert "api_key" not in caplog.text
+    assert "secret-token" not in caplog.text
 
 
 @pytest.mark.asyncio

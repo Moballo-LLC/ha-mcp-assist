@@ -141,6 +141,17 @@ class _ImageFetchTarget:
 
 
 _SKIP_NON_SERIALIZABLE = object()
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
+_SENSITIVE_LOG_FIELD_RE = re.compile(
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
+)
+_MAX_LOG_VALUE_CHARS = 500
 
 
 def _strip_non_json_serializable(value: Any) -> Any:
@@ -180,7 +191,33 @@ def _strip_non_json_serializable(value: Any) -> Any:
 
 def _sanitize_log_value(value: Any) -> str:
     """Return a log-safe representation of user-controlled values."""
-    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+    text = str(value)
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
+    text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
+    if len(text) <= _MAX_LOG_VALUE_CHARS:
+        return text
+    return f"{text[:_MAX_LOG_VALUE_CHARS].rstrip()}... [truncated {len(text) - _MAX_LOG_VALUE_CHARS} chars]"
+
+
+def _json_size_bytes(value: Any) -> int:
+    """Return UTF-8 JSON size for logs without logging the JSON itself."""
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        serialized = str(value)
+    return len(serialized.encode("utf-8"))
+
+
+def _mapping_count(value: Any) -> int:
+    """Return the number of keys in a mapping for metadata-only logs."""
+    return len(value) if isinstance(value, dict) else 0
 
 
 class MCPServer(
@@ -2217,9 +2254,11 @@ class MCPServer(
         context = params.get("context") or {}
 
         _LOGGER.debug(
-            "Calling tool: %s with args: %s",
+            "Calling tool: %s (argument_count=%d, context_count=%d, argument_bytes=%d)",
             _sanitize_log_value(tool_name),
-            _sanitize_log_value(arguments),
+            _mapping_count(arguments),
+            _mapping_count(context),
+            _json_size_bytes(arguments),
         )
 
         if not self._is_tool_enabled(tool_name):
@@ -2961,8 +3000,12 @@ class MCPServer(
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
+                        _LOGGER.warning(
+                            "Image analysis provider error: status=%s",
+                            response.status,
+                        )
                         raise ValueError(
-                            f"Image analysis failed for {server_type}: HTTP {response.status} {await response.text()}"
+                            f"Image analysis failed for {server_type}: HTTP {response.status}"
                         )
                     data = await response.json()
             return str(data.get("message", {}).get("content") or "").strip()
@@ -2990,8 +3033,12 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
+                    _LOGGER.warning(
+                        "Image analysis provider error: status=%s",
+                        response.status,
+                    )
                     raise ValueError(
-                        f"Image analysis failed for {server_type}: HTTP {response.status} {await response.text()}"
+                        f"Image analysis failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
 
@@ -3041,8 +3088,12 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
+                    _LOGGER.warning(
+                        "Image generation provider error: status=%s",
+                        response.status,
+                    )
                     raise ValueError(
-                        f"Image generation failed for {server_type}: HTTP {response.status} {await response.text()}"
+                        f"Image generation failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
 
@@ -4046,10 +4097,13 @@ class MCPServer(
             }
 
         _LOGGER.info(
-            "🎯 Performing action: %s.%s on %s",
+            "🎯 Performing action: %s.%s (target_count=%d, data_count=%d, target_bytes=%d, data_bytes=%d)",
             _sanitize_log_value(domain),
             _sanitize_log_value(action),
-            _sanitize_log_value(target),
+            _mapping_count(target),
+            _mapping_count(data),
+            _json_size_bytes(target),
+            _json_size_bytes(data),
         )
 
         # Notify start
@@ -4079,8 +4133,8 @@ class MCPServer(
                 resolved_target, domain
             )
             _LOGGER.debug(
-                "Resolved target: %s",
-                _sanitize_log_value(resolved_target),
+                "Resolved target: entity_count=%d",
+                len(resolved_target.get("entity_id", [])),
             )
         except Exception as err:
             error_msg = f"Failed to resolve target: {err}"
@@ -4341,9 +4395,10 @@ class MCPServer(
         full_script_id = f"script.{script_name}"
 
         _LOGGER.info(
-            "📜 Running script: %s with variables: %s",
+            "📜 Running script: %s (variable_count=%d, variable_bytes=%d)",
             _sanitize_log_value(full_script_id),
-            _sanitize_log_value(variables),
+            _mapping_count(variables),
+            _json_size_bytes(variables),
         )
 
         # Notify start
@@ -4417,9 +4472,10 @@ class MCPServer(
             automation_id = f"automation.{automation_id}"
 
         _LOGGER.info(
-            "🤖 Triggering automation: %s with variables: %s, skip_conditions: %s",
+            "🤖 Triggering automation: %s (variable_count=%d, variable_bytes=%d, skip_conditions=%s)",
             _sanitize_log_value(automation_id),
-            _sanitize_log_value(variables),
+            _mapping_count(variables),
+            _json_size_bytes(variables),
             _sanitize_log_value(skip_conditions),
         )
 
@@ -4888,10 +4944,14 @@ class MCPServer(
             external=True,
         )
         _LOGGER.debug(
-            "Calling Home Assistant LLM API %s tool: %s(%s)",
+            (
+                "Calling Home Assistant LLM API %s tool: %s "
+                "(argument_count=%d, argument_bytes=%d)"
+            ),
             _sanitize_log_value(llm_api.api.id),
             _sanitize_log_value(tool_input.tool_name),
-            _sanitize_log_value(tool_input.tool_args),
+            _mapping_count(tool_input.tool_args),
+            _json_size_bytes(tool_input.tool_args),
         )
 
         try:
@@ -5058,9 +5118,9 @@ class MCPServer(
 
         resolved_target = {"entity_id": sorted(resolved_entities)}
         _LOGGER.debug(
-            "Resolved target %s to entity_ids: %s",
-            _sanitize_log_value(target),
-            _sanitize_log_value(resolved_target["entity_id"]),
+            "Resolved target selector_count=%d to entity_count=%d",
+            _mapping_count(target),
+            len(resolved_target["entity_id"]),
         )
         return resolved_target
 
