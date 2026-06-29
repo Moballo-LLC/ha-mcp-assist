@@ -49,6 +49,8 @@ CONF_SEARCH_PROVIDER = "search_provider"
 CONF_ENABLE_WEB_SEARCH = "enable_web_search"
 CONF_ENABLE_GAP_FILLING = "enable_gap_filling"
 CONF_ENABLE_ASSIST_BRIDGE = "enable_assist_bridge"
+CONF_ENABLE_LLM_API_BRIDGE = "enable_llm_api_bridge"
+CONF_LLM_API_ALLOWLIST = "llm_api_allowlist"
 CONF_ENABLE_RESPONSE_SERVICE_TOOLS = "enable_response_service_tools"
 CONF_ENABLE_WEATHER_FORECAST_TOOL = "enable_weather_forecast_tool"
 CONF_ENABLE_RECORDER_TOOLS = "enable_recorder_tools"
@@ -63,6 +65,7 @@ CONF_MEMORY_MAX_ITEMS = "memory_max_items"
 CONF_PROFILE_ENABLE_WEB_SEARCH = "profile_enable_web_search"
 CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS = "profile_enable_external_custom_tools"
 CONF_PROFILE_ENABLE_ASSIST_BRIDGE = "profile_enable_assist_bridge"
+CONF_PROFILE_ENABLE_LLM_API_BRIDGE = "profile_enable_llm_api_bridge"
 CONF_PROFILE_ENABLE_RESPONSE_SERVICE_TOOLS = "profile_enable_response_service_tools"
 CONF_PROFILE_ENABLE_WEATHER_FORECAST_TOOL = "profile_enable_weather_forecast_tool"
 CONF_PROFILE_ENABLE_RECORDER_TOOLS = "profile_enable_recorder_tools"
@@ -139,6 +142,8 @@ DEFAULT_SEARCH_PROVIDER = "none"
 DEFAULT_ENABLE_WEB_SEARCH = False
 DEFAULT_ENABLE_GAP_FILLING = True
 DEFAULT_ENABLE_ASSIST_BRIDGE = False
+DEFAULT_ENABLE_LLM_API_BRIDGE = False
+DEFAULT_LLM_API_ALLOWLIST = ""
 DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS = True
 DEFAULT_ENABLE_WEATHER_FORECAST_TOOL = True
 DEFAULT_ENABLE_RECORDER_TOOLS = True
@@ -153,6 +158,7 @@ DEFAULT_MEMORY_MAX_ITEMS = 500
 DEFAULT_PROFILE_ENABLE_WEB_SEARCH = True
 DEFAULT_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS = True
 DEFAULT_PROFILE_ENABLE_ASSIST_BRIDGE = True
+DEFAULT_PROFILE_ENABLE_LLM_API_BRIDGE = True
 DEFAULT_PROFILE_ENABLE_RESPONSE_SERVICE_TOOLS = True
 DEFAULT_PROFILE_ENABLE_WEATHER_FORECAST_TOOL = True
 DEFAULT_PROFILE_ENABLE_RECORDER_TOOLS = True
@@ -187,6 +193,7 @@ SERVICE_CLEAR_CHAT_LOGS = "clear_chat_logs"
 TOOL_FAMILY_DEVICE = "device"
 TOOL_FAMILY_EXTERNAL_CUSTOM = "external_custom"
 TOOL_FAMILY_ASSIST_BRIDGE = "assist_bridge"
+TOOL_FAMILY_LLM_API_BRIDGE = "llm_api_bridge"
 TOOL_FAMILY_RESPONSE_SERVICE = "response_service"
 TOOL_FAMILY_WEATHER_FORECAST = "weather_forecast"
 TOOL_FAMILY_RECORDER = "recorder"
@@ -204,6 +211,14 @@ OPTIONAL_TOOL_FAMILY_TOOL_NAMES = {
             "call_assist_tool",
             "get_assist_prompt",
             "get_assist_context_snapshot",
+        }
+    ),
+    TOOL_FAMILY_LLM_API_BRIDGE: frozenset(
+        {
+            "list_llm_apis",
+            "list_llm_api_tools",
+            "call_llm_api_tool",
+            "get_llm_api_prompt",
         }
     ),
     TOOL_FAMILY_RESPONSE_SERVICE: frozenset(
@@ -296,6 +311,10 @@ TOOL_FAMILY_SHARED_SETTINGS = {
         CONF_ENABLE_ASSIST_BRIDGE,
         DEFAULT_ENABLE_ASSIST_BRIDGE,
     ),
+    TOOL_FAMILY_LLM_API_BRIDGE: (
+        CONF_ENABLE_LLM_API_BRIDGE,
+        DEFAULT_ENABLE_LLM_API_BRIDGE,
+    ),
     TOOL_FAMILY_RESPONSE_SERVICE: (
         CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
         DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -343,6 +362,10 @@ TOOL_FAMILY_PROFILE_SETTINGS = {
         CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
         DEFAULT_PROFILE_ENABLE_ASSIST_BRIDGE,
     ),
+    TOOL_FAMILY_LLM_API_BRIDGE: (
+        CONF_PROFILE_ENABLE_LLM_API_BRIDGE,
+        DEFAULT_PROFILE_ENABLE_LLM_API_BRIDGE,
+    ),
     TOOL_FAMILY_RESPONSE_SERVICE: (
         CONF_PROFILE_ENABLE_RESPONSE_SERVICE_TOOLS,
         DEFAULT_PROFILE_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -381,6 +404,19 @@ TOOL_FAMILY_PROFILE_SETTINGS = {
 def get_optional_tool_family(tool_name: str) -> str | None:
     """Return the optional tool family for a tool name, if any."""
     return OPTIONAL_TOOL_NAME_TO_FAMILY.get(tool_name)
+
+
+def parse_llm_api_allowlist(value: object) -> tuple[str, ...]:
+    """Normalize a comma/newline-separated LLM API allowlist."""
+    seen: set[str] = set()
+    allowed_api_ids: list[str] = []
+    for item in str(value or "").replace("\n", ",").split(","):
+        api_id = item.strip()
+        if not api_id or api_id in seen:
+            continue
+        seen.add(api_id)
+        allowed_api_ids.append(api_id)
+    return tuple(allowed_api_ids)
 
 # MCP Server settings
 MCP_SERVER_NAME = "ha-entity-discovery"
@@ -458,6 +494,13 @@ ASSIST_BRIDGE_TECHNICAL_INSTRUCTIONS = """
 Assist bridge tools are enabled.
 - Use list_assist_tools / call_assist_tool only as fallback or debugging.
 - Prefer MCP Assist discovery and control tools first.
+"""
+
+LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS = """
+Third-party Home Assistant LLM API bridge tools are enabled.
+- Use list_llm_apis to inspect allowlisted third-party LLM APIs.
+- Use list_llm_api_tools before call_llm_api_tool so arguments match that API's schema.
+- Prefer MCP Assist native tools first for common Home Assistant discovery and control.
 """
 
 CALCULATOR_TECHNICAL_INSTRUCTIONS = """

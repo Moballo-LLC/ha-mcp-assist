@@ -97,6 +97,25 @@ Recommendations:
 general network scanner or a way to bypass Home Assistant network policy.
 Wikipedia Search is limited to validated `*.wikipedia.org` API requests.
 
+## Third-Party LLM APIs
+
+The optional LLM API Bridge can expose tools registered by other Home Assistant
+integrations through Home Assistant's LLM API registry. It is disabled by
+default and requires an explicit allowlist of API IDs.
+
+Recommendations:
+
+- Enable the bridge only when a profile needs a specific third-party LLM API.
+- Add only API IDs from integrations you trust, such as a locally installed
+  intent or helper integration you intentionally configured.
+- Review the tools exposed by `list_llm_api_tools` before relying on them.
+- Keep the allowlist narrow and remove API IDs that are no longer needed.
+- Use MCP Assist's native tools first for common Home Assistant discovery,
+  state reads, and control.
+
+The built-in Home Assistant `assist` API is handled by the separate Assist
+Bridge tools and is not allowlisted through this feature.
+
 ## Memory
 
 When enabled, memory tools can store user-approved facts and preferences with a

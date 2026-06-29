@@ -123,6 +123,7 @@ Shared settings apply to all profiles:
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |
 | Web Search Provider | None, DuckDuckGo, Brave Search, or SearXNG |
 | Memory Retention | Default TTL, max TTL, and max stored memories |
+| LLM API Bridge | Optional allowlist for third-party Home Assistant LLM APIs |
 | Shared Tool Families | Which optional built-in and external tools are exposed |
 
 Because the MCP server is shared, changing these settings from one profile's
@@ -180,6 +181,26 @@ custom categories are still accepted for existing workflows.
 
 Memories are shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).
+
+## Third-Party LLM API Bridge
+
+The LLM API Bridge is optional and disabled by default. When enabled, MCP Assist
+can inspect and call tools exposed by other Home Assistant integrations that
+register LLM APIs.
+
+Shared settings:
+
+- **LLM API Bridge**: Exposes bridge tools on the shared MCP server.
+- **Allowed LLM API IDs**: Comma- or newline-separated API IDs MCP Assist may
+  inspect or call, such as `llm_intents`.
+
+The shared settings form shows currently registered third-party LLM APIs beside
+the allowlist field. Copy the API ID from that list when enabling an installed
+integration.
+
+The built-in Home Assistant `assist` API remains on the separate Assist Bridge.
+Do not add third-party API IDs unless you trust the integration that registered
+them. See [Security and Privacy](security-and-privacy.md#third-party-llm-apis).
 
 ## Weather Configuration
 

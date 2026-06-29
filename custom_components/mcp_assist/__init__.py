@@ -34,6 +34,8 @@ from .const import (
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_GAP_FILLING,
     CONF_ENABLE_ASSIST_BRIDGE,
+    CONF_ENABLE_LLM_API_BRIDGE,
+    CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_ENABLE_RECORDER_TOOLS,
@@ -60,6 +62,8 @@ from .const import (
     DEFAULT_ENABLE_WEB_SEARCH,
     DEFAULT_ENABLE_GAP_FILLING,
     DEFAULT_ENABLE_ASSIST_BRIDGE,
+    DEFAULT_ENABLE_LLM_API_BRIDGE,
+    DEFAULT_LLM_API_ALLOWLIST,
     DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS,
     DEFAULT_ENABLE_WEATHER_FORECAST_TOOL,
     DEFAULT_ENABLE_RECORDER_TOOLS,
@@ -365,6 +369,18 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                         CONF_ENABLE_ASSIST_BRIDGE, DEFAULT_ENABLE_ASSIST_BRIDGE
                     ),
                 ),
+                CONF_ENABLE_LLM_API_BRIDGE: first_profile.options.get(
+                    CONF_ENABLE_LLM_API_BRIDGE,
+                    first_profile.data.get(
+                        CONF_ENABLE_LLM_API_BRIDGE, DEFAULT_ENABLE_LLM_API_BRIDGE
+                    ),
+                ),
+                CONF_LLM_API_ALLOWLIST: first_profile.options.get(
+                    CONF_LLM_API_ALLOWLIST,
+                    first_profile.data.get(
+                        CONF_LLM_API_ALLOWLIST, DEFAULT_LLM_API_ALLOWLIST
+                    ),
+                ),
                 CONF_ENABLE_RESPONSE_SERVICE_TOOLS: first_profile.options.get(
                     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
                     first_profile.data.get(
@@ -478,6 +494,8 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                 CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
                 CONF_ENABLE_GAP_FILLING: DEFAULT_ENABLE_GAP_FILLING,
                 CONF_ENABLE_ASSIST_BRIDGE: DEFAULT_ENABLE_ASSIST_BRIDGE,
+                CONF_ENABLE_LLM_API_BRIDGE: DEFAULT_ENABLE_LLM_API_BRIDGE,
+                CONF_LLM_API_ALLOWLIST: DEFAULT_LLM_API_ALLOWLIST,
                 CONF_ENABLE_RESPONSE_SERVICE_TOOLS: DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS,
                 CONF_ENABLE_WEATHER_FORECAST_TOOL: DEFAULT_ENABLE_WEATHER_FORECAST_TOOL,
                 CONF_ENABLE_RECORDER_TOOLS: DEFAULT_ENABLE_RECORDER_TOOLS,
