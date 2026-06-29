@@ -277,7 +277,7 @@ class ReadUrlTool:
                 }]
             }
 
-        text = await self._extract_text(html_text, content_type)
+        text = await self._extract_text(html_text, lower_content_type)
         if 'text/html' in lower_content_type:
             if self._is_wikipedia_url(parsed):
                 text = self._trim_wikipedia_html_fallback(text)
@@ -288,7 +288,7 @@ class ReadUrlTool:
         if '<title>' in lower_html and '</title>' in lower_html:
             title_start = lower_html.index('<title>') + 7
             title_end = lower_html.index('</title>', title_start)
-            title = html_lib.unescape(html_text[title_start:title_end]).strip()
+            title = html_text[title_start:title_end]
         title = self._clean_title(title)
 
         truncated = False
@@ -480,7 +480,7 @@ class ReadUrlTool:
         """Strip lightweight markup from a page title."""
         if not title:
             return title
-        return re.sub(r"<[^>]+>", "", title).strip()
+        return html_lib.unescape(re.sub(r"<[^>]+>", "", title)).strip()
 
     @staticmethod
     def _postprocess_text(text: str) -> str:

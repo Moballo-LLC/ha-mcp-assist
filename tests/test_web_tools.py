@@ -699,6 +699,49 @@ async def test_read_url_preserves_plain_text_markdown_escapes(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_url_normalizes_plain_text_content_type(hass) -> None:
+    """Plain text media types should be handled case-insensitively."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "Text/Plain; charset=utf-8"},
+        text="<example>keep angle-bracket text</example>",
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/source.txt"),
+        "https://example.com/source.txt",
+        summary_only=False,
+    )
+
+    assert "<example>keep angle-bracket text</example>" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_escaped_angle_brackets_in_title(hass) -> None:
+    """Escaped angle-bracket title text should not be mistaken for markup."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text="""
+        <html>
+          <head><title>C++ vector&lt;int&gt; reference</title></head>
+          <body><main><p>Useful article text.</p></main></body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/vector"),
+        "https://example.com/vector",
+        summary_only=False,
+    )
+
+    assert "📖 **C++ vector<int> reference**" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
 async def test_read_url_cleans_wikipedia_page_chrome(hass) -> None:
     """Wikipedia HTML fallback should remove common article chrome."""
     tool = read_url_module.ReadUrlTool(hass)
