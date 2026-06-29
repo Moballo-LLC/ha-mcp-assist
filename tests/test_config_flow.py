@@ -722,6 +722,31 @@ async def test_options_mcp_step_requires_google_maps_api_key_when_enabled(
     assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
 
 
+async def test_options_mcp_step_rejects_invalid_shared_port(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should not persist an invalid MCP server port."""
+    system_entry = system_entry_factory(data={CONF_MCP_PORT: 8090})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 80,
+            CONF_ALLOWED_IPS: "127.0.0.1",
+            _builtin_shared_key("search"): False,
+            CONF_SEARCH_PROVIDER: "none",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_MCP_PORT] == "invalid_port"
+    assert system_entry.data[CONF_MCP_PORT] == 8090
+
+
 async def test_options_mcp_step_preserves_google_maps_api_key_default(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:

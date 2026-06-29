@@ -141,6 +141,25 @@ async def test_memory_manager_invalid_category_filter_matches_nothing(hass) -> N
     assert [memory["id"] for memory in all_memories] == [stored["id"]]
 
 
+def test_memory_manager_handles_malformed_loaded_ttl(hass) -> None:
+    """Malformed persisted TTL metadata should not break memory loading."""
+    manager = MemoryManager(hass)
+
+    normalized = manager._normalize_loaded_memory(
+        {
+            "id": "memory123",
+            "text": "loaded memory",
+            "category": "preference",
+            "created_at": dt_util.utcnow().isoformat(),
+            "expires_at": (dt_util.utcnow() + timedelta(days=1)).isoformat(),
+            "ttl_days": "not-a-number",
+        }
+    )
+
+    assert normalized is not None
+    assert normalized["ttl_days"] == 0
+
+
 @pytest.mark.asyncio
 async def test_memory_manager_prunes_to_max_items(hass) -> None:
     """Only the newest configured number of memories should be retained."""

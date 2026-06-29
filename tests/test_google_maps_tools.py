@@ -385,6 +385,66 @@ def test_google_route_waypoint_accepts_bare_place_ids(hass) -> None:
     assert waypoint == {"placeId": "ChIJ1234567890abcdef"}
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("place_id:ChIJ1234567890abcdef", "ChIJ1234567890abcdef"),
+        ("place_id:places/ChIJ1234567890abcdef", "ChIJ1234567890abcdef"),
+        ("places/ChIJ1234567890abcdef", "ChIJ1234567890abcdef"),
+    ],
+)
+def test_google_route_waypoint_accepts_prefixed_place_ids(
+    hass,
+    value: str,
+    expected: str,
+) -> None:
+    """Explicit place ID prefixes should normalize before calling Routes."""
+    waypoint = google_maps_module.GoogleMapsTool(hass)._build_route_waypoint(value)
+
+    assert waypoint == {"placeId": expected}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "place_id:",
+        "place_id:places/",
+        "places/",
+        "place_id:not/a/place",
+    ],
+)
+def test_google_route_waypoint_rejects_invalid_explicit_place_ids(
+    hass,
+    value: str,
+) -> None:
+    """Malformed explicit route place IDs should fail before the API call."""
+    with pytest.raises(ValueError, match="place_id must be"):
+        google_maps_module.GoogleMapsTool(hass)._build_route_waypoint(value)
+
+
+@pytest.mark.asyncio
+async def test_get_google_route_rejects_invalid_explicit_place_id_before_http(
+    hass,
+    system_entry_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid explicit place IDs should not be sent to Google Routes."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+
+    def _client_session(**_kwargs):
+        raise AssertionError("HTTP should not be called for invalid place_id")
+
+    monkeypatch.setattr(google_maps_module.aiohttp, "ClientSession", _client_session)
+
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route",
+        {"origin": "Downtown Seattle", "destination": "place_id:"},
+    )
+
+    assert result["isError"] is True
+    assert "place_id must be" in result["content"][0]["text"]
+
+
 @pytest.mark.asyncio
 async def test_google_maps_tools_require_api_key(
     hass,

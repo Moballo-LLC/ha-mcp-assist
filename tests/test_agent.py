@@ -1201,109 +1201,20 @@ def test_convert_mcp_tools_to_llm_tools_keeps_compact_routing_with_llm_descripti
     assert "Very long UI-facing description" not in description
 
 
-def test_build_anthropic_payload_uses_native_messages_shape(
-    hass, profile_entry_factory
-) -> None:
-    """Claude should receive native Messages payloads, not OpenAI chat payloads."""
-    entry = profile_entry_factory(
-        data={
-            CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC,
-            CONF_MODEL_NAME: "claude-sonnet-4-5",
-        },
-        options={CONF_MAX_TOKENS: 321},
-    )
-    agent = MCPAssistConversationEntity(hass, entry)
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "discover_entities",
-                "description": "Find entities.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"area": {"type": "string"}},
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "analyze_image",
-                "description": "Analyze an image.",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "generate_image",
-                "description": "Generate an image.",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        },
-    ]
-    messages = [
-        {"role": "system", "content": "You are helpful."},
-        {"role": "user", "content": "Find kitchen lights."},
-        {
-            "role": "assistant",
-            "tool_calls": [
-                {
-                    "id": "toolu_1",
-                    "type": "function",
-                    "function": {
-                        "name": "discover_entities",
-                        "arguments": '{"area":"Kitchen"}',
-                    },
-                }
-            ],
-        },
-        {"role": "tool", "tool_call_id": "toolu_1", "content": "Kitchen light"},
-    ]
+def test_agent_does_not_expose_provider_specific_transport_helpers() -> None:
+    """Provider quirks should live under llm_providers, not on the agent."""
+    provider_specific_helpers = {
+        "_append_anthropic_message",
+        "_build_anthropic_payload",
+        "_build_ollama_payload",
+        "_build_openai_payload",
+        "_call_anthropic_messages",
+        "_format_tool_calls_for_ollama",
+        "_get_anthropic_provider",
+    }
 
-    payload = agent._build_anthropic_payload(messages, tools)
-
-    assert payload["model"] == "claude-sonnet-4-5"
-    assert payload["max_tokens"] == 321
-    assert payload["system"] == "You are helpful."
-    assert "stream" not in payload
-    assert payload["tools"] == [
-        {
-            "name": "discover_entities",
-            "description": "Find entities.",
-            "input_schema": {
-                "type": "object",
-                "properties": {"area": {"type": "string"}},
-            },
-        }
-    ]
-    assert payload["messages"] == [
-        {
-            "role": "user",
-            "content": [{"type": "text", "text": "Find kitchen lights."}],
-        },
-        {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "tool_use",
-                    "id": "toolu_1",
-                    "name": "discover_entities",
-                    "input": {"area": "Kitchen"},
-                }
-            ],
-        },
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": "toolu_1",
-                    "content": "Kitchen light",
-                }
-            ],
-        },
-    ]
+    for helper_name in provider_specific_helpers:
+        assert not hasattr(MCPAssistConversationEntity, helper_name)
 
 
 @pytest.mark.asyncio
