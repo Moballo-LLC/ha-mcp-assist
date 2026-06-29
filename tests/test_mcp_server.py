@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
 import json
 import logging
 import math
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, WSCloseCode
 import yarl
 from homeassistant.components.weather import WeatherEntityFeature
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -139,6 +140,81 @@ def test_server_collects_allowed_ips_from_url_and_shared_settings(
     assert "192.168.50.12" in server.allowed_ips
     assert "10.0.0.0/24" in server.allowed_ips
     assert "192.168.1.25" in server.allowed_ips
+
+
+@pytest.mark.asyncio
+async def test_server_applies_shared_allowed_ips_and_reloads_tools(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Running servers should refresh shared allowlists and package tools."""
+    system_entry = system_entry_factory(
+        data={CONF_ALLOWED_IPS: "10.0.0.0/24"}
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.custom_tools = SimpleNamespace(
+        reload_tool_packages=AsyncMock(
+            return_value={
+                "external_custom_tools_enabled": False,
+                "external_packages": [],
+                "built_in_packages": [],
+            }
+        )
+    )
+    server.broadcast_notification = AsyncMock()
+    removed_ws = Mock()
+    removed_ws.close = AsyncMock()
+    kept_ws = Mock()
+    kept_ws.close = AsyncMock()
+    server._websocket_clients = {
+        removed_ws: "10.0.0.10",
+        kept_ws: "192.168.1.25",
+    }
+    removed_sse = Mock()
+    removed_sse.write_eof = AsyncMock()
+    kept_sse = Mock()
+    kept_sse.write_eof = AsyncMock()
+    server.sse_clients = [removed_sse, kept_sse]
+    server._sse_client_ips = {
+        removed_sse: "10.0.0.10",
+        kept_sse: "192.168.1.25",
+    }
+    removed_progress = asyncio.Queue()
+    kept_progress = asyncio.Queue()
+    server.progress_queues = {removed_progress, kept_progress}
+    server._progress_queue_ips = {
+        removed_progress: "10.0.0.10",
+        kept_progress: "192.168.1.25",
+    }
+
+    assert "10.0.0.0/24" in server.allowed_ips
+
+    hass.config_entries.async_update_entry(
+        system_entry,
+        data={**system_entry.data, CONF_ALLOWED_IPS: "192.168.1.25"},
+    )
+
+    result = await server.async_apply_shared_settings()
+
+    assert "192.168.1.25" in server.allowed_ips
+    assert "10.0.0.0/24" not in server.allowed_ips
+    assert result["allowed_ips"] == server.allowed_ips
+    removed_ws.close.assert_awaited_once_with(
+        code=WSCloseCode.POLICY_VIOLATION,
+        message=b"IP no longer authorized",
+    )
+    kept_ws.close.assert_not_awaited()
+    removed_sse.write_eof.assert_awaited_once()
+    kept_sse.write_eof.assert_not_awaited()
+    assert removed_sse not in server.sse_clients
+    assert kept_sse in server.sse_clients
+    assert removed_progress not in server.progress_queues
+    assert removed_progress.get_nowait() is None
+    assert kept_progress in server.progress_queues
+    assert kept_progress.empty()
+    server.custom_tools.reload_tool_packages.assert_awaited_once()
+    server.broadcast_notification.assert_awaited_once_with(
+        "notifications/tools/list_changed"
+    )
 
 
 @pytest.mark.asyncio

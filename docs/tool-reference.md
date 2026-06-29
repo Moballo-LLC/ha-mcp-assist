@@ -140,12 +140,16 @@ integration is installed and the tool family is enabled.
 | `list_music_assistant_players` | List Music Assistant media players |
 | `play_music_assistant` | Play media through Music Assistant |
 | `list_music_assistant_instances` | List configured Music Assistant instances |
-| `search_music_assistant` | Search Music Assistant library content |
-| `get_music_assistant_library` | Browse library content |
+| `search_music_assistant` | Search Music Assistant tracks, albums, artists, playlists, radio, audiobooks, and podcasts |
+| `get_music_assistant_library` | Browse Music Assistant library content |
 | `get_music_assistant_queue` | Inspect a player queue |
+| `control_music_assistant_player` | Pause, resume, skip, seek, adjust volume, shuffle, repeat, or clear queues |
+| `transfer_music_assistant_queue` | Move an active queue to another Music Assistant player |
 
 Use player names, areas, floors, labels, or entity IDs to narrow ambiguous
-player requests.
+player requests. Search and library browsing support Music Assistant tracks,
+albums, artists, playlists, radio, audiobooks, and podcasts when those media
+types are available from the configured Music Assistant instance.
 
 ## Image Tools
 

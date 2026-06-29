@@ -3,6 +3,7 @@
 import asyncio
 import base64
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 import ipaddress
 import json
@@ -16,7 +17,7 @@ from urllib.parse import unquote, urlparse
 from datetime import timedelta
 
 import aiohttp
-from aiohttp import web, WSMsgType
+from aiohttp import web, WSCloseCode, WSMsgType
 from aiohttp.web_ws import WebSocketResponse
 import voluptuous as vol
 from voluptuous_openapi import convert
@@ -229,61 +230,15 @@ class MCPServer(
         self.discovery = EntityDiscovery(hass)
         self.sse_clients = []  # Track SSE connections for notifications
         self.progress_queues = set()  # Track progress SSE clients
+        self._sse_client_ips: dict[web.StreamResponse, str | None] = {}
+        self._progress_queue_ips: dict[asyncio.Queue[Any], str | None] = {}
+        self._websocket_clients: dict[WebSocketResponse, str | None] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.memory_manager = MemoryManager(hass)
 
-        # Extract allowed IPs from LM Studio URL
-        self.allowed_ips = ["127.0.0.1", "::1"]  # Always allow localhost
-
-        # Get LM Studio URL from config
-        lmstudio_url = DEFAULT_LMSTUDIO_URL
-        if entry:
-            # Check options first, then data
-            lmstudio_url = entry.options.get(
-                CONF_LMSTUDIO_URL,
-                entry.data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL),
-            )
-
-        # Extract hostname/IP from LM Studio URL
-        try:
-            parsed = urlparse(lmstudio_url)
-            lmstudio_host = parsed.hostname or parsed.netloc.split(":")[0]
-            if lmstudio_host and lmstudio_host not in self.allowed_ips:
-                self.allowed_ips.append(lmstudio_host)
-                _LOGGER.info(
-                    "MCP server automatically whitelisted LM Studio IP: %s",
-                    _sanitize_log_value(lmstudio_host),
-                )
-        except Exception as e:
-            _LOGGER.warning(
-                "Could not parse LM Studio URL '%s': %s",
-                _sanitize_log_value(lmstudio_url),
-                _sanitize_log_value(e),
-            )
-
-        # Add user-configured allowed IPs/CIDR ranges (shared setting)
-        allowed_ips_str = self._get_shared_setting(
-            CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
-        )
-        if allowed_ips_str:
-            # Parse comma-separated list
-            additional_ips = [
-                ip.strip() for ip in allowed_ips_str.split(",") if ip.strip()
-            ]
-            for ip_entry in additional_ips:
-                if ip_entry not in self.allowed_ips:
-                    self.allowed_ips.append(ip_entry)
-            if additional_ips:
-                _LOGGER.info(
-                    "MCP server added user-configured allowed IPs/ranges: %s",
-                    _sanitize_log_value(additional_ips),
-                )
-
-        _LOGGER.info(
-            "MCP server allowed IPs/ranges: %s",
-            _sanitize_log_value(self.allowed_ips),
-        )
+        self.allowed_ips: list[str] = []
+        self._refresh_allowed_ips_from_settings()
 
         # Custom tools will be initialized in start() after system entry exists
         self.custom_tools = None
@@ -308,6 +263,55 @@ class MCPServer(
 
         # Return default
         return default
+
+    def _refresh_allowed_ips_from_settings(self) -> None:
+        """Refresh allowed IPs from profile URL and shared server settings."""
+        allowed_ips = ["127.0.0.1", "::1"]
+
+        lmstudio_url = DEFAULT_LMSTUDIO_URL
+        if self.entry:
+            lmstudio_url = self.entry.options.get(
+                CONF_LMSTUDIO_URL,
+                self.entry.data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL),
+            )
+
+        try:
+            parsed = urlparse(lmstudio_url)
+            lmstudio_host = parsed.hostname or parsed.netloc.split(":")[0]
+            if lmstudio_host and lmstudio_host not in allowed_ips:
+                allowed_ips.append(lmstudio_host)
+                _LOGGER.info(
+                    "MCP server automatically whitelisted LM Studio IP: %s",
+                    _sanitize_log_value(lmstudio_host),
+                )
+        except Exception as e:
+            _LOGGER.warning(
+                "Could not parse LM Studio URL '%s': %s",
+                _sanitize_log_value(lmstudio_url),
+                _sanitize_log_value(e),
+            )
+
+        allowed_ips_str = self._get_shared_setting(
+            CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
+        )
+        if allowed_ips_str:
+            additional_ips = [
+                ip.strip() for ip in allowed_ips_str.split(",") if ip.strip()
+            ]
+            for ip_entry in additional_ips:
+                if ip_entry not in allowed_ips:
+                    allowed_ips.append(ip_entry)
+            if additional_ips:
+                _LOGGER.info(
+                    "MCP server added user-configured allowed IPs/ranges: %s",
+                    _sanitize_log_value(additional_ips),
+                )
+
+        self.allowed_ips = allowed_ips
+        _LOGGER.info(
+            "MCP server allowed IPs/ranges: %s",
+            _sanitize_log_value(self.allowed_ips),
+        )
 
     def _get_search_provider(self) -> str:
         """Get search provider (shared setting) with backward compatibility."""
@@ -928,6 +932,63 @@ class MCPServer(
         await self.broadcast_notification("notifications/tools/list_changed")
         return diagnostics
 
+    async def async_apply_shared_settings(self) -> dict[str, Any]:
+        """Apply changed shared MCP settings without reloading every profile."""
+        self._refresh_allowed_ips_from_settings()
+        await self._close_disallowed_websocket_clients()
+        await self._close_disallowed_stream_clients()
+        diagnostics = await self.reload_external_custom_tools()
+        return {
+            "allowed_ips": list(self.allowed_ips),
+            "tool_diagnostics": diagnostics,
+        }
+
+    async def _close_disallowed_websocket_clients(self) -> None:
+        """Close live WebSocket clients that no longer pass the IP allowlist."""
+        for ws, client_ip in list(self._websocket_clients.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP WebSocket client removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            await ws.close(
+                code=WSCloseCode.POLICY_VIOLATION,
+                message=b"IP no longer authorized",
+            )
+
+    async def _close_disallowed_stream_clients(self) -> None:
+        """Stop SSE/progress streams that no longer pass the IP allowlist."""
+        for response, client_ip in list(self._sse_client_ips.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP SSE client removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            if response in self.sse_clients:
+                self.sse_clients.remove(response)
+            self._sse_client_ips.pop(response, None)
+            try:
+                await response.write_eof()
+            except Exception as err:
+                _LOGGER.debug(
+                    "SSE client close failed after allowlist update: %s",
+                    _sanitize_log_value(err),
+                )
+
+        for queue, client_ip in list(self._progress_queue_ips.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP progress stream removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            self.progress_queues.discard(queue)
+            self._progress_queue_ips.pop(queue, None)
+            with suppress(asyncio.QueueFull):
+                queue.put_nowait(None)
+
     async def handle_progress_stream(self, request: web.Request) -> web.StreamResponse:
         """SSE endpoint for progress updates during tool execution."""
         client_ip = request.remote
@@ -956,6 +1017,7 @@ class MCPServer(
         # Create a queue for this client
         queue = asyncio.Queue()
         self.progress_queues.add(queue)
+        self._progress_queue_ips[queue] = client_ip
 
         try:
             # Send initial connection message
@@ -965,6 +1027,8 @@ class MCPServer(
             # Stream progress updates
             while True:
                 msg = await queue.get()
+                if msg is None:
+                    break
                 data = f"data: {json.dumps(msg)}\n\n"
                 await response.write(data.encode())
 
@@ -972,6 +1036,7 @@ class MCPServer(
             _LOGGER.debug("Progress stream closed: %s", _sanitize_log_value(err))
         finally:
             self.progress_queues.discard(queue)
+            self._progress_queue_ips.pop(queue, None)
 
         return response
 
@@ -1017,6 +1082,7 @@ class MCPServer(
 
         # Store this client for notifications
         self.sse_clients.append(response)
+        self._sse_client_ips[response] = client_ip
         _LOGGER.info("✅ SSE client connected. Total clients: %d", len(self.sse_clients))
 
         try:
@@ -1044,6 +1110,7 @@ class MCPServer(
         finally:
             if response in self.sse_clients:
                 self.sse_clients.remove(response)
+            self._sse_client_ips.pop(response, None)
             _LOGGER.info("SSE clients remaining: %d", len(self.sse_clients))
 
         return response
@@ -1249,6 +1316,7 @@ class MCPServer(
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
+        self._websocket_clients[ws] = client_ip
 
         _LOGGER.info(
             "✅ MCP WebSocket connection established with %s",
@@ -1297,6 +1365,12 @@ class MCPServer(
             pass
         except Exception:
             _LOGGER.exception("WebSocket handler error")
+        finally:
+            self._websocket_clients.pop(ws, None)
+            _LOGGER.info(
+                "MCP WebSocket clients remaining: %d",
+                len(self._websocket_clients),
+            )
 
         return ws
 

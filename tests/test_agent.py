@@ -28,6 +28,7 @@ from custom_components.mcp_assist.const import (
     CONF_CLEAN_RESPONSES,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_MAX_HISTORY,
+    CONF_CONTEXT_MODE,
     CONF_MAX_ITERATIONS,
     CONF_MAX_TOKENS,
     CONF_MODEL_NAME,
@@ -46,7 +47,10 @@ from custom_components.mcp_assist.const import (
     CONF_CHAT_LOG_MODE,
     CONF_DEBUG_MODE,
     DOMAIN,
+    CONTEXT_MODE_LIGHT,
+    DEFAULT_CONTEXT_MODE,
     PROMPT_MODE_CUSTOM,
+    SERVER_TYPE_OLLAMA,
     SERVER_TYPE_ANTHROPIC,
 )
 
@@ -68,6 +72,32 @@ def _tool(name: str) -> dict[str, object]:
         "description": name,
         "inputSchema": {"type": "object", "properties": {}},
     }
+
+
+def test_provider_log_snippet_redacts_and_truncates_details() -> None:
+    """Provider details written to logs should be compact and secret-safe."""
+    snippet = agent_module._provider_log_snippet(
+        'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
+        '"error":"Incorrect API key: sk-live-secret1234567890",'
+        '"details":"API key provided: sk-prose-secret",'
+        '"google":"AIzaSyExampleKeyValue1234567890",'
+        '"local":"API key: my-local-secret",'
+        '"message":"'
+        + ("x" * 80)
+        + '"}',
+        max_chars=120,
+    )
+
+    assert "\n" not in snippet
+    assert "secret-value" not in snippet
+    assert "sk-leaked-value" not in snippet
+    assert "sk-live-secret1234567890" not in snippet
+    assert "sk-prose-secret" not in snippet
+    assert "AIzaSyExampleKeyValue1234567890" not in snippet
+    assert "my-local-secret" not in snippet
+    assert 'api_key":"[redacted]' in snippet
+    assert 'Authorization":"[redacted]' in snippet
+    assert "truncated" in snippet
 
 
 class _FakeAnthropicResponse:
@@ -217,6 +247,43 @@ def test_profile_tool_filtering_hides_disabled_optional_tools(
     assert "discover_entities" in tool_names
     assert "discover_devices" not in tool_names
     assert "list_assist_tools" not in tool_names
+
+
+def test_light_context_mode_advertises_core_profile_tools(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Light context mode should keep the LLM-facing tool schema small."""
+    system_entry_factory(
+        data={
+            CONF_ENABLE_DEVICE_TOOLS: True,
+            CONF_ENABLE_WEB_SEARCH: True,
+        }
+    )
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT})
+
+    agent = MCPAssistConversationEntity(hass, entry)
+    filtered = agent._filter_mcp_tools_for_profile(
+        [
+            _tool("discover_entities"),
+            _tool("get_entity_details"),
+            _tool("perform_action"),
+            _tool("discover_devices"),
+            _tool("get_device_details"),
+            _tool("get_weather_forecast"),
+            _tool("get_entity_history"),
+            _tool("search"),
+            _tool("sample_custom_tool"),
+        ]
+    )
+
+    tool_names = {tool["name"] for tool in filtered}
+    assert tool_names == {
+        "discover_entities",
+        "get_entity_details",
+        "perform_action",
+        "discover_devices",
+        "get_device_details",
+    }
 
 
 def test_profile_tool_filtering_can_hide_convert_unit_without_hiding_add(
@@ -462,16 +529,17 @@ def test_build_messages_respects_configured_max_history(
         {"user": "u1", "assistant": "a1"},
         {"user": "u2", "assistant": "a2"},
         {"user": "u3", "assistant": "a3"},
+        {"user": "u4", "assistant": "a4"},
     ]
 
     messages = agent._build_messages("system", "current", history)
 
     assert messages == [
         {"role": "system", "content": "system"},
-        {"role": "user", "content": "u2"},
-        {"role": "assistant", "content": "a2"},
         {"role": "user", "content": "u3"},
         {"role": "assistant", "content": "a3"},
+        {"role": "user", "content": "u4"},
+        {"role": "assistant", "content": "a4"},
         {"role": "user", "content": "current"},
     ]
 
@@ -493,6 +561,34 @@ def test_build_messages_supports_zero_history(
     ]
 
 
+def test_build_messages_light_context_caps_history_to_two_turns(
+    hass, profile_entry_factory
+) -> None:
+    """Light context mode should override large history settings with a small cap."""
+    entry = profile_entry_factory(
+        options={CONF_MAX_HISTORY: 10, CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT}
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    history = [
+        {"user": "u1", "assistant": "a1"},
+        {"user": "u2", "assistant": "a2"},
+        {"user": "u3", "assistant": "a3"},
+        {"user": "u4", "assistant": "a4"},
+    ]
+
+    messages = agent._build_messages("system", "current", history)
+
+    assert messages == [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "u3"},
+        {"role": "assistant", "content": "a3"},
+        {"role": "user", "content": "u4"},
+        {"role": "assistant", "content": "a4"},
+        {"role": "user", "content": "current"},
+    ]
+
+
 def test_chat_log_mode_defaults_off_and_can_be_enabled(
     hass, profile_entry_factory
 ) -> None:
@@ -508,6 +604,57 @@ def test_chat_log_mode_defaults_off_and_can_be_enabled(
 
     assert default_agent.chat_log_mode is False
     assert enabled_agent.chat_log_mode is True
+
+
+def test_context_mode_defaults_to_standard_for_unknown_values(
+    hass, profile_entry_factory
+) -> None:
+    """Unknown stored context mode values should fall back to standard behavior."""
+    default_agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    invalid_agent = MCPAssistConversationEntity(
+        hass,
+        profile_entry_factory(
+            unique_id=f"{DOMAIN}_context_mode_profile",
+            options={CONF_CONTEXT_MODE: "unexpected"},
+        ),
+    )
+
+    assert default_agent.context_mode == DEFAULT_CONTEXT_MODE
+    assert invalid_agent.context_mode == DEFAULT_CONTEXT_MODE
+
+
+def test_ollama_context_error_suggests_light_context_mode(
+    hass, profile_entry_factory
+) -> None:
+    """Ollama context-window errors should point users to the small-context setting."""
+    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    message = agent._get_friendly_error_message(
+        Exception(
+            'ollama API error 400: {"error":"request (12772 tokens) exceed"}'
+        )
+    )
+
+    assert "Context Mode: Light" in message
+    assert "12772 tokens" in message
+
+
+def test_ollama_token_rate_limit_is_not_reported_as_context_error(
+    hass, profile_entry_factory
+) -> None:
+    """Token-based rate limits should not trigger light-context guidance."""
+    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    message = agent._get_friendly_error_message(
+        Exception(
+            "ollama API error 429: rate limit exceeded: 1000 tokens per minute"
+        )
+    )
+
+    assert "rate limit" in message
+    assert "Context Mode: Light" not in message
 
 
 @pytest.mark.asyncio

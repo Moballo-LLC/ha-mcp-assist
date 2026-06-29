@@ -57,6 +57,7 @@ from .const import (
     CONF_FOLLOW_UP_MODE,
     CONF_RESPONSE_MODE,
     CONF_MAX_HISTORY,
+    CONF_CONTEXT_MODE,
     CONF_SERVER_TYPE,
     CONF_API_KEY,
     CONF_CONTROL_HA,
@@ -80,6 +81,8 @@ from .const import (
     DEFAULT_TECHNICAL_PROMPT,
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
+    CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD,
     DEFAULT_DEBUG_MODE,
     DEFAULT_CHAT_LOG_MODE,
     DEFAULT_MAX_ITERATIONS,
@@ -87,6 +90,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_RESPONSE_MODE,
     DEFAULT_MAX_HISTORY,
+    DEFAULT_CONTEXT_MODE,
     DEFAULT_MCP_PORT,
     DEFAULT_SERVER_TYPE,
     DEFAULT_API_KEY,
@@ -103,6 +107,8 @@ from .const import (
     DEFAULT_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
     DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     DEFAULT_PROFILE_ENABLE_CALCULATOR_TOOLS,
+    LIGHT_CONTEXT_MAX_HISTORY,
+    LIGHT_CONTEXT_TOOL_NAMES,
     RESPONSE_MODE_INSTRUCTIONS,
     DEVICE_TECHNICAL_INSTRUCTIONS,
     MEMORY_TECHNICAL_INSTRUCTIONS,
@@ -137,6 +143,7 @@ _LOGGER = logging.getLogger(__name__)
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
+MAX_PROVIDER_LOG_CHARS = 500
 ANTHROPIC_UNSUPPORTED_TOOL_NAMES = {"analyze_image", "generate_image"}
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
@@ -187,6 +194,28 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 500) -> str:
     text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
     text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
     text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
+
+
+def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -> str:
+    """Return a single-line, redacted provider detail safe for logs."""
+    text = str(value or "")
+    text = re.sub(
+        r"(?i)(authorization)([\"']?\s*[:=]\s*[\"']?)[^,\"'}\r\n]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(api(?:[_\s-]?key)|access(?:[_\s-]?token)|x-api-key)"
+        r"([\"']?\s*[:=]\s*[\"']?)[^,\"'}\s]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{8,}\b", "[redacted]", text)
+    text = re.sub(r"\bAIza[A-Za-z0-9_-]{20,}\b", "[redacted]", text)
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
     if len(text) <= max_chars:
         return text
     return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
@@ -466,6 +495,22 @@ class MCPAssistConversationEntity(ConversationEntity):
         return self.entry.options.get(
             CONF_MAX_HISTORY, self.entry.data.get(CONF_MAX_HISTORY, DEFAULT_MAX_HISTORY)
         )
+
+    @property
+    def context_mode(self) -> str:
+        """Get model context mode (dynamic)."""
+        value = self.entry.options.get(
+            CONF_CONTEXT_MODE,
+            self.entry.data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
+        )
+        if value in {CONTEXT_MODE_STANDARD, CONTEXT_MODE_LIGHT}:
+            return value
+        return DEFAULT_CONTEXT_MODE
+
+    @property
+    def light_context_mode(self) -> bool:
+        """Return whether this profile should send reduced model context."""
+        return self.context_mode == CONTEXT_MODE_LIGHT
 
     @property
     def max_tokens(self) -> int:
@@ -853,6 +898,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.device_tools_enabled,
             self.music_assistant_support_enabled,
             self.web_search_tools_enabled,
+            self.context_mode,
             tuple(
                 (
                     spec.package_id,
@@ -1109,18 +1155,6 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Category C: Resource Limits
         if (
-            "maximum context length" in error_str
-            or "context_length_exceeded" in error_str
-            or "too many tokens" in error_str
-            or ("tokens" in error_str and "exceed" in error_str)
-        ):
-            # Try to extract token limit if present
-            token_match = re.search(r"(\d+)\s*tokens?", error_str)
-            if token_match:
-                return f"The conversation has exceeded the model's {token_match.group(1)} token limit. Start a new conversation or reduce the history limit in Advanced Settings."
-            return "The conversation has exceeded the model's token limit. Start a new conversation or reduce the history limit in Advanced Settings."
-
-        if (
             "rate limit" in error_str
             or "429" in error_str
             or "too many requests" in error_str
@@ -1129,6 +1163,40 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         if "quota exceeded" in error_str or "insufficient credits" in error_str:
             return f"Your {self._get_server_display_name()} account has run out of credits or quota. Check your billing and add credits to continue."
+
+        if (
+            "maximum context length" in error_str
+            or "context_length_exceeded" in error_str
+            or "too many tokens" in error_str
+            or ("tokens" in error_str and "exceed" in error_str)
+            or "context window" in error_str
+        ):
+            # Try to extract token limit if present
+            token_match = re.search(r"(\d+)\s*tokens?", error_str)
+            if self.server_type == SERVER_TYPE_OLLAMA:
+                token_text = (
+                    f" The request was about {token_match.group(1)} tokens."
+                    if token_match
+                    else ""
+                )
+                if self.light_context_mode:
+                    return (
+                        "Ollama rejected the request because it exceeded the "
+                        f"model's context window.{token_text} Try raising the "
+                        "Ollama Context Window if the model supports it, "
+                        "reducing Max History Messages, or disabling optional "
+                        "tool families."
+                    )
+                return (
+                    "Ollama rejected the request because it exceeded the "
+                    f"model's context window.{token_text} Enable Context Mode: "
+                    "Light for this profile, reduce Max History Messages, "
+                    "disable optional tool families, or raise the Ollama "
+                    "Context Window if the model supports it."
+                )
+            if token_match:
+                return f"The conversation has exceeded the model's {token_match.group(1)} token limit. Start a new conversation or reduce the history limit in Advanced Settings."
+            return "The conversation has exceeded the model's token limit. Start a new conversation or reduce the history limit in Advanced Settings."
 
         # Category D: Model Errors
         if "404" in error_str or ("model" in error_str and "not found" in error_str):
@@ -2060,8 +2128,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = self._build_optional_technical_instructions(
-                current_area
+            optional_instructions = (
+                ""
+                if self.light_context_mode
+                else self._build_optional_technical_instructions(current_area)
             )
             if optional_instructions:
                 technical_prompt = (
@@ -2151,8 +2221,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = self._build_optional_technical_instructions(
-                "Unknown"
+            optional_instructions = (
+                ""
+                if self.light_context_mode
+                else self._build_optional_technical_instructions("Unknown")
             )
             if optional_instructions:
                 technical_prompt = (
@@ -2177,6 +2249,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         # OpenClaw manages its own session history on the gateway.
         if self.server_type != SERVER_TYPE_OPENCLAW:
             history_limit = max(0, self.max_history)
+            if self.light_context_mode:
+                history_limit = min(history_limit, LIGHT_CONTEXT_MAX_HISTORY)
             if history_limit > 0:
                 for turn in history[-history_limit:]:
                     messages.append({"role": "user", "content": turn["user"]})
@@ -2265,11 +2339,25 @@ class MCPAssistConversationEntity(ConversationEntity):
         self, tools: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Filter shared MCP tools down to the subset enabled for this profile."""
-        filtered_tools = [
+        profile_tools = [
             tool
             for tool in tools
             if self._is_tool_enabled_for_profile(tool.get("name", ""))
         ]
+
+        if self.light_context_mode:
+            filtered_tools = [
+                tool
+                for tool in profile_tools
+                if tool.get("name", "") in LIGHT_CONTEXT_TOOL_NAMES
+            ]
+            _LOGGER.info(
+                "Light context mode exposing %d of %d profile-visible MCP tools",
+                len(filtered_tools),
+                len(profile_tools),
+            )
+        else:
+            filtered_tools = profile_tools
 
         filtered_names = [tool.get("name", "") for tool in filtered_tools]
         _LOGGER.info("Profile-visible MCP tools: %s", ", ".join(filtered_names))
@@ -3039,7 +3127,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        error_snippet = _redacted_log_snippet(error_text)
+                        error_snippet = _provider_log_snippet(error_text)
                         _LOGGER.warning(
                             "Anthropic API error: status=%s body=%s",
                             response.status,
@@ -3270,12 +3358,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                             _LOGGER.error(
                                 f"❌ Streaming failed with status {response.status}"
                             )
-                            _LOGGER.error(
-                                "❌ Streaming error response: %s",
-                                _redacted_log_snippet(error_text),
+                            _LOGGER.debug(
+                                "Provider streaming error response: %s",
+                                _provider_log_snippet(error_text),
                             )
                             raise Exception(
-                                f"Streaming failed with status {response.status}"
+                                f"Streaming failed: {_provider_log_snippet(error_text)}"
                             )  # Raise to trigger fallback
 
                         if self.debug_mode:
@@ -3334,8 +3422,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                                                     current_thought_signature = (
                                                         google_data["thought_signature"]
                                                     )
-                                                    _LOGGER.info(
-                                                        f"🧠 Captured thought_signature: {current_thought_signature[:50]}..."
+                                                    _LOGGER.debug(
+                                                        "Captured Gemini thought_signature (%d chars)",
+                                                        len(current_thought_signature),
                                                     )
                                                     break  # Only in first tool_call
 
@@ -3524,8 +3613,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                         tool_call["extra_content"] = {
                             "google": {"thought_signature": current_thought_signature}
                         }
-                    _LOGGER.info(
-                        f"🧠 Added thought_signature to {len(current_tool_calls)} tool calls"
+                    _LOGGER.debug(
+                        "Added Gemini thought_signature to %d tool calls",
+                        len(current_tool_calls),
                     )
                 elif self.server_type == SERVER_TYPE_GEMINI:
                     # Only warn for Gemini - other providers don't use thought_signature
@@ -3680,7 +3770,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        error_snippet = _redacted_log_snippet(error_text)
+                        error_snippet = _provider_log_snippet(error_text)
                         _LOGGER.warning(
                             "%s API error: status=%s body=%s",
                             self.server_type,
@@ -3725,8 +3815,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                             )
                             if "thought_signature" in google_data:
                                 thought_signature = google_data["thought_signature"]
-                                _LOGGER.info(
-                                    f"🧠 Captured thought_signature: {thought_signature[:50]}..."
+                                _LOGGER.debug(
+                                    "Captured Gemini thought_signature (%d chars)",
+                                    len(thought_signature),
                                 )
 
                         # Ensure each tool_call has the required type field
@@ -3734,8 +3825,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                             if "type" not in tc:
                                 tc["type"] = "function"
                             if "function" in tc:
-                                _LOGGER.info(
-                                    f"  - {tc['function'].get('name')}: {tc['function'].get('arguments')}"
+                                _LOGGER.debug(
+                                    "  - %s: %s",
+                                    tc["function"].get("name"),
+                                    _provider_log_snippet(
+                                        tc["function"].get("arguments")
+                                    ),
                                 )
 
                         # Preserve thought_signature in tool_calls for Gemini 3

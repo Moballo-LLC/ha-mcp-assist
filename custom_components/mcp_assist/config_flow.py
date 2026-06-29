@@ -55,6 +55,7 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_MAX_TOKENS,
     CONF_MAX_HISTORY,
+    CONF_CONTEXT_MODE,
     CONF_MAX_ITERATIONS,
     CONF_DEBUG_MODE,
     CONF_CHAT_LOG_MODE,
@@ -119,11 +120,14 @@ from .const import (
     DEFAULT_TECHNICAL_PROMPT,
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
+    CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD,
     DEFAULT_CONTROL_HA,
     DEFAULT_RESPONSE_MODE,
     DEFAULT_TEMPERATURE,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_HISTORY,
+    DEFAULT_CONTEXT_MODE,
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_DEBUG_MODE,
     DEFAULT_CHAT_LOG_MODE,
@@ -209,6 +213,19 @@ def _prompt_mode_selector() -> SelectSelector:
             options=[PROMPT_MODE_DEFAULT, PROMPT_MODE_CUSTOM],
             mode=SelectSelectorMode.DROPDOWN,
             translation_key="prompt_source_mode",
+        )
+    )
+
+
+def _context_mode_selector() -> SelectSelector:
+    """Build a model context-size selector."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                {"value": CONTEXT_MODE_STANDARD, "label": "Standard"},
+                {"value": CONTEXT_MODE_LIGHT, "label": "Light"},
+            ],
+            mode=SelectSelectorMode.DROPDOWN,
         )
     )
 
@@ -1704,6 +1721,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     int
                 ),
                 vol.Required(
+                    CONF_CONTEXT_MODE, default=DEFAULT_CONTEXT_MODE
+                ): _context_mode_selector(),
+                vol.Required(
                     CONF_MAX_ITERATIONS, default=DEFAULT_MAX_ITERATIONS
                 ): vol.Coerce(int),
                 vol.Required(CONF_TIMEOUT, default=DEFAULT_TIMEOUT): vol.All(
@@ -2616,6 +2636,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ): vol.Coerce(int),
                 vol.Required(
+                    CONF_CONTEXT_MODE,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_CONTEXT_MODE,
+                        options.get(
+                            CONF_CONTEXT_MODE,
+                            data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
+                        ),
+                    ),
+                ): _context_mode_selector(),
+                vol.Required(
                     CONF_MAX_ITERATIONS,
                     default=_get_form_value(
                         current_values,
@@ -2770,47 +2801,66 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 # Import get_system_entry
-                from . import get_system_entry
+                from . import get_system_entry, _async_apply_shared_mcp_settings
 
+                shared_settings_applied = True
                 # Update system entry with shared MCP settings
                 system_entry = get_system_entry(self.hass)
                 if system_entry:
+                    previous_system_data = dict(system_entry.data)
+                    new_system_data = {**previous_system_data, **user_input}
                     self.hass.config_entries.async_update_entry(
-                        system_entry, data={**system_entry.data, **user_input}
+                        system_entry, data=new_system_data
                     )
-                    _LOGGER.info("Updated system entry with shared MCP settings")
+                    try:
+                        await _async_apply_shared_mcp_settings(self.hass)
+                    except Exception as err:
+                        self.hass.config_entries.async_update_entry(
+                            system_entry, data=previous_system_data
+                        )
+                        shared_settings_applied = False
+                        errors["base"] = "mcp_apply_failed"
+                        _LOGGER.warning(
+                            "Failed to apply shared MCP settings live: %s",
+                            type(err).__name__,
+                        )
+                    if shared_settings_applied:
+                        _LOGGER.info("Updated system entry with shared MCP settings")
                 else:
                     _LOGGER.error("System entry not found when saving shared settings")
+                    shared_settings_applied = False
+                    errors["base"] = "mcp_apply_failed"
 
-                # Update profile entry with per-profile settings only
-                # Update entry title if profile name changed
-                new_profile_name = self.profile_options.get(CONF_PROFILE_NAME)
-                old_profile_name = self.config_entry.options.get(
-                    CONF_PROFILE_NAME, self.config_entry.data.get(CONF_PROFILE_NAME)
-                )
-                if new_profile_name and new_profile_name != old_profile_name:
-                    server_type = self.config_entry.data.get(
-                        CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
+                if shared_settings_applied:
+                    # Update profile entry with per-profile settings only
+                    # Update entry title if profile name changed
+                    new_profile_name = self.profile_options.get(CONF_PROFILE_NAME)
+                    old_profile_name = self.config_entry.options.get(
+                        CONF_PROFILE_NAME, self.config_entry.data.get(CONF_PROFILE_NAME)
                     )
-                    server_display_map = {
-                        SERVER_TYPE_LMSTUDIO: "LM Studio",
-                        SERVER_TYPE_LLAMACPP: "llama.cpp",
-                        SERVER_TYPE_OLLAMA: "Ollama",
-                        SERVER_TYPE_OPENAI: "OpenAI",
-                        SERVER_TYPE_GEMINI: "Gemini",
-                        SERVER_TYPE_ANTHROPIC: "Claude",
-                        SERVER_TYPE_OPENROUTER: "OpenRouter",
-                        SERVER_TYPE_OPENCLAW: "OpenClaw",
-                        SERVER_TYPE_VLLM: "vLLM",
-                    }
-                    server_display = server_display_map.get(server_type, "LM Studio")
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        title=f"{server_display} - {new_profile_name}",
-                    )
+                    if new_profile_name and new_profile_name != old_profile_name:
+                        server_type = self.config_entry.data.get(
+                            CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
+                        )
+                        server_display_map = {
+                            SERVER_TYPE_LMSTUDIO: "LM Studio",
+                            SERVER_TYPE_LLAMACPP: "llama.cpp",
+                            SERVER_TYPE_OLLAMA: "Ollama",
+                            SERVER_TYPE_OPENAI: "OpenAI",
+                            SERVER_TYPE_GEMINI: "Gemini",
+                            SERVER_TYPE_ANTHROPIC: "Claude",
+                            SERVER_TYPE_OPENROUTER: "OpenRouter",
+                            SERVER_TYPE_OPENCLAW: "OpenClaw",
+                            SERVER_TYPE_VLLM: "vLLM",
+                        }
+                        server_display = server_display_map.get(server_type, "LM Studio")
+                        self.hass.config_entries.async_update_entry(
+                            self.config_entry,
+                            title=f"{server_display} - {new_profile_name}",
+                        )
 
-                # Save profile settings only (not shared settings)
-                return self.async_create_entry(title="", data=self.profile_options)
+                    # Save profile settings only (not shared settings)
+                    return self.async_create_entry(title="", data=self.profile_options)
 
         # Get current values from system entry
         from . import get_system_entry
