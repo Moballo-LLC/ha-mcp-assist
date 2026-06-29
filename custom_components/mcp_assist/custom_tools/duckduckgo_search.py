@@ -5,10 +5,17 @@ from typing import Dict, Any, List
 
 try:  # Prefer the renamed package when available.
     from ddgs import DDGS
+
+    _USES_RENAMED_DDGS = True
 except ImportError:  # pragma: no cover - compatibility for older installs
     from duckduckgo_search import DDGS
 
+    _USES_RENAMED_DDGS = False
+
 _LOGGER = logging.getLogger(__name__)
+
+DUCKDUCKGO_BACKEND = "duckduckgo"
+LEGACY_DUCKDUCKGO_BACKEND = "auto"
 
 NEWS_QUERY_HINTS = (
     "news",
@@ -144,7 +151,10 @@ class DuckDuckGoSearchTool:
             client = DDGS()
             if normalized_mode == "news":
                 try:
-                    raw_results = client.news(query, max_results=count)
+                    raw_results = client.news(
+                        query,
+                        **self._ddgs_news_kwargs(count),
+                    )
                 except Exception as err:
                     _LOGGER.warning(
                         "DDGS news search failed for %r, falling back to web search: %s",
@@ -153,24 +163,44 @@ class DuckDuckGoSearchTool:
                     )
                     raw_results = client.text(
                         query,
-                        max_results=count,
-                        region="us-en",
-                        safesearch="moderate",
-                        backend="auto",
+                        **self._ddgs_text_kwargs(count),
                     )
             else:
                 raw_results = client.text(
                     query,
-                    max_results=count,
-                    region="us-en",
-                    safesearch="moderate",
-                    backend="auto",
+                    **self._ddgs_text_kwargs(count),
                 )
 
             return [self._normalize_result(r) for r in raw_results]
         except Exception as e:
             _LOGGER.error(f"DDG sync search failed: {e}")
             raise
+
+    @staticmethod
+    def _ddgs_news_kwargs(count: int) -> Dict[str, Any]:
+        """Build news kwargs for the installed DuckDuckGo package."""
+        kwargs: Dict[str, Any] = {
+            "max_results": count,
+            "region": "us-en",
+            "safesearch": "moderate",
+        }
+        if _USES_RENAMED_DDGS:
+            kwargs["backend"] = DUCKDUCKGO_BACKEND
+        return kwargs
+
+    @staticmethod
+    def _ddgs_text_kwargs(count: int) -> Dict[str, Any]:
+        """Build text kwargs for the installed DuckDuckGo package."""
+        return {
+            "max_results": count,
+            "region": "us-en",
+            "safesearch": "moderate",
+            "backend": (
+                DUCKDUCKGO_BACKEND
+                if _USES_RENAMED_DDGS
+                else LEGACY_DUCKDUCKGO_BACKEND
+            ),
+        }
 
     def _normalize_mode(self, raw_mode: Any, query: Any) -> str:
         """Normalize requested search mode."""

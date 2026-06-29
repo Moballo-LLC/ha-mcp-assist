@@ -2,6 +2,6 @@
 # can see the integration's runtime dependency surface.
 aiohttp>=3.8.0
 pyyaml>=6.0.3
-duckduckgo-search>=6.0.0
+ddgs>=6.0.0
 websockets>=12.0
 cryptography>=49.0.0
