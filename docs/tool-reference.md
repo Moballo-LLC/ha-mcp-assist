@@ -46,6 +46,22 @@ enabled.
 | `get_assist_prompt` | Read Assist prompt context |
 | `get_assist_context_snapshot` | Inspect the current Assist context snapshot |
 
+## Third-Party LLM API Bridge Tools
+
+The LLM API Bridge exposes allowlisted third-party Home Assistant LLM APIs
+registered by other integrations. It is disabled by default.
+
+| Tool | Purpose |
+| --- | --- |
+| `list_llm_apis` | List registered non-Assist LLM APIs and allowlist status |
+| `list_llm_api_tools` | Inspect tools exposed by one allowlisted LLM API |
+| `call_llm_api_tool` | Call a tool on one allowlisted LLM API |
+| `get_llm_api_prompt` | Read prompt text from one allowlisted LLM API |
+
+Use `list_llm_api_tools` before `call_llm_api_tool` so arguments match the
+third-party API's schema. The built-in Home Assistant `assist` API stays on the
+Assist Bridge tools.
+
 ## Response-Service Read Tools
 
 These tools read structured data from Home Assistant services that return

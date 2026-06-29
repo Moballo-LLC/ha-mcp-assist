@@ -18,6 +18,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_ENABLE_LLM_API_BRIDGE,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -39,6 +40,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
     CONF_PROFILE_ENABLE_CALCULATOR_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_PROFILE_ENABLE_LLM_API_BRIDGE,
     CONF_PROFILE_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_WEB_SEARCH,
@@ -148,12 +150,14 @@ def test_profile_tool_enablement_respects_shared_and_profile_settings(
     system_entry_factory(
         data={
             CONF_ENABLE_ASSIST_BRIDGE: True,
+            CONF_ENABLE_LLM_API_BRIDGE: True,
             CONF_ENABLE_DEVICE_TOOLS: False,
         }
     )
     entry = profile_entry_factory(
         options={
             CONF_PROFILE_ENABLE_ASSIST_BRIDGE: False,
+            CONF_PROFILE_ENABLE_LLM_API_BRIDGE: False,
             CONF_PROFILE_ENABLE_DEVICE_TOOLS: True,
         }
     )
@@ -161,6 +165,7 @@ def test_profile_tool_enablement_respects_shared_and_profile_settings(
     agent = MCPAssistConversationEntity(hass, entry)
 
     assert agent.assist_bridge_enabled is False
+    assert agent.llm_api_bridge_enabled is False
     assert agent.device_tools_enabled is False
 
 
@@ -192,12 +197,14 @@ def test_profile_tool_filtering_hides_disabled_optional_tools(
     system_entry_factory(
         data={
             CONF_ENABLE_ASSIST_BRIDGE: True,
+            CONF_ENABLE_LLM_API_BRIDGE: True,
             CONF_ENABLE_DEVICE_TOOLS: True,
         }
     )
     entry = profile_entry_factory(
         options={
             CONF_PROFILE_ENABLE_ASSIST_BRIDGE: False,
+            CONF_PROFILE_ENABLE_LLM_API_BRIDGE: False,
             CONF_PROFILE_ENABLE_DEVICE_TOOLS: False,
         }
     )
@@ -208,6 +215,7 @@ def test_profile_tool_filtering_hides_disabled_optional_tools(
             _tool("discover_entities"),
             _tool("discover_devices"),
             _tool("list_assist_tools"),
+            _tool("list_llm_apis"),
         ]
     )
 
@@ -215,6 +223,7 @@ def test_profile_tool_filtering_hides_disabled_optional_tools(
     assert "discover_entities" in tool_names
     assert "discover_devices" not in tool_names
     assert "list_assist_tools" not in tool_names
+    assert "list_llm_apis" not in tool_names
 
 
 def test_profile_tool_filtering_can_hide_convert_unit_without_hiding_add(

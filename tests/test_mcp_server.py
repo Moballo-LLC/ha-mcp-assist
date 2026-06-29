@@ -7,16 +7,20 @@ from datetime import datetime, timedelta, timezone
 import json
 import math
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 from aiohttp import ClientSession
 import yarl
 from homeassistant.components.weather import WeatherEntityFeature
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import llm
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_socket import disable_socket, enable_socket
+import voluptuous as vol
 
 import custom_components.mcp_assist.mcp_server as mcp_server_module
 from custom_components.mcp_assist.custom_tools.builtin_catalog import (
@@ -32,6 +36,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_DEVICE_TOOLS,
+    CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_MEMORY_TOOLS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_RECORDER_TOOLS,
@@ -40,10 +45,53 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_LMSTUDIO_URL,
+    CONF_LLM_API_ALLOWLIST,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
+
+
+class _EchoLLMTool(llm.Tool):
+    """Small fake Home Assistant LLM tool for bridge tests."""
+
+    name = "EchoIntent"
+    description = "Echo a value through a fake third-party LLM API."
+    parameters = vol.Schema({vol.Required("value"): str})
+
+    async def async_call(
+        self,
+        hass,
+        tool_input: llm.ToolInput,
+        llm_context: llm.LLMContext,
+    ) -> dict[str, Any]:
+        """Return the provided value and basic context metadata."""
+        return {
+            "echo": tool_input.tool_args["value"],
+            "external": tool_input.external,
+            "platform": llm_context.platform,
+        }
+
+
+class _FakeLLMAPI(llm.API):
+    """Small fake third-party Home Assistant LLM API for bridge tests."""
+
+    async def async_get_api_instance(
+        self,
+        llm_context: llm.LLMContext,
+    ) -> llm.APIInstance:
+        """Return a fake API instance with one tool."""
+        return llm.APIInstance(
+            api=self,
+            api_prompt="Use EchoIntent for fake LLM intent testing.",
+            llm_context=llm_context,
+            tools=[_EchoLLMTool()],
+        )
+
+
+def _json_payload_from_text_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Extract the JSON payload appended after a text header."""
+    return json.loads(result["content"][0]["text"].split("\n\n", 1)[1])
 
 
 def test_sanitize_log_value_escapes_line_breaks() -> None:
@@ -231,6 +279,7 @@ def test_tool_enablement_follows_shared_settings(
         data={
             CONF_ENABLE_DEVICE_TOOLS: False,
             CONF_ENABLE_ASSIST_BRIDGE: False,
+            CONF_ENABLE_LLM_API_BRIDGE: False,
             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: False,
             CONF_ENABLE_WEATHER_FORECAST_TOOL: False,
             CONF_ENABLE_RECORDER_TOOLS: False,
@@ -245,6 +294,7 @@ def test_tool_enablement_follows_shared_settings(
     assert server._is_tool_enabled("discover_entities") is True
     assert server._is_tool_enabled("discover_devices") is False
     assert server._is_tool_enabled("list_assist_tools") is False
+    assert server._is_tool_enabled("list_llm_apis") is False
     assert server._is_tool_enabled("get_calendar_events") is False
     assert server._is_tool_enabled("call_service_with_response") is False
     assert server._is_tool_enabled("get_weather_forecast") is False
@@ -300,6 +350,7 @@ async def test_handle_tools_list_filters_disabled_tool_families(
         data={
             CONF_ENABLE_DEVICE_TOOLS: False,
             CONF_ENABLE_ASSIST_BRIDGE: False,
+            CONF_ENABLE_LLM_API_BRIDGE: False,
             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: False,
             CONF_ENABLE_WEATHER_FORECAST_TOOL: False,
             CONF_ENABLE_RECORDER_TOOLS: False,
@@ -324,6 +375,7 @@ async def test_handle_tools_list_filters_disabled_tool_families(
     assert "discover_entities" in tool_names
     assert "discover_devices" not in tool_names
     assert "list_assist_tools" not in tool_names
+    assert "list_llm_apis" not in tool_names
     assert "get_calendar_events" not in tool_names
     assert "call_service_with_response" not in tool_names
     assert "get_weather_forecast" not in tool_names
@@ -552,12 +604,114 @@ async def test_default_tool_list_stays_streamlined(
     assert "remember_memory" not in tool_names
     assert "get_last_entity_event" not in tool_names
     assert "list_assist_tools" not in tool_names
+    assert "list_llm_apis" not in tool_names
 
     get_index_tool = next(
         tool for tool in result["tools"] if tool["name"] == "get_index"
     )
     assert "start of a conversation" not in get_index_tool["description"]
     assert "do not call by default" in get_index_tool["description"]
+
+
+@pytest.mark.asyncio
+async def test_llm_api_bridge_lists_allowlisted_registered_apis(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """The optional LLM API bridge should list registered non-Assist APIs."""
+    unregister = llm.async_register_api(
+        hass,
+        _FakeLLMAPI(hass=hass, id="llm_intents", name="LLM Intents"),
+    )
+    try:
+        system_entry_factory(
+            data={
+                CONF_ENABLE_LLM_API_BRIDGE: True,
+                CONF_LLM_API_ALLOWLIST: "llm_intents\nmissing_api",
+            }
+        )
+        server = MCPServer(hass, 8099, profile_entry_factory())
+
+        tools_result = await server.handle_tools_list()
+        tool_names = {tool["name"] for tool in tools_result["tools"]}
+        list_result = await server.tool_list_llm_apis({})
+        payload = _json_payload_from_text_result(list_result)
+
+        assert {
+            "list_llm_apis",
+            "list_llm_api_tools",
+            "call_llm_api_tool",
+            "get_llm_api_prompt",
+        } <= tool_names
+        assert payload["enabled"] is True
+        assert payload["allowed_api_ids"] == ["llm_intents", "missing_api"]
+        assert payload["missing_allowed_api_ids"] == ["missing_api"]
+        assert payload["apis"] == [
+            {"id": "llm_intents", "name": "LLM Intents", "allowed": True}
+        ]
+    finally:
+        unregister()
+
+
+@pytest.mark.asyncio
+async def test_llm_api_bridge_can_inspect_call_and_read_prompt(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Allowlisted third-party LLM API tools should be inspectable and callable."""
+    unregister = llm.async_register_api(
+        hass,
+        _FakeLLMAPI(hass=hass, id="llm_intents", name="LLM Intents"),
+    )
+    try:
+        system_entry_factory(
+            data={
+                CONF_ENABLE_LLM_API_BRIDGE: True,
+                CONF_LLM_API_ALLOWLIST: "llm_intents",
+            }
+        )
+        server = MCPServer(hass, 8099, profile_entry_factory())
+
+        tools_result = await server.tool_list_llm_api_tools({"api_id": "llm_intents"})
+        tools_payload = _json_payload_from_text_result(tools_result)
+        call_result = await server.tool_call_llm_api_tool(
+            {
+                "api_id": "llm_intents",
+                "tool_name": "EchoIntent",
+                "arguments": {"value": "hello"},
+            }
+        )
+        prompt_result = await server.tool_get_llm_api_prompt({"api_id": "llm_intents"})
+
+        assert tools_payload["api_id"] == "llm_intents"
+        assert tools_payload["tools"][0]["name"] == "EchoIntent"
+        assert tools_payload["tools"][0]["input_schema"]["required"] == ["value"]
+        assert '"echo": "hello"' in call_result["content"][0]["text"]
+        assert '"external": true' in call_result["content"][0]["text"]
+        assert '"platform": "mcp_assist"' in call_result["content"][0]["text"]
+        assert "Use EchoIntent for fake LLM intent testing." in (
+            prompt_result["content"][0]["text"]
+        )
+    finally:
+        unregister()
+
+
+@pytest.mark.asyncio
+async def test_llm_api_bridge_rejects_unallowlisted_and_assist_api(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """The bridge should fail closed for untrusted API ids and the built-in Assist API."""
+    system_entry_factory(
+        data={
+            CONF_ENABLE_LLM_API_BRIDGE: True,
+            CONF_LLM_API_ALLOWLIST: "llm_intents",
+        }
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    with pytest.raises(HomeAssistantError, match="not allowlisted"):
+        await server.tool_list_llm_api_tools({"api_id": "other_api"})
+
+    with pytest.raises(HomeAssistantError, match="Assist API"):
+        await server.tool_list_llm_api_tools({"api_id": llm.LLM_API_ASSIST})
 
 
 @pytest.mark.asyncio
