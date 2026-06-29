@@ -178,3 +178,55 @@ async def test_transfer_music_assistant_queue_requires_distinct_single_targets(
         }
     ]
     assert "Transferred Music Assistant queue" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_transfer_music_assistant_queue_allows_inferred_source(
+    hass,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queue transfer may omit source so Music Assistant can infer the active queue."""
+    tool = MusicAssistantTool(hass)
+    service_calls = []
+    resolver_calls = []
+
+    async def resolve_targets(**kwargs: Any) -> tuple[list[str], str]:
+        resolver_calls.append(kwargs)
+        if kwargs.get("media_player") == "Office":
+            return ["media_player.office"], "Resolved Music Assistant players: Office"
+        return [], ""
+
+    monkeypatch.setattr(tool, "_resolve_music_assistant_player_targets", resolve_targets)
+    monkeypatch.setattr(
+        tool,
+        "_friendly_names_for_entities",
+        lambda ids: ["Office Speaker" for _entity_id in ids],
+    )
+
+    async def transfer_service(call):
+        service_calls.append(dict(call.data))
+
+    hass.services.async_register(
+        "music_assistant",
+        "transfer_queue",
+        transfer_service,
+    )
+
+    result = await tool.handle_call(
+        "transfer_music_assistant_queue",
+        {
+            "media_player": "Office",
+        },
+    )
+
+    assert result["isError"] is False
+    assert service_calls == [{"entity_id": "media_player.office"}]
+    assert resolver_calls == [
+        {
+            "area": None,
+            "floor": None,
+            "label": None,
+            "media_player": "Office",
+        }
+    ]
+    assert "Transferred active Music Assistant queue to Office Speaker" in result["content"][0]["text"]

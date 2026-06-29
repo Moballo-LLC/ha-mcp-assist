@@ -443,7 +443,7 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Optional Music Assistant auto_play flag for the transferred queue.",
                 },
             },
-            "required": ["source_media_player"],
+            "required": [],
             "additionalProperties": False,
         },
     },
@@ -1039,10 +1039,7 @@ class MusicAssistantTool:
                 "The Home Assistant Music Assistant integration is not available or does not expose music_assistant.transfer_queue."
             )
 
-        if not self._normalize_target_values(args.get("source_media_player")):
-            return self._text_result(
-                "❌ Error: source_media_player is required for transfer_music_assistant_queue."
-            )
+        source_values = self._normalize_target_values(args.get("source_media_player"))
         if not any(
             self._normalize_target_values(args.get(key))
             for key in ("area", "floor", "label", "media_player")
@@ -1052,9 +1049,12 @@ class MusicAssistantTool:
             )
 
         try:
-            source_player_ids, _source_resolution_text = await self._resolve_music_assistant_player_targets(
-                media_player=args.get("source_media_player"),
-            )
+            if source_values:
+                source_player_ids, _source_resolution_text = await self._resolve_music_assistant_player_targets(
+                    media_player=args.get("source_media_player"),
+                )
+            else:
+                source_player_ids = []
             target_player_ids, target_resolution_text = await self._resolve_music_assistant_player_targets(
                 area=args.get("area"),
                 floor=args.get("floor"),
@@ -1064,7 +1064,7 @@ class MusicAssistantTool:
         except ValueError as err:
             return self._text_result(f"❌ Error: {err}")
 
-        if len(source_player_ids) != 1:
+        if source_player_ids and len(source_player_ids) != 1:
             return self._text_result(
                 "❌ Error: source_media_player must resolve to exactly one Music Assistant player."
             )
@@ -1072,15 +1072,16 @@ class MusicAssistantTool:
             return self._text_result(
                 "❌ Error: target selectors must resolve to exactly one Music Assistant player."
             )
-        if source_player_ids[0] == target_player_ids[0]:
+        if source_player_ids and source_player_ids[0] == target_player_ids[0]:
             return self._text_result(
                 "❌ Error: source and target Music Assistant players must be different."
             )
 
         service_data: Dict[str, Any] = {
             "entity_id": target_player_ids[0],
-            "source_player": source_player_ids[0],
         }
+        if source_player_ids:
+            service_data["source_player"] = source_player_ids[0]
         if isinstance(args.get("auto_play"), bool):
             service_data["auto_play"] = args["auto_play"]
 
@@ -1110,10 +1111,16 @@ class MusicAssistantTool:
             success=True,
         )
 
-        source_name = self._friendly_names_for_entities(source_player_ids)[0]
         target_name = self._friendly_names_for_entities(target_player_ids)[0]
+        if source_player_ids:
+            source_name = self._friendly_names_for_entities(source_player_ids)[0]
+            transfer_text = (
+                f"✅ Transferred Music Assistant queue from {source_name} to {target_name}."
+            )
+        else:
+            transfer_text = f"✅ Transferred active Music Assistant queue to {target_name}."
         text_parts = [
-            f"✅ Transferred Music Assistant queue from {source_name} to {target_name}.",
+            transfer_text,
             target_resolution_text,
         ]
         if isinstance(args.get("auto_play"), bool):
