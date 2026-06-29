@@ -2774,8 +2774,7 @@ class MCPServer(
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
                         _LOGGER.warning(
-                            "Image analysis provider error: provider=%s status=%s",
-                            _sanitize_log_value(server_type),
+                            "Image analysis provider error: status=%s",
                             response.status,
                         )
                         raise ValueError(
@@ -2808,8 +2807,7 @@ class MCPServer(
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
                     _LOGGER.warning(
-                        "Image analysis provider error: provider=%s status=%s",
-                        _sanitize_log_value(server_type),
+                        "Image analysis provider error: status=%s",
                         response.status,
                     )
                     raise ValueError(
@@ -2864,8 +2862,7 @@ class MCPServer(
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
                     _LOGGER.warning(
-                        "Image generation provider error: provider=%s status=%s",
-                        _sanitize_log_value(server_type),
+                        "Image generation provider error: status=%s",
                         response.status,
                     )
                     raise ValueError(
