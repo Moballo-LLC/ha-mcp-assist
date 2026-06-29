@@ -150,7 +150,12 @@ def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -
     """Return a single-line, redacted provider detail safe for logs."""
     text = str(value or "")
     text = re.sub(
-        r"(?i)(api[_-]?key|access[_-]?token|authorization|x-api-key)"
+        r"(?i)(authorization)([\"']?\s*[:=]\s*[\"']?)[^,\"'}\r\n]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(api[_-]?key|access[_-]?token|x-api-key)"
         r"([\"']?\s*[:=]\s*[\"']?)[^,\"'}\s]+",
         r"\1\2[redacted]",
         text,

@@ -65,15 +65,18 @@ def _tool(name: str) -> dict[str, object]:
 def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     """Provider details written to logs should be compact and secret-safe."""
     snippet = agent_module._provider_log_snippet(
-        'first line\n{"api_key":"secret-value","message":"'
+        'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
+        '"message":"'
         + ("x" * 80)
         + '"}',
-        max_chars=80,
+        max_chars=120,
     )
 
     assert "\n" not in snippet
     assert "secret-value" not in snippet
+    assert "sk-leaked-value" not in snippet
     assert 'api_key":"[redacted]' in snippet
+    assert 'Authorization":"[redacted]' in snippet
     assert "truncated" in snippet
 
 
