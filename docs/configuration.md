@@ -205,6 +205,19 @@ Required shared setting:
 - **Google Maps API Key**: A Google Maps Platform API key with the Places API
   and Routes API enabled.
 
+To create a key:
+
+1. In Google Cloud, use a project with billing enabled.
+2. Enable [Places API (New)](https://developers.google.com/maps/documentation/places/web-service/get-api-key)
+   and [Routes API](https://developers.google.com/maps/documentation/routes/get-api-key)
+   for that project.
+3. Open the [Google Maps Platform Credentials page](https://console.cloud.google.com/google/maps-apis/credentials).
+4. Choose **Create credentials** -> **API key**.
+5. Restrict the key before using it in production. For API restrictions, allow
+   only the Places API and Routes API. For application restrictions, choose the
+   restriction type that matches where Home Assistant sends requests from, such
+   as server IP address restrictions for a fixed outbound IP.
+
 When `get_google_route` is called without an origin, MCP Assist can use the Home
 Assistant home latitude and longitude as the route origin only if **Share Home
 Location with MCP Tools** is enabled. Otherwise the caller must provide an
