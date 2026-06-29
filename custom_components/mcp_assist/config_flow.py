@@ -1894,6 +1894,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_BRAVE_API_KEY,
                 DEFAULT_BRAVE_API_KEY,
             ),
+            CONF_GOOGLE_MAPS_API_KEY: _get_form_value(
+                current_values,
+                CONF_GOOGLE_MAPS_API_KEY,
+                DEFAULT_GOOGLE_MAPS_API_KEY,
+            ),
             CONF_SEARXNG_URL: _get_form_value(
                 current_values,
                 CONF_SEARXNG_URL,
@@ -2846,6 +2851,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 sys_options.get(
                     CONF_BRAVE_API_KEY,
                     sys_data.get(CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY),
+                ),
+            ),
+            CONF_GOOGLE_MAPS_API_KEY: _get_form_value(
+                current_values,
+                CONF_GOOGLE_MAPS_API_KEY,
+                sys_options.get(
+                    CONF_GOOGLE_MAPS_API_KEY,
+                    sys_data.get(CONF_GOOGLE_MAPS_API_KEY, DEFAULT_GOOGLE_MAPS_API_KEY),
                 ),
             ),
             CONF_SEARXNG_URL: _get_form_value(

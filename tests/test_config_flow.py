@@ -625,6 +625,29 @@ async def test_options_mcp_step_requires_google_maps_api_key_when_enabled(
     assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
 
 
+async def test_options_mcp_step_preserves_google_maps_api_key_default(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should keep the saved Google Maps key in form defaults."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "saved-maps-key"})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server()
+
+    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    tool_markers = {
+        getattr(marker, "schema", marker): marker
+        for marker in tools_section.schema.schema.keys()
+    }
+    maps_default = tool_markers[CONF_GOOGLE_MAPS_API_KEY].default
+    resolved_default = maps_default() if callable(maps_default) else maps_default
+    assert resolved_default == "saved-maps-key"
+
+
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
     """Built-in packaged tool checkboxes should not override translated subtitles inline."""
     shared_section = _build_shared_tools_section({}, BUILTIN_SPECS)

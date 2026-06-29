@@ -418,6 +418,8 @@ class GoogleMapsTool:
         try:
             if desired_arrival_time is not None and travel_mode == "TRANSIT":
                 body["arrivalTime"] = self._format_route_time(desired_arrival_time)
+            elif desired_arrival_time is not None:
+                body["departureTime"] = self._format_route_time(desired_arrival_time)
             if departure_time and departure_time.casefold() != "now":
                 body["departureTime"] = self._normalize_route_time(departure_time)
         except ValueError as err:

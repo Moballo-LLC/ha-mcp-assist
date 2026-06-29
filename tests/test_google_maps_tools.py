@@ -255,12 +255,12 @@ async def test_get_google_route_defaults_origin_to_home_and_uses_traffic(
 
 
 @pytest.mark.asyncio
-async def test_get_google_route_calculates_drive_leave_by_without_arrival_time_field(
+async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_time(
     hass,
     system_entry_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Drive arrival-time requests should calculate leave-by locally."""
+    """Drive arrival-time requests should sample future traffic and calculate leave-by."""
     _set_home_coordinates(hass)
     system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
     captured = {}
@@ -298,6 +298,7 @@ async def test_get_google_route_calculates_drive_leave_by_without_arrival_time_f
     assert result["isError"] is False
     body = captured["calls"][0][2]["json"]
     assert "arrivalTime" not in body
+    assert body["departureTime"] == "2026-06-30T01:30:00Z"
     route = result["structuredContent"]["route"]
     assert route["desired_arrival_time"] == "2026-06-30T01:30:00Z"
     assert route["leave_by"] == "2026-06-30T01:00:00Z"

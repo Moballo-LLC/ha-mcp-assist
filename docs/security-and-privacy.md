@@ -92,8 +92,9 @@ Recommendations:
 - Prefer Home Assistant-native tools for Home Assistant data.
 - Use provider-specific keys and quotas where applicable.
 - Be aware that fetched pages may include untrusted content.
-- Google Routes defaults to Home Assistant home coordinates when no origin is
-  provided. Enable it only for profiles where that location sharing is expected.
+- Google Places can use Home Assistant home coordinates as a default search
+  bias, and Google Routes defaults to home coordinates when no origin is
+  provided. Enable them only for profiles where that location sharing is expected.
 
 `read_url` is intended for page text extraction. It should not be used as a
 general network scanner or a way to bypass Home Assistant network policy.
