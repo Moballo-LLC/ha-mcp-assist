@@ -5,7 +5,9 @@ from __future__ import annotations
 import aiohttp
 import pytest
 
-from custom_components.mcp_assist.custom_tools import wikipedia_search as wikipedia_module
+from custom_components.mcp_assist.tools.packages.wikipedia_search import (
+    wikipedia_search as wikipedia_module,
+)
 
 
 class _FakeWikipediaResponse:

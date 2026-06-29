@@ -9,7 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .custom_tools.builtin_catalog import (
+from .tools.builtin_catalog import (
     get_builtin_shared_setting_value,
     load_builtin_tool_toggle_specs,
 )

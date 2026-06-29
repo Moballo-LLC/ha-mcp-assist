@@ -47,7 +47,7 @@ try:
 except ImportError:  # pragma: no cover - older Home Assistant versions
     lr = None
 
-from .custom_tools.builtin_catalog import (
+from .tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     get_builtin_toggle_spec_by_package_id,
     is_builtin_package_enabled_for_shared_settings,
@@ -106,10 +106,10 @@ from .provider_runtime import (
     build_provider_auth_headers,
     resolve_provider_runtime_config,
 )
-from .server_tools.calendar import CalendarToolsMixin
-from .server_tools.recorder import RecorderToolsMixin
-from .server_tools.response_services import ResponseServicesMixin
-from .server_tools.weather import WeatherToolsMixin
+from .tools.packages.recorder.history import RecorderToolsMixin
+from .tools.packages.response_service.calendar import CalendarToolsMixin
+from .tools.packages.response_service.service_calls import ResponseServicesMixin
+from .tools.packages.weather_forecast.forecast import WeatherToolsMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ class MCPServer(
         self._refresh_allowed_ips_from_settings()
 
         # Custom tools will be initialized in start() after system entry exists
-        self.custom_tools = None
+        self.tools = None
 
     def _get_shared_setting(self, key: str, default: Any) -> Any:
         """Get a shared setting from system entry with fallback to profile entry."""
@@ -483,11 +483,11 @@ class MCPServer(
         tool_name: str,
     ) -> BuiltInToolToggleSpec | None:
         """Return built-in packaged-tool metadata for a tool name, if any."""
-        custom_tools = self.custom_tools
-        if custom_tools is None:
+        tools = self.tools
+        if tools is None:
             return None
 
-        getter = getattr(custom_tools, "get_builtin_toggle_spec", None)
+        getter = getattr(tools, "get_builtin_toggle_spec", None)
         if not callable(getter):
             return None
 
@@ -503,11 +503,11 @@ class MCPServer(
 
     def _get_builtin_toggle_specs(self) -> tuple[BuiltInToolToggleSpec, ...]:
         """Return built-in packaged-tool metadata from the custom tool loader."""
-        custom_tools = self.custom_tools
-        if custom_tools is None:
+        tools = self.tools
+        if tools is None:
             return ()
 
-        getter = getattr(custom_tools, "get_builtin_toggle_specs", None)
+        getter = getattr(tools, "get_builtin_toggle_specs", None)
         if not callable(getter):
             return ()
 
@@ -570,8 +570,8 @@ class MCPServer(
     def _get_tools_list_signature(self, max_limit: int) -> tuple[Any, ...]:
         """Return a cache signature for the current MCP tool surface."""
         custom_tool_signature: tuple[Any, ...] = ()
-        if self.custom_tools:
-            get_cache_signature = getattr(self.custom_tools, "get_cache_signature", None)
+        if self.tools:
+            get_cache_signature = getattr(self.tools, "get_cache_signature", None)
             if callable(get_cache_signature):
                 try:
                     raw_signature = get_cache_signature()
@@ -585,7 +585,7 @@ class MCPServer(
                         _sanitize_log_value(err),
                     )
             else:
-                custom_tool_store = getattr(self.custom_tools, "tools", {})
+                custom_tool_store = getattr(self.tools, "tools", {})
                 if isinstance(custom_tool_store, dict):
                     custom_tool_signature = (tuple(sorted(custom_tool_store.keys())),)
 
@@ -649,10 +649,10 @@ class MCPServer(
             # Calculator tools are optional; web tools depend on search provider.
             search_provider = self._get_search_provider()
             try:
-                from .custom_tools import CustomToolsLoader
+                from .tools import CustomToolsLoader
 
-                self.custom_tools = CustomToolsLoader(self.hass, self.entry)
-                await self.custom_tools.initialize()
+                self.tools = CustomToolsLoader(self.hass, self.entry)
+                await self.tools.initialize()
                 _LOGGER.info(
                     "✅ Custom tools initialized (search provider: %s, external enabled: %s)",
                     _sanitize_log_value(search_provider),
@@ -706,8 +706,8 @@ class MCPServer(
             await self.site.stop()
         if self.runner:
             await self.runner.cleanup()
-        if self.custom_tools:
-            await self.custom_tools.shutdown()
+        if self.tools:
+            await self.tools.shutdown()
 
     def _is_ip_allowed(self, client_ip: str) -> bool:
         """Check if client IP is in the allowed list.
@@ -794,12 +794,12 @@ class MCPServer(
             "tools_available": len(await self._get_tools_list()),
             "timestamp": dt_util.now().isoformat(),
         }
-        if self.custom_tools:
+        if self.tools:
             health_info["external_custom_tools_enabled"] = (
                 self._external_custom_tools_enabled()
             )
             get_loaded_builtin_tool_info = getattr(
-                self.custom_tools,
+                self.tools,
                 "get_loaded_builtin_tool_info",
                 None,
             )
@@ -808,10 +808,10 @@ class MCPServer(
                     get_loaded_builtin_tool_info()
                 )
             health_info["external_custom_tools_loaded"] = (
-                self.custom_tools.get_loaded_external_tool_info()
+                self.tools.get_loaded_external_tool_info()
             )
             get_package_diagnostics = getattr(
-                self.custom_tools,
+                self.tools,
                 "get_package_diagnostics",
                 None,
             )
@@ -820,7 +820,7 @@ class MCPServer(
                     get_package_diagnostics()
                 )
             get_external_diagnostics = getattr(
-                self.custom_tools,
+                self.tools,
                 "get_external_diagnostics",
                 None,
             )
@@ -851,16 +851,16 @@ class MCPServer(
             "enabled": self._external_custom_tools_enabled(),
             "loaded": [],
         }
-        if self.custom_tools:
+        if self.tools:
             get_package_diagnostics = getattr(
-                self.custom_tools,
+                self.tools,
                 "get_package_diagnostics",
                 None,
             )
             if callable(get_package_diagnostics):
                 diagnostics = get_package_diagnostics()
             get_external_diagnostics = getattr(
-                self.custom_tools,
+                self.tools,
                 "get_external_diagnostics",
                 None,
             )
@@ -871,26 +871,30 @@ class MCPServer(
 
     async def reload_external_custom_tools(self) -> dict[str, Any]:
         """Reload external custom tools, clear caches, and notify clients."""
-        if not self.custom_tools:
+        if not self.tools:
             return {
                 "enabled": self._external_custom_tools_enabled(),
                 "loaded_tools": [],
                 "load_errors": ["Custom tools are not initialized"],
             }
 
-        reload_tool_packages = getattr(self.custom_tools, "reload_tool_packages", None)
+        reload_tool_packages = getattr(self.tools, "reload_tool_packages", None)
         if callable(reload_tool_packages):
             diagnostics = await reload_tool_packages()
         else:
-            reload_external_tools = getattr(self.custom_tools, "reload_external_tools", None)
-            if not callable(reload_external_tools):
+            reload_external_custom_tools = getattr(
+                self.tools,
+                "reload_external_custom_tools",
+                None,
+            )
+            if not callable(reload_external_custom_tools):
                 return {
                     "enabled": self._external_custom_tools_enabled(),
                     "loaded_tools": [],
                     "load_errors": ["Reload is not supported by the current custom tool loader"],
                 }
 
-            diagnostics = await reload_external_tools()
+            diagnostics = await reload_external_custom_tools()
 
         if diagnostics is None:
             return {
@@ -1976,9 +1980,9 @@ class MCPServer(
         tools.extend(self._get_media_tool_definitions())
 
         # Add custom tool definitions if enabled
-        if self.custom_tools:
+        if self.tools:
             try:
-                custom_tool_defs = self.custom_tools.get_tool_definitions()
+                custom_tool_defs = self.tools.get_tool_definitions()
                 tools.extend(custom_tool_defs)
             except Exception as e:
                 _LOGGER.error(
@@ -2050,8 +2054,8 @@ class MCPServer(
             return await self.tool_generate_image(arguments, context=context)
         else:
             # Check if it's a custom tool
-            if self.custom_tools and self.custom_tools.is_custom_tool(tool_name):
-                return await self.custom_tools.handle_tool_call(
+            if self.tools and self.tools.is_custom_tool(tool_name):
+                return await self.tools.handle_tool_call(
                     tool_name,
                     arguments,
                     context=context,
