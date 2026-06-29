@@ -34,6 +34,7 @@ def test_builtin_catalog_loads_expected_manifest_packages() -> None:
         "unit_conversion",
         "search",
         "read_url",
+        "wikipedia_search",
     } <= package_ids
 
 
@@ -51,6 +52,9 @@ def test_builtin_catalog_looks_up_specs_by_package_id_and_tool_name() -> None:
     assert get_builtin_toggle_spec_by_tool_name(
         "get_google_route", BUILTIN_SPECS
     ) == _spec("google_maps")
+    assert get_builtin_toggle_spec_by_tool_name(
+        "search_wikipedia", BUILTIN_SPECS
+    ) == _spec("wikipedia_search")
     assert get_builtin_toggle_spec_by_tool_name("missing_tool", BUILTIN_SPECS) is None
 
 

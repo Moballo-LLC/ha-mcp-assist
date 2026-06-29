@@ -373,6 +373,35 @@ async def test_initialize_loads_google_maps_when_enabled(
 
 
 @pytest.mark.asyncio
+async def test_initialize_loads_wikipedia_search_when_enabled(
+    hass,
+    profile_entry_factory,
+    system_entry_factory,
+) -> None:
+    """Wikipedia search should load as its own optional built-in package."""
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            "enable_wikipedia_search_tool": True,
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+
+    loader = CustomToolsLoader(hass, profile_entry)
+    await loader.initialize()
+
+    assert "wikipedia_search" in loader.tools
+    assert any(
+        definition["name"] == "search_wikipedia"
+        for definition in loader.get_tool_definitions()
+    )
+    wikipedia_spec = loader.get_builtin_toggle_spec("search_wikipedia")
+    assert wikipedia_spec is not None
+    assert wikipedia_spec.package_id == "wikipedia_search"
+
+
+@pytest.mark.asyncio
 async def test_initialize_loads_search_and_read_url_for_brave(
     hass, profile_entry_factory, system_entry_factory, monkeypatch
 ) -> None:

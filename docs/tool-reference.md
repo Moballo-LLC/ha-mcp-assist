@@ -144,9 +144,22 @@ Google Places and Routes tools are optional and require a Google Maps API key.
 | `get_google_place_details` | Fetch details for a Google Places result |
 | `get_google_route` | Calculate travel time, distance, and traffic-aware ETAs |
 
-If `get_google_route` is called without an origin, it uses the configured Home
-Assistant home latitude and longitude. Use regular web search for broad
-location research that is not a place lookup or route question.
+If `get_google_route` is called without an origin, it can use the configured
+Home Assistant home latitude and longitude only when **Share Home Location with
+MCP Tools** is enabled. Use regular web search for broad location research that
+is not a place lookup or route question.
+
+## Wikipedia Search
+
+Wikipedia Search is an optional lightweight reference tool.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_wikipedia` | Search Wikipedia article titles and descriptions |
+
+Use this for stable background or encyclopedia-style questions where Wikipedia
+results are enough. Use regular web search for latest information, current
+events, or broader internet research.
 
 ## Music Assistant
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -555,6 +556,63 @@ def test_build_messages_supports_zero_history(
         {"role": "system", "content": "system"},
         {"role": "user", "content": "current"},
     ]
+
+
+def test_message_content_char_count_handles_provider_blocks(
+    hass, profile_entry_factory
+) -> None:
+    """Prompt metrics should count provider text blocks without schema noise."""
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+
+    assert agent._message_content_char_count(
+        [
+            {"role": "system", "content": "abc"},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "hello"}],
+            },
+            {
+                "role": "tool",
+                "content": {"type": "tool_result", "content": "result"},
+            },
+        ]
+    ) == 14
+
+
+def test_initial_payload_metrics_log_size_without_content(
+    hass, profile_entry_factory, caplog
+) -> None:
+    """Debug metrics should help size first prompts without leaking prompt text."""
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    messages = [{"role": "user", "content": "please keep this private"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "discover_entities", "parameters": {}},
+        }
+    ]
+    payload = {"model": "test-model", "messages": messages, "tools": tools}
+
+    with caplog.at_level(logging.DEBUG, logger=agent_module._LOGGER.name):
+        agent._log_initial_llm_payload_metrics(
+            transport="http",
+            iteration=0,
+            payload=payload,
+            messages=messages,
+            tools=tools,
+        )
+        agent._log_initial_llm_payload_metrics(
+            transport="http",
+            iteration=1,
+            payload=payload,
+            messages=messages,
+            tools=tools,
+        )
+
+    assert caplog.text.count("Initial LLM payload metrics") == 1
+    assert "payload_bytes=" in caplog.text
+    assert "message_chars=24" in caplog.text
+    assert "please keep this private" not in caplog.text
 
 
 def test_build_messages_light_context_caps_history_to_two_turns(
@@ -1262,7 +1320,23 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
                         "description": "Find entities.",
                         "parameters": {"type": "object", "properties": {}},
                     },
-                }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "analyze_image",
+                        "description": "Analyze an image.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "generate_image",
+                        "description": "Generate an image.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
             ]
         ),
     )
@@ -1308,6 +1382,12 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
         return _FakeAnthropicSession(responses, posts)
 
     monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    metrics_calls: list[dict] = []
+    monkeypatch.setattr(
+        agent,
+        "_log_initial_llm_payload_metrics",
+        lambda **kwargs: metrics_calls.append(kwargs),
+    )
 
     result = await agent._call_llm([{"role": "user", "content": "Check kitchen"}])
 
@@ -1320,6 +1400,9 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
     assert posts[0]["headers"]["anthropic-version"] == "2023-06-01"
     assert "tool_choice" not in posts[0]["json"]
     assert posts[0]["json"]["tools"][0]["input_schema"]["type"] == "object"
+    assert [tool["name"] for tool in metrics_calls[0]["tools"]] == [
+        "discover_entities"
+    ]
     execute_mock.assert_awaited_once()
     assert execute_mock.await_args.args[0][0]["function"]["arguments"] == (
         '{"area": "Kitchen"}'

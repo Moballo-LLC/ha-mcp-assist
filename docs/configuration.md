@@ -210,6 +210,12 @@ Assistant home latitude and longitude as the route origin only if **Share Home
 Location with MCP Tools** is enabled. Otherwise the caller must provide an
 origin.
 
+## Reference Tools
+
+Wikipedia Search is disabled by default. Enable it when a profile should be able
+to search Wikipedia for lightweight background or encyclopedia-style reference
+results without using the broader web-search provider.
+
 ## External Custom Tools
 
 External custom tools are disabled by default. When enabled, MCP Assist loads

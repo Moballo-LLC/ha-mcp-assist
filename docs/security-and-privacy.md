@@ -81,10 +81,10 @@ Local models can reduce third-party data exposure, but check your actual setup:
 - Container networking can expose services more broadly than expected.
 - Some local tools or frontends may have telemetry settings of their own.
 
-## Web Search, URL Reading, and Maps
+## Web Search, Reference Tools, and Maps
 
-The Search, Read URL, and Google Places and Routes tool families can send
-requests to external services or websites.
+The Search, Read URL, Wikipedia Search, and Google Places and Routes tool
+families can send requests to external services or websites.
 
 Recommendations:
 
@@ -98,6 +98,7 @@ Recommendations:
 
 `read_url` is intended for page text extraction. It should not be used as a
 general network scanner or a way to bypass Home Assistant network policy.
+Wikipedia Search is limited to validated `*.wikipedia.org` API requests.
 
 ## Memory
 
