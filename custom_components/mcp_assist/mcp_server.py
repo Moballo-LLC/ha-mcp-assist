@@ -755,6 +755,13 @@ class MCPServer(
         client_ip = request.remote
         _LOGGER.info("🏥 Health check from %s", _sanitize_log_value(client_ip))
 
+        if not self._is_ip_allowed(client_ip):
+            _LOGGER.warning(
+                "🚫 Blocked health check from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
+            )
+            return web.Response(status=403, text="Forbidden: IP not authorized")
+
         health_info = {
             "status": "healthy",
             "server": MCP_SERVER_NAME,
