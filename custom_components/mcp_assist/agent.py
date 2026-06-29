@@ -137,6 +137,7 @@ _LOGGER = logging.getLogger(__name__)
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
+ANTHROPIC_UNSUPPORTED_TOOL_NAMES = {"analyze_image", "generate_image"}
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -2766,6 +2767,267 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return payload
 
+    def _get_anthropic_headers(self) -> Dict[str, str]:
+        """Build headers for Anthropic's native Messages API."""
+        return {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
+    def _convert_openai_tools_to_anthropic(
+        self, tools: Optional[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """Convert OpenAI-style function tools to Anthropic tool schemas."""
+        anthropic_tools: list[dict[str, Any]] = []
+        for tool in tools or []:
+            function = tool.get("function", {})
+            name = function.get("name")
+            if not name:
+                continue
+            if name in ANTHROPIC_UNSUPPORTED_TOOL_NAMES:
+                continue
+            input_schema = function.get("parameters") or {
+                "type": "object",
+                "properties": {},
+            }
+            anthropic_tools.append(
+                {
+                    "name": name,
+                    "description": function.get("description", ""),
+                    "input_schema": input_schema,
+                }
+            )
+        return anthropic_tools
+
+    def _append_anthropic_message(
+        self,
+        messages: list[dict[str, Any]],
+        role: str,
+        content_blocks: list[dict[str, Any]],
+    ) -> None:
+        """Append an Anthropic message, merging adjacent messages with the same role."""
+        if not content_blocks:
+            return
+        if messages and messages[-1].get("role") == role:
+            messages[-1].setdefault("content", []).extend(content_blocks)
+            return
+        messages.append({"role": role, "content": content_blocks})
+
+    def _text_content_blocks(self, content: Any) -> list[dict[str, str]]:
+        """Convert provider-neutral message content to Anthropic text blocks."""
+        if isinstance(content, list):
+            blocks: list[dict[str, str]] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text = str(item.get("text") or "").strip()
+                else:
+                    text = str(item or "").strip()
+                if text:
+                    blocks.append({"type": "text", "text": text})
+            return blocks
+
+        text = str(content or "").strip()
+        return [{"type": "text", "text": text}] if text else []
+
+    def _anthropic_tool_use_blocks(
+        self, tool_calls: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Convert internal tool calls to Anthropic tool_use blocks."""
+        blocks: list[dict[str, Any]] = []
+        for tool_call in tool_calls:
+            function = tool_call.get("function", {})
+            name = function.get("name")
+            if not name:
+                continue
+            blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": tool_call.get("id", f"toolu_{uuid.uuid4().hex[:8]}"),
+                    "name": name,
+                    "input": self._parse_tool_arguments(function.get("arguments")),
+                }
+            )
+        return blocks
+
+    def _build_anthropic_payload(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Build Anthropic's native Messages API payload."""
+        system_parts: list[str] = []
+        anthropic_messages: list[dict[str, Any]] = []
+
+        for msg in messages:
+            role = msg.get("role")
+            if role == "system":
+                content = str(msg.get("content") or "").strip()
+                if content:
+                    system_parts.append(content)
+                continue
+
+            if role == "tool":
+                self._append_anthropic_message(
+                    anthropic_messages,
+                    "user",
+                    [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg.get("tool_call_id", ""),
+                            "content": str(msg.get("content") or ""),
+                        }
+                    ],
+                )
+                continue
+
+            if role == "assistant" and msg.get("tool_calls"):
+                content_blocks = self._text_content_blocks(msg.get("content"))
+                content_blocks.extend(
+                    self._anthropic_tool_use_blocks(msg.get("tool_calls", []))
+                )
+                self._append_anthropic_message(
+                    anthropic_messages,
+                    "assistant",
+                    content_blocks,
+                )
+                continue
+
+            if role in {"user", "assistant"}:
+                self._append_anthropic_message(
+                    anthropic_messages,
+                    role,
+                    self._text_content_blocks(msg.get("content")),
+                )
+
+        payload: dict[str, Any] = {
+            "model": self.model_name,
+            "max_tokens": max(1, int(self.max_tokens or DEFAULT_MAX_TOKENS)),
+            "messages": anthropic_messages,
+        }
+
+        if system_parts:
+            payload["system"] = "\n\n".join(system_parts)
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+
+        anthropic_tools = self._convert_openai_tools_to_anthropic(tools)
+        if anthropic_tools:
+            payload["tools"] = anthropic_tools
+
+        return payload
+
+    def _anthropic_response_to_tool_calls(
+        self, content_blocks: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Convert Anthropic tool_use blocks to internal OpenAI-style tool calls."""
+        tool_calls: list[dict[str, Any]] = []
+        for block in content_blocks:
+            if block.get("type") != "tool_use":
+                continue
+            tool_calls.append(
+                {
+                    "id": block.get("id", f"toolu_{uuid.uuid4().hex[:8]}"),
+                    "type": "function",
+                    "function": {
+                        "name": block.get("name", ""),
+                        "arguments": self._stringify_tool_arguments(
+                            block.get("input") or {}
+                        ),
+                    },
+                }
+            )
+        return tool_calls
+
+    async def _call_anthropic_messages(self, messages: List[Dict[str, Any]]) -> str:
+        """Call Anthropic's native Messages API with MCP tool-loop support."""
+        _LOGGER.info("🚀 Calling Anthropic Messages API")
+
+        tools = await self._get_mcp_tools()
+        if not tools:
+            _LOGGER.warning("No MCP tools available - proceeding without tools")
+
+        conversation_messages = list(messages)
+
+        for iteration in range(self.max_iterations):
+            _LOGGER.info(
+                "🔄 Anthropic iteration %d: %d messages",
+                iteration + 1,
+                len(conversation_messages),
+            )
+            payload = self._build_anthropic_payload(conversation_messages, tools)
+
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    f"{self.base_url_dynamic}/v1/messages",
+                    headers=self._get_anthropic_headers(),
+                    json=payload,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(
+                            f"anthropic API error {response.status}: {error_text}"
+                        )
+                    data = await response.json()
+
+            content_blocks = [
+                block for block in data.get("content", []) if isinstance(block, dict)
+            ]
+            text_blocks = [
+                str(block.get("text") or "")
+                for block in content_blocks
+                if block.get("type") == "text"
+            ]
+            response_text = "".join(text_blocks).strip()
+            tool_calls = self._anthropic_response_to_tool_calls(content_blocks)
+
+            if tool_calls:
+                _LOGGER.info("🛠️ Anthropic requested %d tool calls", len(tool_calls))
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "tool_calls": tool_calls,
+                }
+                if response_text:
+                    assistant_msg["content"] = response_text
+                conversation_messages.append(assistant_msg)
+
+                self._record_tool_calls_to_chatlog(tool_calls)
+                tool_results = await self._execute_tool_calls(tool_calls)
+
+                for idx, result in enumerate(tool_results):
+                    if idx < len(tool_calls):
+                        tc = tool_calls[idx]
+                        tool_call_id = result.get(
+                            "tool_call_id", tc.get("id", "unknown")
+                        )
+                        tool_name = tc.get("function", {}).get("name", "unknown")
+                        try:
+                            tool_result_data = json.loads(result.get("content", "{}"))
+                        except Exception:
+                            tool_result_data = {"result": result.get("content", "")}
+                        self._record_tool_result_to_chatlog(
+                            tool_call_id, tool_name, tool_result_data
+                        )
+
+                conversation_messages.extend(tool_results)
+                continue
+
+            if response_text:
+                _LOGGER.info(
+                    "💬 Anthropic final response received (length: %d)",
+                    len(response_text),
+                )
+                return response_text
+
+            _LOGGER.warning("Empty Anthropic response, retrying...")
+
+        _LOGGER.warning(
+            "⚠️ Hit maximum iterations (%d) in Anthropic tool execution loop",
+            self.max_iterations,
+        )
+        return f"I reached the maximum of {self.max_iterations} tool calls while processing your request. Try simplifying your request, or increase the limit in Advanced Settings if you have a complex automation need."
+
     async def _call_llm_streaming(self, messages: List[Dict[str, Any]]) -> str:
         """Stream LLM responses with immediate TTS feedback."""
         _LOGGER.info(f"🚀 Starting streaming {self.server_type} conversation")
@@ -3257,6 +3519,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     async def _call_llm(self, messages: List[Dict[str, Any]]) -> str:
         """Call LLM API with MCP tools and handle tool execution loop."""
+        if self.server_type == SERVER_TYPE_ANTHROPIC:
+            return await self._call_anthropic_messages(messages)
+
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
