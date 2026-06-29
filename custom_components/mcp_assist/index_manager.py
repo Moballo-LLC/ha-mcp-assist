@@ -928,23 +928,23 @@ Focus on meaningful categories that would help discover relevant entities for us
             Exception: If LLM call fails or response cannot be parsed
         """
         from homeassistant.components import conversation
-        from .const import DOMAIN
+        from .const import DOMAIN, SYSTEM_ENTRY_UNIQUE_ID
 
-        # Get any conversation agent entry (they all share the same LLM config)
-        entries = [entry for entry in self.hass.config_entries.async_entries(DOMAIN)]
-        if not entries:
-            raise ValueError("No MCP Assist config entries found")
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry = None
+        agent = None
+        for candidate in self.hass.config_entries.async_entries(DOMAIN):
+            if candidate.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
+                continue
+            agent_data = domain_data.get(candidate.entry_id, {})
+            candidate_agent = agent_data.get("agent")
+            if candidate_agent:
+                entry = candidate
+                agent = candidate_agent
+                break
 
-        entry = entries[0]
-
-        # Get the agent
-        agent_data = self.hass.data.get(DOMAIN, {}).get(entry.entry_id)
-        if not agent_data:
-            raise ValueError("No agent found for LLM inference")
-
-        agent = agent_data.get("agent")
-        if not agent:
-            raise ValueError("Agent not available for LLM inference")
+        if entry is None or agent is None:
+            raise ValueError("No profile agent found for LLM inference")
 
         # Create a minimal conversation input with all required fields
         conversation_input = conversation.ConversationInput(
