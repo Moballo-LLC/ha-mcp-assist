@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import ipaddress
 import logging
 import re
@@ -35,6 +36,10 @@ from .custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from .localization import get_language_instruction, get_follow_up_phrases, get_end_words
+from .provider_runtime import (
+    PROVIDER_DISPLAY_NAMES,
+    build_openai_compatible_endpoint,
+)
 
 from .const import (
     DOMAIN,
@@ -237,6 +242,60 @@ def _context_mode_selector() -> SelectSelector:
             mode=SelectSelectorMode.DROPDOWN,
         )
     )
+
+
+@dataclass(frozen=True)
+class ProviderConnectionSpec:
+    """Config-flow metadata for provider connection settings."""
+
+    display_name: str
+    connection_kind: str
+    default_url: str | None = None
+
+
+PROVIDER_CONNECTION_SPECS: dict[str, ProviderConnectionSpec] = {
+    SERVER_TYPE_LMSTUDIO: ProviderConnectionSpec(
+        "LM Studio", "local_url", DEFAULT_LMSTUDIO_URL
+    ),
+    SERVER_TYPE_LLAMACPP: ProviderConnectionSpec(
+        "llama.cpp", "local_url", DEFAULT_LLAMACPP_URL
+    ),
+    SERVER_TYPE_OLLAMA: ProviderConnectionSpec(
+        "Ollama", "local_url", DEFAULT_OLLAMA_URL
+    ),
+    SERVER_TYPE_VLLM: ProviderConnectionSpec(
+        "vLLM", "local_url", DEFAULT_VLLM_URL
+    ),
+    SERVER_TYPE_OPENAI: ProviderConnectionSpec(
+        "OpenAI", "openai_compatible", OPENAI_BASE_URL
+    ),
+    SERVER_TYPE_GEMINI: ProviderConnectionSpec("Gemini", "api_key"),
+    SERVER_TYPE_ANTHROPIC: ProviderConnectionSpec("Claude", "api_key"),
+    SERVER_TYPE_OPENROUTER: ProviderConnectionSpec("OpenRouter", "api_key"),
+    SERVER_TYPE_OPENCLAW: ProviderConnectionSpec("OpenClaw", "openclaw"),
+}
+
+
+def _provider_connection_spec(server_type: str) -> ProviderConnectionSpec:
+    """Return config-flow provider metadata."""
+    return PROVIDER_CONNECTION_SPECS.get(
+        server_type,
+        PROVIDER_CONNECTION_SPECS[DEFAULT_SERVER_TYPE],
+    )
+
+
+def _provider_display_name(server_type: str) -> str:
+    """Return the user-facing provider display name."""
+    return PROVIDER_DISPLAY_NAMES.get(
+        server_type,
+        _provider_connection_spec(server_type).display_name,
+    )
+
+
+def _provider_default_url(server_type: str) -> str:
+    """Return the default URL for providers that use a configurable endpoint."""
+    spec = _provider_connection_spec(server_type)
+    return spec.default_url or DEFAULT_LMSTUDIO_URL
 
 
 def _get_default_system_prompt(hass: HomeAssistant) -> str:
@@ -980,7 +1039,9 @@ def _needs_prompt_followup(
 
 async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]:
     """Fetch available models from local inference server (LM Studio/Ollama)."""
-    _LOGGER.info("🌐 FETCH: Starting model fetch from %s", url)
+    normalized_url = str(url or DEFAULT_LMSTUDIO_URL).strip().rstrip("/")
+    models_url = build_openai_compatible_endpoint(normalized_url, "models")
+    _LOGGER.info("🌐 FETCH: Starting model fetch from %s", normalized_url)
     try:
         # Small delay to ensure server is ready
         await asyncio.sleep(0.5)
@@ -988,10 +1049,10 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             _LOGGER.info(
-                "📡 FETCH: Sending request to %s/v1/models",
-                _redacted_log_snippet(url),
+                "📡 FETCH: Sending request to %s",
+                _redacted_log_snippet(models_url),
             )
-            async with session.get(f"{url}/v1/models") as resp:
+            async with session.get(models_url) as resp:
                 _LOGGER.info("📥 FETCH: Got response with status %d", resp.status)
                 if resp.status != 200:
                     _LOGGER.warning("⚠️ FETCH: Non-200 status, returning empty list")
@@ -1017,11 +1078,16 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
 async def fetch_models_from_openai(
     hass: HomeAssistant,
     api_key: str,
-    base_url: str = OPENAI_BASE_URL
+    base_url: str = OPENAI_BASE_URL,
 ) -> list[str]:
     """Fetch available models from OpenAI API."""
     _LOGGER.info("🌐 FETCH: Starting OpenAI model fetch")
     try:
+        normalized_base_url = str(base_url or OPENAI_BASE_URL).strip().rstrip("/")
+        official_base_urls = {
+            OPENAI_BASE_URL,
+            f"{OPENAI_BASE_URL}/v1",
+        }
         timeout = aiohttp.ClientTimeout(total=10)
         headers = {
             "Content-Type": "application/json",
@@ -1029,13 +1095,18 @@ async def fetch_models_from_openai(
 
         # Only include Authorization header if API key looks valid
         # Some custom OpenAI-compatible services don't require authentication
-        if api_key and len(api_key) > 5 and api_key.lower() not in ["none", "null", "fake", "na", "n/a"]:
+        if (
+            api_key
+            and len(api_key) > 5
+            and api_key.lower() not in ["none", "null", "fake", "na", "n/a"]
+        ):
             headers["Authorization"] = f"Bearer {api_key}"
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             _LOGGER.info("📡 FETCH: Requesting OpenAI models")
             async with session.get(
-                f"{base_url}/v1/models", headers=headers
+                build_openai_compatible_endpoint(normalized_base_url, "models"),
+                headers=headers,
             ) as resp:
                 _LOGGER.info("📥 FETCH: OpenAI response status %d", resp.status)
                 if resp.status != 200:
@@ -1053,7 +1124,7 @@ async def fetch_models_from_openai(
 
                 # Only filter for GPT models when using official OpenAI URL
                 # Custom OpenAI-compatible services may use different naming schemes
-                if base_url == OPENAI_BASE_URL:
+                if normalized_base_url in official_base_urls:
                     chat_models = [m for m in all_models if m.startswith("gpt-")]
                 else:
                     # For custom URLs, return all models (user's service defines what's available)
@@ -1220,7 +1291,9 @@ async def validate_lmstudio_connection(
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # Test models endpoint
-            async with session.get(f"{url}/v1/models") as resp:
+            async with session.get(
+                build_openai_compatible_endpoint(url, "models")
+            ) as resp:
                 if resp.status != 200:
                     raise CannotConnect(
                         f"LM Studio not responding (status {resp.status})"
@@ -1249,7 +1322,8 @@ async def validate_lmstudio_connection(
             }
 
             async with session.post(
-                f"{url}/v1/chat/completions", json=test_payload
+                build_openai_compatible_endpoint(url, "chat/completions"),
+                json=test_payload,
             ) as resp:
                 if resp.status != 200:
                     raise InvalidModel(
@@ -1312,9 +1386,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get server type from step 1 to build dynamic schema
         server_type = self.step1_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_spec = _provider_connection_spec(server_type)
 
         # Build schema based on server type
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if provider_spec.connection_kind == "openclaw":
             # OpenClaw Gateway - host, port, token, SSL
             server_schema = vol.Schema(
                 {
@@ -1326,33 +1401,25 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_OPENCLAW_USE_SSL, default=DEFAULT_OPENCLAW_USE_SSL): BooleanSelector(),
                 }
             )
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
+        elif provider_spec.connection_kind == "local_url":
             # Local servers - show URL field
-            if server_type == SERVER_TYPE_OLLAMA:
-                default_url = DEFAULT_OLLAMA_URL
-            elif server_type == SERVER_TYPE_LLAMACPP:
-                default_url = DEFAULT_LLAMACPP_URL
-            elif server_type == SERVER_TYPE_VLLM:
-                default_url = DEFAULT_VLLM_URL
-            else:
-                default_url = DEFAULT_LMSTUDIO_URL
-
             server_schema = vol.Schema(
                 {
-                    vol.Required(CONF_LMSTUDIO_URL, default=default_url): str,
+                    vol.Required(
+                        CONF_LMSTUDIO_URL,
+                        default=_provider_default_url(server_type),
+                    ): str,
                 }
             )
-        elif server_type == SERVER_TYPE_OPENAI:
+        elif provider_spec.connection_kind == "openai_compatible":
             # OpenAI - hybrid like OpenClaw (URL + API key)
             # Pre-fill with official OpenAI URL but allow users to edit for custom endpoints
             server_schema = vol.Schema(
                 {
-                    vol.Required(CONF_LMSTUDIO_URL, default=OPENAI_BASE_URL): str,
+                    vol.Required(
+                        CONF_LMSTUDIO_URL,
+                        default=_provider_default_url(server_type),
+                    ): str,
                     vol.Required(CONF_API_KEY): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
@@ -1441,6 +1508,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get server type to determine model source
         server_type = self.step1_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_spec = _provider_connection_spec(server_type)
         default_system_prompt = _get_default_system_prompt(self.hass)
 
         if user_input is not None:
@@ -1466,15 +1534,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_TECHNICAL_PROMPT_MODE: PROMPT_MODE_DEFAULT,
             }
             return await self.async_step_advanced()
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
+        elif provider_spec.connection_kind == "local_url":
             # Local servers - fetch models from API
             server_url = self.step2_data.get(
-                CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL
+                CONF_LMSTUDIO_URL,
+                _provider_default_url(server_type),
             ).rstrip("/")
             _LOGGER.debug("Attempting to fetch models from %s", server_url)
             models = await fetch_models_from_lmstudio(self.hass, server_url)
@@ -1482,11 +1546,14 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Show error if fetch failed
             if not models:
                 errors["base"] = "cannot_connect"
-        elif server_type == SERVER_TYPE_OPENAI:
+        elif provider_spec.connection_kind == "openai_compatible":
             # OpenAI - fetch models from API with authentication
             api_key = self.step2_data.get(CONF_API_KEY, "")
             # Get custom URL from step 2 (uses same CONF_LMSTUDIO_URL field as local servers)
-            base_url = self.step2_data.get(CONF_LMSTUDIO_URL, OPENAI_BASE_URL).rstrip("/")
+            base_url = self.step2_data.get(
+                CONF_LMSTUDIO_URL,
+                _provider_default_url(server_type),
+            ).rstrip("/")
             _LOGGER.debug("Fetching OpenAI models from %s", base_url)
             models = await fetch_models_from_openai(self.hass, api_key, base_url)
             _LOGGER.debug("Fetched %d OpenAI models: %s", len(models), models)
@@ -1734,18 +1801,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
                     )
 
-                    server_display_map = {
-                        SERVER_TYPE_LMSTUDIO: "LM Studio",
-                        SERVER_TYPE_LLAMACPP: "llama.cpp",
-                        SERVER_TYPE_OLLAMA: "Ollama",
-                        SERVER_TYPE_OPENAI: "OpenAI",
-                        SERVER_TYPE_GEMINI: "Gemini",
-                        SERVER_TYPE_ANTHROPIC: "Claude",
-                        SERVER_TYPE_OPENROUTER: "OpenRouter",
-                        SERVER_TYPE_OPENCLAW: "OpenClaw",
-                        SERVER_TYPE_VLLM: "vLLM",
-                    }
-                    server_display = server_display_map.get(server_type, "LM Studio")
+                    server_display = _provider_display_name(server_type)
 
                     unique_id = f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
                     await self.async_set_unique_id(unique_id)
@@ -1983,18 +2039,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 profile_name = combined_data[CONF_PROFILE_NAME]
                 server_type = combined_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
 
-                server_display_map = {
-                    SERVER_TYPE_LMSTUDIO: "LM Studio",
-                    SERVER_TYPE_LLAMACPP: "llama.cpp",
-                    SERVER_TYPE_OLLAMA: "Ollama",
-                    SERVER_TYPE_OPENAI: "OpenAI",
-                    SERVER_TYPE_GEMINI: "Gemini",
-                    SERVER_TYPE_ANTHROPIC: "Claude",
-                    SERVER_TYPE_OPENROUTER: "OpenRouter",
-                    SERVER_TYPE_OPENCLAW: "OpenClaw",
-                    SERVER_TYPE_VLLM: "vLLM",
-                }
-                server_display = server_display_map.get(server_type, "LM Studio")
+                server_display = _provider_display_name(server_type)
 
                 unique_id = (
                     f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
@@ -2231,6 +2276,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
         errors: dict[str, str] = {}
         server_type = self.config_entry.data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_spec = _provider_connection_spec(server_type)
         default_system_prompt = _get_default_system_prompt(self.hass)
         built_in_specs = await _async_load_builtin_tool_toggle_specs(self.hass)
 
@@ -2297,18 +2343,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         if server_type == SERVER_TYPE_OPENCLAW:
             # Don't fetch models, don't show model field
             pass
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
+        elif provider_spec.connection_kind == "local_url":
             # Local servers - fetch from URL
             server_url = _get_form_value(
                 current_values,
                 CONF_LMSTUDIO_URL,
                 options.get(
-                    CONF_LMSTUDIO_URL, data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL)
+                    CONF_LMSTUDIO_URL,
+                    data.get(
+                        CONF_LMSTUDIO_URL,
+                        _provider_default_url(server_type),
+                    ),
                 ),
             ).rstrip("/")
             _LOGGER.info(
@@ -2319,17 +2364,32 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 _LOGGER.info(f"✅ OPTIONS: Successfully fetched {len(models)} models")
             except Exception as err:
                 _LOGGER.error(f"❌ OPTIONS: Failed to fetch models: {err}")
-        elif server_type == SERVER_TYPE_OPENAI:
+        elif provider_spec.connection_kind == "openai_compatible":
             # OpenAI - fetch from API
             api_key = _get_form_value(
                 current_values,
                 CONF_API_KEY,
                 options.get(CONF_API_KEY, data.get(CONF_API_KEY, "")),
             )
+            base_url = _get_form_value(
+                current_values,
+                CONF_LMSTUDIO_URL,
+                options.get(
+                    CONF_LMSTUDIO_URL,
+                    data.get(
+                        CONF_LMSTUDIO_URL,
+                        _provider_default_url(server_type),
+                    ),
+                ),
+            ).rstrip("/")
             if api_key:
                 _LOGGER.info("🔍 OPTIONS: Attempting to fetch models from OpenAI")
                 try:
-                    models = await fetch_models_from_openai(self.hass, api_key)
+                    models = await fetch_models_from_openai(
+                        self.hass,
+                        api_key,
+                        base_url,
+                    )
                     _LOGGER.info(
                         f"✅ OPTIONS: Successfully fetched {len(models)} OpenAI models"
                     )
@@ -2476,14 +2536,13 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 )
             ] = BooleanSelector()
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
+        elif provider_spec.connection_kind == "local_url":
             server_url = options.get(
-                CONF_LMSTUDIO_URL, data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL)
+                CONF_LMSTUDIO_URL,
+                data.get(
+                    CONF_LMSTUDIO_URL,
+                    _provider_default_url(server_type),
+                ),
             )
             connection_schema_items[
                 vol.Required(
@@ -2493,11 +2552,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 )
             ] = str
-        elif server_type == SERVER_TYPE_OPENAI:
+        elif provider_spec.connection_kind == "openai_compatible":
             # OpenAI - hybrid (URL + API key)
             server_url = options.get(
                 CONF_LMSTUDIO_URL,
-                data.get(CONF_LMSTUDIO_URL, OPENAI_BASE_URL)
+                data.get(
+                    CONF_LMSTUDIO_URL,
+                    _provider_default_url(server_type),
+                ),
             )
             connection_schema_items[
                 vol.Required(
@@ -2968,18 +3030,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         server_type = self.config_entry.data.get(
                             CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
                         )
-                        server_display_map = {
-                            SERVER_TYPE_LMSTUDIO: "LM Studio",
-                            SERVER_TYPE_LLAMACPP: "llama.cpp",
-                            SERVER_TYPE_OLLAMA: "Ollama",
-                            SERVER_TYPE_OPENAI: "OpenAI",
-                            SERVER_TYPE_GEMINI: "Gemini",
-                            SERVER_TYPE_ANTHROPIC: "Claude",
-                            SERVER_TYPE_OPENROUTER: "OpenRouter",
-                            SERVER_TYPE_OPENCLAW: "OpenClaw",
-                            SERVER_TYPE_VLLM: "vLLM",
-                        }
-                        server_display = server_display_map.get(server_type, "LM Studio")
+                        server_display = _provider_display_name(server_type)
                         self.hass.config_entries.async_update_entry(
                             self.config_entry,
                             title=f"{server_display} - {new_profile_name}",

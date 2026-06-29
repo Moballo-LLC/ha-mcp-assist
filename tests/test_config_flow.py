@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import voluptuous as vol
@@ -15,6 +16,7 @@ from homeassistant.helpers.selector import TemplateSelector
 from custom_components.mcp_assist import config_flow as config_flow_module
 from custom_components.mcp_assist.config_flow import (
     ADVANCED_SECTION_KEY,
+    CONNECTION_SECTION_KEY,
     CONVERSATION_SECTION_KEY,
     CONTEXT_SECTION_KEY,
     DISCOVERY_SECTION_KEY,
@@ -53,6 +55,7 @@ from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
     CONF_ALLOWED_IPS,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
@@ -96,10 +99,13 @@ from custom_components.mcp_assist.const import (
     CONF_TECHNICAL_PROMPT_MODE,
     DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
+    DEFAULT_OLLAMA_URL,
     DEFAULT_TECHNICAL_PROMPT,
+    OPENAI_BASE_URL,
     PROMPT_MODE_CUSTOM,
     PROMPT_MODE_DEFAULT,
     SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENCLAW,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
@@ -169,6 +175,14 @@ def _section_field_names(form_section: section) -> set[str]:
     return {
         getattr(marker, "schema", marker)
         for marker in form_section.schema.schema.keys()
+    }
+
+
+def _schema_marker_by_field(data_schema: vol.Schema) -> dict[str, Any]:
+    """Return schema markers by normalized field name."""
+    return {
+        getattr(marker, "schema", marker): marker
+        for marker in data_schema.schema.keys()
     }
 
 
@@ -337,6 +351,31 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
         isinstance(selector, TemplateSelector)
         for selector in prompts_section.schema.schema.values()
     )
+
+
+async def test_server_step_uses_provider_specific_connection_fields(hass) -> None:
+    """Provider setup should show the connection fields required by that provider."""
+    ollama_flow = MCPAssistConfigFlow()
+    ollama_flow.hass = hass
+    ollama_flow.context = {"source": "user"}
+    ollama_flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA}
+
+    ollama_result = await ollama_flow.async_step_server()
+    ollama_markers = _schema_marker_by_field(ollama_result["data_schema"])
+
+    assert set(ollama_markers) == {CONF_LMSTUDIO_URL}
+    assert ollama_markers[CONF_LMSTUDIO_URL].default() == DEFAULT_OLLAMA_URL
+
+    openai_flow = MCPAssistConfigFlow()
+    openai_flow.hass = hass
+    openai_flow.context = {"source": "user"}
+    openai_flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OPENAI}
+
+    openai_result = await openai_flow.async_step_server()
+    openai_markers = _schema_marker_by_field(openai_result["data_schema"])
+
+    assert set(openai_markers) == {CONF_LMSTUDIO_URL, CONF_API_KEY}
+    assert openai_markers[CONF_LMSTUDIO_URL].default() == OPENAI_BASE_URL
 
 
 async def test_model_step_prompt_overrides_are_optional(hass) -> None:
@@ -1000,6 +1039,72 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     }
     assert CONF_OLLAMA_NUM_CTX not in _section_field_names(advanced_section)
     assert CONF_OLLAMA_KEEP_ALIVE not in _section_field_names(advanced_section)
+
+
+async def test_options_step_for_ollama_uses_provider_default_url_when_missing(
+    hass, profile_entry_factory
+) -> None:
+    """Older Ollama entries without a stored URL should use Ollama's default."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA})
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            key: value
+            for key, value in entry.data.items()
+            if key != CONF_LMSTUDIO_URL
+        },
+    )
+    flow.handler = entry.entry_id
+
+    fetch_models = AsyncMock(return_value=["qwen3"])
+    with patch(
+        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        fetch_models,
+    ):
+        result = await flow.async_step_init()
+
+    fetch_models.assert_awaited_once_with(hass, DEFAULT_OLLAMA_URL)
+    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
+    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert CONF_LMSTUDIO_URL in _section_field_names(connection_section)
+
+
+async def test_options_step_for_openai_fetches_models_from_custom_base_url(
+    hass, profile_entry_factory
+) -> None:
+    """OpenAI-compatible options should discover models from the saved base URL."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        title="OpenAI - Test Profile",
+        unique_id="mcp_assist_openai_test_profile",
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_API_KEY: "sk-test",
+            CONF_LMSTUDIO_URL: "https://proxy.example.com/v1",
+        },
+    )
+    flow.handler = entry.entry_id
+
+    fetch_models = AsyncMock(return_value=["proxy-model"])
+    with patch(
+        "custom_components.mcp_assist.config_flow.fetch_models_from_openai",
+        fetch_models,
+    ):
+        result = await flow.async_step_init()
+
+    fetch_models.assert_awaited_once_with(
+        hass,
+        "sk-test",
+        "https://proxy.example.com/v1",
+    )
+    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
+    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert {CONF_LMSTUDIO_URL, CONF_API_KEY} <= _section_field_names(
+        connection_section
+    )
 
 
 async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_section(

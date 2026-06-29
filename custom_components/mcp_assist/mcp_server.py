@@ -109,6 +109,7 @@ from .domain_registry import (
 )
 from .memory_manager import MemoryManager
 from .provider_runtime import (
+    build_openai_compatible_endpoint,
     build_provider_auth_headers,
     resolve_provider_runtime_config,
 )
@@ -3029,7 +3030,7 @@ class MCPServer(
                 }
             ],
         }
-        url = f"{base_url}/v1/chat/completions"
+        url = build_openai_compatible_endpoint(base_url, "chat/completions")
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
@@ -3083,7 +3084,10 @@ class MCPServer(
 
         timeout = aiohttp.ClientTimeout(total=provider_config["timeout"])
         headers = self._get_model_auth_headers(provider_config)
-        url = f"{provider_config['base_url']}/v1/images/generations"
+        url = build_openai_compatible_endpoint(
+            provider_config["base_url"],
+            "images/generations",
+        )
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:

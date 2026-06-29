@@ -6,7 +6,10 @@ from dataclasses import dataclass
 import json
 from typing import Any
 
-from ..provider_runtime import build_provider_auth_headers
+from ..provider_runtime import (
+    build_openai_compatible_endpoint,
+    build_provider_auth_headers,
+)
 
 
 @dataclass(frozen=True)
@@ -171,7 +174,7 @@ class LLMProvider:
 
     def chat_url(self) -> str:
         """Return the provider chat-completions endpoint."""
-        return f"{self.base_url}/v1/chat/completions"
+        return build_openai_compatible_endpoint(self.base_url, "chat/completions")
 
     def build_payload(
         self,
