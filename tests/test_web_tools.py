@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import ipaddress
+import socket
 import sys
 import types
 
@@ -18,6 +20,17 @@ sys.modules.setdefault("duckduckgo_search", types.SimpleNamespace(DDGS=object))
 ddg_module = importlib.import_module(
     "custom_components.mcp_assist.custom_tools.duckduckgo_search"
 )
+
+
+def _allow_public_example_resolution(tool) -> None:
+    """Stub URL reader DNS resolution to a public address."""
+
+    async def _resolve_host_addresses(host: str, port: int):
+        assert host in {"example.com", "news.example.com"}
+        assert port in {80, 443}
+        return {ipaddress.ip_address("93.184.216.34")}
+
+    tool._resolve_host_addresses = _resolve_host_addresses
 
 
 def test_search_tool_definitions_include_current_events_routing_metadata(hass) -> None:
@@ -35,6 +48,29 @@ def test_search_tool_definitions_include_current_events_routing_metadata(hass) -
         assert definition["returns"]
 
 
+class _FakeContent:
+    """Minimal stream reader stub."""
+
+    def __init__(
+        self,
+        body: bytes | None = None,
+        chunks: list[bytes] | None = None,
+    ) -> None:
+        self._body = body or b""
+        self._chunks = list(chunks or [])
+
+    async def read(self, n: int = -1) -> bytes:
+        if self._chunks:
+            return self._chunks.pop(0)
+        if n < 0:
+            chunk = self._body
+            self._body = b""
+            return chunk
+        chunk = self._body[:n]
+        self._body = self._body[n:]
+        return chunk
+
+
 class _FakeResponse:
     """Minimal async HTTP response stub."""
 
@@ -44,12 +80,18 @@ class _FakeResponse:
         status: int = 200,
         headers: dict[str, str] | None = None,
         text: str = "",
+        content_bytes: bytes | None = None,
+        content_chunks: list[bytes] | None = None,
+        charset: str | None = None,
         json_data: dict | None = None,
     ) -> None:
         self.status = status
         self.headers = headers or {}
         self._text = text
         self._json_data = json_data or {}
+        self.charset = charset
+        if content_bytes is not None or content_chunks is not None:
+            self.content = _FakeContent(content_bytes, content_chunks)
 
     async def __aenter__(self):
         return self
@@ -67,10 +109,18 @@ class _FakeResponse:
 class _FakeSession:
     """Minimal async HTTP session stub."""
 
-    def __init__(self, *, response: _FakeResponse | None = None, error=None) -> None:
+    def __init__(
+        self,
+        *,
+        response: _FakeResponse | None = None,
+        responses: list[_FakeResponse] | None = None,
+        error=None,
+    ) -> None:
         self._response = response
+        self._responses = list(responses or [])
         self._error = error
         self.calls: list[tuple[str, dict]] = []
+        self.client_session_kwargs: list[dict] = []
 
     async def __aenter__(self):
         return self
@@ -82,8 +132,20 @@ class _FakeSession:
         self.calls.append((url, kwargs))
         if self._error is not None:
             raise self._error
+        if self._responses:
+            return self._responses.pop(0)
         assert self._response is not None
         return self._response
+
+
+def _read_url_client_session(fake_session: _FakeSession):
+    """Build a ClientSession factory that records constructor kwargs."""
+
+    def _client_session(**kwargs):
+        fake_session.client_session_kwargs.append(kwargs)
+        return fake_session
+
+    return _client_session
 
 
 @pytest.mark.asyncio
@@ -482,11 +544,13 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
         )
     )
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
 
     result = await tool.handle_call(
         "read_url",
@@ -495,6 +559,43 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
 
     assert "📖 **Example Page**" in result["content"][0]["text"]
     assert "Hello world" in result["content"][0]["text"]
+    assert fake_session.calls[0][0] == "https://example.com/page"
+    assert "Host" not in fake_session.calls[0][1]["headers"]
+    assert "server_hostname" not in fake_session.calls[0][1]
+    assert isinstance(
+        fake_session.client_session_kwargs[0]["connector"],
+        read_url_module.aiohttp.TCPConnector,
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_url_pins_all_validated_dns_addresses(hass) -> None:
+    """Validated hostnames should keep every safe address for connector fallback."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _resolve_host_addresses(host: str, port: int):
+        assert host == "example.com"
+        assert port == 443
+        return {
+            ipaddress.ip_address("93.184.216.34"),
+            ipaddress.ip_address("2606:2800:220:1:248:1893:25c8:1946"),
+        }
+
+    tool._resolve_host_addresses = _resolve_host_addresses
+
+    target = await tool._validate_fetchable_url("https://example.com/page")
+    resolver = read_url_module._PinnedHostResolver(
+        "example.com",
+        target.resolved_addresses,
+    )
+
+    resolved = await resolver.resolve("example.com", 443, socket.AF_UNSPEC)
+
+    assert target.request_url == "https://example.com/page"
+    assert {item["host"] for item in resolved} == {
+        "93.184.216.34",
+        "2606:2800:220:1:248:1893:25c8:1946",
+    }
 
 
 @pytest.mark.asyncio
@@ -510,10 +611,249 @@ async def test_read_url_rejects_invalid_urls_and_timeouts(hass, monkeypatch) -> 
 
     fake_session = _FakeSession(error=asyncio.TimeoutError())
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    _allow_public_example_resolution(tool)
     timed_out = await tool.handle_call("read_url", {"url": "https://example.com"})
 
     assert timed_out["content"][0]["text"] == "❌ Timeout reading URL"
+
+
+@pytest.mark.asyncio
+async def test_read_url_reports_dns_resolution_failures(hass) -> None:
+    """DNS resolver errors should become tool error text."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _raise_dns_error(host: str, port: int):
+        assert host == "missing.example"
+        assert port == 443
+        raise socket.gaierror("name not known")
+
+    tool._resolve_host_addresses = _raise_dns_error
+
+    result = await tool.handle_call("read_url", {"url": "https://missing.example"})
+
+    assert result["content"][0]["text"] == "❌ Unable to resolve URL host: missing.example"
+
+
+@pytest.mark.asyncio
+async def test_read_url_reports_dns_resolution_timeouts(hass) -> None:
+    """DNS resolver timeouts should become tool error text."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _raise_timeout(host: str, port: int):
+        assert host == "slow.example"
+        assert port == 443
+        raise asyncio.TimeoutError
+
+    tool._resolve_host_addresses = _raise_timeout
+
+    result = await tool.handle_call("read_url", {"url": "https://slow.example"})
+
+    assert result["content"][0]["text"] == "❌ Timed out resolving URL host: slow.example"
+
+
+@pytest.mark.asyncio
+async def test_read_url_blocks_local_and_private_urls_before_fetch(
+    hass,
+    monkeypatch,
+) -> None:
+    """Read URL should not fetch local/private network targets by default."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    def _client_session(**kwargs):
+        del kwargs
+        raise AssertionError("unsafe URLs should be rejected before opening a session")
+
+    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+
+    localhost = await tool.handle_call("read_url", {"url": "http://localhost:8123/api"})
+    assert localhost["content"][0]["text"] == "❌ Local URLs must be allowlisted in Home Assistant"
+
+    loopback = await tool.handle_call("read_url", {"url": "http://127.0.0.1:8123/api"})
+    assert loopback["content"][0]["text"] == (
+        "❌ Private or local URLs must be allowlisted in Home Assistant"
+    )
+
+    shared_address = await tool.handle_call("read_url", {"url": "http://100.64.0.1/status"})
+    assert shared_address["content"][0]["text"] == (
+        "❌ Private or local URLs must be allowlisted in Home Assistant"
+    )
+
+    async def _resolve_private_host(host: str, port: int):
+        assert host == "internal.example"
+        assert port == 443
+        return {ipaddress.ip_address("10.0.0.5")}
+
+    tool._resolve_host_addresses = _resolve_private_host
+    private_dns = await tool.handle_call("read_url", {"url": "https://internal.example"})
+    assert private_dns["content"][0]["text"] == (
+        "❌ Private or local URLs must be allowlisted in Home Assistant"
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_url_allows_explicitly_allowlisted_private_url(
+    hass,
+    monkeypatch,
+) -> None:
+    """Home Assistant's external URL allowlist should opt private URLs back in."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            text="health ok",
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    monkeypatch.setattr(
+        hass.config,
+        "is_allowed_external_url",
+        lambda url: url == "http://127.0.0.1:8123/health",
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+
+    result = await tool.handle_call(
+        "read_url",
+        {"url": "http://127.0.0.1:8123/health"},
+    )
+
+    assert "health ok" in result["content"][0]["text"]
+    assert fake_session.calls[0][0] == "http://127.0.0.1:8123/health"
+
+
+@pytest.mark.asyncio
+async def test_read_url_revalidates_redirect_targets(
+    hass,
+    monkeypatch,
+) -> None:
+    """Redirects should be blocked when they target local/private network space."""
+    fake_session = _FakeSession(
+        responses=[
+            _FakeResponse(
+                status=302,
+                headers={"Location": "http://169.254.169.254/latest/meta-data"},
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call(
+        "read_url",
+        {"url": "https://example.com/start"},
+    )
+
+    assert result["content"][0]["text"] == (
+        "❌ Unsafe redirect blocked: Private or local URLs must be allowlisted in Home Assistant"
+    )
+    assert len(fake_session.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_read_url_rejects_oversized_responses(
+    hass,
+    monkeypatch,
+) -> None:
+    """Read URL should reject oversized responses before decoding full page text."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain", "Content-Length": "513000"},
+            text="too large",
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    length_result = await tool.handle_call(
+        "read_url",
+        {"url": "https://example.com/huge"},
+    )
+    assert length_result["content"][0]["text"] == "❌ URL response is too large to read safely"
+
+    streamed_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            content_bytes=b"x" * (tool.max_response_bytes + 2),
+        )
+    )
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(streamed_session),
+    )
+
+    streamed_result = await tool.handle_call(
+        "read_url",
+        {"url": "https://example.com/chunked"},
+    )
+    assert streamed_result["content"][0]["text"] == "❌ URL response is too large to read safely"
+
+
+@pytest.mark.asyncio
+async def test_read_url_reads_chunked_body_until_eof(hass, monkeypatch) -> None:
+    """Chunked responses should be read until EOF within the size limit."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            content_chunks=[b"hello ", b"world", b""],
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call("read_url", {"url": "https://example.com/chunked"})
+
+    assert "hello world" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_rejects_oversized_chunked_body_after_multiple_reads(
+    hass,
+    monkeypatch,
+) -> None:
+    """Chunked responses should not bypass the size limit with a small first chunk."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            content_chunks=[b"abc", b"def", b""],
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    tool.max_response_bytes = 5
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call("read_url", {"url": "https://example.com/chunked"})
+
+    assert result["content"][0]["text"] == "❌ URL response is too large to read safely"
