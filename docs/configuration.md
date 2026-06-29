@@ -123,9 +123,8 @@ Shared settings apply to all profiles:
 | Max Entities Per Discovery | Upper bound for a single discovery result |
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |
 | Web Search Provider | None, DuckDuckGo, Brave Search, or SearXNG |
-| Memory Retention | Default TTL, max TTL, and max stored memories |
 | LLM API Bridge | Optional allowlist for third-party Home Assistant LLM APIs |
-| Shared Tool Families | Which optional built-in and external tools are exposed |
+| Shared Tool Families | Which optional built-in and external tools are exposed, with tool-specific settings shown beside the relevant tool |
 
 Because the MCP server is shared, changing these settings from one profile's
 options flow affects every profile.
@@ -168,7 +167,7 @@ legacy web-search settings may still enable it for older profiles.
 The Memory tool family is optional. When enabled, the assistant can store,
 recall, categorize, and forget user-approved memories.
 
-Shared settings:
+Shared settings shown with the Memory tool:
 
 - **Default Memory TTL**: How long a new memory is kept when a tool call does
   not specify `ttl_days`.
@@ -189,7 +188,7 @@ The LLM API Bridge is optional and disabled by default. When enabled, MCP Assist
 can inspect and call tools exposed by other Home Assistant integrations that
 register LLM APIs.
 
-Shared settings:
+Shared setting shown with the LLM API Bridge tool:
 
 - **LLM API Bridge**: Exposes bridge tools on the shared MCP server.
 - **Allowed LLM API IDs**: Comma- or newline-separated API IDs MCP Assist may
@@ -222,7 +221,7 @@ available.
 Google Places and Routes is disabled by default. Enable it when a profile should
 be able to look up place details or calculate travel time.
 
-Required shared setting:
+Required shared setting shown with the Google Places and Routes tool:
 
 - **Google Maps API Key**: A Google Maps Platform API key with the Places API
   and Routes API enabled.
