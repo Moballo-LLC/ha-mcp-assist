@@ -4745,9 +4745,9 @@ class MCPServer(
         arguments: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Call a Home Assistant LLM API tool safely."""
-        tool_input = llm.ToolInput(
-            tool_name=tool_name,
-            tool_args=arguments,
+        tool_input = self._create_llm_tool_input(
+            tool_name,
+            arguments,
             external=True,
         )
         _LOGGER.debug(
@@ -4768,6 +4768,22 @@ class MCPServer(
         if not isinstance(result, dict):
             return {"result": self._serialize_service_response_value(result)}
         return result
+
+    def _create_llm_tool_input(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        *,
+        external: bool,
+    ) -> llm.ToolInput:
+        """Create a ToolInput while supporting HA versions without external."""
+        kwargs = {"tool_name": tool_name, "tool_args": arguments}
+        try:
+            return llm.ToolInput(**kwargs, external=external)
+        except TypeError as err:
+            if "external" not in str(err):
+                raise
+            return llm.ToolInput(**kwargs)
 
     def _build_assist_tool_response_summary(self, response: Any) -> List[str]:
         """Build a concise summary for a native Assist tool response."""

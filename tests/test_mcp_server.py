@@ -125,6 +125,30 @@ def test_create_assist_llm_context_supports_legacy_user_prompt(
     assert context.user_prompt == ""
 
 
+def test_create_llm_tool_input_supports_legacy_external_keyword(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Older HA ToolInput constructors should not reject bridge calls."""
+
+    class _LegacyToolInput:
+        def __init__(self, *, tool_name, tool_args) -> None:
+            self.tool_name = tool_name
+            self.tool_args = tool_args
+
+    monkeypatch.setattr(mcp_server_module.llm, "ToolInput", _LegacyToolInput)
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    tool_input = server._create_llm_tool_input(
+        "EchoIntent",
+        {"value": "hello"},
+        external=True,
+    )
+
+    assert tool_input.tool_name == "EchoIntent"
+    assert tool_input.tool_args == {"value": "hello"}
+    assert not hasattr(tool_input, "external")
+
+
 def _json_payload_from_text_result(result: dict[str, Any]) -> dict[str, Any]:
     """Extract the JSON payload appended after a text header."""
     return json.loads(result["content"][0]["text"].split("\n\n", 1)[1])
