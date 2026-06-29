@@ -7,6 +7,15 @@ MCP Assist has two troubleshooting modes:
 
 Chat Log Mode is off by default. Enable it per profile from the profile's advanced settings.
 
+## Debug Mode
+
+Use Debug Mode when you need to inspect provider behavior, prompt construction,
+tool selection, MCP requests, or tool execution failures in the Home Assistant
+log.
+
+Turn it off after troubleshooting. Debug logs can include provider error
+messages, entity names, URLs, tool arguments, and other local home context.
+
 ## What Chat Log Mode Records
 
 When enabled, MCP Assist stores recent conversation records in Home Assistant storage. Each record includes:
@@ -20,6 +29,11 @@ When enabled, MCP Assist stores recent conversation records in Home Assistant st
 - processing errors when a request fails
 
 These logs can include sensitive home context, prompts, entity names, tool arguments, and tool results. Enable Chat Log Mode only while you are actively debugging, and clear logs when you are done.
+
+Chat Log Mode is useful when a request succeeds or fails after several tool
+calls and the normal Home Assistant log is too noisy to reconstruct the
+conversation. It is not a replacement for Debug Mode when diagnosing startup,
+provider connection, or custom-tool loading failures.
 
 ## Review Logs
 
@@ -56,4 +70,10 @@ Clear logs for one profile or conversation:
 service: mcp_assist.clear_chat_logs
 data:
   profile_entry_id: "01J..."
+```
+
+```yaml
+service: mcp_assist.clear_chat_logs
+data:
+  conversation_id: "abc123"
 ```

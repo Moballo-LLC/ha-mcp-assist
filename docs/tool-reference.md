@@ -78,12 +78,13 @@ Recorder tools answer questions about past entity state.
 | Tool | Purpose |
 | --- | --- |
 | `get_entity_history` | Read recent state history for an entity |
-| `get_last_entity_event` | Find the last matching state event |
+| `get_entity_history` with `mode: "last_event"` | Find the last matching state event |
 | `analyze_entity_history` | Count, summarize, or analyze state changes over a period |
 | `get_entity_state_at_time` | Read an entity state at a point in time |
 
 These tools require Home Assistant recorder data for the relevant entities and
-time range.
+time range. Use `period: "today"` or `period: "yesterday"` for calendar-day
+questions instead of approximating with a number of hours.
 
 ## Calculator and Unit Conversion
 

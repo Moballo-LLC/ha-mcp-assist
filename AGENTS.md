@@ -161,6 +161,15 @@ pytest -ra --junitxml=test-results/pytest.xml tests
   to make copy feel less hyped.
 - When recommending models or features, describe observed fit and tradeoffs
   instead of using phrases like "frontier", "very best", or "super AI".
+- Treat documentation as part of feature completeness. When a change adds or
+  changes a user-facing setting, MCP tool, service, provider behavior,
+  workflow, release process, or security/privacy boundary, update the relevant
+  README/docs page in the same PR unless the change is intentionally internal.
+- Keep tool and service docs aligned with code names. Tool additions belong in
+  `docs/tool-reference.md`; scenario examples belong in `docs/examples.md`;
+  settings belong in `docs/configuration.md`; debugging services belong in
+  `docs/debugging.md`; risks and data-flow changes belong in
+  `docs/security-and-privacy.md`.
 
 ## Home Assistant and HACS Notes
 
@@ -191,6 +200,8 @@ pytest -ra --junitxml=test-results/pytest.xml tests
   and the README together when the human process changes.
 - For GitHub Actions changes, remember CodeQL analyzes both `actions` and
   `python`.
+- For user-facing feature PRs, include a documentation update or a short note in
+  the PR explaining why docs did not need to change.
 - For docs-only changes, still run `git diff --check` and any cheap parser
   checks that apply.
 

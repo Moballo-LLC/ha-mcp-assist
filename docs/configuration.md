@@ -25,6 +25,7 @@ Profile settings are independent per conversation agent.
 | Response Mode | Whether the assistant should continue conversations |
 | Timeout | Provider response timeout |
 | Debug Mode | Extra logging for investigation |
+| Chat Log Mode | Opt-in stored conversation records for debugging |
 | Tool Family Overrides | Optional per-profile narrowing of shared tools |
 
 ## Provider Connection Settings
@@ -90,6 +91,15 @@ instructions concise and avoid hardcoding entity IDs unless that is intentional.
 Users can end a continuing conversation with configured end words such as "bye"
 or "thanks".
 
+### Debugging Settings
+
+- **Debug Mode** writes more detail to the Home Assistant log, including
+  provider behavior and tool selection details.
+- **Chat Log Mode** stores recent conversation records in Home Assistant
+  storage. Records can include user text, assistant replies, tool names,
+  arguments, results, and errors. Keep it off unless you are actively
+  troubleshooting. See [Debugging](debugging.md).
+
 ## Shared MCP Server Settings
 
 Shared settings apply to all profiles:
@@ -100,12 +110,18 @@ Shared settings apply to all profiles:
 | Additional Allowed IPs/Ranges | Extra clients allowed to connect to the MCP server |
 | Smart Entity Index | Compact Home Assistant structure index and gap-filling behavior |
 | Max Entities Per Discovery | Upper bound for a single discovery result |
+| Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |
 | Web Search Provider | None, DuckDuckGo, Brave Search, or SearXNG |
 | Memory Retention | Default TTL, max TTL, and max stored memories |
 | Shared Tool Families | Which optional built-in and external tools are exposed |
 
 Because the MCP server is shared, changing these settings from one profile's
 options flow affects every profile.
+
+Context sharing has separate prompt and tool-call controls. The prompt settings
+let the model know the current Home Assistant user and configured home location
+when available. The tool-call settings separately decide whether that user or
+location metadata is passed to MCP tools, including external custom tools.
 
 ## Shared vs Per-Profile Tool Settings
 

@@ -34,6 +34,22 @@ Even with control enabled, the model should use discovery and details before
 acting when the target is ambiguous. Keep technical instructions aligned with
 that expectation.
 
+## Context Sharing
+
+MCP Assist can include the current Home Assistant user and configured home
+location in model prompts. It can also pass that context as tool-call metadata
+when the shared MCP server settings allow it.
+
+Recommendations:
+
+- Include current user and home location in prompts only when they improve
+  routing or personalization for your use case.
+- Keep tool-call context disabled unless built-in or external tools need it.
+- Treat tool-call context as part of the data available to external custom tool
+  packages.
+- Avoid sharing screenshots or logs that contain user, location, or entity
+  details unless they are redacted.
+
 ## MCP Server Network Access
 
 The MCP server listens on the configured port, default `8090`. Use
@@ -116,9 +132,16 @@ misconfiguration and package collisions.
 Debug Mode is useful while diagnosing tool calls, but logs can include provider
 errors, tool arguments, entity names, URLs, and other details about your home.
 
+Chat Log Mode stores recent conversation records in Home Assistant storage. It
+can include user text, assistant replies, tool names, tool arguments, tool
+results, and errors. See [Debugging](debugging.md) for review and clear
+services.
+
 Recommendations:
 
 - Disable Debug Mode after troubleshooting.
+- Disable Chat Log Mode after troubleshooting.
+- Clear stored chat logs when they are no longer needed.
 - Review logs before sharing them publicly.
 - Redact API keys, hostnames, IPs, and sensitive entity names when needed.
 

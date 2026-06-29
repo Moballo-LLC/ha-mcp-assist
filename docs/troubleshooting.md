@@ -102,6 +102,19 @@ Check:
 - The previous response identified the object clearly enough for the model to
   reuse it.
 
+## Chat Logs Are Empty
+
+Check:
+
+- **Chat Log Mode** is enabled on the profile that handled the request.
+- You ran a new request after enabling Chat Log Mode.
+- The `mcp_assist.get_chat_logs` service is not filtered to the wrong profile
+  entry ID or conversation ID.
+- Logs were not cleared by `mcp_assist.clear_chat_logs`.
+
+Chat logs are intentionally opt-in and recent. Use Debug Mode alongside Chat Log
+Mode when you need lower-level provider or tool-loading details.
+
 ## Weather Forecast Fails
 
 Check:
@@ -194,4 +207,5 @@ When reporting an issue, include:
 - Relevant MCP Assist settings
 - A simple request that reproduces the issue
 - Home Assistant log excerpts with Debug Mode enabled
+- A recent `mcp_assist.get_chat_logs` response when Chat Log Mode is enabled
 - Whether the entity is exposed to the conversation assistant

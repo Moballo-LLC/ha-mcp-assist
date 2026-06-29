@@ -27,12 +27,20 @@ detail.
 - Put tool behavior, tool-family toggles, and capability boundaries in
   `tool-reference.md`.
 - Put scenario-based requests in `examples.md`.
-- Put debugging steps in `troubleshooting.md`.
+- Put debugging concepts, debug mode, and chat-log services in `debugging.md`.
+- Put symptom-driven debugging steps in `troubleshooting.md`.
+- Put data exposure, network, logging, memory, and custom-code risks in
+  `security-and-privacy.md`.
 - Put release workflow and maintainer process in `releases.md`.
 - Put external package authoring details in `custom-tools.md`.
 
 When a topic spans several guides, link between them instead of duplicating the
 same long explanation in multiple places.
+
+Documentation updates are part of feature work. When a PR changes a user-facing
+setting, tool, service, workflow, provider behavior, or security/privacy
+boundary, update the relevant guide in the same PR or explain why the change is
+internal-only.
 
 ## Documentation Style
 

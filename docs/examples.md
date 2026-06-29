@@ -98,7 +98,7 @@ When was the front door last opened?
 Typical flow:
 
 1. `discover_entities` finds the front-door contact sensor.
-2. `get_last_entity_event` checks recorder history.
+2. `get_entity_history` with `mode: "last_event"` checks recorder history.
 3. The assistant reports the timestamp in a useful form.
 
 Other examples:
