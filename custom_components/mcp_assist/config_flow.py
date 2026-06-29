@@ -806,7 +806,9 @@ def _build_shared_tools_section(
     built_in_specs: tuple[BuiltInToolToggleSpec, ...],
 ) -> section:
     """Build the shared MCP server optional tools section."""
-    shared_tool_entries: list[tuple[str, vol.Optional, type[bool]]] = []
+    shared_tool_entries: list[
+        tuple[str, str, vol.Optional, type[bool], BuiltInToolToggleSpec | None]
+    ] = []
     packaged_shared_setting_keys = {
         spec.shared_setting_key for spec in built_in_specs
     }
@@ -818,11 +820,13 @@ def _build_shared_tools_section(
         shared_tool_entries.append(
             (
                 STATIC_TOOL_FAMILY_SHARED_LABELS[family].casefold(),
+                setting_key,
                 vol.Optional(
                     setting_key,
                     default=_get_form_value(defaults, setting_key, default),
                 ),
                 bool,
+                None,
             )
         )
 
@@ -830,6 +834,7 @@ def _build_shared_tools_section(
         shared_tool_entries.append(
             (
                 spec.shared_label.casefold(),
+                spec.shared_setting_key,
                 vol.Optional(
                     _builtin_shared_field_key(spec),
                     default=_get_form_value(
@@ -839,48 +844,19 @@ def _build_shared_tools_section(
                     ),
                 ),
                 bool,
+                spec,
             )
         )
 
-    shared_tool_fields = {
-        marker: value_type
-        for _label, marker, value_type in sorted(
-            shared_tool_entries,
-            key=lambda item: item[0],
-        )
-    }
+    shared_tool_fields: dict[Any, Any] = {}
+    for _label, setting_key, marker, value_type, spec in sorted(
+        shared_tool_entries,
+        key=lambda item: item[0],
+    ):
+        shared_tool_fields[marker] = value_type
 
-    return section(
-        vol.Schema(
-            {
-                **shared_tool_fields,
-                vol.Required(
-                    CONF_SEARCH_PROVIDER,
-                    default=_get_form_value(
-                        defaults, CONF_SEARCH_PROVIDER, DEFAULT_SEARCH_PROVIDER
-                    ),
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            {"value": "duckduckgo", "label": "DuckDuckGo"},
-                            {
-                                "value": "brave",
-                                "label": "Brave Search (requires API key)",
-                            },
-                            {
-                                "value": "searxng",
-                                "label": "SearXNG (self-hosted)",
-                            },
-                        ],
-                        mode=SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(
-                    CONF_BRAVE_API_KEY,
-                    default=_get_form_value(
-                        defaults, CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
-                    ),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+        if spec and spec.package_id == "google_maps":
+            shared_tool_fields[
                 vol.Optional(
                     CONF_GOOGLE_MAPS_API_KEY,
                     default=_get_form_value(
@@ -888,13 +864,11 @@ def _build_shared_tools_section(
                         CONF_GOOGLE_MAPS_API_KEY,
                         DEFAULT_GOOGLE_MAPS_API_KEY,
                     ),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                vol.Optional(
-                    CONF_SEARXNG_URL,
-                    default=_get_form_value(
-                        defaults, CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
-                    ),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+                )
+            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+        if setting_key == CONF_ENABLE_LLM_API_BRIDGE:
+            shared_tool_fields[
                 vol.Optional(
                     CONF_LLM_API_ALLOWLIST,
                     default=_get_form_value(
@@ -902,9 +876,84 @@ def _build_shared_tools_section(
                         CONF_LLM_API_ALLOWLIST,
                         DEFAULT_LLM_API_ALLOWLIST,
                     ),
-                ): TextSelector(TextSelectorConfig(multiline=True)),
-            }
-        ),
+                )
+            ] = TextSelector(TextSelectorConfig(multiline=True))
+
+        if setting_key == CONF_ENABLE_MEMORY_TOOLS:
+            shared_tool_fields[
+                vol.Optional(
+                    CONF_MEMORY_DEFAULT_TTL_DAYS,
+                    default=_get_form_value(
+                        defaults,
+                        CONF_MEMORY_DEFAULT_TTL_DAYS,
+                        DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
+                    ),
+                )
+            ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
+            shared_tool_fields[
+                vol.Optional(
+                    CONF_MEMORY_MAX_TTL_DAYS,
+                    default=_get_form_value(
+                        defaults,
+                        CONF_MEMORY_MAX_TTL_DAYS,
+                        DEFAULT_MEMORY_MAX_TTL_DAYS,
+                    ),
+                )
+            ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
+            shared_tool_fields[
+                vol.Optional(
+                    CONF_MEMORY_MAX_ITEMS,
+                    default=_get_form_value(
+                        defaults,
+                        CONF_MEMORY_MAX_ITEMS,
+                        DEFAULT_MEMORY_MAX_ITEMS,
+                    ),
+                )
+            ] = vol.All(vol.Coerce(int), vol.Range(min=10, max=5000))
+
+        if spec and spec.requires_search_provider:
+            shared_tool_fields[
+                vol.Required(
+                    CONF_SEARCH_PROVIDER,
+                    default=_get_form_value(
+                        defaults, CONF_SEARCH_PROVIDER, DEFAULT_SEARCH_PROVIDER
+                    ),
+                )
+            ] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        {"value": "duckduckgo", "label": "DuckDuckGo"},
+                        {
+                            "value": "brave",
+                            "label": "Brave Search (requires API key)",
+                        },
+                        {
+                            "value": "searxng",
+                            "label": "SearXNG (self-hosted)",
+                        },
+                    ],
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+            shared_tool_fields[
+                vol.Optional(
+                    CONF_BRAVE_API_KEY,
+                    default=_get_form_value(
+                        defaults, CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
+                    ),
+                )
+            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+            shared_tool_fields[
+                vol.Optional(
+                    CONF_SEARXNG_URL,
+                    default=_get_form_value(
+                        defaults, CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
+                    ),
+                )
+            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.URL))
+
+    return section(
+        vol.Schema(shared_tool_fields),
         {"collapsed": False},
     )
 
@@ -1889,7 +1938,6 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): str,
                 CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
                 DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
-                MEMORY_SECTION_KEY: _build_shared_memory_section(shared_defaults),
                 TOOLS_SECTION_KEY: _build_shared_tools_section(
                     shared_defaults,
                     built_in_specs,
@@ -2800,7 +2848,6 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
                 DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
-                MEMORY_SECTION_KEY: _build_shared_memory_section(shared_defaults),
                 TOOLS_SECTION_KEY: _build_shared_tools_section(
                     shared_defaults,
                     built_in_specs,

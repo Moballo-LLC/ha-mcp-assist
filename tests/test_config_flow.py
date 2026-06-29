@@ -29,7 +29,6 @@ from custom_components.mcp_assist.config_flow import (
     DISABLE_RECORDER_FIELD,
     DISABLE_RESPONSE_SERVICE_FIELD,
     DISABLE_WEATHER_FORECAST_FIELD,
-    MEMORY_SECTION_KEY,
     MCPAssistConfigFlow,
     MCPAssistOptionsFlow,
     MODEL_SECTION_KEY,
@@ -165,19 +164,27 @@ PROFILE_TOOL_ORDER = [
     _builtin_profile_key("wikipedia_search"),
 ]
 
-SHARED_TOOL_ORDER = [
+SHARED_TOOL_SECTION_ORDER = [
     CONF_ENABLE_ASSIST_BRIDGE,
     _builtin_shared_key("calculator"),
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_ENABLE_DEVICE_TOOLS,
     _builtin_shared_key("google_maps"),
+    CONF_GOOGLE_MAPS_API_KEY,
     CONF_ENABLE_LLM_API_BRIDGE,
+    CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_MEMORY_TOOLS,
+    CONF_MEMORY_DEFAULT_TTL_DAYS,
+    CONF_MEMORY_MAX_TTL_DAYS,
+    CONF_MEMORY_MAX_ITEMS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     _builtin_shared_key("read_url"),
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     _builtin_shared_key("search"),
+    CONF_SEARCH_PROVIDER,
+    CONF_BRAVE_API_KEY,
+    CONF_SEARXNG_URL,
     _builtin_shared_key("unit_conversion"),
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     _builtin_shared_key("wikipedia_search"),
@@ -655,7 +662,7 @@ async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> No
 async def test_shared_mcp_step_groups_context_discovery_and_tools(
     hass, monkeypatch
 ) -> None:
-    """Shared MCP settings should group context, discovery, and tools fields into sections."""
+    """Shared MCP settings should group tool-specific settings next to their tools."""
     monkeypatch.setattr(
         config_flow_module.llm,
         "async_get_apis",
@@ -675,22 +682,27 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
 
     context_section = result["data_schema"].schema[CONTEXT_SECTION_KEY]
     discovery_section = result["data_schema"].schema[DISCOVERY_SECTION_KEY]
-    memory_section = result["data_schema"].schema[MEMORY_SECTION_KEY]
     tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
 
     assert isinstance(context_section, section)
     assert isinstance(discovery_section, section)
-    assert isinstance(memory_section, section)
     assert isinstance(tools_section, section)
+    top_level_keys = {
+        getattr(key, "schema", key) for key in result["data_schema"].schema.keys()
+    }
+    assert top_level_keys == {
+        CONF_MCP_PORT,
+        CONF_ALLOWED_IPS,
+        CONTEXT_SECTION_KEY,
+        DISCOVERY_SECTION_KEY,
+        TOOLS_SECTION_KEY,
+    }
 
     context_keys = {
         getattr(key, "schema", key) for key in context_section.schema.schema.keys()
     }
     discovery_keys = {
         getattr(key, "schema", key) for key in discovery_section.schema.schema.keys()
-    }
-    memory_keys = {
-        getattr(key, "schema", key) for key in memory_section.schema.schema.keys()
     }
     tool_keys = [
         getattr(key, "schema", key) for key in tools_section.schema.schema.keys()
@@ -706,19 +718,7 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
         CONF_ENABLE_GAP_FILLING,
         CONF_MAX_ENTITIES_PER_DISCOVERY,
     }
-    assert memory_keys == {
-        CONF_MEMORY_DEFAULT_TTL_DAYS,
-        CONF_MEMORY_MAX_TTL_DAYS,
-        CONF_MEMORY_MAX_ITEMS,
-    }
-    assert tool_keys == [
-        *SHARED_TOOL_ORDER,
-        CONF_SEARCH_PROVIDER,
-        CONF_BRAVE_API_KEY,
-        CONF_GOOGLE_MAPS_API_KEY,
-        CONF_SEARXNG_URL,
-        CONF_LLM_API_ALLOWLIST,
-    ]
+    assert tool_keys == SHARED_TOOL_SECTION_ORDER
     tool_markers = {
         getattr(marker, "schema", marker): marker
         for marker in tools_section.schema.schema.keys()
@@ -983,8 +983,8 @@ def test_optional_tool_family_checkbox_sets_stay_in_sync() -> None:
     assert set(STATIC_TOOL_FAMILY_ALPHABETICAL) == set(PROFILE_DISABLE_FIELD_BY_FAMILY)
 
 
-def test_tool_checkbox_translations_cover_all_declared_tool_fields() -> None:
-    """Static shared/profile tool checkbox fields should still have labels and descriptions."""
+def test_tool_translations_cover_all_declared_tool_fields() -> None:
+    """Shared/profile tool fields should still have labels and descriptions."""
     strings = json.loads(
         Path("custom_components/mcp_assist/strings.json").read_text(encoding="utf-8")
     )
@@ -1005,6 +1005,18 @@ def test_tool_checkbox_translations_cover_all_declared_tool_fields() -> None:
         )
         expected_shared_fields.update(
             _builtin_shared_key(spec.package_id) for spec in BUILTIN_SPECS
+        )
+        expected_shared_fields.update(
+            {
+                CONF_BRAVE_API_KEY,
+                CONF_GOOGLE_MAPS_API_KEY,
+                CONF_LLM_API_ALLOWLIST,
+                CONF_MEMORY_DEFAULT_TTL_DAYS,
+                CONF_MEMORY_MAX_ITEMS,
+                CONF_MEMORY_MAX_TTL_DAYS,
+                CONF_SEARCH_PROVIDER,
+                CONF_SEARXNG_URL,
+            }
         )
 
         assert expected_profile_fields <= set(advanced_tools["data"])
