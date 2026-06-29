@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timedelta, timezone
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
@@ -113,6 +114,57 @@ def test_server_collects_allowed_ips_from_url_and_shared_settings(
     assert "192.168.50.12" in server.allowed_ips
     assert "10.0.0.0/24" in server.allowed_ips
     assert "192.168.1.25" in server.allowed_ips
+
+
+@pytest.mark.asyncio
+async def test_detail_tools_skip_non_json_serializable_values(
+    hass,
+    profile_entry_factory,
+    system_entry_factory,
+) -> None:
+    """Detail tools should return usable JSON even with custom attribute objects."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    unserializable = object()
+    invalid_key = object()
+    server.discovery = SimpleNamespace(
+        get_entity_details=AsyncMock(
+            return_value={
+                "sensor.custom": {
+                    "state": "on",
+                    "raw_object": unserializable,
+                    "nested": {"keep": 1, "drop": unserializable},
+                    "items": ["ok", unserializable],
+                    invalid_key: "drop invalid key",
+                }
+            }
+        ),
+        get_device_details=AsyncMock(
+            return_value={
+                "device-id": {
+                    "name": "Device",
+                    "identifiers": {"ok", unserializable},
+                }
+            }
+        ),
+    )
+
+    entity_result = await server.tool_get_entity_details(
+        {"entity_ids": ["sensor.custom"]}
+    )
+    device_result = await server.tool_get_device_details(
+        {"device_ids": ["device-id"]}
+    )
+
+    entity_payload = json.loads(entity_result["content"][0]["text"])
+    device_payload = json.loads(device_result["content"][0]["text"])
+    entity_details = entity_payload["sensor.custom"]
+
+    assert entity_details["state"] == "on"
+    assert entity_details["nested"] == {"keep": 1}
+    assert entity_details["items"] == ["ok"]
+    assert "raw_object" not in entity_details
+    assert device_payload["device-id"]["identifiers"] == ["ok"]
 
 
 @pytest.mark.asyncio
