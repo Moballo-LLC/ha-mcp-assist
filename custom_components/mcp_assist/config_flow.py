@@ -567,10 +567,16 @@ def _apply_profile_tool_disables(
 ) -> dict[str, Any]:
     """Map profile disable checkboxes to stored profile enable flags."""
     normalized = dict(user_input)
+    packaged_profile_setting_keys = {
+        spec.profile_setting_key for spec in built_in_specs
+    }
     for family in STATIC_TOOL_FAMILY_ALPHABETICAL:
         disable_field = PROFILE_DISABLE_FIELD_BY_FAMILY[family]
-        disabled = bool(normalized.pop(disable_field, False))
         setting_key, _default = TOOL_FAMILY_PROFILE_SETTINGS[family]
+        if setting_key in packaged_profile_setting_keys:
+            continue
+
+        disabled = bool(normalized.pop(disable_field, False))
         if disabled:
             normalized[setting_key] = False
         else:
@@ -743,7 +749,14 @@ def _build_profile_tools_section(
     options = options or {}
     data = data or {}
     profile_tool_entries: list[tuple[str, vol.Optional, type[bool]]] = []
+    packaged_profile_setting_keys = {
+        spec.profile_setting_key for spec in built_in_specs
+    }
     for family in STATIC_TOOL_FAMILY_ALPHABETICAL:
+        setting_key, _default = TOOL_FAMILY_PROFILE_SETTINGS[family]
+        if setting_key in packaged_profile_setting_keys:
+            continue
+
         disable_field = PROFILE_DISABLE_FIELD_BY_FAMILY[family]
         profile_tool_entries.append(
             (
@@ -795,8 +808,14 @@ def _build_shared_tools_section(
 ) -> section:
     """Build the shared MCP server optional tools section."""
     shared_tool_entries: list[tuple[str, vol.Optional, type[bool]]] = []
+    packaged_shared_setting_keys = {
+        spec.shared_setting_key for spec in built_in_specs
+    }
     for family in STATIC_TOOL_FAMILY_ALPHABETICAL:
         setting_key, default = TOOL_FAMILY_SHARED_SETTINGS[family]
+        if setting_key in packaged_shared_setting_keys:
+            continue
+
         shared_tool_entries.append(
             (
                 STATIC_TOOL_FAMILY_SHARED_LABELS[family].casefold(),

@@ -28,6 +28,11 @@ import custom_components.mcp_assist.mcp_server as mcp_server_module
 from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
+from custom_components.mcp_assist.custom_tools.llm_api_bridge import (
+    LLM_API_BRIDGE_TOOL_DEFINITIONS,
+    LLMApiBridgeTool,
+)
+from custom_components.mcp_assist.custom_tools.memory import MemoryTool
 from custom_components.mcp_assist.custom_tools.recorder import RECORDER_TOOL_DEFINITIONS
 from custom_components.mcp_assist.custom_tools.response_services import (
     RESPONSE_SERVICE_TOOL_DEFINITIONS,
@@ -203,6 +208,19 @@ def _domain_package_tool_stub() -> SimpleNamespace:
     return SimpleNamespace(
         get_tool_definitions=lambda: list(tool_definitions),
         is_custom_tool=lambda tool_name: tool_name in tool_names,
+        get_cache_signature=lambda: tuple(sorted(tool_names)),
+    )
+
+
+def _llm_api_bridge_tool_stub() -> SimpleNamespace:
+    """Return a custom-tool stub exposing the built-in LLM API Bridge package."""
+    tool_definitions = list(LLM_API_BRIDGE_TOOL_DEFINITIONS)
+    tool_names = {tool["name"] for tool in tool_definitions}
+    return SimpleNamespace(
+        get_tool_definitions=lambda: list(tool_definitions),
+        is_custom_tool=lambda tool_name: tool_name in tool_names,
+        get_builtin_toggle_spec=lambda name: _builtin_spec(name),
+        get_builtin_toggle_specs=lambda: BUILTIN_SPECS,
         get_cache_signature=lambda: tuple(sorted(tool_names)),
     )
 
@@ -830,10 +848,12 @@ async def test_llm_api_bridge_lists_allowlisted_registered_apis(
             }
         )
         server = MCPServer(hass, 8099, profile_entry_factory())
+        server.custom_tools = _llm_api_bridge_tool_stub()
+        bridge_tool = LLMApiBridgeTool(hass)
 
         tools_result = await server.handle_tools_list()
         tool_names = {tool["name"] for tool in tools_result["tools"]}
-        list_result = await server.tool_list_llm_apis({})
+        list_result = await bridge_tool.handle_call("list_llm_apis", {})
         payload = _json_payload_from_text_result(list_result)
 
         assert {
@@ -868,18 +888,23 @@ async def test_llm_api_bridge_can_inspect_call_and_read_prompt(
                 CONF_LLM_API_ALLOWLIST: "llm_intents",
             }
         )
-        server = MCPServer(hass, 8099, profile_entry_factory())
+        bridge_tool = LLMApiBridgeTool(hass)
 
-        tools_result = await server.tool_list_llm_api_tools({"api_id": "llm_intents"})
+        tools_result = await bridge_tool.handle_call(
+            "list_llm_api_tools", {"api_id": "llm_intents"}
+        )
         tools_payload = _json_payload_from_text_result(tools_result)
-        call_result = await server.tool_call_llm_api_tool(
+        call_result = await bridge_tool.handle_call(
+            "call_llm_api_tool",
             {
                 "api_id": "llm_intents",
                 "tool_name": "EchoIntent",
                 "arguments": {"value": "hello"},
-            }
+            },
         )
-        prompt_result = await server.tool_get_llm_api_prompt({"api_id": "llm_intents"})
+        prompt_result = await bridge_tool.handle_call(
+            "get_llm_api_prompt", {"api_id": "llm_intents"}
+        )
 
         assert tools_payload["api_id"] == "llm_intents"
         assert tools_payload["tools"][0]["name"] == "EchoIntent"
@@ -905,13 +930,15 @@ async def test_llm_api_bridge_rejects_unallowlisted_and_assist_api(
             CONF_LLM_API_ALLOWLIST: "llm_intents",
         }
     )
-    server = MCPServer(hass, 8099, profile_entry_factory())
+    bridge_tool = LLMApiBridgeTool(hass)
 
     with pytest.raises(HomeAssistantError, match="not allowlisted"):
-        await server.tool_list_llm_api_tools({"api_id": "other_api"})
+        await bridge_tool.handle_call("list_llm_api_tools", {"api_id": "other_api"})
 
     with pytest.raises(HomeAssistantError, match="Assist API"):
-        await server.tool_list_llm_api_tools({"api_id": llm.LLM_API_ASSIST})
+        await bridge_tool.handle_call(
+            "list_llm_api_tools", {"api_id": llm.LLM_API_ASSIST}
+        )
 
 
 @pytest.mark.asyncio
@@ -1002,16 +1029,25 @@ async def test_memory_tools_store_recall_and_forget(
 ) -> None:
     """Memory tools should store, search, and delete persisted memories."""
     system_entry_factory(data={CONF_ENABLE_MEMORY_TOOLS: True})
-    server = MCPServer(hass, 8099, profile_entry_factory())
-    await server.memory_manager.async_initialize()
-
-    remembered = await server.tool_remember_memory(
-        {"memory": "Front door code is changing next week", "category": "household"}
-    )
-    recalled = await server.tool_recall_memories({"query": "front door code"})
-    memory_id = recalled["memories"][0]["id"]
-    forgotten = await server.tool_forget_memory({"memory_id": memory_id})
-    recalled_again = await server.tool_recall_memories({"query": "front door code"})
+    memory_tool = MemoryTool(hass)
+    await memory_tool.initialize()
+    try:
+        remembered = await memory_tool.handle_call(
+            "remember_memory",
+            {"memory": "Front door code is changing next week", "category": "household"},
+        )
+        recalled = await memory_tool.handle_call(
+            "recall_memories", {"query": "front door code"}
+        )
+        memory_id = recalled["memories"][0]["id"]
+        forgotten = await memory_tool.handle_call(
+            "forget_memory", {"memory_id": memory_id}
+        )
+        recalled_again = await memory_tool.handle_call(
+            "recall_memories", {"query": "front door code"}
+        )
+    finally:
+        await memory_tool.async_shutdown()
 
     assert "Stored memory" in remembered["content"][0]["text"]
     assert recalled["result_count"] == 1
@@ -1025,17 +1061,24 @@ async def test_list_memory_categories_reports_suggestions_and_counts(
 ) -> None:
     """Memory category discovery should report suggestions and active counts."""
     system_entry_factory(data={CONF_ENABLE_MEMORY_TOOLS: True})
-    server = MCPServer(hass, 8099, profile_entry_factory())
-    await server.memory_manager.async_initialize()
+    memory_tool = MemoryTool(hass)
+    await memory_tool.initialize()
+    try:
+        await memory_tool.handle_call(
+            "remember_memory",
+            {"memory": "The den lamp is called the reading light", "category": "alias"},
+        )
+        await memory_tool.handle_call(
+            "remember_memory",
+            {
+                "memory": "The office is usually 69 degrees overnight",
+                "category": "normal",
+            },
+        )
 
-    await server.tool_remember_memory(
-        {"memory": "The den lamp is called the reading light", "category": "alias"}
-    )
-    await server.tool_remember_memory(
-        {"memory": "The office is usually 69 degrees overnight", "category": "normal"}
-    )
-
-    result = await server.tool_list_memory_categories({})
+        result = await memory_tool.handle_call("list_memory_categories", {})
+    finally:
+        await memory_tool.async_shutdown()
     category_counts = {item["category"]: item["count"] for item in result["categories"]}
 
     assert "Suggested memory categories" in result["content"][0]["text"]

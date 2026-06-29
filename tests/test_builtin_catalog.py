@@ -31,6 +31,8 @@ def test_builtin_catalog_loads_expected_manifest_packages() -> None:
     assert {
         "calculator",
         "google_maps",
+        "llm_api_bridge",
+        "memory",
         "unit_conversion",
         "search",
         "read_url",
@@ -55,6 +57,12 @@ def test_builtin_catalog_looks_up_specs_by_package_id_and_tool_name() -> None:
     assert get_builtin_toggle_spec_by_tool_name(
         "search_wikipedia", BUILTIN_SPECS
     ) == _spec("wikipedia_search")
+    assert get_builtin_toggle_spec_by_tool_name(
+        "list_llm_apis", BUILTIN_SPECS
+    ) == _spec("llm_api_bridge")
+    assert get_builtin_toggle_spec_by_tool_name(
+        "remember_memory", BUILTIN_SPECS
+    ) == _spec("memory")
     assert get_builtin_toggle_spec_by_tool_name("missing_tool", BUILTIN_SPECS) is None
 
 
