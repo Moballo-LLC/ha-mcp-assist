@@ -630,7 +630,9 @@ class _MainContentParser(HTMLParser):
             return
 
         is_skip = tag in self._SKIP_TAGS
-        is_boilerplate = tag in self._BOILERPLATE_TAGS
+        is_boilerplate = tag in self._BOILERPLATE_TAGS and not (
+            tag == "header" and self._preferred_depth > 0
+        )
         is_literal = tag in self._LITERAL_TAGS
         is_preferred = (
             not is_skip
