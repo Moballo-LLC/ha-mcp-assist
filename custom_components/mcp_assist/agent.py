@@ -1179,6 +1179,29 @@ class MCPAssistConversationEntity(ConversationEntity):
             normalized.append(normalized_call)
         return normalized
 
+    @staticmethod
+    def _normalize_stream_tool_call_index(
+        raw_index: Any,
+        stream_index_offset: int | None,
+    ) -> tuple[int, int]:
+        """Normalize streamed tool-call indexes that start above zero."""
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            index = 0
+
+        if stream_index_offset is None:
+            stream_index_offset = index
+
+        return max(0, index - stream_index_offset), stream_index_offset
+
+    @staticmethod
+    def _compact_streamed_tool_calls(
+        tool_calls: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Drop empty streamed tool-call placeholders before execution."""
+        return [tool_call for tool_call in tool_calls if tool_call]
+
     def _format_tool_calls_for_ollama(
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -2666,6 +2689,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             has_tool_calls = False
             current_tool_calls = []
+            stream_tool_index_offset = None
             current_thought_signature = None  # Track Gemini 3 thought signatures
 
             try:
@@ -2791,7 +2815,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 if "tool_calls" in delta:
                                     has_tool_calls = True
                                     for tc in delta["tool_calls"]:
-                                        idx = tc.get("index", 0)
+                                        idx, stream_tool_index_offset = (
+                                            self._normalize_stream_tool_call_index(
+                                                tc.get("index", 0),
+                                                stream_tool_index_offset,
+                                            )
+                                        )
 
                                         # Initialize tool call if new
                                         if idx >= len(current_tool_calls):
@@ -2929,6 +2958,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             if sentence_buffer.strip():
                 await self._trigger_tts(sentence_buffer.strip())
                 sentence_buffer = ""
+
+            current_tool_calls = self._compact_streamed_tool_calls(current_tool_calls)
 
             # If we got tool calls, execute them
             if has_tool_calls and current_tool_calls:

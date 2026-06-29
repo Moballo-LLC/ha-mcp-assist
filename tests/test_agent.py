@@ -59,6 +59,41 @@ def _tool(name: str) -> dict[str, object]:
     }
 
 
+def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
+    """Streamed tool-call indexes should normalize providers that start above zero."""
+    offset = None
+
+    first_index, offset = MCPAssistConversationEntity._normalize_stream_tool_call_index(
+        1,
+        offset,
+    )
+    second_index, offset = MCPAssistConversationEntity._normalize_stream_tool_call_index(
+        2,
+        offset,
+    )
+    repeated_first_index, offset = (
+        MCPAssistConversationEntity._normalize_stream_tool_call_index(1, offset)
+    )
+
+    assert first_index == 0
+    assert second_index == 1
+    assert repeated_first_index == 0
+    assert offset == 1
+
+
+def test_compact_streamed_tool_calls_drops_empty_placeholders() -> None:
+    """Empty streamed tool-call slots should not be executed."""
+    compacted = MCPAssistConversationEntity._compact_streamed_tool_calls(
+        [
+            {},
+            {"id": "call-1", "function": {"name": "get_index"}},
+            {},
+        ]
+    )
+
+    assert compacted == [{"id": "call-1", "function": {"name": "get_index"}}]
+
+
 def test_profile_tool_enablement_respects_shared_and_profile_settings(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
