@@ -30,6 +30,31 @@ from ..discovery import EntityDiscovery
 
 _LOGGER = logging.getLogger(__name__)
 
+MUSIC_ASSISTANT_PLAYBACK_MEDIA_TYPES = ("track", "album", "artist", "playlist", "radio")
+MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES = (
+    "track",
+    "album",
+    "artist",
+    "playlist",
+    "radio",
+    "audiobook",
+    "podcast",
+)
+MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_SET = set(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES)
+MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_TEXT = ", ".join(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES)
+MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_ALIASES = {
+    "tracks": "track",
+    "albums": "album",
+    "artists": "artist",
+    "playlists": "playlist",
+    "radios": "radio",
+    "radio station": "radio",
+    "radio stations": "radio",
+    "stations": "radio",
+    "audiobooks": "audiobook",
+    "podcasts": "podcast",
+}
+
 MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "list_music_assistant_players",
@@ -75,7 +100,7 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "media_type": {
                     "type": "string",
-                    "enum": ["track", "album", "artist", "playlist", "radio"],
+                    "enum": list(MUSIC_ASSISTANT_PLAYBACK_MEDIA_TYPES),
                     "description": "The type of content to play.",
                 },
                 "media_id": {
@@ -158,26 +183,26 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "search_music_assistant",
         "description": "Search the Music Assistant library and providers using a resolved Music Assistant instance. Prefer this over generic service calls when you want LLM-friendly music discovery results and automatic instance resolution.",
-        "llmDescription": "Search Music Assistant for tracks, artists, albums, playlists, or radio.",
+        "llmDescription": "Search Music Assistant for tracks, artists, albums, playlists, radio, audiobooks, or podcasts.",
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "The track, artist, album, playlist, or radio station name to search for.",
+                    "description": "The track, artist, album, playlist, radio station, audiobook, or podcast name to search for.",
                 },
                 "media_type": {
                     "oneOf": [
                         {
                             "type": "string",
-                            "enum": ["track", "album", "artist", "playlist", "radio"],
+                            "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
                         },
                         {
                             "type": "array",
                             "items": {
                                 "type": "string",
-                                "enum": ["track", "album", "artist", "playlist", "radio"],
+                                "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
                             },
                         },
                     ],
@@ -223,7 +248,7 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "media_type": {
                     "type": "string",
-                    "enum": ["track", "album", "artist", "playlist", "radio"],
+                    "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
                     "description": "The library media type to list.",
                 },
                 "search": {
@@ -646,7 +671,7 @@ class MusicAssistantTool:
             )
 
         media_type = str(args.get("media_type") or "").strip().lower()
-        if media_type not in {"track", "album", "artist", "playlist", "radio"}:
+        if media_type not in MUSIC_ASSISTANT_PLAYBACK_MEDIA_TYPES:
             return self._text_result(
                 "❌ Error: media_type must be one of track, album, artist, playlist, or radio."
             )
@@ -814,7 +839,8 @@ class MusicAssistantTool:
         normalized_media_type = self._normalize_music_assistant_media_type_filter(media_type)
         if media_type is not None and normalized_media_type is None:
             return self._text_result(
-                "❌ Error: media_type must be track, album, artist, playlist, radio, or a list of those values."
+                f"❌ Error: media_type must be {MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_TEXT}, "
+                "or a list of those values."
             )
         if normalized_media_type not in (None, [], ""):
             service_data["media_type"] = normalized_media_type
@@ -832,10 +858,10 @@ class MusicAssistantTool:
         args: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Browse the Music Assistant library."""
-        media_type = str(args.get("media_type") or "").strip().lower()
-        if media_type not in {"track", "album", "artist", "playlist", "radio"}:
+        media_type = self._normalize_music_assistant_media_type_value(args.get("media_type"))
+        if media_type is None:
             return self._text_result(
-                "❌ Error: media_type must be one of track, album, artist, playlist, or radio."
+                f"❌ Error: media_type must be one of {MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_TEXT}."
             )
 
         try:
@@ -1592,15 +1618,14 @@ class MusicAssistantTool:
     @staticmethod
     def _normalize_music_assistant_media_type_filter(value: Any) -> Any:
         """Normalize Music Assistant media_type filters."""
-        allowed = {"track", "album", "artist", "playlist", "radio"}
         if value is None:
             return None
 
         if isinstance(value, (list, tuple, set)):
             normalized = []
             for item in value:
-                item_text = str(item).strip().lower()
-                if item_text in allowed and item_text not in normalized:
+                item_text = MusicAssistantTool._normalize_music_assistant_media_type_value(item)
+                if item_text is not None and item_text not in normalized:
                     normalized.append(item_text)
             return normalized or None
 
@@ -1613,9 +1638,22 @@ class MusicAssistantTool:
                 for part in value_text.replace(";", ",").split(",")
                 if part.strip()
             ]
-            normalized = [part for part in parts if part in allowed]
+            normalized = []
+            for part in parts:
+                item_text = MusicAssistantTool._normalize_music_assistant_media_type_value(part)
+                if item_text is not None and item_text not in normalized:
+                    normalized.append(item_text)
             return normalized or None
-        return value_text if value_text in allowed else None
+        return MusicAssistantTool._normalize_music_assistant_media_type_value(value_text)
+
+    @staticmethod
+    def _normalize_music_assistant_media_type_value(value: Any) -> str | None:
+        """Normalize one Music Assistant library/search media type value."""
+        value_text = str(value).strip().lower()
+        if not value_text:
+            return None
+        value_text = MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_ALIASES.get(value_text, value_text)
+        return value_text if value_text in MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_SET else None
 
     async def _call_music_assistant_response_service(
         self,

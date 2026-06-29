@@ -200,6 +200,8 @@ Other examples:
 
 - "What is playing in the living room?"
 - "Show me albums by The National."
+- "Find podcasts about home automation in my Music Assistant library."
+- "Show my audiobooks in Music Assistant."
 - "Play my dinner playlist downstairs."
 
 ## Image and Camera Questions
