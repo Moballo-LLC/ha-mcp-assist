@@ -209,6 +209,20 @@ async def test_server_start_serves_health_endpoint(
         disable_socket()
 
 
+@pytest.mark.asyncio
+async def test_health_endpoint_rejects_unauthorized_ip(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Health diagnostics should use the same IP whitelist as other handlers."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    response = await server.handle_health(SimpleNamespace(remote="192.168.1.50"))
+
+    assert response.status == 403
+    assert response.text == "Forbidden: IP not authorized"
+
+
 def test_tool_enablement_follows_shared_settings(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
