@@ -310,6 +310,143 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "control_music_assistant_player",
+        "description": "Control Music Assistant playback, queue settings, and volume for resolved Music Assistant players. Use this instead of generic media_player services when the target is managed by Music Assistant.",
+        "llmDescription": "Pause, resume, skip, stop, seek, adjust volume, mute, shuffle, repeat, or clear Music Assistant queues.",
+        "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "pause",
+                        "resume",
+                        "toggle",
+                        "stop",
+                        "next",
+                        "previous",
+                        "seek",
+                        "skip",
+                        "set_volume",
+                        "volume_up",
+                        "volume_down",
+                        "mute",
+                        "shuffle",
+                        "repeat",
+                        "clear_queue",
+                    ],
+                    "description": "The Music Assistant control action to perform.",
+                },
+                "area": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional area name or alias to resolve Music Assistant players.",
+                },
+                "floor": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional floor name or alias to resolve Music Assistant players.",
+                },
+                "label": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional label name to resolve Music Assistant players.",
+                },
+                "media_player": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional Music Assistant player entity_id, friendly name, or alias.",
+                },
+                "position": {
+                    "type": "integer",
+                    "description": "Required for seek. Absolute playback position in seconds from the start of the current item.",
+                },
+                "seconds": {
+                    "type": "integer",
+                    "description": "Optional for skip. Relative seconds to move from the current playback position. Defaults to 10 and can be negative.",
+                    "default": 10,
+                },
+                "volume_level": {
+                    "type": "integer",
+                    "description": "Required for set_volume. Target volume from 0 to 100.",
+                },
+                "muted": {
+                    "type": "boolean",
+                    "description": "Required for mute. True to mute, false to unmute.",
+                },
+                "shuffle": {
+                    "type": "boolean",
+                    "description": "Required for shuffle. True to enable shuffle, false to disable it.",
+                },
+                "repeat": {
+                    "type": "string",
+                    "enum": ["off", "one", "all"],
+                    "description": "Required for repeat. Repeat mode to apply to the queue.",
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "transfer_music_assistant_queue",
+        "description": "Transfer a Music Assistant queue from one Music Assistant player to another resolved Music Assistant player.",
+        "llmDescription": "Move the active Music Assistant queue from one player to another.",
+        "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "source_media_player": {
+                    "type": "string",
+                    "description": "Source Music Assistant player entity_id, friendly name, or alias whose queue should move.",
+                },
+                "area": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional target area name or alias to resolve one Music Assistant player.",
+                },
+                "floor": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional target floor name or alias to resolve one Music Assistant player.",
+                },
+                "label": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Optional target label name to resolve one Music Assistant player.",
+                },
+                "media_player": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}},
+                    ],
+                    "description": "Target Music Assistant player entity_id, friendly name, or alias.",
+                },
+                "auto_play": {
+                    "type": "boolean",
+                    "description": "Optional Music Assistant auto_play flag for the transferred queue.",
+                },
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 MUSIC_ASSISTANT_TOOL_NAMES = {
@@ -445,6 +582,10 @@ class MusicAssistantTool:
             return await self.tool_get_music_assistant_library(arguments)
         if tool_name == "get_music_assistant_queue":
             return await self.tool_get_music_assistant_queue(arguments)
+        if tool_name == "control_music_assistant_player":
+            return await self.tool_control_music_assistant_player(arguments)
+        if tool_name == "transfer_music_assistant_queue":
+            return await self.tool_transfer_music_assistant_queue(arguments)
         return self._text_result(
             f"Unknown Music Assistant tool: {tool_name}",
             is_error=True,
@@ -761,6 +902,230 @@ class MusicAssistantTool:
             result["content"][0]["text"] += f"\n\n{resolution_text}"
 
         return result
+
+    async def tool_control_music_assistant_player(
+        self,
+        args: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Control playback, queue settings, or volume for Music Assistant players."""
+        action = str(args.get("action") or "").strip().lower()
+        if action not in {
+            "pause",
+            "resume",
+            "toggle",
+            "stop",
+            "next",
+            "previous",
+            "seek",
+            "skip",
+            "set_volume",
+            "volume_up",
+            "volume_down",
+            "mute",
+            "shuffle",
+            "repeat",
+            "clear_queue",
+        }:
+            return self._text_result(
+                "❌ Error: action must be one of pause, resume, toggle, stop, next, previous, seek, skip, set_volume, volume_up, volume_down, mute, shuffle, repeat, or clear_queue."
+            )
+
+        try:
+            resolved_player_ids, resolution_text = await self._resolve_music_assistant_player_targets(
+                area=args.get("area"),
+                floor=args.get("floor"),
+                label=args.get("label"),
+                media_player=args.get("media_player"),
+            )
+        except ValueError as err:
+            return self._text_result(f"❌ Error: {err}")
+
+        service = {
+            "pause": "media_pause",
+            "resume": "media_play",
+            "toggle": "media_play_pause",
+            "stop": "media_stop",
+            "next": "media_next_track",
+            "previous": "media_previous_track",
+            "volume_up": "volume_up",
+            "volume_down": "volume_down",
+            "clear_queue": "clear_playlist",
+        }.get(action)
+
+        service_data: Dict[str, Any] = {}
+        detail_text: str | None = None
+
+        if action == "seek":
+            if args.get("position") is None:
+                return self._text_result("❌ Error: position is required for seek.")
+            service = "media_seek"
+            service_data["seek_position"] = self._coerce_int_arg(
+                args.get("position"),
+                default=0,
+                minimum=0,
+                maximum=24 * 60 * 60,
+            )
+            detail_text = f"Position: {service_data['seek_position']} seconds."
+        elif action == "skip":
+            service = "media_seek"
+            seconds = self._coerce_int_arg(
+                args.get("seconds"),
+                default=10,
+                minimum=-(24 * 60 * 60),
+                maximum=24 * 60 * 60,
+            )
+            return await self._skip_music_assistant_players(
+                resolved_player_ids=resolved_player_ids,
+                seconds=seconds,
+                resolution_text=resolution_text,
+            )
+        elif action == "set_volume":
+            if args.get("volume_level") is None:
+                return self._text_result(
+                    "❌ Error: volume_level is required for set_volume."
+                )
+            service = "volume_set"
+            volume_percent = self._coerce_int_arg(
+                args.get("volume_level"),
+                default=0,
+                minimum=0,
+                maximum=100,
+            )
+            service_data["volume_level"] = volume_percent / 100
+            detail_text = f"Volume: {volume_percent}%."
+        elif action == "mute":
+            if not isinstance(args.get("muted"), bool):
+                return self._text_result("❌ Error: muted is required for mute.")
+            service = "volume_mute"
+            service_data["is_volume_muted"] = args["muted"]
+            detail_text = f"Muted: {'yes' if args['muted'] else 'no'}."
+        elif action == "shuffle":
+            if not isinstance(args.get("shuffle"), bool):
+                return self._text_result("❌ Error: shuffle is required for shuffle.")
+            service = "shuffle_set"
+            service_data["shuffle"] = args["shuffle"]
+            detail_text = f"Shuffle: {'on' if args['shuffle'] else 'off'}."
+        elif action == "repeat":
+            repeat = str(args.get("repeat") or "").strip().lower()
+            if repeat not in {"off", "one", "all"}:
+                return self._text_result(
+                    "❌ Error: repeat is required for repeat and must be off, one, or all."
+                )
+            service = "repeat_set"
+            service_data["repeat"] = repeat
+            detail_text = f"Repeat: {repeat}."
+
+        if service is None:
+            return self._text_result(
+                f"❌ Error: Unsupported Music Assistant control action: {action}."
+            )
+
+        return await self._call_music_assistant_media_player_service(
+            service=service,
+            service_data=service_data,
+            action_label=action,
+            resolved_player_ids=resolved_player_ids,
+            resolution_text=resolution_text,
+            detail_text=detail_text,
+        )
+
+    async def tool_transfer_music_assistant_queue(
+        self,
+        args: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Transfer a Music Assistant queue between two players."""
+        if not self.hass.services.has_service("music_assistant", "transfer_queue"):
+            return self._text_result(
+                "The Home Assistant Music Assistant integration is not available or does not expose music_assistant.transfer_queue."
+            )
+
+        source_values = self._normalize_target_values(args.get("source_media_player"))
+        if not any(
+            self._normalize_target_values(args.get(key))
+            for key in ("area", "floor", "label", "media_player")
+        ):
+            return self._text_result(
+                "❌ Error: target area, floor, label, or media_player is required for transfer_music_assistant_queue."
+            )
+
+        try:
+            if source_values:
+                source_player_ids, _source_resolution_text = await self._resolve_music_assistant_player_targets(
+                    media_player=args.get("source_media_player"),
+                )
+            else:
+                source_player_ids = []
+            target_player_ids, target_resolution_text = await self._resolve_music_assistant_player_targets(
+                area=args.get("area"),
+                floor=args.get("floor"),
+                label=args.get("label"),
+                media_player=args.get("media_player"),
+            )
+        except ValueError as err:
+            return self._text_result(f"❌ Error: {err}")
+
+        if source_player_ids and len(source_player_ids) != 1:
+            return self._text_result(
+                "❌ Error: source_media_player must resolve to exactly one Music Assistant player."
+            )
+        if len(target_player_ids) != 1:
+            return self._text_result(
+                "❌ Error: target selectors must resolve to exactly one Music Assistant player."
+            )
+        if source_player_ids and source_player_ids[0] == target_player_ids[0]:
+            return self._text_result(
+                "❌ Error: source and target Music Assistant players must be different."
+            )
+
+        service_data: Dict[str, Any] = {
+            "entity_id": target_player_ids[0],
+        }
+        if source_player_ids:
+            service_data["source_player"] = source_player_ids[0]
+        if isinstance(args.get("auto_play"), bool):
+            service_data["auto_play"] = args["auto_play"]
+
+        self._publish_progress(
+            "tool_start",
+            "Transferring Music Assistant queue",
+            tool="transfer_music_assistant_queue",
+        )
+
+        try:
+            await self.hass.services.async_call(
+                domain="music_assistant",
+                service="transfer_queue",
+                service_data=service_data,
+                blocking=True,
+                return_response=False,
+            )
+        except Exception as err:
+            error_msg = f"Music Assistant queue transfer failed: {err}"
+            _LOGGER.exception(error_msg)
+            return self._text_result(f"❌ Error: {error_msg}")
+
+        self._publish_progress(
+            "tool_complete",
+            "Music Assistant queue transferred",
+            tool="transfer_music_assistant_queue",
+            success=True,
+        )
+
+        target_name = self._friendly_names_for_entities(target_player_ids)[0]
+        if source_player_ids:
+            source_name = self._friendly_names_for_entities(source_player_ids)[0]
+            transfer_text = (
+                f"✅ Transferred Music Assistant queue from {source_name} to {target_name}."
+            )
+        else:
+            transfer_text = f"✅ Transferred active Music Assistant queue to {target_name}."
+        text_parts = [
+            transfer_text,
+            target_resolution_text,
+        ]
+        if isinstance(args.get("auto_play"), bool):
+            text_parts.append(f"Auto play: {'yes' if args['auto_play'] else 'no'}.")
+        return self._text_result("\n".join(text_parts))
 
     def _publish_progress(self, stage: str, message: str, **payload: Any) -> None:
         """Forward progress updates to the shared MCP server when available."""
@@ -1305,6 +1670,149 @@ class MusicAssistantTool:
             "\n".join(text_parts),
             response=serialized_response,
         )
+
+    async def _call_music_assistant_media_player_service(
+        self,
+        *,
+        service: str,
+        service_data: Dict[str, Any],
+        action_label: str,
+        resolved_player_ids: List[str],
+        resolution_text: str,
+        detail_text: str | None = None,
+    ) -> Dict[str, Any]:
+        """Call a media_player service for resolved Music Assistant players."""
+        if not self.hass.services.has_service("media_player", service):
+            return self._text_result(
+                f"Home Assistant does not expose media_player.{service}."
+            )
+
+        self._publish_progress(
+            "tool_start",
+            f"Running Music Assistant {action_label}",
+            tool="control_music_assistant_player",
+            action=action_label,
+            target_count=len(resolved_player_ids),
+        )
+
+        try:
+            await self.hass.services.async_call(
+                domain="media_player",
+                service=service,
+                service_data={**service_data, "entity_id": resolved_player_ids},
+                blocking=True,
+                return_response=False,
+            )
+        except Exception as err:
+            error_msg = f"Music Assistant {action_label} failed: {err}"
+            _LOGGER.exception(error_msg)
+            return self._text_result(f"❌ Error: {error_msg}")
+
+        self._publish_progress(
+            "tool_complete",
+            f"Music Assistant {action_label} completed",
+            tool="control_music_assistant_player",
+            action=action_label,
+            success=True,
+            target_count=len(resolved_player_ids),
+        )
+
+        target_text = ", ".join(self._friendly_names_for_entities(resolved_player_ids))
+        text_parts = [
+            f"✅ Completed Music Assistant {action_label.replace('_', ' ')} for {target_text}."
+        ]
+        if detail_text:
+            text_parts.append(detail_text)
+        if resolution_text:
+            text_parts.append(resolution_text)
+        return self._text_result("\n".join(text_parts))
+
+    async def _skip_music_assistant_players(
+        self,
+        *,
+        resolved_player_ids: List[str],
+        seconds: int,
+        resolution_text: str,
+    ) -> Dict[str, Any]:
+        """Seek each Music Assistant player relative to its current position."""
+        if not self.hass.services.has_service("media_player", "media_seek"):
+            return self._text_result("Home Assistant does not expose media_player.media_seek.")
+
+        seek_positions: Dict[str, int] = {}
+        for entity_id in resolved_player_ids:
+            state_obj = self.hass.states.get(entity_id)
+            current_position = self._current_music_assistant_position_seconds(state_obj)
+            if current_position is None:
+                return self._text_result(
+                    f"❌ Error: {entity_id} does not expose a current media_position for skip."
+                )
+            seek_positions[entity_id] = max(0, int(current_position) + seconds)
+
+        self._publish_progress(
+            "tool_start",
+            "Skipping Music Assistant playback",
+            tool="control_music_assistant_player",
+            action="skip",
+            target_count=len(resolved_player_ids),
+        )
+
+        try:
+            for entity_id, seek_position in seek_positions.items():
+                await self.hass.services.async_call(
+                    domain="media_player",
+                    service="media_seek",
+                    service_data={
+                        "entity_id": entity_id,
+                        "seek_position": seek_position,
+                    },
+                    blocking=True,
+                    return_response=False,
+                )
+        except Exception as err:
+            error_msg = f"Music Assistant skip failed: {err}"
+            _LOGGER.exception(error_msg)
+            return self._text_result(f"❌ Error: {error_msg}")
+
+        self._publish_progress(
+            "tool_complete",
+            "Music Assistant skip completed",
+            tool="control_music_assistant_player",
+            action="skip",
+            success=True,
+            target_count=len(resolved_player_ids),
+        )
+
+        target_text = ", ".join(self._friendly_names_for_entities(resolved_player_ids))
+        text_parts = [
+            f"✅ Skipped Music Assistant playback by {seconds} second{'s' if seconds != 1 else ''} for {target_text}."
+        ]
+        if resolution_text:
+            text_parts.append(resolution_text)
+        return self._text_result("\n".join(text_parts))
+
+    @staticmethod
+    def _current_music_assistant_position_seconds(state_obj: Any) -> int | None:
+        """Return the current media position, accounting for elapsed play time."""
+        if state_obj is None:
+            return None
+
+        raw_position = state_obj.attributes.get("media_position")
+        if raw_position is None:
+            return None
+        try:
+            position = float(raw_position)
+        except (TypeError, ValueError):
+            return None
+
+        updated_at = state_obj.attributes.get("media_position_updated_at")
+        if (
+            state_obj.state == "playing"
+            and isinstance(updated_at, datetime)
+        ):
+            now = datetime.now(updated_at.tzinfo) if updated_at.tzinfo else datetime.now()
+            position += max(0, (now - updated_at).total_seconds())
+
+        return max(0, int(position))
 
     def _friendly_names_for_entities(self, entity_ids: List[str]) -> List[str]:
         """Resolve entity IDs to friendly names."""

@@ -194,9 +194,15 @@ async def test_initialize_loads_music_assistant_bundle_when_enabled(
     tool_names = {tool["name"] for tool in loader.get_tool_definitions()}
     assert "play_music_assistant" in tool_names
     assert "get_music_assistant_queue" in tool_names
+    assert "control_music_assistant_player" in tool_names
+    assert "transfer_music_assistant_queue" in tool_names
     music_assistant_spec = loader.get_builtin_toggle_spec("play_music_assistant")
     assert music_assistant_spec is not None
     assert music_assistant_spec.package_id == "music_assistant"
+    assert (
+        loader.get_builtin_toggle_spec("control_music_assistant_player")
+        == music_assistant_spec
+    )
 
 
 @pytest.mark.asyncio

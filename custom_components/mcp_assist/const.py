@@ -248,6 +248,8 @@ OPTIONAL_TOOL_FAMILY_TOOL_NAMES = {
             "search_music_assistant",
             "get_music_assistant_library",
             "get_music_assistant_queue",
+            "control_music_assistant_player",
+            "transfer_music_assistant_queue",
         }
     ),
     TOOL_FAMILY_WEB_SEARCH: frozenset({"search", "read_url"}),
@@ -446,7 +448,7 @@ Unit conversion tools are enabled.
 
 MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS = """
 Music Assistant support is enabled.
-- Prefer Music Assistant tools for playback, target discovery, search, library, and queue questions.
+- Prefer Music Assistant tools for playback, playback control, target discovery, search, library, and queue questions.
 - Only target Music Assistant players, not arbitrary media_player entities.
 - If no target is given and the current area is known, use area="{current_area}".
 """
