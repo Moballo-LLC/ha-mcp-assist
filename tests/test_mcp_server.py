@@ -174,6 +174,7 @@ def test_tool_enablement_follows_shared_settings(
     assert server._is_tool_enabled("add") is False
     assert server._is_tool_enabled("convert_unit") is False
     assert server._is_tool_enabled("play_music_assistant") is False
+    assert server._is_tool_enabled("control_music_assistant_player") is False
 
 
 def test_unit_conversion_can_stay_enabled_when_calculator_is_disabled(
@@ -273,9 +274,18 @@ async def test_handle_tools_list_includes_music_assistant_package_tools(
                 "description": "queue",
                 "inputSchema": {"type": "object", "properties": {}},
             },
+            {
+                "name": "control_music_assistant_player",
+                "description": "control",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
         ],
         is_custom_tool=lambda tool_name: tool_name
-        in {"play_music_assistant", "get_music_assistant_queue"},
+        in {
+            "play_music_assistant",
+            "get_music_assistant_queue",
+            "control_music_assistant_player",
+        },
     )
 
     result = await server.handle_tools_list()
@@ -283,6 +293,7 @@ async def test_handle_tools_list_includes_music_assistant_package_tools(
 
     assert "play_music_assistant" in tool_names
     assert "get_music_assistant_queue" in tool_names
+    assert "control_music_assistant_player" in tool_names
 
 
 @pytest.mark.asyncio

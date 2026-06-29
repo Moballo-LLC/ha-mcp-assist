@@ -15,7 +15,9 @@
       "list_music_assistant_instances",
       "search_music_assistant",
       "get_music_assistant_library",
-      "get_music_assistant_queue"
+      "get_music_assistant_queue",
+      "control_music_assistant_player",
+      "transfer_music_assistant_queue"
     ],
     "shared_setting_key": "enable_music_assistant_support",
     "profile_setting_key": "profile_enable_music_assistant_support",
