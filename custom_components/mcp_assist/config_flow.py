@@ -19,6 +19,8 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TemplateSelector,
+    TemplateSelectorConfig,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -747,12 +749,12 @@ def _build_prompt_section(
     if include_system_prompt:
         schema_items[
             _optional_with_suggested_value(CONF_SYSTEM_PROMPT, system_prompt_value)
-        ] = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT, multiline=True))
+        ] = TemplateSelector(TemplateSelectorConfig())
     schema_items[
         _optional_with_suggested_value(
             CONF_TECHNICAL_PROMPT, technical_prompt_value
         )
-    ] = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT, multiline=True))
+    ] = TemplateSelector(TemplateSelectorConfig())
     return section(vol.Schema(schema_items), {"collapsed": False})
 
 

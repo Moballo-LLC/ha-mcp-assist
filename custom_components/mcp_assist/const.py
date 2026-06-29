@@ -400,13 +400,13 @@ Responses:
 - For time answers, prefer relative time plus local absolute time when available.
 - When listing multiple items, group by area when possible, otherwise use a stable order.
 
-{response_mode}
+{{ response_mode }}
 
-{current_user_context}
-Current area: {current_area}
-{home_location_context}
-Current time: {time}
-Current date: {date}"""
+{{ current_user_context }}
+Current area: {{ current_area }}
+{{ home_location_context }}
+Current time: {{ time }}
+Current date: {{ date }}"""
 
 DEVICE_TECHNICAL_INSTRUCTIONS = """
 Device tools are enabled.
@@ -441,5 +441,5 @@ MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS = """
 Music Assistant support is enabled.
 - Prefer Music Assistant tools for playback, target discovery, search, library, and queue questions.
 - Only target Music Assistant players, not arbitrary media_player entities.
-- If no target is given and the current area is known, use area="{current_area}".
+- If no target is given and the current area is known, use area="{{ current_area }}".
 """

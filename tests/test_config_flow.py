@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import voluptuous as vol
 import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType, section
+from homeassistant.helpers.selector import TemplateSelector
 
 from custom_components.mcp_assist.config_flow import (
     ADVANCED_SECTION_KEY,
@@ -290,6 +291,10 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     }
     assert CONF_SYSTEM_PROMPT in prompt_keys
     assert CONF_TECHNICAL_PROMPT in prompt_keys
+    assert all(
+        isinstance(selector, TemplateSelector)
+        for selector in prompts_section.schema.schema.values()
+    )
 
 
 async def test_model_step_prompt_overrides_are_optional(hass) -> None:
