@@ -143,6 +143,7 @@ _LOGGER = logging.getLogger(__name__)
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
+MAX_PROVIDER_LOG_CHARS = 500
 ANTHROPIC_UNSUPPORTED_TOOL_NAMES = {"analyze_image", "generate_image"}
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
@@ -150,6 +151,28 @@ _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
 )
+
+
+def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -> str:
+    """Return a single-line, redacted provider detail safe for logs."""
+    text = str(value or "")
+    text = re.sub(
+        r"(?i)(authorization)([\"']?\s*[:=]\s*[\"']?)[^,\"'}\r\n]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(api(?:[_\s-]?key)|access(?:[_\s-]?token)|x-api-key)"
+        r"([\"']?\s*[:=]\s*[\"']?)[^,\"'}\s]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{8,}\b", "[redacted]", text)
+    text = re.sub(r"\bAIza[A-Za-z0-9_-]{20,}\b", "[redacted]", text)
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
 
 
 class MCPAssistConversationEntity(ConversationEntity):
@@ -3259,9 +3282,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                             _LOGGER.error(
                                 f"❌ Streaming failed with status {response.status}"
                             )
-                            _LOGGER.error(f"❌ Full error response: {error_text}")
+                            _LOGGER.debug(
+                                "Provider streaming error response: %s",
+                                _provider_log_snippet(error_text),
+                            )
                             raise Exception(
-                                f"Streaming failed: {error_text}"
+                                f"Streaming failed: {_provider_log_snippet(error_text)}"
                             )  # Raise to trigger fallback
 
                         if self.debug_mode:
@@ -3320,8 +3346,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                                                     current_thought_signature = (
                                                         google_data["thought_signature"]
                                                     )
-                                                    _LOGGER.info(
-                                                        f"🧠 Captured thought_signature: {current_thought_signature[:50]}..."
+                                                    _LOGGER.debug(
+                                                        "Captured Gemini thought_signature (%d chars)",
+                                                        len(current_thought_signature),
                                                     )
                                                     break  # Only in first tool_call
 
@@ -3510,8 +3537,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                         tool_call["extra_content"] = {
                             "google": {"thought_signature": current_thought_signature}
                         }
-                    _LOGGER.info(
-                        f"🧠 Added thought_signature to {len(current_tool_calls)} tool calls"
+                    _LOGGER.debug(
+                        "Added Gemini thought_signature to %d tool calls",
+                        len(current_tool_calls),
                     )
                 elif self.server_type == SERVER_TYPE_GEMINI:
                     # Only warn for Gemini - other providers don't use thought_signature
@@ -3667,7 +3695,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                     if response.status != 200:
                         error_text = await response.text()
                         raise Exception(
-                            f"{self.server_type} API error {response.status}: {error_text}"
+                            f"{self.server_type} API error {response.status}: "
+                            f"{_provider_log_snippet(error_text)}"
                         )
 
                     data = await response.json()
@@ -3704,8 +3733,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                             )
                             if "thought_signature" in google_data:
                                 thought_signature = google_data["thought_signature"]
-                                _LOGGER.info(
-                                    f"🧠 Captured thought_signature: {thought_signature[:50]}..."
+                                _LOGGER.debug(
+                                    "Captured Gemini thought_signature (%d chars)",
+                                    len(thought_signature),
                                 )
 
                         # Ensure each tool_call has the required type field
@@ -3713,8 +3743,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                             if "type" not in tc:
                                 tc["type"] = "function"
                             if "function" in tc:
-                                _LOGGER.info(
-                                    f"  - {tc['function'].get('name')}: {tc['function'].get('arguments')}"
+                                _LOGGER.debug(
+                                    "  - %s: %s",
+                                    tc["function"].get("name"),
+                                    _provider_log_snippet(
+                                        tc["function"].get("arguments")
+                                    ),
                                 )
 
                         # Preserve thought_signature in tool_calls for Gemini 3

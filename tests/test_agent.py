@@ -72,6 +72,30 @@ def _tool(name: str) -> dict[str, object]:
     }
 
 
+def test_provider_log_snippet_redacts_and_truncates_details() -> None:
+    """Provider details written to logs should be compact and secret-safe."""
+    snippet = agent_module._provider_log_snippet(
+        'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
+        '"error":"Incorrect API key: sk-live-secret1234567890",'
+        '"google":"AIzaSyExampleKeyValue1234567890",'
+        '"local":"API key: my-local-secret",'
+        '"message":"'
+        + ("x" * 80)
+        + '"}',
+        max_chars=120,
+    )
+
+    assert "\n" not in snippet
+    assert "secret-value" not in snippet
+    assert "sk-leaked-value" not in snippet
+    assert "sk-live-secret1234567890" not in snippet
+    assert "AIzaSyExampleKeyValue1234567890" not in snippet
+    assert "my-local-secret" not in snippet
+    assert 'api_key":"[redacted]' in snippet
+    assert 'Authorization":"[redacted]' in snippet
+    assert "truncated" in snippet
+
+
 class _FakeAnthropicResponse:
     """Minimal async response for Anthropic API tests."""
 
