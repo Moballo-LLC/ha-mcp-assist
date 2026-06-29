@@ -1502,6 +1502,36 @@ def test_follow_up_pattern_debug_logs_do_not_include_response_tail(
     assert "private-token-123" not in caplog.text
 
 
+def test_tool_call_log_summary_omits_argument_values(hass, profile_entry_factory) -> None:
+    """Streaming tool-call debug logs should keep metadata without raw arguments."""
+    entry = profile_entry_factory(data={CONF_DEBUG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    summary = agent._tool_call_log_summary(
+        [
+            {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                    "name": "read_url",
+                    "arguments": (
+                        '{"url":"https://private.example/path?api_key=sk-secret",'
+                        '"entity_id":"light.private","api_key":"sk-secret"}'
+                    ),
+                },
+            }
+        ]
+    )
+
+    log_text = str(summary)
+
+    assert summary[0]["name"] == "read_url"
+    assert summary[0]["argument_keys"] == "api_key, entity_id, url"
+    assert summary[0]["argument_bytes"] > 0
+    assert "https://private.example" not in log_text
+    assert "light.private" not in log_text
+    assert "sk-secret" not in log_text
+
+
 @pytest.mark.asyncio
 async def test_call_mcp_tool_includes_profile_context(
     hass, profile_entry_factory, system_entry_factory, monkeypatch

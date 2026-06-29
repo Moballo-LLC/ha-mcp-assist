@@ -1356,6 +1356,29 @@ class MCPAssistConversationEntity(ConversationEntity):
             return parsed if isinstance(parsed, dict) else {}
         return {}
 
+    def _tool_call_log_summary(
+        self, tool_calls: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Summarize tool calls for logs without exposing argument values."""
+        summaries: List[Dict[str, Any]] = []
+        for tool_call in tool_calls:
+            function = tool_call.get("function")
+            if not isinstance(function, dict):
+                function = {}
+
+            raw_arguments = function.get("arguments")
+            parsed_arguments = self._parse_tool_arguments(raw_arguments)
+            summaries.append(
+                {
+                    "id": tool_call.get("id"),
+                    "type": tool_call.get("type"),
+                    "name": function.get("name"),
+                    "argument_keys": _mapping_key_summary(parsed_arguments),
+                    "argument_bytes": _json_size_bytes(raw_arguments),
+                }
+            )
+        return summaries
+
     def _normalize_tool_call_arguments(
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -3727,7 +3750,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                         f"📝 Discarding intermediate narration: {len(response_text)} chars"
                     )
                     _LOGGER.debug(
-                        f"📊 Tool calls structure: {json.dumps(current_tool_calls, indent=2)}"
+                        "📊 Tool calls structure: %s",
+                        json.dumps(
+                            self._tool_call_log_summary(current_tool_calls),
+                            indent=2,
+                        ),
                     )
 
                 # Add assistant message with tool calls
