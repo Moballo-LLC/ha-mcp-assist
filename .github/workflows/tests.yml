@@ -34,16 +34,8 @@ jobs:
           python -m pip install --upgrade pip wheel
           pip install -r requirements_test.txt
 
-      - name: Ruff
-        run: ruff check custom_components tests
-
-      - name: Compile Python
-        run: python -m compileall -q custom_components tests
-
-      - name: Validate JSON
-        run: |
-          python -m json.tool custom_components/mcp_assist/strings.json >/dev/null
-          python -m json.tool custom_components/mcp_assist/translations/en.json >/dev/null
+      - name: Static validation
+        run: scripts/verify_local.sh --static
 
   test:
     name: Test
@@ -67,9 +59,7 @@ jobs:
           pip install -r requirements_test.txt
 
       - name: Run full pytest suite
-        run: |
-          mkdir -p test-results
-          pytest -ra --junitxml=test-results/pytest.xml tests
+        run: scripts/verify_local.sh --pytest
 
       - name: Upload pytest results
         if: always()
