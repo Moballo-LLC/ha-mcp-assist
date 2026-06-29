@@ -393,6 +393,17 @@ class GoogleMapsTool:
                 "Use departure_time for drive, walk, or bicycle routes.",
                 is_error=True,
             )
+        avoid_tolls = bool(arguments.get("avoid_tolls", False))
+        avoid_highways = bool(arguments.get("avoid_highways", False))
+        avoid_ferries = bool(arguments.get("avoid_ferries", False))
+        if travel_mode != "DRIVE" and any(
+            (avoid_tolls, avoid_highways, avoid_ferries)
+        ):
+            return self._text_result(
+                "Error: avoid_tolls, avoid_highways, and avoid_ferries are only "
+                "supported for driving routes.",
+                is_error=True,
+            )
 
         desired_arrival_time: datetime | None = None
         if arrival_time:
@@ -406,11 +417,6 @@ class GoogleMapsTool:
             "destination": self._build_route_waypoint(destination),
             "travelMode": travel_mode,
             "computeAlternativeRoutes": False,
-            "routeModifiers": {
-                "avoidTolls": bool(arguments.get("avoid_tolls", False)),
-                "avoidHighways": bool(arguments.get("avoid_highways", False)),
-                "avoidFerries": bool(arguments.get("avoid_ferries", False)),
-            },
         }
         routing_preference = self._normalize_routing_preference(
             arguments.get("routing_preference")
@@ -423,6 +429,11 @@ class GoogleMapsTool:
             )
         if travel_mode == "DRIVE":
             body["routingPreference"] = routing_preference
+            body["routeModifiers"] = {
+                "avoidTolls": avoid_tolls,
+                "avoidHighways": avoid_highways,
+                "avoidFerries": avoid_ferries,
+            }
 
         try:
             if desired_arrival_time is not None and travel_mode == "TRANSIT":

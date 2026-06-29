@@ -348,6 +348,34 @@ async def test_get_google_route_rejects_drive_arrival_time(
     assert "arrival_time is only supported for transit" in result["content"][0]["text"]
 
 
+@pytest.mark.asyncio
+async def test_get_google_route_rejects_avoid_flags_for_non_drive_modes(
+    hass,
+    system_entry_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Avoid modifiers should not be sent for route modes that do not support them."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+
+    def _client_session(**_kwargs):
+        raise AssertionError("HTTP should not be called for unsupported avoid flags")
+
+    monkeypatch.setattr(google_maps_module.aiohttp, "ClientSession", _client_session)
+
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route",
+        {
+            "origin": "Downtown Seattle",
+            "destination": "Capitol Hill",
+            "travel_mode": "transit",
+            "avoid_tolls": True,
+        },
+    )
+
+    assert result["isError"] is True
+    assert "only supported for driving routes" in result["content"][0]["text"]
+
+
 def test_google_route_waypoint_accepts_bare_place_ids(hass) -> None:
     """Search result place IDs should be directly routeable."""
     waypoint = google_maps_module.GoogleMapsTool(hass)._build_route_waypoint(

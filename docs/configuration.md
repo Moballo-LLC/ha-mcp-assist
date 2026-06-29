@@ -205,8 +205,10 @@ Required shared setting:
 - **Google Maps API Key**: A Google Maps Platform API key with the Places API
   and Routes API enabled.
 
-When `get_google_route` is called without an origin, MCP Assist uses the Home
-Assistant home latitude and longitude as the route origin.
+When `get_google_route` is called without an origin, MCP Assist can use the Home
+Assistant home latitude and longitude as the route origin only if **Share Home
+Location with MCP Tools** is enabled. Otherwise the caller must provide an
+origin.
 
 ## External Custom Tools
 
