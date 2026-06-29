@@ -7,6 +7,7 @@ from typing import Any
 from .anthropic import AnthropicProvider
 from .base import (
     LLMProvider,
+    ProviderConfigField,
     ProviderSettings,
     StreamParseResult,
     normalize_tool_call_arguments,
@@ -17,6 +18,7 @@ from .gemini import GeminiProvider
 from .llamacpp import LlamaCppProvider
 from .lmstudio import LMStudioProvider
 from .ollama import OllamaProvider
+from .openclaw import OpenClawProvider
 from .openai import OpenAIProvider
 from .openrouter import OpenRouterProvider
 from .vllm import VLLMProvider
@@ -27,6 +29,7 @@ from ..const import (
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENCLAW,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_VLLM,
@@ -43,8 +46,22 @@ def _provider_classes() -> dict[str, type[LLMProvider]]:
         SERVER_TYPE_GEMINI: GeminiProvider,
         SERVER_TYPE_ANTHROPIC: AnthropicProvider,
         SERVER_TYPE_OPENROUTER: OpenRouterProvider,
+        SERVER_TYPE_OPENCLAW: OpenClawProvider,
         SERVER_TYPE_VLLM: VLLMProvider,
     }
+
+
+def get_llm_provider_class(server_type: str) -> type[LLMProvider]:
+    """Return the provider class for a server type."""
+    return _provider_classes().get(server_type, LMStudioProvider)
+
+
+def provider_selector_options() -> list[dict[str, str]]:
+    """Return provider options for config-flow provider selection."""
+    return [
+        {"value": server_type, "label": provider_class.config_display_name()}
+        for server_type, provider_class in _provider_classes().items()
+    ]
 
 
 def build_provider_settings(
@@ -55,10 +72,7 @@ def build_provider_settings(
 ) -> ProviderSettings:
     """Build current provider settings from a conversation profile entry."""
     runtime_config = resolve_provider_runtime_config(entry)
-    provider_class = _provider_classes().get(
-        runtime_config.server_type,
-        LMStudioProvider,
-    )
+    provider_class = get_llm_provider_class(runtime_config.server_type)
     return ProviderSettings(
         server_type=runtime_config.server_type,
         model_name=runtime_config.model_name,
@@ -75,7 +89,7 @@ def build_provider_settings(
 
 def create_llm_provider(settings: ProviderSettings) -> LLMProvider:
     """Create the provider transport for the configured server type."""
-    provider_class = _provider_classes().get(settings.server_type, LMStudioProvider)
+    provider_class = get_llm_provider_class(settings.server_type)
     return provider_class(settings)
 
 
@@ -87,13 +101,17 @@ __all__ = [
     "LMStudioProvider",
     "OllamaProvider",
     "OpenAIProvider",
+    "OpenClawProvider",
     "OpenRouterProvider",
+    "ProviderConfigField",
     "ProviderSettings",
     "StreamParseResult",
     "VLLMProvider",
     "build_provider_settings",
     "create_llm_provider",
+    "get_llm_provider_class",
     "normalize_tool_call_arguments",
     "parse_tool_arguments",
+    "provider_selector_options",
     "stringify_tool_arguments",
 ]

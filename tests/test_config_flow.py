@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import voluptuous as vol
@@ -15,6 +16,7 @@ from homeassistant.helpers.selector import TemplateSelector
 from custom_components.mcp_assist import config_flow as config_flow_module
 from custom_components.mcp_assist.config_flow import (
     ADVANCED_SECTION_KEY,
+    CONNECTION_SECTION_KEY,
     CONVERSATION_SECTION_KEY,
     CONTEXT_SECTION_KEY,
     DISCOVERY_SECTION_KEY,
@@ -52,10 +54,16 @@ from custom_components.mcp_assist.config_flow import (
 from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
+from custom_components.mcp_assist.llm_providers.ollama import OllamaProvider
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
     CONF_ALLOWED_IPS,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
+    CONF_CLEAN_RESPONSES,
+    CONF_CONTROL_HA,
+    CONF_CONTEXT_MODE,
+    CONF_DEBUG_MODE,
     CONF_ENABLE_GAP_FILLING,
     CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_WEB_SEARCH,
@@ -68,38 +76,50 @@ from custom_components.mcp_assist.const import (
     CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_MEMORY_TOOLS,
-    CONF_MAX_ENTITIES_PER_DISCOVERY,
+    CONF_END_WORDS,
     CONF_ENABLE_ASSIST_BRIDGE,
+    CONF_FOLLOW_UP_PHRASES,
     CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
-    CONF_CONTEXT_MODE,
+    CONF_MAX_ENTITIES_PER_DISCOVERY,
+    CONF_MAX_HISTORY,
+    CONF_MAX_ITERATIONS,
+    CONF_MAX_TOKENS,
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
     CONF_MCP_PORT,
     CONF_LMSTUDIO_URL,
+    CONF_MODEL_NAME,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
     CONF_OPENCLAW_SESSION_KEY,
+    CONF_PROFILE_NAME,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_PROFILE_ENABLE_LLM_API_BRIDGE,
+    CONF_RESPONSE_MODE,
     CONF_SEARCH_PROVIDER,
     CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
+    CONF_TEMPERATURE,
     CONF_TECHNICAL_PROMPT,
     CONF_TECHNICAL_PROMPT_MODE,
+    CONF_TIMEOUT,
     DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
+    DEFAULT_OLLAMA_URL,
     DEFAULT_TECHNICAL_PROMPT,
+    OPENAI_BASE_URL,
     PROMPT_MODE_CUSTOM,
     PROMPT_MODE_DEFAULT,
     SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENCLAW,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
@@ -169,6 +189,14 @@ def _section_field_names(form_section: section) -> set[str]:
     return {
         getattr(marker, "schema", marker)
         for marker in form_section.schema.schema.keys()
+    }
+
+
+def _schema_marker_by_field(data_schema: vol.Schema) -> dict[str, Any]:
+    """Return schema markers by normalized field name."""
+    return {
+        getattr(marker, "schema", marker): marker
+        for marker in data_schema.schema.keys()
     }
 
 
@@ -317,7 +345,7 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_model()
@@ -339,6 +367,31 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     )
 
 
+async def test_server_step_uses_provider_specific_connection_fields(hass) -> None:
+    """Provider setup should show the connection fields required by that provider."""
+    ollama_flow = MCPAssistConfigFlow()
+    ollama_flow.hass = hass
+    ollama_flow.context = {"source": "user"}
+    ollama_flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA}
+
+    ollama_result = await ollama_flow.async_step_server()
+    ollama_markers = _schema_marker_by_field(ollama_result["data_schema"])
+
+    assert set(ollama_markers) == {CONF_LMSTUDIO_URL}
+    assert ollama_markers[CONF_LMSTUDIO_URL].default() == DEFAULT_OLLAMA_URL
+
+    openai_flow = MCPAssistConfigFlow()
+    openai_flow.hass = hass
+    openai_flow.context = {"source": "user"}
+    openai_flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OPENAI}
+
+    openai_result = await openai_flow.async_step_server()
+    openai_markers = _schema_marker_by_field(openai_result["data_schema"])
+
+    assert set(openai_markers) == {CONF_LMSTUDIO_URL, CONF_API_KEY}
+    assert openai_markers[CONF_LMSTUDIO_URL].default() == OPENAI_BASE_URL
+
+
 async def test_model_step_prompt_overrides_are_optional(hass) -> None:
     """Prompt fields should be optional and prefilled with the effective prompts."""
     flow = MCPAssistConfigFlow()
@@ -348,7 +401,7 @@ async def test_model_step_prompt_overrides_are_optional(hass) -> None:
     flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_model()
@@ -547,6 +600,56 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     }
     assert marker_by_key[_builtin_profile_key("calculator")].description is None
     assert marker_by_key[_builtin_profile_key("search")].description is None
+
+
+async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> None:
+    """Initial setup should flatten provider-owned fields before shared MCP setup."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+    flow.step1_data = {
+        CONF_PROFILE_NAME: "Test Profile",
+        CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+    }
+    flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
+    flow.step3_data = {CONF_MODEL_NAME: "qwen3"}
+
+    result = await flow.async_step_advanced(
+        {
+            CONVERSATION_SECTION_KEY: {
+                CONF_CONTROL_HA: True,
+                CONF_RESPONSE_MODE: "default",
+                CONF_FOLLOW_UP_PHRASES: "Anything else?",
+                CONF_END_WORDS: "stop",
+                CONF_CLEAN_RESPONSES: True,
+            },
+            PERFORMANCE_SECTION_KEY: {
+                CONF_TEMPERATURE: 0.4,
+                CONF_MAX_TOKENS: 2048,
+                CONF_MAX_HISTORY: 8,
+                CONF_CONTEXT_MODE: "standard",
+                CONF_MAX_ITERATIONS: 6,
+                CONF_TIMEOUT: 45,
+                CONF_DEBUG_MODE: False,
+                CONF_CHAT_LOG_MODE: True,
+            },
+            PROVIDER_SECTION_KEY: {
+                CONF_OLLAMA_NUM_CTX: 12288,
+                CONF_OLLAMA_KEEP_ALIVE: "30m",
+            },
+            TOOLS_SECTION_KEY: {
+                DISABLE_DEVICE_FIELD: True,
+            },
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mcp_server"
+    assert flow.step4_data[CONF_OLLAMA_NUM_CTX] == 12288
+    assert flow.step4_data[CONF_OLLAMA_KEEP_ALIVE] == "30m"
+    assert flow.step4_data[CONF_TEMPERATURE] == 0.4
+    assert flow.step4_data[CONF_CONTEXT_MODE] == "standard"
+    assert flow.step4_data[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
 
 
 async def test_shared_mcp_step_groups_context_discovery_and_tools(
@@ -953,7 +1056,7 @@ async def test_options_step_groups_profile_settings_into_sections(
     flow.handler = entry.entry_id
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.lmstudio.LMStudioProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_init()
@@ -985,7 +1088,7 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     flow.handler = entry.entry_id
 
     with patch(
-        "custom_components.mcp_assist.config_flow.fetch_models_from_lmstudio",
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
         AsyncMock(return_value=["qwen3"]),
     ):
         result = await flow.async_step_init()
@@ -1000,6 +1103,144 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     }
     assert CONF_OLLAMA_NUM_CTX not in _section_field_names(advanced_section)
     assert CONF_OLLAMA_KEEP_ALIVE not in _section_field_names(advanced_section)
+
+
+async def test_options_submit_preserves_provider_fields_from_sections(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Options flow should save provider-owned fields from the standard sectioned form."""
+    system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_LMSTUDIO_URL: "http://localhost:11434",
+        }
+    )
+    flow.handler = entry.entry_id
+
+    result = await flow.async_step_init(
+        {
+            PROFILE_SECTION_KEY: {CONF_PROFILE_NAME: "Updated Profile"},
+            CONNECTION_SECTION_KEY: {
+                CONF_LMSTUDIO_URL: "http://ollama.example.invalid:11434",
+            },
+            MODEL_SECTION_KEY: {CONF_MODEL_NAME: "qwen3"},
+            PROMPTS_SECTION_KEY: {
+                CONF_SYSTEM_PROMPT: "Use short answers",
+                CONF_TECHNICAL_PROMPT: "Prefer entity ids",
+            },
+            CONVERSATION_SECTION_KEY: {
+                CONF_CONTROL_HA: True,
+                CONF_RESPONSE_MODE: "always",
+                CONF_FOLLOW_UP_PHRASES: "Anything else?",
+                CONF_END_WORDS: "stop",
+                CONF_CLEAN_RESPONSES: False,
+            },
+            PROVIDER_SECTION_KEY: {
+                CONF_OLLAMA_NUM_CTX: 16384,
+                CONF_OLLAMA_KEEP_ALIVE: "1h",
+            },
+            ADVANCED_SECTION_KEY: {
+                CONF_TEMPERATURE: 0.2,
+                CONF_MAX_TOKENS: 4096,
+                CONF_MAX_HISTORY: 12,
+                CONF_CONTEXT_MODE: "light",
+                CONF_MAX_ITERATIONS: 7,
+                CONF_TIMEOUT: 90,
+                CONF_DEBUG_MODE: True,
+                CONF_CHAT_LOG_MODE: False,
+            },
+            TOOLS_SECTION_KEY: {
+                DISABLE_DEVICE_FIELD: True,
+            },
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mcp_server"
+    assert flow.profile_options[CONF_LMSTUDIO_URL] == (
+        "http://ollama.example.invalid:11434"
+    )
+    assert flow.profile_options[CONF_MODEL_NAME] == "qwen3"
+    assert flow.profile_options[CONF_OLLAMA_NUM_CTX] == 16384
+    assert flow.profile_options[CONF_OLLAMA_KEEP_ALIVE] == "1h"
+    assert flow.profile_options[CONF_RESPONSE_MODE] == "always"
+    assert flow.profile_options[CONF_CONTEXT_MODE] == "light"
+    assert flow.profile_options[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
+
+
+async def test_options_step_for_ollama_uses_provider_default_url_when_missing(
+    hass, profile_entry_factory
+) -> None:
+    """Older Ollama entries without a stored URL should use Ollama's default."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA, CONF_LMSTUDIO_URL: ""}
+    )
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            key: value
+            for key, value in entry.data.items()
+            if key != CONF_LMSTUDIO_URL
+        },
+    )
+    flow.handler = entry.entry_id
+
+    fetch_models = AsyncMock(return_value=["qwen3"])
+    with patch(
+        "custom_components.mcp_assist.llm_providers.ollama.OllamaProvider.fetch_models",
+        fetch_models,
+    ):
+        result = await flow.async_step_init()
+
+    fetch_models.assert_awaited_once()
+    provider_values = fetch_models.await_args.args[1]
+    assert OllamaProvider.model_base_url(provider_values) == DEFAULT_OLLAMA_URL
+    assert OllamaProvider.model_base_url({CONF_LMSTUDIO_URL: ""}) == DEFAULT_OLLAMA_URL
+    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
+    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert CONF_LMSTUDIO_URL in _section_field_names(connection_section)
+
+
+async def test_options_step_for_openai_fetches_models_from_custom_base_url(
+    hass, profile_entry_factory
+) -> None:
+    """OpenAI-compatible options should discover models from the saved base URL."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        title="OpenAI - Test Profile",
+        unique_id="mcp_assist_openai_test_profile",
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_API_KEY: "sk-test",
+            CONF_LMSTUDIO_URL: "https://proxy.example.com/v1",
+        },
+    )
+    flow.handler = entry.entry_id
+
+    fetch_models = AsyncMock(return_value=["proxy-model"])
+    with patch(
+        "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
+        fetch_models,
+    ):
+        result = await flow.async_step_init()
+
+    fetch_models.assert_awaited_once()
+    assert fetch_models.await_args.args[1][CONF_API_KEY] == "sk-test"
+    assert (
+        fetch_models.await_args.args[1][CONF_LMSTUDIO_URL]
+        == "https://proxy.example.com/v1"
+    )
+    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
+    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert {CONF_LMSTUDIO_URL, CONF_API_KEY} <= _section_field_names(
+        connection_section
+    )
 
 
 async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_section(

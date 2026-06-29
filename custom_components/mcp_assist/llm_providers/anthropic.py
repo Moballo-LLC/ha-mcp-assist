@@ -5,9 +5,14 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
-from ..const import DEFAULT_MAX_TOKENS
+from ..const import (
+    CONF_API_KEY,
+    DEFAULT_MAX_TOKENS,
+    SERVER_TYPE_ANTHROPIC,
+)
 from .base import (
     LLMProvider,
+    ProviderConfigField,
     normalize_tool_call_arguments,
     parse_tool_arguments,
     stringify_tool_arguments,
@@ -21,6 +26,9 @@ class AnthropicProvider(LLMProvider):
 
     transport_name = "anthropic_messages"
     supports_streaming = False
+    provider_type = SERVER_TYPE_ANTHROPIC
+    provider_display_name = "Claude"
+    connection_fields = (ProviderConfigField(CONF_API_KEY, kind="password"),)
 
     def chat_url(self) -> str:
         """Return Anthropic's native Messages endpoint."""

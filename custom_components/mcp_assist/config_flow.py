@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import ipaddress
 import logging
 import re
 from typing import Any
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult, section
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -35,14 +32,17 @@ from .tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from .localization import get_language_instruction, get_follow_up_phrases, get_end_words
+from .llm_providers import (
+    ProviderConfigField,
+    get_llm_provider_class,
+    provider_selector_options,
+)
 
 from .const import (
     DOMAIN,
     SYSTEM_ENTRY_UNIQUE_ID,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
-    CONF_API_KEY,
-    CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_MCP_PORT,
     CONF_AUTO_START,
@@ -89,35 +89,19 @@ from .const import (
     CONF_MEMORY_MAX_ITEMS,
     CONF_MAX_ENTITIES_PER_DISCOVERY,
     DEFAULT_MAX_ENTITIES_PER_DISCOVERY,
-    CONF_OLLAMA_KEEP_ALIVE,
-    CONF_OLLAMA_NUM_CTX,
     CONF_FOLLOW_UP_PHRASES,
     CONF_END_WORDS,
     CONF_CLEAN_RESPONSES,
     CONF_TIMEOUT,
-    SERVER_TYPE_LMSTUDIO,
-    SERVER_TYPE_LLAMACPP,
-    SERVER_TYPE_OLLAMA,
-    SERVER_TYPE_OPENAI,
-    SERVER_TYPE_GEMINI,
-    SERVER_TYPE_ANTHROPIC,
-    SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_OPENCLAW,
-    SERVER_TYPE_VLLM,
     DEFAULT_SERVER_TYPE,
-    DEFAULT_LMSTUDIO_URL,
-    DEFAULT_LLAMACPP_URL,
-    DEFAULT_OLLAMA_URL,
     CONF_OPENCLAW_HOST,
     CONF_OPENCLAW_PORT,
     CONF_OPENCLAW_TOKEN,
     CONF_OPENCLAW_USE_SSL,
-    CONF_OPENCLAW_SESSION_KEY,
     DEFAULT_OPENCLAW_HOST,
     DEFAULT_OPENCLAW_PORT,
     DEFAULT_OPENCLAW_USE_SSL,
-    DEFAULT_OPENCLAW_SESSION_KEY,
-    DEFAULT_VLLM_URL,
     DEFAULT_MCP_PORT,
     DEFAULT_MODEL_NAME,
     DEFAULT_SYSTEM_PROMPT,
@@ -161,8 +145,6 @@ from .const import (
     DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
     DEFAULT_MEMORY_MAX_ITEMS,
-    DEFAULT_OLLAMA_KEEP_ALIVE,
-    DEFAULT_OLLAMA_NUM_CTX,
     DEFAULT_FOLLOW_UP_PHRASES,
     DEFAULT_END_WORDS,
     DEFAULT_CLEAN_RESPONSES,
@@ -174,8 +156,6 @@ from .const import (
     TOOL_FAMILY_MEMORY,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
-    OPENAI_BASE_URL,
-    OPENROUTER_BASE_URL,
     parse_llm_api_allowlist,
 )
 
@@ -237,6 +217,84 @@ def _context_mode_selector() -> SelectSelector:
             mode=SelectSelectorMode.DROPDOWN,
         )
     )
+
+
+def _provider_display_name(server_type: str) -> str:
+    """Return the user-facing provider display name."""
+    return get_llm_provider_class(server_type).config_display_name()
+
+
+def _provider_default_url(server_type: str) -> str:
+    """Return the default URL for providers that use a configurable endpoint."""
+    return str(get_llm_provider_class(server_type).default_base_url or "")
+
+
+def _provider_field_default(
+    field: ProviderConfigField,
+    current_values: dict[str, Any] | None = None,
+    options: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+) -> Any:
+    """Resolve a provider field default from in-progress, option, data, then spec."""
+    default = field.default
+    if options is not None or data is not None:
+        default = (options or {}).get(field.key, (data or {}).get(field.key, default))
+    return _get_form_value(current_values, field.key, default)
+
+
+def _provider_field_marker(
+    field: ProviderConfigField,
+    current_values: dict[str, Any] | None = None,
+    options: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+) -> vol.Required | vol.Optional:
+    """Build a voluptuous marker for a provider-owned field."""
+    default = _provider_field_default(field, current_values, options, data)
+    marker = vol.Required if field.required else vol.Optional
+    if default is None:
+        return marker(field.key)
+    return marker(field.key, default=default)
+
+
+def _provider_field_validator(field: ProviderConfigField) -> Any:
+    """Build a selector or validator for a provider-owned field."""
+    if field.kind == "password":
+        return TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+    if field.kind == "boolean":
+        return BooleanSelector()
+    if field.kind == "integer":
+        validator: Any = vol.Coerce(int)
+        if field.minimum is not None or field.maximum is not None:
+            validator = vol.All(
+                validator,
+                vol.Range(min=field.minimum, max=field.maximum),
+            )
+        return validator
+    return str
+
+
+def _build_provider_field_schema_items(
+    fields: tuple[ProviderConfigField, ...],
+    current_values: dict[str, Any] | None = None,
+    options: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+) -> dict[Any, Any]:
+    """Build schema items for provider-owned fields."""
+    return {
+        _provider_field_marker(field, current_values, options, data): (
+            _provider_field_validator(field)
+        )
+        for field in fields
+    }
+
+
+def _merge_provider_values(*sources: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge profile/config values for provider hooks."""
+    merged: dict[str, Any] = {}
+    for source in sources:
+        if source:
+            merged.update(source)
+    return merged
 
 
 def _get_default_system_prompt(hass: HomeAssistant) -> str:
@@ -997,182 +1055,6 @@ def _needs_prompt_followup(
     return False
 
 
-async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]:
-    """Fetch available models from local inference server (LM Studio/Ollama)."""
-    _LOGGER.info("🌐 FETCH: Starting model fetch from %s", url)
-    try:
-        # Small delay to ensure server is ready
-        await asyncio.sleep(0.5)
-
-        timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info(
-                "📡 FETCH: Sending request to %s/v1/models",
-                _redacted_log_snippet(url),
-            )
-            async with session.get(f"{url}/v1/models") as resp:
-                _LOGGER.info("📥 FETCH: Got response with status %d", resp.status)
-                if resp.status != 200:
-                    _LOGGER.warning("⚠️ FETCH: Non-200 status, returning empty list")
-                    return []
-
-                models = await resp.json()
-                model_ids = [m.get("id", "") for m in models.get("data", [])]
-                sorted_models = sorted(model_ids) if model_ids else []
-                _LOGGER.info(
-                    "✨ FETCH: Returning %d sorted models: %s",
-                    len(sorted_models),
-                    sorted_models,
-                )
-                return sorted_models
-    except Exception as err:
-        _LOGGER.error(
-            "💥 FETCH: Exception during fetch: %s",
-            _redacted_log_snippet(err),
-        )
-        return []
-
-
-async def fetch_models_from_openai(
-    hass: HomeAssistant,
-    api_key: str,
-    base_url: str = OPENAI_BASE_URL
-) -> list[str]:
-    """Fetch available models from OpenAI API."""
-    _LOGGER.info("🌐 FETCH: Starting OpenAI model fetch")
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        # Only include Authorization header if API key looks valid
-        # Some custom OpenAI-compatible services don't require authentication
-        if api_key and len(api_key) > 5 and api_key.lower() not in ["none", "null", "fake", "na", "n/a"]:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info("📡 FETCH: Requesting OpenAI models")
-            async with session.get(
-                f"{base_url}/v1/models", headers=headers
-            ) as resp:
-                _LOGGER.info("📥 FETCH: OpenAI response status %d", resp.status)
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.warning(
-                        "⚠️ FETCH: OpenAI API error %d: %s",
-                        resp.status,
-                        _redacted_log_snippet(error_text),
-                    )
-                    return []
-
-                data = await resp.json()
-                # Filter for chat models only (exclude embeddings, whisper, etc.)
-                all_models = [m.get("id", "") for m in data.get("data", [])]
-
-                # Only filter for GPT models when using official OpenAI URL
-                # Custom OpenAI-compatible services may use different naming schemes
-                if base_url == OPENAI_BASE_URL:
-                    chat_models = [m for m in all_models if m.startswith("gpt-")]
-                else:
-                    # For custom URLs, return all models (user's service defines what's available)
-                    chat_models = all_models
-
-                sorted_models = sorted(chat_models, reverse=True) if chat_models else []
-                _LOGGER.info("✨ FETCH: Found %d OpenAI chat models", len(sorted_models))
-                return sorted_models
-    except Exception as err:
-        _LOGGER.error("💥 FETCH: OpenAI fetch failed: %s", _redacted_log_snippet(err))
-        return []
-
-
-async def fetch_models_from_gemini(hass: HomeAssistant, api_key: str) -> list[str]:
-    """Fetch available models from Gemini API."""
-    _LOGGER.info("🌐 FETCH: Starting Gemini model fetch")
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info("📡 FETCH: Requesting Gemini models")
-            # Gemini uses native API for model listing, not OpenAI-compatible endpoint
-            # API key goes in query parameter for native API
-            async with session.get(
-                f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-            ) as resp:
-                _LOGGER.info("📥 FETCH: Gemini response status %d", resp.status)
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.warning(
-                        "⚠️ FETCH: Gemini API error %d: %s",
-                        resp.status,
-                        _redacted_log_snippet(error_text),
-                    )
-                    return []
-
-                data = await resp.json()
-                # Gemini native API response format: {"models": [{"name": "models/gemini-..."}]}
-                all_models = []
-                for model in data.get("models", []):
-                    # Extract model ID from "models/gemini-pro" format
-                    model_name = model.get("name", "")
-                    if model_name.startswith("models/"):
-                        model_id = model_name.replace("models/", "")
-                        all_models.append(model_id)
-
-                # Filter for gemini models only
-                gemini_models = [m for m in all_models if "gemini" in m.lower()]
-                sorted_models = (
-                    sorted(gemini_models, reverse=True) if gemini_models else []
-                )
-                _LOGGER.info("✨ FETCH: Found %d Gemini models", len(sorted_models))
-                return sorted_models
-    except Exception as err:
-        _LOGGER.error("💥 FETCH: Gemini fetch failed: %s", _redacted_log_snippet(err))
-        return []
-
-
-async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> list[str]:
-    """Fetch available models from OpenRouter API."""
-    _LOGGER.info("🌐 FETCH: Starting OpenRouter model fetch")
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://github.com/Moballo-LLC/ha-mcp-assist",
-            "X-Title": "MCP Assist for Home Assistant",
-        }
-
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info("📡 FETCH: Requesting OpenRouter models")
-            async with session.get(
-                f"{OPENROUTER_BASE_URL}/v1/models", headers=headers
-            ) as resp:
-                _LOGGER.info("📥 FETCH: OpenRouter response status %d", resp.status)
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.warning(
-                        "⚠️ FETCH: OpenRouter API error %d: %s",
-                        resp.status,
-                        _redacted_log_snippet(error_text),
-                    )
-                    return []
-
-                data = await resp.json()
-                # OpenRouter returns models in OpenAI-compatible format
-                all_models = [m.get("id", "") for m in data.get("data", [])]
-                # Filter out empty strings and sort
-                models = [m for m in all_models if m]
-                sorted_models = sorted(models) if models else []
-                _LOGGER.info("✨ FETCH: Found %d OpenRouter models", len(sorted_models))
-                return sorted_models
-    except Exception as err:
-        _LOGGER.error(
-            "💥 FETCH: OpenRouter fetch failed: %s",
-            _redacted_log_snippet(err),
-        )
-        return []
-
-
 def validate_allowed_ips(allowed_ips_str: str) -> tuple[bool, str]:
     """Validate comma-separated list of IP addresses and CIDR ranges.
 
@@ -1203,17 +1085,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PROFILE_NAME): str,
         vol.Required(CONF_SERVER_TYPE, default=DEFAULT_SERVER_TYPE): SelectSelector(
             SelectSelectorConfig(
-                options=[
-                    {"value": "lmstudio", "label": "LM Studio"},
-                    {"value": "llamacpp", "label": "llama.cpp"},
-                    {"value": "ollama", "label": "Ollama"},
-                    {"value": "openai", "label": "OpenAI"},
-                    {"value": "gemini", "label": "Google Gemini"},
-                    {"value": "anthropic", "label": "Anthropic (Claude)"},
-                    {"value": "openrouter", "label": "OpenRouter"},
-                    {"value": "openclaw", "label": "OpenClaw"},
-                    {"value": "vllm", "label": "vLLM"},
-                ],
+                options=provider_selector_options(),
                 mode=SelectSelectorMode.LIST,
             )
         ),
@@ -1226,59 +1098,6 @@ STEP_MCP_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_AUTO_START, default=True): bool,
     }
 )
-
-
-async def validate_lmstudio_connection(
-    hass: HomeAssistant, data: dict[str, Any]
-) -> dict[str, Any]:
-    """Validate LM Studio connection."""
-    url = data[CONF_LMSTUDIO_URL].rstrip("/")
-    model_name = data[CONF_MODEL_NAME]
-
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            # Test models endpoint
-            async with session.get(f"{url}/v1/models") as resp:
-                if resp.status != 200:
-                    raise CannotConnect(
-                        f"LM Studio not responding (status {resp.status})"
-                    )
-
-                models = await resp.json()
-                model_ids = [m.get("id", "") for m in models.get("data", [])]
-
-                if not model_ids:
-                    raise NoModelsLoaded("No models loaded in LM Studio")
-
-                # Check if specified model exists
-                if model_name not in model_ids:
-                    _LOGGER.warning(
-                        "Model '%s' not found. Available models: %s",
-                        model_name,
-                        model_ids,
-                    )
-
-            # Test chat completions endpoint
-            test_payload = {
-                "model": model_name,
-                "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 1,
-                "stream": False,
-            }
-
-            async with session.post(
-                f"{url}/v1/chat/completions", json=test_payload
-            ) as resp:
-                if resp.status != 200:
-                    raise InvalidModel(
-                        f"Model '{model_name}' not working (status {resp.status})"
-                    )
-
-    except aiohttp.ClientError as err:
-        raise CannotConnect(f"Failed to connect to LM Studio: {err}") from err
-
-    return {"title": f"LM Studio ({model_name})"}
 
 
 class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -1331,61 +1150,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get server type from step 1 to build dynamic schema
         server_type = self.step1_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
-
-        # Build schema based on server type
-        if server_type == SERVER_TYPE_OPENCLAW:
-            # OpenClaw Gateway - host, port, token, SSL
-            server_schema = vol.Schema(
-                {
-                    vol.Required(CONF_OPENCLAW_HOST, default=DEFAULT_OPENCLAW_HOST): str,
-                    vol.Required(CONF_OPENCLAW_PORT, default=DEFAULT_OPENCLAW_PORT): vol.Coerce(int),
-                    vol.Required(CONF_OPENCLAW_TOKEN): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                    vol.Required(CONF_OPENCLAW_USE_SSL, default=DEFAULT_OPENCLAW_USE_SSL): BooleanSelector(),
-                }
-            )
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
-            # Local servers - show URL field
-            if server_type == SERVER_TYPE_OLLAMA:
-                default_url = DEFAULT_OLLAMA_URL
-            elif server_type == SERVER_TYPE_LLAMACPP:
-                default_url = DEFAULT_LLAMACPP_URL
-            elif server_type == SERVER_TYPE_VLLM:
-                default_url = DEFAULT_VLLM_URL
-            else:
-                default_url = DEFAULT_LMSTUDIO_URL
-
-            server_schema = vol.Schema(
-                {
-                    vol.Required(CONF_LMSTUDIO_URL, default=default_url): str,
-                }
-            )
-        elif server_type == SERVER_TYPE_OPENAI:
-            # OpenAI - hybrid like OpenClaw (URL + API key)
-            # Pre-fill with official OpenAI URL but allow users to edit for custom endpoints
-            server_schema = vol.Schema(
-                {
-                    vol.Required(CONF_LMSTUDIO_URL, default=OPENAI_BASE_URL): str,
-                    vol.Required(CONF_API_KEY): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                }
-            )
-        else:
-            # Other cloud providers (Gemini, Anthropic, OpenRouter) - API key only
-            server_schema = vol.Schema(
-                {
-                    vol.Required(CONF_API_KEY): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                }
-            )
+        provider_class = get_llm_provider_class(server_type)
+        server_schema = vol.Schema(
+            _build_provider_field_schema_items(provider_class.connection_fields)
+        )
 
         return self.async_show_form(
             step_id="server",
@@ -1460,6 +1228,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get server type to determine model source
         server_type = self.step1_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_class = get_llm_provider_class(server_type)
         default_system_prompt = _get_default_system_prompt(self.hass)
 
         if user_input is not None:
@@ -1476,60 +1245,29 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         models = []
         current_values = getattr(self, "step3_data", {})
 
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if not provider_class.uses_config_model_step:
             self.step3_data = {
-                CONF_MODEL_NAME: "main",
-                CONF_SYSTEM_PROMPT: "",
-                CONF_TECHNICAL_PROMPT: "",
+                CONF_MODEL_NAME: provider_class.default_config_model_name,
+                CONF_SYSTEM_PROMPT: provider_class.default_config_system_prompt,
+                CONF_TECHNICAL_PROMPT: provider_class.default_config_technical_prompt,
                 CONF_SYSTEM_PROMPT_MODE: PROMPT_MODE_DEFAULT,
                 CONF_TECHNICAL_PROMPT_MODE: PROMPT_MODE_DEFAULT,
             }
             return await self.async_step_advanced()
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
-            # Local servers - fetch models from API
-            server_url = self.step2_data.get(
-                CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL
-            ).rstrip("/")
-            _LOGGER.debug("Attempting to fetch models from %s", server_url)
-            models = await fetch_models_from_lmstudio(self.hass, server_url)
-            _LOGGER.debug("Fetched %d models: %s", len(models), models)
-            # Show error if fetch failed
-            if not models:
-                errors["base"] = "cannot_connect"
-        elif server_type == SERVER_TYPE_OPENAI:
-            # OpenAI - fetch models from API with authentication
-            api_key = self.step2_data.get(CONF_API_KEY, "")
-            # Get custom URL from step 2 (uses same CONF_LMSTUDIO_URL field as local servers)
-            base_url = self.step2_data.get(CONF_LMSTUDIO_URL, OPENAI_BASE_URL).rstrip("/")
-            _LOGGER.debug("Fetching OpenAI models from %s", base_url)
-            models = await fetch_models_from_openai(self.hass, api_key, base_url)
-            _LOGGER.debug("Fetched %d OpenAI models: %s", len(models), models)
-            # Show error if fetch failed
-            if not models:
-                errors["base"] = "invalid_api_key"
-        elif server_type == SERVER_TYPE_GEMINI:
-            # Gemini - fetch models from API with authentication
-            api_key = self.step2_data.get(CONF_API_KEY, "")
-            _LOGGER.debug("Fetching Gemini models with API key")
-            models = await fetch_models_from_gemini(self.hass, api_key)
-            _LOGGER.debug("Fetched %d Gemini models: %s", len(models), models)
-            # Show error if fetch failed
-            if not models:
-                errors["base"] = "invalid_api_key"
-        elif server_type == SERVER_TYPE_OPENROUTER:
-            # OpenRouter - fetch models from API with authentication
-            api_key = self.step2_data.get(CONF_API_KEY, "")
-            _LOGGER.debug("Fetching OpenRouter models with API key")
-            models = await fetch_models_from_openrouter(self.hass, api_key)
-            _LOGGER.debug("Fetched %d OpenRouter models: %s", len(models), models)
-            # Show error if fetch failed
-            if not models:
-                errors["base"] = "invalid_api_key"
+        else:
+            provider_values = _merge_provider_values(
+                self.step1_data,
+                self.step2_data,
+                current_values,
+            )
+            models = await provider_class.fetch_models(self.hass, provider_values)
+            _LOGGER.debug(
+                "Fetched %d %s models",
+                len(models),
+                provider_class.config_display_name(),
+            )
+            if provider_class.model_fetch_error and not models:
+                errors["base"] = provider_class.model_fetch_error
 
         # Build dynamic schema based on whether models were fetched
         current_model = current_values.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)
@@ -1589,6 +1327,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get server type to determine which fields to show
         server_type = self.step1_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_class = get_llm_provider_class(server_type)
 
         if user_input is not None:
             user_input = _flatten_section_values(
@@ -1601,7 +1340,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _apply_profile_tool_disables(user_input, built_in_specs)
 
             # For OpenClaw, set defaults for LLM-specific fields (not shown in UI)
-            if server_type == SERVER_TYPE_OPENCLAW:
+            if not provider_class.uses_config_model_step:
                 user_input[CONF_TEMPERATURE] = DEFAULT_TEMPERATURE
                 user_input[CONF_MAX_TOKENS] = DEFAULT_MAX_TOKENS
                 user_input[CONF_MAX_HISTORY] = DEFAULT_MAX_HISTORY
@@ -1753,18 +1492,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
                     )
 
-                    server_display_map = {
-                        SERVER_TYPE_LMSTUDIO: "LM Studio",
-                        SERVER_TYPE_LLAMACPP: "llama.cpp",
-                        SERVER_TYPE_OLLAMA: "Ollama",
-                        SERVER_TYPE_OPENAI: "OpenAI",
-                        SERVER_TYPE_GEMINI: "Gemini",
-                        SERVER_TYPE_ANTHROPIC: "Claude",
-                        SERVER_TYPE_OPENROUTER: "OpenRouter",
-                        SERVER_TYPE_OPENCLAW: "OpenClaw",
-                        SERVER_TYPE_VLLM: "vLLM",
-                    }
-                    server_display = server_display_map.get(server_type, "LM Studio")
+                    server_display = _provider_display_name(server_type)
 
                     unique_id = f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
                     await self.async_set_unique_id(unique_id)
@@ -1775,11 +1503,14 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         data=combined_data,
                     )
 
-        # Gemini requires temperature=1.0 for optimal performance (Google's guidance)
-        default_temp = 1.0 if server_type == SERVER_TYPE_GEMINI else DEFAULT_TEMPERATURE
+        default_temp = (
+            provider_class.default_temperature
+            if provider_class.default_temperature is not None
+            else DEFAULT_TEMPERATURE
+        )
 
         # Build schema based on server type
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if not provider_class.uses_config_model_step:
             advanced_schema_dict = {
                 CONVERSATION_SECTION_KEY: _build_conversation_section(
                     {
@@ -1823,12 +1554,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }
                 ),
                 PROVIDER_SECTION_KEY: _build_provider_section(
-                    {
-                        vol.Optional(
-                            CONF_OPENCLAW_SESSION_KEY,
-                            default=DEFAULT_OPENCLAW_SESSION_KEY,
-                        ): str,
-                    }
+                    _build_provider_field_schema_items(
+                        provider_class.provider_options_fields
+                    )
                 ),
             }
         else:
@@ -1886,18 +1614,12 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             }
 
-            # Add Ollama-specific fields in correct position (after Max Tokens)
-            if server_type == SERVER_TYPE_OLLAMA:
+            provider_schema_items = _build_provider_field_schema_items(
+                provider_class.provider_options_fields
+            )
+            if provider_schema_items:
                 advanced_schema_dict[PROVIDER_SECTION_KEY] = _build_provider_section(
-                    {
-                        vol.Optional(
-                            CONF_OLLAMA_NUM_CTX, default=DEFAULT_OLLAMA_NUM_CTX
-                        ): vol.Coerce(int),
-                        vol.Optional(
-                            CONF_OLLAMA_KEEP_ALIVE,
-                            default=DEFAULT_OLLAMA_KEEP_ALIVE,
-                        ): str,
-                    }
+                    provider_schema_items
                 )
 
         advanced_schema_dict[TOOLS_SECTION_KEY] = _build_profile_tools_section(
@@ -2002,18 +1724,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 profile_name = combined_data[CONF_PROFILE_NAME]
                 server_type = combined_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
 
-                server_display_map = {
-                    SERVER_TYPE_LMSTUDIO: "LM Studio",
-                    SERVER_TYPE_LLAMACPP: "llama.cpp",
-                    SERVER_TYPE_OLLAMA: "Ollama",
-                    SERVER_TYPE_OPENAI: "OpenAI",
-                    SERVER_TYPE_GEMINI: "Gemini",
-                    SERVER_TYPE_ANTHROPIC: "Claude",
-                    SERVER_TYPE_OPENROUTER: "OpenRouter",
-                    SERVER_TYPE_OPENCLAW: "OpenClaw",
-                    SERVER_TYPE_VLLM: "vLLM",
-                }
-                server_display = server_display_map.get(server_type, "LM Studio")
+                server_display = _provider_display_name(server_type)
 
                 unique_id = (
                     f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
@@ -2250,6 +1961,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
         errors: dict[str, str] = {}
         server_type = self.config_entry.data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+        provider_class = get_llm_provider_class(server_type)
         default_system_prompt = _get_default_system_prompt(self.hass)
         built_in_specs = await _async_load_builtin_tool_toggle_specs(self.hass)
 
@@ -2312,82 +2024,9 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             options.get(CONF_MODEL_NAME, data.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)),
         )
 
-        # OpenClaw doesn't have /v1/models - skip model fetching
-        if server_type == SERVER_TYPE_OPENCLAW:
-            # Don't fetch models, don't show model field
-            pass
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
-            # Local servers - fetch from URL
-            server_url = _get_form_value(
-                current_values,
-                CONF_LMSTUDIO_URL,
-                options.get(
-                    CONF_LMSTUDIO_URL, data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL)
-                ),
-            ).rstrip("/")
-            _LOGGER.info(
-                f"🔍 OPTIONS: Attempting to fetch models from {server_type} at {server_url}"
-            )
-            try:
-                models = await fetch_models_from_lmstudio(self.hass, server_url)
-                _LOGGER.info(f"✅ OPTIONS: Successfully fetched {len(models)} models")
-            except Exception as err:
-                _LOGGER.error(f"❌ OPTIONS: Failed to fetch models: {err}")
-        elif server_type == SERVER_TYPE_OPENAI:
-            # OpenAI - fetch from API
-            api_key = _get_form_value(
-                current_values,
-                CONF_API_KEY,
-                options.get(CONF_API_KEY, data.get(CONF_API_KEY, "")),
-            )
-            if api_key:
-                _LOGGER.info("🔍 OPTIONS: Attempting to fetch models from OpenAI")
-                try:
-                    models = await fetch_models_from_openai(self.hass, api_key)
-                    _LOGGER.info(
-                        f"✅ OPTIONS: Successfully fetched {len(models)} OpenAI models"
-                    )
-                except Exception as err:
-                    _LOGGER.error(f"❌ OPTIONS: Failed to fetch OpenAI models: {err}")
-        elif server_type == SERVER_TYPE_GEMINI:
-            # Gemini - fetch from API
-            api_key = _get_form_value(
-                current_values,
-                CONF_API_KEY,
-                options.get(CONF_API_KEY, data.get(CONF_API_KEY, "")),
-            )
-            if api_key:
-                _LOGGER.info("🔍 OPTIONS: Attempting to fetch models from Gemini")
-                try:
-                    models = await fetch_models_from_gemini(self.hass, api_key)
-                    _LOGGER.info(
-                        f"✅ OPTIONS: Successfully fetched {len(models)} Gemini models"
-                    )
-                except Exception as err:
-                    _LOGGER.error(f"❌ OPTIONS: Failed to fetch Gemini models: {err}")
-        elif server_type == SERVER_TYPE_OPENROUTER:
-            # OpenRouter - fetch from API
-            api_key = _get_form_value(
-                current_values,
-                CONF_API_KEY,
-                options.get(CONF_API_KEY, data.get(CONF_API_KEY, "")),
-            )
-            if api_key:
-                _LOGGER.info("🔍 OPTIONS: Attempting to fetch models from OpenRouter")
-                try:
-                    models = await fetch_models_from_openrouter(self.hass, api_key)
-                    _LOGGER.info(
-                        f"✅ OPTIONS: Successfully fetched {len(models)} OpenRouter models"
-                    )
-                except Exception as err:
-                    _LOGGER.error(
-                        f"❌ OPTIONS: Failed to fetch OpenRouter models: {err}"
-                    )
+        if provider_class.uses_config_model_step:
+            provider_values = _merge_provider_values(data, options, current_values)
+            models = await provider_class.fetch_models(self.hass, provider_values)
 
         # Build model selector based on whether models were fetched
         if models:
@@ -2438,122 +2077,23 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             default_prompt=DEFAULT_TECHNICAL_PROMPT,
         )
 
-        connection_schema_items: dict[Any, Any] = {}
-        if server_type == SERVER_TYPE_OPENCLAW:
-            connection_schema_items[
-                vol.Required(
-                    CONF_OPENCLAW_HOST,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_OPENCLAW_HOST,
-                        options.get(
-                            CONF_OPENCLAW_HOST,
-                            data.get(CONF_OPENCLAW_HOST, DEFAULT_OPENCLAW_HOST),
-                        ),
-                    ),
-                )
-            ] = str
-            connection_schema_items[
-                vol.Required(
-                    CONF_OPENCLAW_PORT,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_OPENCLAW_PORT,
-                        options.get(
-                            CONF_OPENCLAW_PORT,
-                            data.get(CONF_OPENCLAW_PORT, DEFAULT_OPENCLAW_PORT),
-                        ),
-                    ),
-                )
-            ] = vol.Coerce(int)
-            connection_schema_items[
-                vol.Required(
-                    CONF_OPENCLAW_TOKEN,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_OPENCLAW_TOKEN,
-                        options.get(
-                            CONF_OPENCLAW_TOKEN,
-                            data.get(CONF_OPENCLAW_TOKEN, ""),
-                        ),
-                    ),
-                )
-            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
-            connection_schema_items[
-                vol.Required(
-                    CONF_OPENCLAW_USE_SSL,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_OPENCLAW_USE_SSL,
-                        options.get(
-                            CONF_OPENCLAW_USE_SSL,
-                            data.get(
-                                CONF_OPENCLAW_USE_SSL,
-                                DEFAULT_OPENCLAW_USE_SSL,
-                            ),
-                        ),
-                    ),
-                )
-            ] = BooleanSelector()
-        elif server_type in [
-            SERVER_TYPE_LMSTUDIO,
-            SERVER_TYPE_LLAMACPP,
-            SERVER_TYPE_OLLAMA,
-            SERVER_TYPE_VLLM,
-        ]:
-            server_url = options.get(
-                CONF_LMSTUDIO_URL, data.get(CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL)
-            )
-            connection_schema_items[
-                vol.Required(
-                    CONF_LMSTUDIO_URL,
-                    default=_get_form_value(
-                        current_values, CONF_LMSTUDIO_URL, server_url
-                    ),
-                )
-            ] = str
-        elif server_type == SERVER_TYPE_OPENAI:
-            # OpenAI - hybrid (URL + API key)
-            server_url = options.get(
-                CONF_LMSTUDIO_URL,
-                data.get(CONF_LMSTUDIO_URL, OPENAI_BASE_URL)
-            )
-            connection_schema_items[
-                vol.Required(
-                    CONF_LMSTUDIO_URL,
-                    default=_get_form_value(
-                        current_values, CONF_LMSTUDIO_URL, server_url
-                    ),
-                )
-            ] = str
-
-            api_key = options.get(CONF_API_KEY, data.get(CONF_API_KEY, ""))
-            connection_schema_items[
-                vol.Required(
-                    CONF_API_KEY,
-                    default=_get_form_value(current_values, CONF_API_KEY, api_key),
-                )
-            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
-        else:
-            # Other cloud providers (Gemini, Anthropic, OpenRouter) - API key only
-            api_key = options.get(CONF_API_KEY, data.get(CONF_API_KEY, ""))
-            connection_schema_items[
-                vol.Required(
-                    CONF_API_KEY,
-                    default=_get_form_value(current_values, CONF_API_KEY, api_key),
-                )
-            ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+        connection_schema_items = _build_provider_field_schema_items(
+            provider_class.connection_fields,
+            current_values,
+            options,
+            data,
+        )
 
         schema_dict[CONNECTION_SECTION_KEY] = _build_connection_section(
             connection_schema_items
         )
 
-        if server_type != SERVER_TYPE_OPENCLAW:
+        if provider_class.uses_config_model_step:
             schema_dict[MODEL_SECTION_KEY] = _build_model_section(
                 current_model, model_selector
             )
 
-        if server_type != SERVER_TYPE_OPENCLAW:
+        if provider_class.uses_config_model_step:
             schema_dict[PROMPTS_SECTION_KEY] = _build_prompt_section(
                 include_system_prompt=True,
                 system_prompt_value=system_prompt_suggestion,
@@ -2617,22 +2157,12 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ): bool,
                 }
             )
-            provider_schema_items = {
-                vol.Optional(
-                    CONF_OPENCLAW_SESSION_KEY,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_OPENCLAW_SESSION_KEY,
-                        options.get(
-                            CONF_OPENCLAW_SESSION_KEY,
-                            data.get(
-                                CONF_OPENCLAW_SESSION_KEY,
-                                DEFAULT_OPENCLAW_SESSION_KEY,
-                            ),
-                        ),
-                    ),
-                ): str,
-            }
+            provider_schema_items = _build_provider_field_schema_items(
+                provider_class.provider_options_fields,
+                current_values,
+                options,
+                data,
+            )
             advanced_schema_items: dict[Any, Any] = {
                 vol.Required(
                     CONF_TIMEOUT,
@@ -2833,37 +2363,12 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ): bool,
             }
-            if server_type == SERVER_TYPE_OLLAMA:
-                provider_schema_items = {
-                    vol.Optional(
-                        CONF_OLLAMA_NUM_CTX,
-                        default=_get_form_value(
-                            current_values,
-                            CONF_OLLAMA_NUM_CTX,
-                            options.get(
-                                CONF_OLLAMA_NUM_CTX,
-                                data.get(
-                                    CONF_OLLAMA_NUM_CTX,
-                                    DEFAULT_OLLAMA_NUM_CTX,
-                                ),
-                            ),
-                        ),
-                    ): vol.Coerce(int),
-                    vol.Optional(
-                        CONF_OLLAMA_KEEP_ALIVE,
-                        default=_get_form_value(
-                            current_values,
-                            CONF_OLLAMA_KEEP_ALIVE,
-                            options.get(
-                                CONF_OLLAMA_KEEP_ALIVE,
-                                data.get(
-                                    CONF_OLLAMA_KEEP_ALIVE,
-                                    DEFAULT_OLLAMA_KEEP_ALIVE,
-                                ),
-                            ),
-                        ),
-                    ): str,
-                }
+            provider_schema_items = _build_provider_field_schema_items(
+                provider_class.provider_options_fields,
+                current_values,
+                options,
+                data,
+            )
 
         if provider_schema_items:
             schema_dict[PROVIDER_SECTION_KEY] = _build_provider_section(
@@ -2987,18 +2492,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         server_type = self.config_entry.data.get(
                             CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
                         )
-                        server_display_map = {
-                            SERVER_TYPE_LMSTUDIO: "LM Studio",
-                            SERVER_TYPE_LLAMACPP: "llama.cpp",
-                            SERVER_TYPE_OLLAMA: "Ollama",
-                            SERVER_TYPE_OPENAI: "OpenAI",
-                            SERVER_TYPE_GEMINI: "Gemini",
-                            SERVER_TYPE_ANTHROPIC: "Claude",
-                            SERVER_TYPE_OPENROUTER: "OpenRouter",
-                            SERVER_TYPE_OPENCLAW: "OpenClaw",
-                            SERVER_TYPE_VLLM: "vLLM",
-                        }
-                        server_display = server_display_map.get(server_type, "LM Studio")
+                        server_display = _provider_display_name(server_type)
                         self.hass.config_entries.async_update_entry(
                             self.config_entry,
                             title=f"{server_display} - {new_profile_name}",
@@ -3327,15 +2821,3 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class NoModelsLoaded(HomeAssistantError):
-    """Error to indicate no models are loaded."""
-
-
-class InvalidModel(HomeAssistantError):
-    """Error to indicate the model is invalid."""

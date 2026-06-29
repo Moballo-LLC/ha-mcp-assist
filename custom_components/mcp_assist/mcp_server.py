@@ -101,9 +101,10 @@ from .domain_registry import (
     TYPE_CONTROLLABLE,
     TYPE_READ_ONLY,
 )
-from .provider_runtime import (
-    build_provider_auth_headers,
-    resolve_provider_runtime_config,
+from .llm_providers import (
+    LLMProvider,
+    build_provider_settings,
+    create_llm_provider,
 )
 from .tools.packages.recorder.history import RecorderToolsMixin
 from .tools.packages.response_service.calendar import CalendarToolsMixin
@@ -2090,28 +2091,15 @@ class MCPServer(
                     return entry
         return self.entry
 
-    def _get_model_provider_config(
-        self, context: dict[str, Any] | None
-    ) -> dict[str, Any]:
-        """Resolve the current profile's model/provider config for media tools."""
+    def _get_model_provider(self, context: dict[str, Any] | None) -> LLMProvider:
+        """Resolve the current profile's provider transport for media tools."""
         entry = self._resolve_profile_entry(context)
-        runtime_config = resolve_provider_runtime_config(entry)
-
-        return {
-            "entry": entry,
-            "server_type": runtime_config.server_type,
-            "model_name": runtime_config.model_name,
-            "api_key": runtime_config.api_key,
-            "timeout": runtime_config.timeout,
-            "base_url": runtime_config.base_url,
-        }
-
-    def _get_model_auth_headers(self, provider_config: dict[str, Any]) -> dict[str, str]:
-        """Build provider auth headers using the same rules as the conversation agent."""
-        return build_provider_auth_headers(
-            str(provider_config.get("server_type") or ""),
-            str(provider_config.get("api_key") or ""),
+        provider_settings = build_provider_settings(
+            entry,
+            max_tokens=0,
+            temperature=None,
         )
+        return create_llm_provider(provider_settings)
 
     async def tool_get_image(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch an image and return it as an MCP image content block."""
@@ -2711,15 +2699,14 @@ class MCPServer(
         context: dict[str, Any] | None,
     ) -> str:
         """Run image analysis through the active profile provider."""
-        provider_config = self._get_model_provider_config(context)
-        server_type = provider_config["server_type"]
-        timeout = aiohttp.ClientTimeout(total=provider_config["timeout"])
-        headers = self._get_model_auth_headers(provider_config)
-        base_url = provider_config["base_url"]
+        provider = self._get_model_provider(context)
+        server_type = provider.server_type
+        timeout = aiohttp.ClientTimeout(total=provider.settings.timeout)
+        headers = provider.headers()
 
         if server_type == SERVER_TYPE_OLLAMA:
             payload = {
-                "model": provider_config["model_name"],
+                "model": provider.model_name,
                 "stream": False,
                 "messages": [
                     {
@@ -2729,7 +2716,7 @@ class MCPServer(
                     }
                 ],
             }
-            url = f"{base_url}/api/chat"
+            url = provider.chat_url()
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
@@ -2744,7 +2731,7 @@ class MCPServer(
             return str(data.get("message", {}).get("content") or "").strip()
 
         payload = {
-            "model": provider_config["model_name"],
+            "model": provider.model_name,
             "stream": False,
             "messages": [
                 {
@@ -2762,7 +2749,7 @@ class MCPServer(
                 }
             ],
         }
-        url = f"{base_url}/v1/chat/completions"
+        url = provider.chat_url()
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
@@ -2793,15 +2780,18 @@ class MCPServer(
         context: dict[str, Any] | None,
     ) -> tuple[bytes, str, dict[str, Any]]:
         """Generate an image through an OpenAI-compatible images API when supported."""
-        provider_config = self._get_model_provider_config(context)
-        server_type = provider_config["server_type"]
-        if server_type == SERVER_TYPE_OLLAMA:
+        provider = self._get_model_provider(context)
+        server_type = provider.server_type
+        try:
+            url = provider.image_generation_url()
+        except NotImplementedError as err:
             raise ValueError(
-                "Image generation is not supported for Ollama profiles through MCP Assist yet."
-            )
+                f"Image generation is not supported for {provider.display_name} "
+                "profiles through MCP Assist yet."
+            ) from err
 
         payload: dict[str, Any] = {
-            "model": provider_config["model_name"],
+            "model": provider.model_name,
             "prompt": prompt,
             "response_format": "b64_json",
         }
@@ -2814,9 +2804,8 @@ class MCPServer(
         if background:
             payload["background"] = background
 
-        timeout = aiohttp.ClientTimeout(total=provider_config["timeout"])
-        headers = self._get_model_auth_headers(provider_config)
-        url = f"{provider_config['base_url']}/v1/images/generations"
+        timeout = aiohttp.ClientTimeout(total=provider.settings.timeout)
+        headers = provider.headers()
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
@@ -2854,7 +2843,7 @@ class MCPServer(
         metadata = {
             "prompt": prompt,
             "provider": server_type,
-            "model": provider_config["model_name"],
+            "model": provider.model_name,
             "mime_type": mime_type,
             "size_bytes": len(image_bytes),
         }

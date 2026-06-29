@@ -2,29 +2,73 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
+    CONF_LMSTUDIO_URL,
+    CONF_OLLAMA_KEEP_ALIVE,
+    CONF_OLLAMA_NUM_CTX,
+    CONF_OPENCLAW_HOST,
+    CONF_OPENCLAW_PORT,
+    CONF_OPENCLAW_SESSION_KEY,
+    CONF_OPENCLAW_TOKEN,
+    CONF_OPENCLAW_USE_SSL,
+    DEFAULT_LLAMACPP_URL,
+    DEFAULT_LMSTUDIO_URL,
+    DEFAULT_OLLAMA_KEEP_ALIVE,
+    DEFAULT_OLLAMA_NUM_CTX,
+    DEFAULT_OLLAMA_URL,
+    DEFAULT_OPENCLAW_HOST,
+    DEFAULT_OPENCLAW_PORT,
+    DEFAULT_OPENCLAW_SESSION_KEY,
+    DEFAULT_OPENCLAW_USE_SSL,
+    DEFAULT_VLLM_URL,
+    OPENAI_BASE_URL,
+    OPENROUTER_BASE_URL,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENCLAW,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_VLLM,
 )
+from custom_components.mcp_assist.llm_providers import base as base_module
+from custom_components.mcp_assist.llm_providers import gemini as gemini_module
+from custom_components.mcp_assist.llm_providers import ollama as ollama_module
 from custom_components.mcp_assist.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
+    LLMProvider,
     LlamaCppProvider,
     LMStudioProvider,
     OllamaProvider,
+    OpenClawProvider,
     OpenAIProvider,
     OpenRouterProvider,
     ProviderSettings,
     VLLMProvider,
+    get_llm_provider_class,
+    provider_selector_options,
     create_llm_provider,
+)
+
+
+PROVIDER_CLASSES: tuple[tuple[str, type[LLMProvider]], ...] = (
+    (SERVER_TYPE_LMSTUDIO, LMStudioProvider),
+    (SERVER_TYPE_LLAMACPP, LlamaCppProvider),
+    (SERVER_TYPE_OLLAMA, OllamaProvider),
+    (SERVER_TYPE_OPENAI, OpenAIProvider),
+    (SERVER_TYPE_GEMINI, GeminiProvider),
+    (SERVER_TYPE_ANTHROPIC, AnthropicProvider),
+    (SERVER_TYPE_OPENROUTER, OpenRouterProvider),
+    (SERVER_TYPE_OPENCLAW, OpenClawProvider),
+    (SERVER_TYPE_VLLM, VLLMProvider),
 )
 
 
@@ -35,6 +79,7 @@ def _settings(
     max_tokens: int = 100,
     temperature: float | None = 0.25,
     provider_options: dict[str, object] | None = None,
+    base_url: str = "https://provider.example.invalid",
     display_name: str = "Test Provider",
     is_remote_service: bool = False,
 ) -> ProviderSettings:
@@ -43,7 +88,7 @@ def _settings(
         server_type=server_type,
         model_name=model_name,
         api_key="test-key",
-        base_url="https://provider.example.invalid",
+        base_url=base_url,
         timeout=30,
         max_tokens=max_tokens,
         temperature=temperature,
@@ -55,23 +100,354 @@ def _settings(
 
 @pytest.mark.parametrize(
     ("server_type", "provider_class"),
+    PROVIDER_CLASSES,
+)
+def test_create_llm_provider_returns_provider_class(
+    server_type: str,
+    provider_class: type[LLMProvider],
+) -> None:
+    """Each configured server type should get its own provider class."""
+    assert isinstance(create_llm_provider(_settings(server_type)), provider_class)
+
+
+def test_provider_selector_options_are_owned_by_provider_classes() -> None:
+    """Provider labels shown in config flow should come from provider metadata."""
+    assert provider_selector_options() == [
+        {"value": server_type, "label": provider_class.config_display_name()}
+        for server_type, provider_class in PROVIDER_CLASSES
+    ]
+
+
+@pytest.mark.parametrize(
+    (
+        "server_type",
+        "provider_class",
+        "display_name",
+        "connection_fields",
+        "provider_options_fields",
+        "default_base_url",
+        "model_fetch_error",
+        "uses_config_model_step",
+        "supports_streaming",
+    ),
+    [
+        (
+            SERVER_TYPE_LMSTUDIO,
+            LMStudioProvider,
+            "LM Studio",
+            ((CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL, "text", True),),
+            (),
+            DEFAULT_LMSTUDIO_URL,
+            "cannot_connect",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_LLAMACPP,
+            LlamaCppProvider,
+            "llama.cpp",
+            ((CONF_LMSTUDIO_URL, DEFAULT_LLAMACPP_URL, "text", True),),
+            (),
+            DEFAULT_LLAMACPP_URL,
+            "cannot_connect",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_OLLAMA,
+            OllamaProvider,
+            "Ollama",
+            ((CONF_LMSTUDIO_URL, DEFAULT_OLLAMA_URL, "text", True),),
+            (
+                (CONF_OLLAMA_NUM_CTX, DEFAULT_OLLAMA_NUM_CTX, "integer", False),
+                (CONF_OLLAMA_KEEP_ALIVE, DEFAULT_OLLAMA_KEEP_ALIVE, "text", False),
+            ),
+            DEFAULT_OLLAMA_URL,
+            "cannot_connect",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_OPENAI,
+            OpenAIProvider,
+            "OpenAI",
+            (
+                (CONF_LMSTUDIO_URL, OPENAI_BASE_URL, "text", True),
+                (CONF_API_KEY, None, "password", True),
+            ),
+            (),
+            OPENAI_BASE_URL,
+            "invalid_api_key",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_GEMINI,
+            GeminiProvider,
+            "Gemini",
+            ((CONF_API_KEY, None, "password", True),),
+            (),
+            None,
+            "invalid_api_key",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_ANTHROPIC,
+            AnthropicProvider,
+            "Claude",
+            ((CONF_API_KEY, None, "password", True),),
+            (),
+            None,
+            None,
+            True,
+            False,
+        ),
+        (
+            SERVER_TYPE_OPENROUTER,
+            OpenRouterProvider,
+            "OpenRouter",
+            ((CONF_API_KEY, None, "password", True),),
+            (),
+            OPENROUTER_BASE_URL,
+            "invalid_api_key",
+            True,
+            True,
+        ),
+        (
+            SERVER_TYPE_OPENCLAW,
+            OpenClawProvider,
+            "OpenClaw",
+            (
+                (CONF_OPENCLAW_HOST, DEFAULT_OPENCLAW_HOST, "text", True),
+                (CONF_OPENCLAW_PORT, DEFAULT_OPENCLAW_PORT, "integer", True),
+                (CONF_OPENCLAW_TOKEN, None, "password", True),
+                (CONF_OPENCLAW_USE_SSL, DEFAULT_OPENCLAW_USE_SSL, "boolean", True),
+            ),
+            (
+                (CONF_OPENCLAW_SESSION_KEY, DEFAULT_OPENCLAW_SESSION_KEY, "text", False),
+            ),
+            None,
+            None,
+            False,
+            False,
+        ),
+        (
+            SERVER_TYPE_VLLM,
+            VLLMProvider,
+            "vLLM",
+            ((CONF_LMSTUDIO_URL, DEFAULT_VLLM_URL, "text", True),),
+            (),
+            DEFAULT_VLLM_URL,
+            "cannot_connect",
+            True,
+            True,
+        ),
+    ],
+)
+def test_provider_classes_expose_config_metadata(
+    server_type: str,
+    provider_class: type[LLMProvider],
+    display_name: str,
+    connection_fields: tuple[tuple[str, object, str, bool], ...],
+    provider_options_fields: tuple[tuple[str, object, str, bool], ...],
+    default_base_url: str | None,
+    model_fetch_error: str | None,
+    uses_config_model_step: bool,
+    supports_streaming: bool,
+) -> None:
+    """Each provider should own the metadata consumed by config and options flows."""
+    assert get_llm_provider_class(server_type) is provider_class
+    assert provider_class.provider_type == server_type
+    assert provider_class.config_display_name() == display_name
+    assert provider_class.default_base_url == default_base_url
+    assert provider_class.model_fetch_error == model_fetch_error
+    assert provider_class.uses_config_model_step is uses_config_model_step
+    assert provider_class.supports_streaming is supports_streaming
+    assert tuple(
+        (field.key, field.default, field.kind, field.required)
+        for field in provider_class.connection_fields
+    ) == connection_fields
+    assert tuple(
+        (field.key, field.default, field.kind, field.required)
+        for field in provider_class.provider_options_fields
+    ) == provider_options_fields
+
+
+def test_openai_compatible_provider_owns_versioned_endpoints() -> None:
+    """OpenAI-compatible providers should own root-vs-/v1 endpoint handling."""
+    root_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url="https://api.example.invalid")
+    )
+    v1_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url="https://api.example.invalid/v1")
+    )
+
+    assert root_provider.chat_url() == (
+        "https://api.example.invalid/v1/chat/completions"
+    )
+    assert v1_provider.chat_url() == (
+        "https://api.example.invalid/v1/chat/completions"
+    )
+    assert OpenAIProvider.model_list_url(
+        {CONF_LMSTUDIO_URL: "https://api.example.invalid/v1/"}
+    ) == "https://api.example.invalid/v1/models"
+
+
+def test_gemini_provider_owns_openai_compatible_endpoint_shape() -> None:
+    """Gemini's OpenAI-compatible path should not get an extra /v1 segment."""
+    provider = GeminiProvider(
+        _settings(
+            SERVER_TYPE_GEMINI,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        )
+    )
+
+    assert provider.chat_url() == (
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    )
+
+
+async def test_ollama_provider_fetches_models_from_native_tags_endpoint(
+    monkeypatch,
+) -> None:
+    """Ollama should own native supported-model discovery."""
+    calls: list[str] = []
+
+    class TagsResponse:
+        status = 200
+
+        async def __aenter__(self) -> "TagsResponse":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def json(self) -> dict[str, list[dict[str, str]]]:
+            return {
+                "models": [
+                    {"name": "llama3.2"},
+                    {"model": "qwen3"},
+                ]
+            }
+
+    class TagsSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "TagsSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> TagsResponse:
+            calls.append(url)
+            return TagsResponse()
+
+    monkeypatch.setattr(OllamaProvider, "model_fetch_delay", 0)
+    monkeypatch.setattr(ollama_module.aiohttp, "ClientSession", TagsSession)
+
+    models = await OllamaProvider.fetch_models(
+        None,
+        {CONF_LMSTUDIO_URL: "http://ollama.example.invalid"},
+    )
+
+    assert calls == ["http://ollama.example.invalid/api/tags"]
+    assert models == ["llama3.2", "qwen3"]
+
+
+async def test_openai_model_fetch_redacts_base_url_userinfo(
+    monkeypatch,
+    caplog,
+) -> None:
+    """Provider model-fetch logs should not expose credentials embedded in URLs."""
+
+    class ModelsResponse:
+        status = 200
+
+        async def __aenter__(self) -> "ModelsResponse":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def json(self) -> dict[str, list[dict[str, str]]]:
+            return {"data": [{"id": "gpt-5-mini"}]}
+
+    class ModelsSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "ModelsSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, *args: object, **kwargs: object) -> ModelsResponse:
+            return ModelsResponse()
+
+    monkeypatch.setattr(base_module.aiohttp, "ClientSession", ModelsSession)
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="custom_components.mcp_assist.llm_providers.base",
+    ):
+        models = await OpenAIProvider.fetch_models(
+            None,
+            {
+                CONF_LMSTUDIO_URL: "https://user:pass@proxy.example.invalid/v1",
+                CONF_API_KEY: "sk-test",
+            },
+        )
+
+    assert models == ["gpt-5-mini"]
+    assert "user:pass" not in caplog.text
+    assert "https://[redacted]@proxy.example.invalid/v1" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("server_type", "provider_class"),
     [
         (SERVER_TYPE_LMSTUDIO, LMStudioProvider),
         (SERVER_TYPE_LLAMACPP, LlamaCppProvider),
-        (SERVER_TYPE_OLLAMA, OllamaProvider),
         (SERVER_TYPE_OPENAI, OpenAIProvider),
         (SERVER_TYPE_GEMINI, GeminiProvider),
-        (SERVER_TYPE_ANTHROPIC, AnthropicProvider),
         (SERVER_TYPE_OPENROUTER, OpenRouterProvider),
         (SERVER_TYPE_VLLM, VLLMProvider),
     ],
 )
-def test_create_llm_provider_returns_provider_class(
+def test_openai_compatible_providers_build_chat_payloads(
     server_type: str,
-    provider_class: type,
+    provider_class: type[LLMProvider],
 ) -> None:
-    """Each configured server type should get its own provider class."""
-    assert isinstance(create_llm_provider(_settings(server_type)), provider_class)
+    """OpenAI-compatible providers should share the standard chat payload shape."""
+    provider = provider_class(_settings(server_type, max_tokens=50, temperature=0.4))
+
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Hello"}],
+        [{"type": "function", "function": {"name": "ping", "parameters": {}}}],
+        stream=True,
+    )
+
+    assert payload == {
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": True,
+        "temperature": 0.4,
+        "max_tokens": 50,
+        "tools": [{"type": "function", "function": {"name": "ping", "parameters": {}}}],
+        "tool_choice": "auto",
+    }
+
+
+def test_openclaw_provider_rejects_http_payload_path() -> None:
+    """OpenClaw should stay registered without pretending to be an HTTP transport."""
+    provider = OpenClawProvider(_settings(SERVER_TYPE_OPENCLAW))
+
+    with pytest.raises(RuntimeError, match="bypass"):
+        provider.build_payload([{"role": "user", "content": "Hello"}])
 
 
 def test_openai_provider_uses_completion_tokens_for_gpt5() -> None:
@@ -186,6 +562,41 @@ def test_gemini_provider_captures_streamed_thought_signature() -> None:
     }
     assert "extra_content" not in tool_calls[0]
     assert provider.missing_stream_metadata_warning(metadata) is None
+
+
+async def test_gemini_model_fetch_redacts_exception_urls(monkeypatch, caplog) -> None:
+    """Gemini model-fetch failures should not log API keys embedded in URLs."""
+
+    class RaisingSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "RaisingSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, *args: object, **kwargs: object) -> object:
+            raise RuntimeError(
+                "Cannot decode https://generativelanguage.googleapis.com/v1beta/"
+                "models?key=gemini-secret"
+            )
+
+    monkeypatch.setattr(gemini_module.aiohttp, "ClientSession", RaisingSession)
+
+    with caplog.at_level(
+        logging.ERROR,
+        logger="custom_components.mcp_assist.llm_providers.gemini",
+    ):
+        models = await GeminiProvider.fetch_models(
+            None,
+            {CONF_API_KEY: "gemini-secret"},
+        )
+
+    assert models == []
+    assert "gemini-secret" not in caplog.text
+    assert "key=[redacted]" in caplog.text
 
 
 def test_anthropic_provider_uses_native_messages_shape() -> None:

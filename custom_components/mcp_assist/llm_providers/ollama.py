@@ -2,22 +2,111 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from typing import Any
 
+import aiohttp
+
 from ..const import (
+    CONF_LMSTUDIO_URL,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
+    DEFAULT_OLLAMA_URL,
     DEFAULT_OLLAMA_KEEP_ALIVE,
     DEFAULT_OLLAMA_NUM_CTX,
+    SERVER_TYPE_OLLAMA,
 )
-from .base import LLMProvider, StreamParseResult, parse_tool_arguments
+from .base import (
+    LLMProvider,
+    ProviderConfigField,
+    StreamParseResult,
+    parse_tool_arguments,
+    _redacted_log_snippet,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class OllamaProvider(LLMProvider):
     """Ollama native chat transport."""
 
     transport_name = "ollama_chat"
+    provider_type = SERVER_TYPE_OLLAMA
+    provider_display_name = "Ollama"
+    default_base_url = DEFAULT_OLLAMA_URL
+    connection_fields = (
+        ProviderConfigField(CONF_LMSTUDIO_URL, default=DEFAULT_OLLAMA_URL),
+    )
+    provider_options_fields = (
+        ProviderConfigField(
+            CONF_OLLAMA_NUM_CTX,
+            default=DEFAULT_OLLAMA_NUM_CTX,
+            required=False,
+            kind="integer",
+        ),
+        ProviderConfigField(
+            CONF_OLLAMA_KEEP_ALIVE,
+            default=DEFAULT_OLLAMA_KEEP_ALIVE,
+            required=False,
+        ),
+    )
+    model_fetch_error = "cannot_connect"
+    model_fetch_timeout = 5
+    model_fetch_delay = 0.5
+
+    @classmethod
+    def model_list_url(cls, values: dict[str, Any]) -> str:
+        """Return Ollama's native model-list endpoint."""
+        base_url = cls.model_base_url(values)
+        return f"{base_url}/api/tags" if base_url else ""
+
+    @classmethod
+    async def fetch_models(cls, hass: Any, values: dict[str, Any]) -> list[str]:
+        """Fetch models from Ollama's native tag listing endpoint."""
+        del hass
+        base_url = cls.model_base_url(values)
+        models_url = cls.model_list_url(values)
+        if not models_url:
+            return []
+
+        _LOGGER.info(
+            "Starting %s model fetch from %s",
+            cls.config_display_name(),
+            _redacted_log_snippet(base_url),
+        )
+        try:
+            if cls.model_fetch_delay > 0:
+                await asyncio.sleep(cls.model_fetch_delay)
+
+            timeout = aiohttp.ClientTimeout(total=cls.model_fetch_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(models_url) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        _LOGGER.warning(
+                            "%s model fetch returned HTTP %d: %s",
+                            cls.config_display_name(),
+                            resp.status,
+                            _redacted_log_snippet(error_text),
+                        )
+                        return []
+
+                    data = await resp.json()
+                    model_ids = [
+                        str(model.get("name") or model.get("model") or "")
+                        for model in data.get("models", [])
+                        if isinstance(model, dict)
+                    ]
+                    return cls.filter_model_ids(model_ids, base_url=base_url)
+        except Exception as err:
+            _LOGGER.error(
+                "%s model fetch failed: %s",
+                cls.config_display_name(),
+                _redacted_log_snippet(err),
+            )
+            return []
 
     @classmethod
     def options_from_entry(cls, entry: Any) -> dict[str, Any]:
