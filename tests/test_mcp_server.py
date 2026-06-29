@@ -1933,3 +1933,61 @@ def test_resolve_fetchable_http_image_url_sanitizes_double_slash_paths(
         server._resolve_fetchable_http_image_url(
             "https://images.example.com//evil.test/weather/radar.png"
         )
+
+
+@pytest.mark.asyncio
+async def test_fetch_http_image_url_uses_validated_absolute_request_url(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Image fetches should request the validated absolute URL, not a raw user path."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        mcp_server_module.network_helper,
+        "get_url",
+        lambda *args, **kwargs: "http://ha.local:8123",
+    )
+
+    class _FakeImageResponse:
+        status = 200
+        headers = {"Content-Type": "image/png"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def read(self) -> bytes:
+            return b"image-bytes"
+
+    class _FakeImageSession:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def get(self, url: str, **kwargs):
+            calls.append((url, kwargs))
+            return _FakeImageResponse()
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _FakeImageSession)
+
+    image_bytes, mime_type = await server._fetch_http_image_url(
+        "/api/image_proxy/front_door?token=preview"
+    )
+
+    assert image_bytes == b"image-bytes"
+    assert mime_type == "image/png"
+    assert calls == [
+        (
+            "http://ha.local:8123/api/image_proxy/front_door?token=preview",
+            {"allow_redirects": False},
+        )
+    ]

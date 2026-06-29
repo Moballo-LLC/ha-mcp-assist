@@ -37,7 +37,7 @@ web data needed for the current request.
    `Moballo-LLC/ha-mcp-assist` manually as an integration repository.
 2. Install **HA MCP Assist** from HACS and restart Home Assistant.
 3. In Home Assistant, go to **Settings** -> **Devices & Services** ->
-   **Add Integration**, then search for **MCP Assist**.
+   **Add Integration**, then search for **HA MCP Assist**.
 4. Create a profile for your local or cloud model provider.
 5. Set the new profile as a voice assistant under **Settings** ->
    **Voice Assistants**.

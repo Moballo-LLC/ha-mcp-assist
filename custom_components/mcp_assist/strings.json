@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -186,7 +187,7 @@
               "disable_recorder": "Prevents this profile from using recorder-backed history, count, duration, and point-in-time tools.",
               "disable_response_service": "Prevents this profile from using Home Assistant services that return structured data, such as calendar and forecast reads.",
               "disable_search": "Prevents this profile from using the built-in web search helper.",
-              "disable_unit_conversion": "Prevents this profile from using exact unit-conversion tools such as °C to °F, distance, storage, and data-rate conversions.",
+              "disable_unit_conversion": "Prevents this profile from using exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "disable_weather_forecast": "Prevents this profile from using the dedicated Home Assistant weather forecast helper.",
               "disable_web_search": "Prevents this profile from using web search and URL-reading tools, even if they are enabled on the shared MCP server."
             }
@@ -279,7 +280,7 @@
               "enable_recorder_tools": "Expose recorder-backed history, analysis, and point-in-time tools.",
               "enable_response_service_tools": "Expose Home Assistant services that return structured data, such as calendar and forecast reads.",
               "enable_search_tool": "Expose web search using the configured shared provider.",
-              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, storage, and data-rate conversions.",
+              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
@@ -482,7 +483,7 @@
               "disable_assist_bridge": "Prevents this profile from using Home Assistant's native Assist tools, prompt, and context snapshot.",
               "disable_calculator": "Prevents this profile from using math and expression-evaluation tools.",
               "disable_custom_tools": "Prevents this profile from using external custom tool packages loaded through the shared MCP server.",
-              "disable_unit_conversion": "Prevents this profile from using exact unit-conversion tools such as °C to °F, distance, storage, and data-rate conversions.",
+              "disable_unit_conversion": "Prevents this profile from using exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "disable_device": "Prevents this profile from discovering physical devices and device details.",
               "disable_memory": "Prevents this profile from storing, recalling, or forgetting shared persisted memories.",
               "disable_music_assistant": "Prevents this profile from using Music Assistant search, queue, library, and playback tools.",
@@ -575,7 +576,7 @@
               "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
               "enable_calculator_tools": "Expose math and expression-evaluation tools.",
               "enable_external_custom_tools": "Load additional local tool packages from the Home Assistant config directory under mcp-assist-tools. Disabled by default. Only enable trusted packages because they run as Python code inside Home Assistant and may add MCP tools plus short prompt guidance.",
-              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, storage, and data-rate conversions.",
+              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "enable_device_tools": "Expose physical-device discovery and device detail tools.",
               "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
               "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
