@@ -6,6 +6,7 @@ from collections import defaultdict
 import ipaddress
 import json
 import logging
+import math
 import mimetypes
 from pathlib import Path, PurePosixPath
 import re
@@ -113,6 +114,43 @@ _LOGGER = logging.getLogger(__name__)
 _MAX_INLINE_IMAGE_BYTES = 6 * 1024 * 1024
 _HTTP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _MAX_IMAGE_FETCH_REDIRECTS = 5
+
+_SKIP_NON_SERIALIZABLE = object()
+
+
+def _strip_non_json_serializable(value: Any) -> Any:
+    """Drop values that cannot be encoded in MCP JSON responses."""
+    if isinstance(value, float):
+        if math.isfinite(value):
+            return value
+        return _SKIP_NON_SERIALIZABLE
+
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+
+    if isinstance(value, dict):
+        result: dict[Any, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, (str, int, float, bool)) and key is not None:
+                continue
+            if isinstance(key, float) and not math.isfinite(key):
+                continue
+            filtered = _strip_non_json_serializable(item)
+            if filtered is _SKIP_NON_SERIALIZABLE:
+                continue
+            result[key] = filtered
+        return result
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        result = []
+        for item in value:
+            filtered = _strip_non_json_serializable(item)
+            if filtered is _SKIP_NON_SERIALIZABLE:
+                continue
+            result.append(filtered)
+        return result
+
+    return _SKIP_NON_SERIALIZABLE
 
 
 class MCPServer(
@@ -3221,15 +3259,17 @@ class MCPServer(
         """Get detailed information about specific entities."""
         entity_ids = args.get("entity_ids", [])
         details = await self.discovery.get_entity_details(entity_ids)
+        safe_details = _strip_non_json_serializable(details)
 
-        return {"content": [{"type": "text", "text": json.dumps(details, indent=2)}]}
+        return {"content": [{"type": "text", "text": json.dumps(safe_details, indent=2)}]}
 
     async def tool_get_device_details(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get detailed information about specific devices."""
         device_ids = args.get("device_ids", [])
         details = await self.discovery.get_device_details(device_ids)
+        safe_details = _strip_non_json_serializable(details)
 
-        return {"content": [{"type": "text", "text": json.dumps(details, indent=2)}]}
+        return {"content": [{"type": "text", "text": json.dumps(safe_details, indent=2)}]}
 
     async def tool_list_areas(self) -> Dict[str, Any]:
         """List all areas."""
