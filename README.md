@@ -22,8 +22,8 @@ web data needed for the current request.
 - Read and write actions for exposed Home Assistant entities, scripts,
   automations, devices, calendars, recorder history, and response services.
 - Optional tool families for calculator, unit conversion, weather forecasts,
-  memory, web search, URL reading, Music Assistant, images, and external custom
-  tools.
+  memory, web search, URL reading, Wikipedia search, Music Assistant, images,
+  and external custom tools.
 - Optional debug and chat log modes for troubleshooting provider, prompt, and
   tool behavior.
 - Multiple conversation profiles with shared MCP server settings.

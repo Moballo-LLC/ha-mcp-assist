@@ -75,6 +75,73 @@ async def test_memory_manager_forget_by_query(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_manager_normalizes_category_aliases_and_counts(hass) -> None:
+    """Category aliases should recall through canonical category names."""
+    manager = MemoryManager(hass)
+    await manager.async_initialize()
+
+    stored_alias = await manager.remember(
+        "The kitchen pendant is the island light",
+        default_ttl_days=30,
+        max_ttl_days=365,
+        category="aliases",
+        max_items=100,
+    )
+    await manager.remember(
+        "The upstairs hallway is usually 68 degrees overnight",
+        default_ttl_days=30,
+        max_ttl_days=365,
+        category="normal",
+        max_items=100,
+    )
+    await manager.remember(
+        "The game shelf uses the label board_games",
+        default_ttl_days=30,
+        max_ttl_days=365,
+        category="custom notes",
+        max_items=100,
+    )
+
+    recalled = await manager.recall(category="device aliases", limit=5)
+    categories = await manager.list_categories()
+    counts = {item["category"]: item["count"] for item in categories["categories"]}
+    custom_counts = {
+        item["category"]: item["count"] for item in categories["custom_categories"]
+    }
+
+    assert stored_alias["category"] == "device_alias"
+    assert recalled["total_found"] == 1
+    assert recalled["items"][0]["category"] == "device_alias"
+    assert counts["device_alias"] == 1
+    assert counts["baseline"] == 1
+    assert custom_counts["custom_notes"] == 1
+    assert categories["total_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_memory_manager_invalid_category_filter_matches_nothing(hass) -> None:
+    """Non-empty filters that normalize away should not behave like no filter."""
+    manager = MemoryManager(hass)
+    await manager.async_initialize()
+    stored = await manager.remember(
+        "Water the patio planters at sunset",
+        default_ttl_days=30,
+        max_ttl_days=365,
+        category="routine",
+        max_items=100,
+    )
+
+    recalled = await manager.recall(category="家庭", limit=5)
+    deleted = await manager.forget(category="💡", delete_all_matches=True)
+    all_memories = await manager.list_all()
+
+    assert stored["category"] == "routine"
+    assert recalled["total_found"] == 0
+    assert deleted["deleted_count"] == 0
+    assert [memory["id"] for memory in all_memories] == [stored["id"]]
+
+
+@pytest.mark.asyncio
 async def test_memory_manager_prunes_to_max_items(hass) -> None:
     """Only the newest configured number of memories should be retained."""
     manager = MemoryManager(hass)

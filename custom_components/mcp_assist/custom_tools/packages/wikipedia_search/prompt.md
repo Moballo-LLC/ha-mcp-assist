@@ -1,0 +1,1 @@
+Use `search_wikipedia` for stable background, reference, and encyclopedia-style questions where Wikipedia results are enough. Use regular web search for current events, latest information, or broader internet research.

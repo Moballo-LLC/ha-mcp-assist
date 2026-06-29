@@ -165,7 +165,7 @@ legacy web-search settings may still enable it for older profiles.
 ## Memory Configuration
 
 The Memory tool family is optional. When enabled, the assistant can store,
-recall, and forget user-approved memories.
+recall, categorize, and forget user-approved memories.
 
 Shared settings:
 
@@ -173,6 +173,11 @@ Shared settings:
   not specify `ttl_days`.
 - **Max Memory TTL**: The longest allowed retention period.
 - **Max Stored Memories**: The maximum number of active stored memories.
+
+Memory categories are labels for retrieval and cleanup. MCP Assist suggests
+stable categories such as `preference`, `routine`, `device_alias`,
+`automation_note`, `baseline`, `correction`, `maintenance`, and `household`, but
+custom categories are still accepted for existing workflows.
 
 Memories are shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).
@@ -190,6 +195,12 @@ For Home Assistant-native weather answers:
 
 MCP Assist falls back to a supported forecast type when a specific type is not
 available.
+
+## Reference Tools
+
+Wikipedia Search is disabled by default. Enable it when a profile should be able
+to search Wikipedia for lightweight background or encyclopedia-style reference
+results without using the broader web-search provider.
 
 ## External Custom Tools
 

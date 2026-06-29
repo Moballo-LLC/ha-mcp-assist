@@ -111,12 +111,16 @@ Memory tools persist user-approved facts and preferences.
 
 | Tool | Purpose |
 | --- | --- |
+| `list_memory_categories` | List suggested categories and active memory counts |
 | `remember_memory` | Store a memory with optional TTL |
 | `recall_memories` | Search stored memories |
 | `forget_memory` | Delete matching stored memories |
 
 The assistant should use memory only when the user asks it to remember, recall,
-or forget something. Memories are shared across MCP Assist profiles.
+or forget something. Suggested categories include `preference`, `routine`,
+`device_alias`, `automation_note`, `baseline`, `correction`, `maintenance`, and
+`household`; custom categories still work. Memories are shared across MCP Assist
+profiles.
 
 ## Web Search and URL Reading
 
@@ -129,6 +133,18 @@ Web tools are optional and controlled by shared provider settings.
 
 Use Home Assistant-native tools first for local Home Assistant data such as
 weather, calendars, history, and entity state.
+
+## Wikipedia Search
+
+Wikipedia Search is an optional lightweight reference tool.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_wikipedia` | Search Wikipedia article titles and descriptions |
+
+Use this for stable background or encyclopedia-style questions where Wikipedia
+results are enough. Use regular web search for latest information, current
+events, or broader internet research.
 
 ## Music Assistant
 
