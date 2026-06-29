@@ -8,7 +8,7 @@ profile, and testing that the model can use MCP tools.
 - Home Assistant 2024.1+
 - Python 3.11+
 - One supported model provider:
-  - Local or self-hosted: LM Studio, llama.cpp, Ollama, Moltbot, or vLLM
+  - Local or self-hosted: LM Studio, llama.cpp, Ollama, OpenClaw, or vLLM
   - Cloud: OpenAI, Google Gemini, Anthropic Claude, or OpenRouter
 - A model that supports tool/function calling well enough for your intended
   workflows
@@ -63,20 +63,22 @@ Supported server types include:
 - Google Gemini
 - Anthropic Claude
 - OpenRouter
-- Moltbot
+- OpenClaw
 - vLLM
 
 ### Step 2: Provider Connection
 
-For local or OpenAI-compatible servers, enter the server URL:
+For local or OpenAI-compatible servers other than OpenClaw, enter the server URL:
 
 | Provider | Common default |
 | --- | --- |
 | LM Studio | `http://localhost:1234` |
 | llama.cpp | `http://localhost:8080` |
 | Ollama | `http://localhost:11434` |
-| Moltbot | `http://localhost:18789` |
 | vLLM | `http://localhost:8000` |
+
+For OpenClaw, enter the gateway host, port, bearer token, and SSL setting shown
+by your OpenClaw gateway. The default gateway port is `18789`.
 
 For cloud providers, enter the provider API key.
 

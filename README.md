@@ -26,7 +26,7 @@ web data needed for the current request.
   tools.
 - Multiple conversation profiles with shared MCP server settings.
 - Local and cloud provider support, including LM Studio, llama.cpp, Ollama,
-  Moltbot, vLLM, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
+  OpenClaw, vLLM, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
 - HACS packaging, automated validation, and GitHub-generated release notes.
 
 ## Quick Start

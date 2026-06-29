@@ -31,19 +31,22 @@ Profile settings are independent per conversation agent.
 
 ### Local and Self-Hosted Providers
 
-For LM Studio, llama.cpp, Ollama, Moltbot, and vLLM, configure the server URL.
+For LM Studio, llama.cpp, Ollama, and vLLM, configure the server URL.
 
 | Provider | Common default URL |
 | --- | --- |
 | LM Studio | `http://localhost:1234` |
 | llama.cpp | `http://localhost:8080` |
 | Ollama | `http://localhost:11434` |
-| Moltbot | `http://localhost:18789` |
 | vLLM | `http://localhost:8000` |
 
 If Home Assistant runs in a container, `localhost` means the Home Assistant
 container, not necessarily the host machine. Use a reachable host IP or Docker
 network name when needed.
+
+OpenClaw uses gateway settings instead of the generic server URL field. Configure
+the gateway host, port, bearer token, and SSL setting from your OpenClaw gateway.
+The default gateway port is `18789`.
 
 ### Cloud Providers
 

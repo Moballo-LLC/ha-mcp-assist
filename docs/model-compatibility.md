@@ -24,7 +24,7 @@ For Home Assistant control, the model needs to:
 | Local OpenAI-compatible servers | Good for privacy and local control; quality depends heavily on the model and server's tool-calling support |
 | Ollama | Convenient local workflow; confirm the selected model and client path support tools reliably |
 | LM Studio | Good local testing surface; model loading and server settings matter |
-| llama.cpp / vLLM / Moltbot | Useful self-hosted options when configured with compatible chat and tool-call behavior |
+| llama.cpp / vLLM / OpenClaw | Useful self-hosted options when configured with compatible chat and tool-call behavior |
 | Cloud providers | Often stronger tool-calling behavior, but involve provider cost, network dependency, and API-key handling |
 
 ## Model Size and Behavior
