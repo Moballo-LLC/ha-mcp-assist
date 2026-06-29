@@ -75,7 +75,7 @@ def test_wikipedia_search_tool_definition_has_reference_routing_metadata(hass) -
     assert "wikipedia" in definition["keywords"]
     assert "current events" in definition["preferred_when"]
     assert definition["returns"]
-    assert definition["inputSchema"]["properties"]["limit"]["maximum"] == 10
+    assert "maximum" not in definition["inputSchema"]["properties"]["limit"]
 
 
 @pytest.mark.asyncio

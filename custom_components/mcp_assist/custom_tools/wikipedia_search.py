@@ -77,7 +77,6 @@ class WikipediaSearchTool:
                                 "Maximum number of results to return (default 5, max 10)."
                             ),
                             "minimum": 1,
-                            "maximum": MAX_WIKIPEDIA_RESULTS,
                             "default": 5,
                         },
                         "language": {
