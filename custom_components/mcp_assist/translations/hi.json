@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "प्रोफ़ाइल नाम",
           "server_type": "सर्वर प्रकार"
+        },
+        "data_description": {
+          "profile_name": "इस वार्तालाप प्रोफ़ाइल के लिए एक अनुकूल नाम.",
+          "server_type": "चुनें कि यह प्रोफ़ाइल किस प्रदाता या अनुमान सर्वर का उपयोग करती है।"
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "सर्वर URL",
           "api_key": "API कुंजी",
-          "mcp_port": "MCP सर्वर पोर्ट"
+          "mcp_port": "MCP सर्वर पोर्ट",
+          "openclaw_host": "गेटवे होस्ट",
+          "openclaw_port": "गेटवे पोर्ट",
+          "openclaw_token": "गेटवे टोकन",
+          "openclaw_use_ssl": "SSL/TLS का प्रयोग करें"
+        },
+        "data_description": {
+          "lmstudio_url": "इस प्रोफ़ाइल द्वारा उपयोग किए गए स्थानीय या OpenAI-compatible सर्वर के लिए आधार URL।",
+          "api_key": "इस प्रदाता द्वारा आवश्यक API कुंजी या वाहक टोकन।",
+          "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
+          "openclaw_host": "OpenClaw गेटवे का होस्ट नाम या आईपी पता।",
+          "openclaw_port": "OpenClaw गेटवे WebSocket सर्वर द्वारा उपयोग किया जाने वाला पोर्ट।",
+          "openclaw_token": "OpenClaw गेटवे के साथ प्रमाणित करने के लिए बियरर टोकन का उपयोग किया जाता है।",
+          "openclaw_use_ssl": "OpenClaw गेटवे से बात करते समय एक सुरक्षित WebSocket कनेक्शन का उपयोग करें।"
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw डिवाइस पेयरिंग",
+        "description": "आपके डिवाइस को OpenClaw सर्वर पर स्वीकृत होना आवश्यक है।\n\n`openclaw devices approve` चलाकर या OpenClaw Control UI का उपयोग करके इसे स्वीकृत करें, फिर सबमिट पर क्लिक करें।\n\nडिवाइस आईडी: {device_id}"
       },
       "model": {
         "title": "मॉडल और प्रॉम्प्ट",
         "description": "{server_info}",
         "data": {
           "model_name": "मॉडल नाम",
+          "system_prompt_mode": "सिस्टम प्रॉम्प्ट स्रोत",
           "system_prompt": "सिस्टम प्रॉम्प्ट",
+          "technical_prompt_mode": "तकनीकी निर्देश स्रोत",
           "technical_prompt": "तकनीकी निर्देश"
+        },
+        "data_description": {
+          "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।",
+          "system_prompt": "वर्तमान प्रभावी सिस्टम प्रॉम्प्ट से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए इसे संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
+          "technical_prompt": "मौजूदा प्रभावी तकनीकी निर्देशों से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए उन्हें संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।"
+        },
+        "sections": {
+          "model_fields": {
+            "name": "नमूना",
+            "description": "वह मॉडल चुनें जिसका उपयोग इस प्रोफ़ाइल को करना चाहिए.",
+            "data": {
+              "model_name": "मॉडल नाम"
+            },
+            "data_description": {
+              "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।"
+            }
+          },
+          "prompts": {
+            "name": "संकेतों",
+            "description": "वर्तमान प्रभावी संकेतों की समीक्षा करें, उन्हें कॉपी करें, या इस प्रोफ़ाइल के लिए उन्हें संपादित करें।",
+            "data": {
+              "system_prompt": "सिस्टम प्रॉम्प्ट",
+              "technical_prompt": "तकनीकी निर्देश"
+            },
+            "data_description": {
+              "system_prompt": "वर्तमान प्रभावी सिस्टम प्रॉम्प्ट से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए इसे संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
+              "technical_prompt": "मौजूदा प्रभावी तकनीकी निर्देशों से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए उन्हें संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।"
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "तापमान",
           "max_tokens": "अधिकतम प्रतिक्रिया टोकन",
           "max_history": "अधिकतम इतिहास संदेश",
+          "context_mode": "प्रसंग विधा",
           "max_iterations": "अधिकतम टूल पुनरावृत्तियां",
           "control_home_assistant": "Home Assistant नियंत्रण",
           "response_mode": "प्रतिक्रिया मोड",
           "follow_up_phrases": "अनुवर्ती वाक्यांश",
           "end_words": "बातचीत समाप्त करने के शब्द",
+          "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ",
           "timeout": "प्रतिक्रिया समय समाप्त",
           "debug_mode": "डीबग मोड",
+          "chat_log_mode": "चैट लॉग मोड",
           "ollama_keep_alive": "Ollama जीवित रखें",
           "ollama_num_ctx": "Ollama संदर्भ विंडो",
-          "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ"
+          "openclaw_session_key": "सत्र कुंजी"
+        },
+        "sections": {
+          "conversation": {
+            "name": "बातचीत",
+            "description": "इस प्रोफ़ाइल के लिए व्यवहार, अनुवर्ती प्रबंधन और ध्वनि-आउटपुट सेटिंग्स।",
+            "data": {
+              "control_home_assistant": "Home Assistant नियंत्रण",
+              "response_mode": "प्रतिक्रिया मोड",
+              "follow_up_phrases": "अनुवर्ती वाक्यांश",
+              "end_words": "बातचीत समाप्त करने के शब्द",
+              "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ"
+            },
+            "data_description": {
+              "control_home_assistant": "इस प्रोफ़ाइल को केवल प्रश्नों का उत्तर देने के बजाय Home Assistant क्रियाएं निष्पादित करने की अनुमति दें।",
+              "response_mode": "यह नियंत्रित करता है कि क्या सहायक तुरंत समाप्त हो जाता है या उपयुक्त होने पर स्वाभाविक अनुवर्ती प्रश्न पूछता है।",
+              "follow_up_phrases": "अनुवर्ती शैली प्रतिक्रियाओं का पता लगाने के लिए अल्पविराम से अलग किए गए वाक्यांशों का उपयोग किया जाता है।",
+              "end_words": "अल्पविराम से अलग किए गए शब्द या वाक्यांश जिनसे बातचीत ख़त्म होनी चाहिए.",
+              "clean_responses": "बोली जाने वाली प्रतिक्रियाओं को साफ़-सुथरा रखने के लिए अनावश्यक फ़ॉर्मेटिंग या फिलर को ट्रिम करें।"
+            }
+          },
+          "performance": {
+            "name": "प्रदर्शन",
+            "description": "मॉडल-प्रतिक्रिया सीमाएँ, निष्पादन सीमाएँ, टाइमआउट और डिबगिंग।",
+            "data": {
+              "temperature": "तापमान",
+              "max_tokens": "अधिकतम प्रतिक्रिया टोकन",
+              "max_history": "अधिकतम इतिहास संदेश",
+              "context_mode": "प्रसंग विधा",
+              "max_iterations": "अधिकतम टूल पुनरावृत्तियां",
+              "timeout": "प्रतिक्रिया समय समाप्त",
+              "debug_mode": "डीबग मोड",
+              "chat_log_mode": "चैट लॉग मोड"
+            },
+            "data_description": {
+              "temperature": "प्रतिक्रिया यादृच्छिकता को नियंत्रित करता है। निम्न मान अधिक नियतिवादी होते हैं।",
+              "max_tokens": "कैप्स कि मॉडल एक प्रतिक्रिया में कितने टोकन उत्पन्न कर सकता है।",
+              "max_history": "कितने पूर्व वार्तालाप संदेशों को संदर्भ में रखना है।",
+              "context_mode": "मानक पूर्ण प्रोफ़ाइल टूल संदर्भ भेजता है। लाइट एक छोटी इतिहास विंडो रखता है और छोटे स्थानीय मॉडलों के लिए मुख्य Home Assistant टूल का विज्ञापन करता है।",
+              "max_iterations": "यह कैप करता है कि सहायक एक अनुरोध के लिए कितने टूल-कॉलिंग टर्न का उपयोग कर सकता है।",
+              "timeout": "समय समाप्त होने से पहले प्रदाता की प्रतिक्रिया के लिए कितनी देर तक प्रतीक्षा करनी होगी।",
+              "debug_mode": "समस्या निवारण के लिए अधिक विस्तृत लॉगिंग सक्षम करें।",
+              "chat_log_mode": "समीक्षा के लिए उपयोगकर्ता पाठ, सहायक उत्तर, टूल नाम, टूल तर्क और टूल परिणाम सहित हाल के वार्तालाप लॉग को बनाए रखें।"
+            }
+          },
+          "provider": {
+            "name": "प्रदाता",
+            "description": "प्रदाता-विशिष्ट सेटिंग्स केवल तभी दिखाई जाती हैं जब वे लागू होती हैं।",
+            "data": {
+              "ollama_keep_alive": "Ollama जीवित रखें",
+              "ollama_num_ctx": "Ollama संदर्भ विंडो",
+              "openclaw_session_key": "सत्र कुंजी"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
+              "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
+              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।"
+            }
+          },
+          "tools": {
+            "name": "औजार",
+            "description": "जब भी वे साझा MCP सर्वर पर सक्षम होते हैं तो अनियंत्रित उपकरण उपलब्ध रहते हैं। केवल इस प्रोफ़ाइल के लिए टूल परिवार को प्रतिबंधित करने के लिए एक बॉक्स को चेक करें।",
+            "data": {
+              "disable_assist_bridge": "सहायता ब्रिज अक्षम करें",
+              "disable_calculator": "कैलकुलेटर अक्षम करें",
+              "disable_custom_tools": "कस्टम उपकरण अक्षम करें",
+              "disable_device": "डिवाइस उपकरण अक्षम करें",
+              "disable_google_maps": "Google Places and Routes अक्षम करें",
+              "disable_llm_api_bridge": "LLM API ब्रिज को अक्षम करें",
+              "disable_memory": "मेमोरी अक्षम करें",
+              "disable_music_assistant": "Music Assistant अक्षम करें",
+              "disable_read_url": "URL पढ़ें अक्षम करें",
+              "disable_recorder": "रिकॉर्डर इतिहास अक्षम करें",
+              "disable_response_service": "प्रतिक्रिया सेवा पठन अक्षम करें",
+              "disable_search": "खोज अक्षम करें",
+              "disable_unit_conversion": "इकाई रूपांतरण अक्षम करें",
+              "disable_weather_forecast": "मौसम पूर्वानुमान अक्षम करें",
+              "disable_wikipedia_search": "Wikipedia खोज अक्षम करें",
+              "disable_web_search": "वेब खोज अक्षम करें"
+            },
+            "data_description": {
+              "disable_assist_bridge": "इस प्रोफ़ाइल को Home Assistant के मूल सहायक उपकरण, प्रॉम्प्ट और संदर्भ स्नैपशॉट का उपयोग करने से रोकता है।",
+              "disable_calculator": "इस प्रोफ़ाइल को गणित और अभिव्यक्ति-मूल्यांकन टूल का उपयोग करने से रोकता है।",
+              "disable_custom_tools": "इस प्रोफ़ाइल को साझा MCP सर्वर के माध्यम से लोड किए गए बाहरी कस्टम टूल पैकेज का उपयोग करने से रोकता है।",
+              "disable_device": "इस प्रोफ़ाइल को भौतिक डिवाइस और डिवाइस विवरण खोजने से रोकता है।",
+              "disable_google_maps": "इस प्रोफ़ाइल को Google Places and Routes टूल का उपयोग करने से रोकता है।",
+              "disable_llm_api_bridge": "इस प्रोफ़ाइल को अनुमति-सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API टूल का उपयोग करने से रोकता है।",
+              "disable_memory": "इस प्रोफ़ाइल को साझा की गई पुरानी यादों को संग्रहीत करने, याद करने या भूलने से रोकता है।",
+              "disable_music_assistant": "इस प्रोफ़ाइल को Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल का उपयोग करने से रोकता है।",
+              "disable_read_url": "इस प्रोफ़ाइल को URLs से पृष्ठ सामग्री को खोलने और निकालने से रोकता है।",
+              "disable_recorder": "इस प्रोफ़ाइल को रिकॉर्डर-समर्थित इतिहास, गिनती, अवधि और पॉइंट-इन-टाइम टूल का उपयोग करने से रोकता है।",
+              "disable_response_service": "इस प्रोफ़ाइल को Home Assistant सेवाओं का उपयोग करने से रोकता है जो संरचित डेटा, जैसे कि कैलेंडर और पूर्वानुमान पढ़ता है, लौटाता है।",
+              "disable_search": "इस प्रोफ़ाइल को अंतर्निहित वेब खोज सहायक का उपयोग करने से रोकता है।",
+              "disable_unit_conversion": "इस प्रोफ़ाइल को सटीक इकाई-रूपांतरण उपकरण जैसे °C से °F, दूरी, रसोई की मात्रा, भंडारण और डेटा-दर रूपांतरण का उपयोग करने से रोकता है।",
+              "disable_weather_forecast": "इस प्रोफ़ाइल को समर्पित Home Assistant मौसम पूर्वानुमान सहायक का उपयोग करने से रोकता है।",
+              "disable_wikipedia_search": "इस प्रोफ़ाइल को Wikipedia खोजने से रोकता है।",
+              "disable_web_search": "इस प्रोफ़ाइल को वेब खोज और URL-रीडिंग टूल का उपयोग करने से रोकता है, भले ही वे साझा MCP सर्वर पर सक्षम हों।"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "⚠️ ये सेटिंग्स सभी प्रोफ़ाइलों को प्रभावित करती हैं। यहां किए गए परिवर्तन हर MCP Assist वार्तालाप एजेंट को प्रभावित करेंगे।",
         "data": {
           "mcp_port": "MCP सर्वर पोर्ट",
-          "search_provider": "वेब खोज",
-          "brave_api_key": "Brave Search API कुंजी",
-          "allowed_ips": "अतिरिक्त अनुमत IP/रेंज",
-          "enable_gap_filling": "स्मार्ट एंटिटी इंडेक्स सक्षम करें",
-          "max_entities_per_discovery": "प्रति खोज अधिकतम एंटिटी (20-500)"
+          "allowed_ips": "अतिरिक्त अनुमत IP/रेंज"
+        },
+        "data_description": {
+          "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
+          "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।"
+        },
+        "sections": {
+          "context": {
+            "name": "प्रसंग",
+            "description": "नियंत्रित करें कि AI संकेतों और MCP टूल-कॉल पेलोड में कौन सी Home Assistant पहचान और स्थान विवरण शामिल हैं।",
+            "data": {
+              "include_current_user": "प्रॉम्प्ट में वर्तमान उपयोगकर्ता को शामिल करें",
+              "include_home_location": "प्रॉम्प्ट में घर का स्थान शामिल करें",
+              "include_current_user_in_tool_calls": "MCP टूल के साथ वर्तमान उपयोगकर्ता को साझा करें",
+              "include_home_location_in_tool_calls": "MCP टूल के साथ घर का स्थान साझा करें"
+            },
+            "data_description": {
+              "include_current_user": "उपलब्ध होने पर AI प्रॉम्प्ट में वर्तमान Home Assistant उपयोगकर्ता का नाम शामिल करें।",
+              "include_home_location": "Home Assistant के कॉन्फ़िगर किए गए होम नाम और निर्देशांक का उपयोग करके AI प्रॉम्प्ट में एक कॉम्पैक्ट होम-लोकेशन सारांश शामिल करें।",
+              "include_current_user_in_tool_calls": "MCP टूल/कॉल संदर्भ में वर्तमान Home Assistant उपयोगकर्ता आईडी और नाम भेजें ताकि टूल पैकेज कार्यों का ऑडिट या वैयक्तिकृत कर सकें।",
+              "include_home_location_in_tool_calls": "स्थान मेटाडेटा की आवश्यकता वाले टूल पैकेज के लिए MCP टूल/कॉल संदर्भ में Home Assistant का कॉन्फ़िगर किया गया होम नाम, अक्षांश और देशांतर भेजें।"
+            }
+          },
+          "discovery": {
+            "name": "खोज",
+            "description": "नियंत्रित करें कि साझा MCP सर्वर कैसे बनाता है और खोज परिणाम लौटाता है।",
+            "data": {
+              "enable_gap_filling": "स्मार्ट एंटिटी इंडेक्स सक्षम करें",
+              "max_entities_per_discovery": "प्रति खोज अधिकतम इकाइयाँ (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "खोज को तेज़ और संदर्भ-जागरूक बनाए रखने के लिए एक कॉम्पैक्ट सिस्टम इंडेक्स बनाता है।",
+              "max_entities_per_discovery": "कैप्स कि एक एकल खोज कॉल कितनी इकाइयाँ लौटा सकती है।"
+            }
+          },
+          "memory": {
+            "name": "याद",
+            "description": "मेमोरी टूल सक्षम होने पर कॉन्फ़िगर करें कि साझा की गई स्थायी यादें कितने समय तक रखी जाती हैं।",
+            "data": {
+              "memory_default_ttl_days": "डिफ़ॉल्ट मेमोरी TTL (दिन)",
+              "memory_max_ttl_days": "अधिकतम मेमोरी TTL (दिन)",
+              "memory_max_items": "अधिकतम संग्रहित यादें"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "जब टूल कॉल ttl_days प्रदान नहीं करता है तो नई मेमोरी रखे जाने वाले दिनों की डिफ़ॉल्ट संख्या।",
+              "memory_max_ttl_days": "किसी संग्रहीत स्मृति को अधिकतम कितने दिनों तक रखा जा सकता है।",
+              "memory_max_items": "सक्रिय संग्रहीत स्मृतियों पर ऊपरी सीमा। जब यह सीमा पार हो जाती है तो सबसे पहले सबसे पुरानी यादें छांट दी जाती हैं।"
+            }
+          },
+          "tools": {
+            "name": "औजार",
+            "description": "साझा MCP सर्वर द्वारा प्रदर्शित वैकल्पिक टूल क्षमताओं को सक्षम या अक्षम करें।",
+            "data": {
+              "enable_assist_bridge": "सहायक पुल",
+              "enable_calculator_tools": "कैलकुलेटर",
+              "enable_external_custom_tools": "कस्टम उपकरण",
+              "enable_device_tools": "डिवाइस उपकरण",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API ब्रिज",
+              "enable_memory_tools": "याद",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL पढ़ें",
+              "enable_recorder_tools": "रिकॉर्डर इतिहास",
+              "enable_response_service_tools": "प्रतिक्रिया सेवा पढ़ता है",
+              "enable_search_tool": "खोज",
+              "enable_unit_conversion_tools": "इकाई रूपांतरण",
+              "enable_weather_forecast_tool": "मौसम पूर्वानुमान",
+              "enable_wikipedia_search_tool": "Wikipedia खोजें",
+              "enable_web_search": "वेब खोज",
+              "search_provider": "वेब खोज प्रदाता",
+              "brave_api_key": "Brave Search API कुंजी",
+              "google_maps_api_key": "Google Maps API कुंजी",
+              "llm_api_allowlist": "LLM API आईडी की अनुमति है",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Home Assistant के मूल सहायक उपकरण, संकेत और संदर्भ स्नैपशॉट को उजागर करें।",
+              "enable_calculator_tools": "गणित और अभिव्यक्ति-मूल्यांकन उपकरण उजागर करें।",
+              "enable_external_custom_tools": "mcp-assist-tools के अंतर्गत Home Assistant कॉन्फ़िगरेशन निर्देशिका से अतिरिक्त स्थानीय टूल पैकेज लोड करें। डिफ़ॉल्ट रूप से अक्षम. केवल विश्वसनीय पैकेज ही सक्षम करें क्योंकि वे Home Assistant के अंदर Python कोड के रूप में चलते हैं और MCP टूल और संक्षिप्त त्वरित मार्गदर्शन जोड़ सकते हैं।",
+              "enable_device_tools": "भौतिक-डिवाइस खोज और डिवाइस विवरण टूल को उजागर करें।",
+              "enable_google_maps_tools": "Google Places लुकअप और Google Routes यात्रा-समय टूल को उजागर करें। Google Maps API कुंजी की आवश्यकता है।",
+              "enable_llm_api_bridge": "अन्य एकीकरणों द्वारा पंजीकृत अनुमत सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API को उजागर करें।",
+              "enable_memory_tools": "साझा किए गए स्थायी मेमोरी टूल को उजागर करें ताकि सहायक TTL-आधारित समाप्ति के साथ उपयोगकर्ता द्वारा अनुमोदित तथ्यों और प्राथमिकताओं को याद रख सके, याद कर सके और भूल सके।",
+              "enable_music_assistant_support": "Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल को उजागर करें।",
+              "enable_read_url_tool": "URL रीडिंग को उजागर करें ताकि सहायक विशिष्ट वेब पेजों का निरीक्षण कर सके।",
+              "enable_recorder_tools": "रिकॉर्डर-समर्थित इतिहास, विश्लेषण और पॉइंट-इन-टाइम टूल को उजागर करें।",
+              "enable_response_service_tools": "Home Assistant सेवाओं को उजागर करें जो संरचित डेटा लौटाती हैं, जैसे कैलेंडर और पूर्वानुमान पढ़ता है।",
+              "enable_search_tool": "कॉन्फ़िगर किए गए साझा प्रदाता का उपयोग करके वेब खोज को उजागर करें।",
+              "enable_unit_conversion_tools": "°C से °F, दूरी, रसोई की मात्रा, भंडारण और डेटा-दर रूपांतरण जैसे सटीक इकाई-रूपांतरण उपकरण उजागर करें।",
+              "enable_weather_forecast_tool": "समर्पित Home Assistant मौसम पूर्वानुमान सहायक को उजागर करें।",
+              "enable_wikipedia_search_tool": "पृष्ठभूमि और संदर्भ प्रश्नों के लिए हल्के Wikipedia लेख खोज को उजागर करें।",
+              "enable_web_search": "वेब खोज और URL-रीडिंग टूल को उजागर करें।",
+              "search_provider": "चुनें कि वेब खोज सक्षम होने पर किस प्रदाता का उपयोग करना है।",
+              "brave_api_key": "केवल तभी आवश्यक है जब वेब खोज सक्षम हो और Brave Search चयनित हो।",
+              "google_maps_api_key": "केवल तभी आवश्यक है जब Google Places and Routes सक्षम हो।",
+              "llm_api_allowlist": "अल्पविराम- या न्यूलाइन से अलग किए गए तृतीय पक्ष LLM API आईडी MCP Assist का निरीक्षण या कॉल कर सकते हैं, जैसे llm_intents। स्थापित तृतीय-पक्ष LLM APIs: {installed_llm_apis}। बिल्ट-इन असिस्ट API असिस्ट ब्रिज पर बना हुआ है।",
+              "searxng_url": "केवल तभी आवश्यक है जब वेब खोज सक्षम हो और SearXNG चयनित हो। अपने स्व-होस्टेड SearXNG उदाहरण के लिए आधार URL का उपयोग करें।"
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "अमान्य IP पता या CIDR रेंज प्रारूप। अल्पविराम से अलग किए गए मान का उपयोग करें जैसे: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "प्रोफ़ाइल नाम आवश्यक है।",
       "invalid_json": "अमान्य JSON प्रारूप। कृपया अपना MCP सर्वर कॉन्फ़िगरेशन जांचें।",
+      "searxng_url_required": "SearXNG खोज सक्षम होने पर SearXNG URL की आवश्यकता होती है।",
+      "google_maps_api_key_required": "Google Places and Routes सक्षम होने पर Google Maps API कुंजी की आवश्यकता होती है।",
+      "mcp_apply_failed": "साझा MCP सर्वर सेटिंग्स लागू नहीं की जा सकीं. पोर्ट और अनुमत आईपी की जाँच करें, फिर पुनः प्रयास करें।",
       "invalid_api_key": "अमान्य API कुंजी। कृपया जांचें और पुनः प्रयास करें।",
       "auth_failed": "प्रमाणीकरण विफल। कृपया अपनी API कुंजी सत्यापित करें।",
-      "unknown": "एक अज्ञात त्रुटि हुई।"
+      "unknown": "एक अज्ञात त्रुटि हुई।",
+      "openclaw_not_paired": "डिवाइस अभी तक OpenClaw सर्वर पर स्वीकृत नहीं है। कृपया इसे स्वीकृत करें और पुनः प्रयास करें।",
+      "openclaw_connection_failed": "OpenClaw गेटवे से कनेक्ट नहीं हो सका। होस्ट, पोर्ट और टोकन की जाँच करें।"
     },
     "abort": {
       "already_configured": "इस नाम की प्रोफ़ाइल पहले से मौजूद है। कृपया कोई अलग नाम चुनें।"
@@ -85,21 +338,186 @@
           "lmstudio_url": "सर्वर URL",
           "api_key": "API कुंजी",
           "model_name": "मॉडल नाम",
+          "system_prompt_mode": "सिस्टम प्रॉम्प्ट स्रोत",
           "system_prompt": "सिस्टम प्रॉम्प्ट",
+          "technical_prompt_mode": "तकनीकी निर्देश स्रोत",
           "technical_prompt": "तकनीकी निर्देश",
           "temperature": "तापमान",
           "max_tokens": "अधिकतम प्रतिक्रिया टोकन",
           "max_history": "अधिकतम इतिहास संदेश",
+          "context_mode": "प्रसंग विधा",
           "max_iterations": "अधिकतम टूल पुनरावृत्तियां",
           "control_home_assistant": "Home Assistant नियंत्रण",
           "response_mode": "प्रतिक्रिया मोड",
           "follow_up_phrases": "अनुवर्ती वाक्यांश",
           "end_words": "बातचीत समाप्त करने के शब्द",
+          "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ",
           "timeout": "प्रतिक्रिया समय समाप्त",
           "debug_mode": "डीबग मोड",
+          "chat_log_mode": "चैट लॉग मोड",
           "ollama_keep_alive": "Ollama जीवित रखें",
           "ollama_num_ctx": "Ollama संदर्भ विंडो",
-          "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ"
+          "openclaw_host": "गेटवे होस्ट",
+          "openclaw_port": "गेटवे पोर्ट",
+          "openclaw_token": "गेटवे टोकन",
+          "openclaw_use_ssl": "SSL/TLS का प्रयोग करें",
+          "openclaw_session_key": "सत्र कुंजी"
+        },
+        "data_description": {
+          "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।",
+          "system_prompt": "वर्तमान प्रभावी सिस्टम प्रॉम्प्ट से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए इसे संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
+          "technical_prompt": "मौजूदा प्रभावी तकनीकी निर्देशों से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए उन्हें संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
+          "context_mode": "मानक पूर्ण प्रोफ़ाइल टूल संदर्भ भेजता है। लाइट एक छोटी इतिहास विंडो रखता है और छोटे स्थानीय मॉडलों के लिए मुख्य Home Assistant टूल का विज्ञापन करता है।"
+        },
+        "sections": {
+          "profile": {
+            "name": "प्रोफ़ाइल",
+            "description": "इस वार्तालाप प्रोफ़ाइल के लिए बुनियादी पहचान सेटिंग्स.",
+            "data": {
+              "profile_name": "प्रोफ़ाइल नाम"
+            },
+            "data_description": {
+              "profile_name": "इस वार्तालाप प्रोफ़ाइल के लिए एक अनुकूल नाम."
+            }
+          },
+          "connection": {
+            "name": "संबंध",
+            "description": "यह प्रोफ़ाइल अपने मॉडल प्रदाता से कैसे जुड़ती है.",
+            "data": {
+              "lmstudio_url": "सर्वर URL",
+              "api_key": "API कुंजी",
+              "openclaw_host": "गेटवे होस्ट",
+              "openclaw_port": "गेटवे पोर्ट",
+              "openclaw_token": "गेटवे टोकन",
+              "openclaw_use_ssl": "SSL/TLS का प्रयोग करें"
+            },
+            "data_description": {
+              "lmstudio_url": "इस प्रोफ़ाइल द्वारा उपयोग किए गए स्थानीय या OpenAI-compatible सर्वर के लिए आधार URL।",
+              "api_key": "इस प्रदाता द्वारा आवश्यक API कुंजी या वाहक टोकन।",
+              "openclaw_host": "OpenClaw गेटवे का होस्ट नाम या आईपी पता।",
+              "openclaw_port": "OpenClaw गेटवे WebSocket सर्वर द्वारा उपयोग किया जाने वाला पोर्ट।",
+              "openclaw_token": "OpenClaw गेटवे के साथ प्रमाणित करने के लिए बियरर टोकन का उपयोग किया जाता है।",
+              "openclaw_use_ssl": "OpenClaw गेटवे से बात करते समय एक सुरक्षित WebSocket कनेक्शन का उपयोग करें।"
+            }
+          },
+          "model_fields": {
+            "name": "नमूना",
+            "description": "वह मॉडल चुनें जिसका उपयोग इस प्रोफ़ाइल को करना चाहिए.",
+            "data": {
+              "model_name": "मॉडल नाम"
+            },
+            "data_description": {
+              "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।"
+            }
+          },
+          "prompts": {
+            "name": "संकेतों",
+            "description": "वर्तमान प्रभावी संकेतों की समीक्षा करें, उन्हें कॉपी करें, या इस प्रोफ़ाइल के लिए उन्हें संपादित करें।",
+            "data": {
+              "system_prompt": "सिस्टम प्रॉम्प्ट",
+              "technical_prompt": "तकनीकी निर्देश"
+            },
+            "data_description": {
+              "system_prompt": "वर्तमान प्रभावी सिस्टम प्रॉम्प्ट से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए इसे संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
+              "technical_prompt": "मौजूदा प्रभावी तकनीकी निर्देशों से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए उन्हें संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।"
+            }
+          },
+          "conversation": {
+            "name": "बातचीत",
+            "description": "इस प्रोफ़ाइल के लिए व्यवहार, अनुवर्ती प्रबंधन और ध्वनि-आउटपुट सेटिंग्स।",
+            "data": {
+              "control_home_assistant": "Home Assistant नियंत्रण",
+              "response_mode": "प्रतिक्रिया मोड",
+              "follow_up_phrases": "अनुवर्ती वाक्यांश",
+              "end_words": "बातचीत समाप्त करने के शब्द",
+              "clean_responses": "वॉइस आउटपुट के लिए साफ़ प्रतिक्रियाएँ"
+            },
+            "data_description": {
+              "control_home_assistant": "इस प्रोफ़ाइल को केवल प्रश्नों का उत्तर देने के बजाय Home Assistant क्रियाएं निष्पादित करने की अनुमति दें।",
+              "response_mode": "यह नियंत्रित करता है कि क्या सहायक तुरंत समाप्त हो जाता है या उपयुक्त होने पर स्वाभाविक अनुवर्ती प्रश्न पूछता है।",
+              "follow_up_phrases": "अनुवर्ती शैली प्रतिक्रियाओं का पता लगाने के लिए अल्पविराम से अलग किए गए वाक्यांशों का उपयोग किया जाता है।",
+              "end_words": "अल्पविराम से अलग किए गए शब्द या वाक्यांश जिनसे बातचीत ख़त्म होनी चाहिए.",
+              "clean_responses": "बोली जाने वाली प्रतिक्रियाओं को साफ़-सुथरा रखने के लिए अनावश्यक फ़ॉर्मेटिंग या फिलर को ट्रिम करें।"
+            }
+          },
+          "provider": {
+            "name": "प्रदाता",
+            "description": "प्रदाता-विशिष्ट सेटिंग्स केवल तभी दिखाई जाती हैं जब वे लागू होती हैं।",
+            "data": {
+              "ollama_keep_alive": "Ollama जीवित रखें",
+              "ollama_num_ctx": "Ollama संदर्भ विंडो",
+              "openclaw_session_key": "सत्र कुंजी"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
+              "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
+              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।"
+            }
+          },
+          "advanced_settings": {
+            "name": "विकसित",
+            "description": "मॉडल व्यवहार, सीमाएं, टाइमआउट और डिबगिंग के लिए विशेषज्ञ ट्यूनिंग।",
+            "data": {
+              "temperature": "तापमान",
+              "max_tokens": "अधिकतम प्रतिक्रिया टोकन",
+              "max_history": "अधिकतम इतिहास संदेश",
+              "context_mode": "प्रसंग विधा",
+              "max_iterations": "अधिकतम टूल पुनरावृत्तियां",
+              "timeout": "प्रतिक्रिया समय समाप्त",
+              "debug_mode": "डीबग मोड",
+              "chat_log_mode": "चैट लॉग मोड"
+            },
+            "data_description": {
+              "temperature": "प्रतिक्रिया यादृच्छिकता को नियंत्रित करता है। निम्न मान अधिक नियतिवादी होते हैं।",
+              "max_tokens": "कैप्स कि मॉडल एक प्रतिक्रिया में कितने टोकन उत्पन्न कर सकता है।",
+              "max_history": "कितने पूर्व वार्तालाप संदेशों को संदर्भ में रखना है।",
+              "context_mode": "मानक पूर्ण प्रोफ़ाइल टूल संदर्भ भेजता है। लाइट एक छोटी इतिहास विंडो रखता है और छोटे स्थानीय मॉडलों के लिए मुख्य Home Assistant टूल का विज्ञापन करता है।",
+              "max_iterations": "यह कैप करता है कि सहायक एक अनुरोध के लिए कितने टूल-कॉलिंग टर्न का उपयोग कर सकता है।",
+              "timeout": "समय समाप्त होने से पहले प्रदाता की प्रतिक्रिया के लिए कितनी देर तक प्रतीक्षा करनी होगी।",
+              "debug_mode": "समस्या निवारण के लिए अधिक विस्तृत लॉगिंग सक्षम करें।",
+              "chat_log_mode": "समीक्षा के लिए उपयोगकर्ता पाठ, सहायक उत्तर, टूल नाम, टूल तर्क और टूल परिणाम सहित हाल के वार्तालाप लॉग को बनाए रखें।"
+            }
+          },
+          "tools": {
+            "name": "औजार",
+            "description": "जब भी वे साझा MCP सर्वर पर सक्षम होते हैं तो अनियंत्रित उपकरण उपलब्ध रहते हैं। केवल इस प्रोफ़ाइल के लिए टूल परिवार को प्रतिबंधित करने के लिए एक बॉक्स को चेक करें।",
+            "data": {
+              "disable_assist_bridge": "सहायता ब्रिज अक्षम करें",
+              "disable_calculator": "कैलकुलेटर अक्षम करें",
+              "disable_custom_tools": "कस्टम उपकरण अक्षम करें",
+              "disable_device": "डिवाइस उपकरण अक्षम करें",
+              "disable_google_maps": "Google Places and Routes अक्षम करें",
+              "disable_llm_api_bridge": "LLM API ब्रिज को अक्षम करें",
+              "disable_memory": "मेमोरी अक्षम करें",
+              "disable_music_assistant": "Music Assistant अक्षम करें",
+              "disable_read_url": "URL पढ़ें अक्षम करें",
+              "disable_recorder": "रिकॉर्डर इतिहास अक्षम करें",
+              "disable_response_service": "प्रतिक्रिया सेवा पठन अक्षम करें",
+              "disable_search": "खोज अक्षम करें",
+              "disable_unit_conversion": "इकाई रूपांतरण अक्षम करें",
+              "disable_weather_forecast": "मौसम पूर्वानुमान अक्षम करें",
+              "disable_wikipedia_search": "Wikipedia खोज अक्षम करें",
+              "disable_web_search": "वेब खोज अक्षम करें"
+            },
+            "data_description": {
+              "disable_assist_bridge": "इस प्रोफ़ाइल को Home Assistant के मूल सहायक उपकरण, प्रॉम्प्ट और संदर्भ स्नैपशॉट का उपयोग करने से रोकता है।",
+              "disable_calculator": "इस प्रोफ़ाइल को गणित और अभिव्यक्ति-मूल्यांकन टूल का उपयोग करने से रोकता है।",
+              "disable_custom_tools": "इस प्रोफ़ाइल को साझा MCP सर्वर के माध्यम से लोड किए गए बाहरी कस्टम टूल पैकेज का उपयोग करने से रोकता है।",
+              "disable_unit_conversion": "इस प्रोफ़ाइल को सटीक इकाई-रूपांतरण उपकरण जैसे °C से °F, दूरी, रसोई की मात्रा, भंडारण और डेटा-दर रूपांतरण का उपयोग करने से रोकता है।",
+              "disable_device": "इस प्रोफ़ाइल को भौतिक डिवाइस और डिवाइस विवरण खोजने से रोकता है।",
+              "disable_google_maps": "इस प्रोफ़ाइल को Google Places and Routes टूल का उपयोग करने से रोकता है।",
+              "disable_llm_api_bridge": "इस प्रोफ़ाइल को अनुमति-सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API टूल का उपयोग करने से रोकता है।",
+              "disable_memory": "इस प्रोफ़ाइल को साझा की गई पुरानी यादों को संग्रहीत करने, याद करने या भूलने से रोकता है।",
+              "disable_music_assistant": "इस प्रोफ़ाइल को Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल का उपयोग करने से रोकता है।",
+              "disable_read_url": "इस प्रोफ़ाइल को URLs से पृष्ठ सामग्री को खोलने और निकालने से रोकता है।",
+              "disable_recorder": "इस प्रोफ़ाइल को रिकॉर्डर-समर्थित इतिहास, गिनती, अवधि और पॉइंट-इन-टाइम टूल का उपयोग करने से रोकता है।",
+              "disable_response_service": "इस प्रोफ़ाइल को Home Assistant सेवाओं का उपयोग करने से रोकता है जो संरचित डेटा, जैसे कि कैलेंडर और पूर्वानुमान पढ़ता है, लौटाता है।",
+              "disable_search": "इस प्रोफ़ाइल को अंतर्निहित वेब खोज सहायक का उपयोग करने से रोकता है।",
+              "disable_weather_forecast": "इस प्रोफ़ाइल को समर्पित Home Assistant मौसम पूर्वानुमान सहायक का उपयोग करने से रोकता है।",
+              "disable_wikipedia_search": "इस प्रोफ़ाइल को Wikipedia खोजने से रोकता है।",
+              "disable_web_search": "इस प्रोफ़ाइल को वेब खोज और URL-रीडिंग टूल का उपयोग करने से रोकता है, भले ही वे साझा MCP सर्वर पर सक्षम हों।"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "⚠️ ये सेटिंग्स सभी प्रोफ़ाइलों में साझा की जाती हैं",
         "data": {
           "mcp_port": "MCP सर्वर पोर्ट",
-          "search_provider": "वेब खोज",
-          "brave_api_key": "Brave Search API कुंजी",
-          "allowed_ips": "अतिरिक्त अनुमत IP/रेंज",
-          "enable_gap_filling": "स्मार्ट एंटिटी इंडेक्स सक्षम करें",
-          "max_entities_per_discovery": "प्रति खोज अधिकतम एंटिटी (20-500)"
+          "allowed_ips": "अतिरिक्त अनुमत IP/रेंज"
+        },
+        "data_description": {
+          "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
+          "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।"
+        },
+        "sections": {
+          "context": {
+            "name": "प्रसंग",
+            "description": "नियंत्रित करें कि AI संकेतों और MCP टूल-कॉल पेलोड में कौन सी Home Assistant पहचान और स्थान विवरण शामिल हैं।",
+            "data": {
+              "include_current_user": "प्रॉम्प्ट में वर्तमान उपयोगकर्ता को शामिल करें",
+              "include_home_location": "प्रॉम्प्ट में घर का स्थान शामिल करें",
+              "include_current_user_in_tool_calls": "MCP टूल के साथ वर्तमान उपयोगकर्ता को साझा करें",
+              "include_home_location_in_tool_calls": "MCP टूल के साथ घर का स्थान साझा करें"
+            },
+            "data_description": {
+              "include_current_user": "उपलब्ध होने पर AI प्रॉम्प्ट में वर्तमान Home Assistant उपयोगकर्ता का नाम शामिल करें।",
+              "include_home_location": "Home Assistant के कॉन्फ़िगर किए गए होम नाम और निर्देशांक का उपयोग करके AI प्रॉम्प्ट में एक कॉम्पैक्ट होम-लोकेशन सारांश शामिल करें।",
+              "include_current_user_in_tool_calls": "MCP टूल/कॉल संदर्भ में वर्तमान Home Assistant उपयोगकर्ता आईडी और नाम भेजें ताकि टूल पैकेज कार्यों का ऑडिट या वैयक्तिकृत कर सकें।",
+              "include_home_location_in_tool_calls": "स्थान मेटाडेटा की आवश्यकता वाले टूल पैकेज के लिए MCP टूल/कॉल संदर्भ में Home Assistant का कॉन्फ़िगर किया गया होम नाम, अक्षांश और देशांतर भेजें।"
+            }
+          },
+          "discovery": {
+            "name": "खोज",
+            "description": "नियंत्रित करें कि साझा MCP सर्वर कैसे बनाता है और खोज परिणाम लौटाता है।",
+            "data": {
+              "enable_gap_filling": "स्मार्ट एंटिटी इंडेक्स सक्षम करें",
+              "max_entities_per_discovery": "प्रति खोज अधिकतम इकाइयाँ (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "खोज को तेज़ और संदर्भ-जागरूक बनाए रखने के लिए एक कॉम्पैक्ट सिस्टम इंडेक्स बनाता है।",
+              "max_entities_per_discovery": "कैप्स कि एक एकल खोज कॉल कितनी इकाइयाँ लौटा सकती है।"
+            }
+          },
+          "memory": {
+            "name": "याद",
+            "description": "मेमोरी टूल सक्षम होने पर कॉन्फ़िगर करें कि साझा की गई स्थायी यादें कितने समय तक रखी जाती हैं।",
+            "data": {
+              "memory_default_ttl_days": "डिफ़ॉल्ट मेमोरी TTL (दिन)",
+              "memory_max_ttl_days": "अधिकतम मेमोरी TTL (दिन)",
+              "memory_max_items": "अधिकतम संग्रहित यादें"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "जब टूल कॉल ttl_days प्रदान नहीं करता है तो नई मेमोरी रखे जाने वाले दिनों की डिफ़ॉल्ट संख्या।",
+              "memory_max_ttl_days": "किसी संग्रहीत स्मृति को अधिकतम कितने दिनों तक रखा जा सकता है।",
+              "memory_max_items": "सक्रिय संग्रहीत स्मृतियों पर ऊपरी सीमा। जब यह सीमा पार हो जाती है तो सबसे पहले सबसे पुरानी यादें छांट दी जाती हैं।"
+            }
+          },
+          "tools": {
+            "name": "औजार",
+            "description": "साझा MCP सर्वर द्वारा प्रदर्शित वैकल्पिक टूल क्षमताओं को सक्षम या अक्षम करें।",
+            "data": {
+              "enable_assist_bridge": "सहायक पुल",
+              "enable_calculator_tools": "कैलकुलेटर",
+              "enable_external_custom_tools": "कस्टम उपकरण",
+              "enable_device_tools": "डिवाइस उपकरण",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API ब्रिज",
+              "enable_memory_tools": "याद",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL पढ़ें",
+              "enable_recorder_tools": "रिकॉर्डर इतिहास",
+              "enable_response_service_tools": "प्रतिक्रिया सेवा पढ़ता है",
+              "enable_search_tool": "खोज",
+              "enable_unit_conversion_tools": "इकाई रूपांतरण",
+              "enable_weather_forecast_tool": "मौसम पूर्वानुमान",
+              "enable_wikipedia_search_tool": "Wikipedia खोजें",
+              "enable_web_search": "वेब खोज",
+              "search_provider": "वेब खोज प्रदाता",
+              "brave_api_key": "Brave Search API कुंजी",
+              "google_maps_api_key": "Google Maps API कुंजी",
+              "llm_api_allowlist": "LLM API आईडी की अनुमति है",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Home Assistant के मूल सहायक उपकरण, संकेत और संदर्भ स्नैपशॉट को उजागर करें।",
+              "enable_calculator_tools": "गणित और अभिव्यक्ति-मूल्यांकन उपकरण उजागर करें।",
+              "enable_external_custom_tools": "mcp-assist-tools के अंतर्गत Home Assistant कॉन्फ़िगरेशन निर्देशिका से अतिरिक्त स्थानीय टूल पैकेज लोड करें। डिफ़ॉल्ट रूप से अक्षम. केवल विश्वसनीय पैकेज ही सक्षम करें क्योंकि वे Home Assistant के अंदर Python कोड के रूप में चलते हैं और MCP टूल और संक्षिप्त त्वरित मार्गदर्शन जोड़ सकते हैं।",
+              "enable_unit_conversion_tools": "°C से °F, दूरी, रसोई की मात्रा, भंडारण और डेटा-दर रूपांतरण जैसे सटीक इकाई-रूपांतरण उपकरण उजागर करें।",
+              "enable_device_tools": "भौतिक-डिवाइस खोज और डिवाइस विवरण टूल को उजागर करें।",
+              "enable_google_maps_tools": "Google Places लुकअप और Google Routes यात्रा-समय टूल को उजागर करें। Google Maps API कुंजी की आवश्यकता है।",
+              "enable_llm_api_bridge": "अन्य एकीकरणों द्वारा पंजीकृत अनुमत सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API को उजागर करें।",
+              "enable_memory_tools": "साझा किए गए स्थायी मेमोरी टूल को उजागर करें ताकि सहायक TTL-आधारित समाप्ति के साथ उपयोगकर्ता द्वारा अनुमोदित तथ्यों और प्राथमिकताओं को याद रख सके, याद कर सके और भूल सके।",
+              "enable_music_assistant_support": "Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल को उजागर करें।",
+              "enable_read_url_tool": "URL रीडिंग को उजागर करें ताकि सहायक विशिष्ट वेब पेजों का निरीक्षण कर सके।",
+              "enable_recorder_tools": "रिकॉर्डर-समर्थित इतिहास, विश्लेषण और पॉइंट-इन-टाइम टूल को उजागर करें।",
+              "enable_response_service_tools": "Home Assistant सेवाओं को उजागर करें जो संरचित डेटा लौटाती हैं, जैसे कैलेंडर और पूर्वानुमान पढ़ता है।",
+              "enable_search_tool": "कॉन्फ़िगर किए गए साझा प्रदाता का उपयोग करके वेब खोज को उजागर करें।",
+              "enable_weather_forecast_tool": "समर्पित Home Assistant मौसम पूर्वानुमान सहायक को उजागर करें।",
+              "enable_wikipedia_search_tool": "पृष्ठभूमि और संदर्भ प्रश्नों के लिए हल्के Wikipedia लेख खोज को उजागर करें।",
+              "enable_web_search": "वेब खोज और URL-रीडिंग टूल को उजागर करें।",
+              "search_provider": "चुनें कि वेब खोज सक्षम होने पर किस प्रदाता का उपयोग करना है।",
+              "brave_api_key": "केवल तभी आवश्यक है जब वेब खोज सक्षम हो और Brave Search चयनित हो।",
+              "google_maps_api_key": "केवल तभी आवश्यक है जब Google Places and Routes सक्षम हो।",
+              "llm_api_allowlist": "अल्पविराम- या न्यूलाइन से अलग किए गए तृतीय पक्ष LLM API आईडी MCP Assist का निरीक्षण या कॉल कर सकते हैं, जैसे llm_intents। स्थापित तृतीय-पक्ष LLM APIs: {installed_llm_apis}। बिल्ट-इन असिस्ट API असिस्ट ब्रिज पर बना हुआ है।",
+              "searxng_url": "केवल तभी आवश्यक है जब वेब खोज सक्षम हो और SearXNG चयनित हो। अपने स्व-होस्टेड SearXNG उदाहरण के लिए आधार URL का उपयोग करें।"
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "गलती करना",
+        "custom": "रिवाज़"
       }
     }
   },

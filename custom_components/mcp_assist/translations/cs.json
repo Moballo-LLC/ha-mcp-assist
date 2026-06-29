@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Nazev profilu",
           "server_type": "Typ serveru"
+        },
+        "data_description": {
+          "profile_name": "Popisný název pro tento profil konverzace.",
+          "server_type": "Vyberte poskytovatele nebo odvozený server, který tento profil používá."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "URL serveru",
           "api_key": "API klic",
-          "mcp_port": "Port MCP serveru"
+          "mcp_port": "Port MCP serveru",
+          "openclaw_host": "Hostitel brány",
+          "openclaw_port": "Port brány",
+          "openclaw_token": "Token brány",
+          "openclaw_use_ssl": "Použijte SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "Základní URL pro místní server nebo server OpenAI-compatible používaný tímto profilem.",
+          "api_key": "Klíč nebo token nosiče API požadovaný tímto poskytovatelem.",
+          "mcp_port": "Místní port používaný sdíleným serverem MCP.",
+          "openclaw_host": "Název hostitele nebo IP adresa brány OpenClaw.",
+          "openclaw_port": "Port používaný serverem brány OpenClaw WebSocket.",
+          "openclaw_token": "Nosný token používaný k ověření s bránou OpenClaw.",
+          "openclaw_use_ssl": "Při komunikaci s bránou OpenClaw použijte zabezpečené připojení WebSocket."
         }
+      },
+      "openclaw_pairing": {
+        "title": "Párování zařízení OpenClaw",
+        "description": "Vaše zařízení musí být schváleno na serveru OpenClaw.\n\nSchvalte jej spuštěním `openclaw devices approve` nebo pomocí OpenClaw Control UI a poté klikněte na Odeslat.\n\nID zařízení: {device_id}"
       },
       "model": {
         "title": "Model a instrukce",
         "description": "{server_info}",
         "data": {
           "model_name": "Nazev modelu",
+          "system_prompt_mode": "Zdroj výzvy systému",
           "system_prompt": "Systemove instrukce",
+          "technical_prompt_mode": "Zdroj technických pokynů",
           "technical_prompt": "Technicke instrukce"
+        },
+        "data_description": {
+          "model_name": "Model LLM by tento profil měl používat.",
+          "system_prompt": "Předvyplněno aktuální výzvou systému. Upravte jej a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
+          "technical_prompt": "Předvyplněno aktuálními platnými technickými pokyny. Upravte je a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "Model",
+            "description": "Vyberte model, který má tento profil používat.",
+            "data": {
+              "model_name": "Nazev modelu"
+            },
+            "data_description": {
+              "model_name": "Model LLM by tento profil měl používat."
+            }
+          },
+          "prompts": {
+            "name": "Výzvy",
+            "description": "Zkontrolujte aktuální platné výzvy, zkopírujte je nebo je upravte pro tento profil.",
+            "data": {
+              "system_prompt": "Systemove instrukce",
+              "technical_prompt": "Technicke instrukce"
+            },
+            "data_description": {
+              "system_prompt": "Předvyplněno aktuální výzvou systému. Upravte jej a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
+              "technical_prompt": "Předvyplněno aktuálními platnými technickými pokyny. Upravte je a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Teplota",
           "max_tokens": "Max tokenu odpovedi",
           "max_history": "Max zprav historie",
+          "context_mode": "Kontextový režim",
           "max_iterations": "Max iteraci nastroju",
           "control_home_assistant": "Ovladat Home Assistant",
           "response_mode": "Rezim odpovedi",
           "follow_up_phrases": "Navazujici fraze",
           "end_words": "Slova pro ukonceni konverzace",
+          "clean_responses": "Čisté odpovědi pro hlasový výstup",
           "timeout": "Casovy limit odpovedi",
           "debug_mode": "Rezim ladeni",
+          "chat_log_mode": "Režim protokolu chatu",
           "ollama_keep_alive": "Udrzovat Ollama aktivni",
           "ollama_num_ctx": "Kontextove okno Ollama",
-          "clean_responses": "Čisté odpovědi pro hlasový výstup"
+          "openclaw_session_key": "Klíč relace"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Konverzace",
+            "description": "Nastavení chování, následné manipulace a hlasového výstupu pro tento profil.",
+            "data": {
+              "control_home_assistant": "Ovladat Home Assistant",
+              "response_mode": "Rezim odpovedi",
+              "follow_up_phrases": "Navazujici fraze",
+              "end_words": "Slova pro ukonceni konverzace",
+              "clean_responses": "Čisté odpovědi pro hlasový výstup"
+            },
+            "data_description": {
+              "control_home_assistant": "Povolit tomuto profilu provádět akce Home Assistant namísto pouze odpovídání na otázky.",
+              "response_mode": "Řídí, zda asistent okamžitě skončí, nebo položí přirozené doplňující otázky, když je to vhodné.",
+              "follow_up_phrases": "Čárkami oddělené fráze používané k detekci následných stylových odpovědí.",
+              "end_words": "Slova nebo fráze oddělené čárkami, které by měly konverzaci ukončit.",
+              "clean_responses": "Ořízněte zbytečné formátování nebo výplň, aby byly mluvené odpovědi čistší."
+            }
+          },
+          "performance": {
+            "name": "Výkon",
+            "description": "Limity odezvy modelu, limity provádění, časový limit a ladění.",
+            "data": {
+              "temperature": "Teplota",
+              "max_tokens": "Max tokenu odpovedi",
+              "max_history": "Max zprav historie",
+              "context_mode": "Kontextový režim",
+              "max_iterations": "Max iteraci nastroju",
+              "timeout": "Casovy limit odpovedi",
+              "debug_mode": "Rezim ladeni",
+              "chat_log_mode": "Režim protokolu chatu"
+            },
+            "data_description": {
+              "temperature": "Řídí náhodnost odezvy. Nižší hodnoty jsou determinističtější.",
+              "max_tokens": "Omezuje, kolik tokenů může model vygenerovat v jedné odpovědi.",
+              "max_history": "Kolik zpráv z předchozí konverzace zachovat v kontextu.",
+              "context_mode": "Standard odešle úplný kontext nástroje profilu. Light udržuje menší okno historie a inzeruje základní nástroje Home Assistant pro malé místní modely.",
+              "max_iterations": "Omezuje, kolik otočení k vyvolání nástroje může asistent použít pro jeden požadavek.",
+              "timeout": "Jak dlouho čekat na odpověď poskytovatele, než vyprší časový limit.",
+              "debug_mode": "Povolit podrobnější protokolování pro odstraňování problémů.",
+              "chat_log_mode": "Přetrvávat protokoly nedávných konverzací, včetně uživatelského textu, odpovědí asistenta, názvů nástrojů, argumentů nástrojů a výsledků nástrojů pro kontrolu."
+            }
+          },
+          "provider": {
+            "name": "Poskytovatel",
+            "description": "Nastavení specifická pro poskytovatele se zobrazí pouze v případě, že platí.",
+            "data": {
+              "ollama_keep_alive": "Udrzovat Ollama aktivni",
+              "ollama_num_ctx": "Kontextove okno Ollama",
+              "openclaw_session_key": "Klíč relace"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
+              "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
+              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy."
+            }
+          },
+          "tools": {
+            "name": "Nástroje",
+            "description": "Nezaškrtnuté nástroje zůstávají dostupné, kdykoli jsou povoleny na sdíleném serveru MCP. Zaškrtnutím políčka zakážete rodinu nástrojů pouze pro tento profil.",
+            "data": {
+              "disable_assist_bridge": "Zakázat Asistenční most",
+              "disable_calculator": "Zakázat kalkulačku",
+              "disable_custom_tools": "Zakázat vlastní nástroje",
+              "disable_device": "Zakázat nástroje zařízení",
+              "disable_google_maps": "Zakázat Google Places and Routes",
+              "disable_llm_api_bridge": "Zakázat LLM API Bridge",
+              "disable_memory": "Zakázat paměť",
+              "disable_music_assistant": "Zakázat Music Assistant",
+              "disable_read_url": "Zakázat čtení URL",
+              "disable_recorder": "Zakázat historii záznamníku",
+              "disable_response_service": "Zakázat čtení služby odezvy",
+              "disable_search": "Zakázat vyhledávání",
+              "disable_unit_conversion": "Zakázat převod jednotek",
+              "disable_weather_forecast": "Zakázat předpověď počasí",
+              "disable_wikipedia_search": "Zakázat vyhledávání Wikipedia",
+              "disable_web_search": "Zakázat vyhledávání na webu"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Zabrání tomuto profilu používat nativní nástroje Assist, výzvu a kontextový snímek Home Assistant.",
+              "disable_calculator": "Zabraňuje tomuto profilu používat matematické nástroje a nástroje pro vyhodnocování výrazů.",
+              "disable_custom_tools": "Zabraňuje tomuto profilu používat externí balíčky vlastních nástrojů načtené prostřednictvím sdíleného serveru MCP.",
+              "disable_device": "Zabrání tomuto profilu v objevování fyzických zařízení a podrobností o zařízení.",
+              "disable_google_maps": "Zabrání tomuto profilu používat nástroje Google Places and Routes.",
+              "disable_llm_api_bridge": "Zabraňuje tomuto profilu používat nástroje třetích stran Home Assistant LLM API uvedené na seznamu povolených.",
+              "disable_memory": "Zabraňuje tomuto profilu ukládat, vyvolávat nebo zapomínat sdílené trvalé vzpomínky.",
+              "disable_music_assistant": "Zabrání tomuto profilu používat nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
+              "disable_read_url": "Zabrání tomuto profilu v otevírání a extrahování obsahu stránky z URLs.",
+              "disable_recorder": "Zabraňuje tomuto profilu používat nástroje historie, počtu, trvání a časového bodu podporované záznamníkem.",
+              "disable_response_service": "Zabraňuje tomuto profilu používat služby Home Assistant, které vracejí strukturovaná data, jako jsou čtení kalendáře a prognózy.",
+              "disable_search": "Zabrání tomuto profilu používat vestavěného pomocníka pro vyhledávání na webu.",
+              "disable_unit_conversion": "Zabraňuje tomuto profilu používat přesné nástroje pro převod jednotek, jako je °C na °F, převod vzdálenosti, objemu kuchyně, úložiště a rychlosti dat.",
+              "disable_weather_forecast": "Zabraňuje tomuto profilu používat vyhrazeného pomocníka pro předpověď počasí Home Assistant.",
+              "disable_wikipedia_search": "Zabrání tomuto profilu ve vyhledávání Wikipedia.",
+              "disable_web_search": "Zabraňuje tomuto profilu používat nástroje pro vyhledávání na webu a čtení URL, i když jsou povoleny na sdíleném serveru MCP."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Tato nastaveni ovlivnuji VSECHNY profily. Zmeny zde ovlivni kazdeho konverzacniho agenta MCP Assist.",
         "data": {
           "mcp_port": "Port MCP serveru",
-          "search_provider": "Webove vyhledavani",
-          "brave_api_key": "API klic Brave Search",
-          "allowed_ips": "Dalsi povolene IP/rozsahy",
-          "enable_gap_filling": "Povolit inteligentni index entit",
-          "max_entities_per_discovery": "Max entit na vyhledavani (20-500)"
+          "allowed_ips": "Dalsi povolene IP/rozsahy"
+        },
+        "data_description": {
+          "mcp_port": "Místní port používaný sdíleným serverem MCP.",
+          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Kontext",
+            "description": "Ovládejte, které podrobnosti o identitě a umístění Home Assistant jsou zahrnuty do výzev AI a užitečných zatížení volání nástroje MCP.",
+            "data": {
+              "include_current_user": "Zahrnout aktuálního uživatele do výzvy",
+              "include_home_location": "Zahrnout umístění domova do výzvy",
+              "include_current_user_in_tool_calls": "Sdílejte aktuálního uživatele pomocí nástrojů MCP",
+              "include_home_location_in_tool_calls": "Sdílejte polohu domova pomocí nástrojů MCP"
+            },
+            "data_description": {
+              "include_current_user": "Pokud je k dispozici, zahrňte do výzvy AI jméno aktuálního uživatele Home Assistant.",
+              "include_home_location": "Zahrňte do výzvy AI kompaktní shrnutí domovské polohy pomocí nakonfigurovaného názvu domova a souřadnic Home Assistant.",
+              "include_current_user_in_tool_calls": "Odešlete aktuální ID uživatele a jméno Home Assistant v kontextu nástrojů/volání MCP, aby balíčky nástrojů mohly auditovat nebo personalizovat akce.",
+              "include_home_location_in_tool_calls": "Odešlete nakonfigurovaný domovský název, zeměpisnou šířku a délku Home Assistant v nástrojích/kontextu volání MCP pro balíčky nástrojů, které potřebují metadata o poloze."
+            }
+          },
+          "discovery": {
+            "name": "Objev",
+            "description": "Řídit, jak sdílený server MCP vytváří a vrací výsledky zjišťování.",
+            "data": {
+              "enable_gap_filling": "Povolit index inteligentních entit",
+              "max_entities_per_discovery": "Maximální počet entit na objev (20–500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Vytváří kompaktní systémový index, aby bylo zjišťování rychlé a s ohledem na kontext.",
+              "max_entities_per_discovery": "Omezuje, kolik entit může vrátit jedno zjišťovací volání."
+            }
+          },
+          "memory": {
+            "name": "Paměť",
+            "description": "Nakonfigurujte, jak dlouho budou sdílené trvalé vzpomínky uchovávány, když je povolen nástroj Paměť.",
+            "data": {
+              "memory_default_ttl_days": "Výchozí paměť TTL (dny)",
+              "memory_max_ttl_days": "Maximální paměť TTL (dny)",
+              "memory_max_items": "Max uložených vzpomínek"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Výchozí počet dní, po které je nová paměť uchovávána, když volání nástroje neposkytuje ttl_days.",
+              "memory_max_ttl_days": "Maximální počet dní, po které může být uložená paměť zachována.",
+              "memory_max_items": "Horní hranice aktivních uložených pamětí. Při překročení tohoto limitu jsou nejdříve ořezány nejstarší paměti."
+            }
+          },
+          "tools": {
+            "name": "Nástroje",
+            "description": "Povolte nebo zakažte možnosti volitelných nástrojů nabízených sdíleným serverem MCP.",
+            "data": {
+              "enable_assist_bridge": "Asistenční můstek",
+              "enable_calculator_tools": "Kalkulačka",
+              "enable_external_custom_tools": "Vlastní nástroje",
+              "enable_device_tools": "Nástroje zařízení",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "Most LLM API",
+              "enable_memory_tools": "Paměť",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Přečtěte si URL",
+              "enable_recorder_tools": "Historie rekordéru",
+              "enable_response_service_tools": "Čtení služby odezvy",
+              "enable_search_tool": "Vyhledávání",
+              "enable_unit_conversion_tools": "Převod jednotek",
+              "enable_weather_forecast_tool": "Předpověď počasí",
+              "enable_wikipedia_search_tool": "Vyhledávání Wikipedia",
+              "enable_web_search": "Vyhledávání na webu",
+              "search_provider": "Poskytovatel vyhledávání na webu",
+              "brave_api_key": "Klíč Brave Search API",
+              "google_maps_api_key": "Klíč Google Maps API",
+              "llm_api_allowlist": "Povolená ID LLM API",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Vystavte nativní nástroje Assist, výzvu a kontextový snímek Home Assistant.",
+              "enable_calculator_tools": "Představte matematické nástroje a nástroje pro vyhodnocování výrazů.",
+              "enable_external_custom_tools": "Načtěte další balíčky místních nástrojů z konfiguračního adresáře Home Assistant pod mcp-assist-tools. Ve výchozím nastavení zakázáno. Povolte pouze důvěryhodné balíčky, protože běží jako kód Python uvnitř Home Assistant a mohou přidávat nástroje MCP a krátké pokyny.",
+              "enable_device_tools": "Odhalte nástroje pro vyhledávání fyzických zařízení a podrobné informace o zařízení.",
+              "enable_google_maps_tools": "Vystavte nástroje pro vyhledávání Google Places a Google Routes. Vyžaduje klíč Google Maps API.",
+              "enable_llm_api_bridge": "Vystavte seznam povolených třetích stran Home Assistant LLM API registrovaných jinými integracemi.",
+              "enable_memory_tools": "Vystavte nástroje sdílené trvalé paměti, aby si asistent mohl zapamatovat, vyvolat a zapomenout uživatelsky schválená fakta a preference s vypršením platnosti na základě TTL.",
+              "enable_music_assistant_support": "Vystavte nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
+              "enable_read_url_tool": "Vystavte čtení URL, aby asistent mohl zkontrolovat konkrétní webové stránky.",
+              "enable_recorder_tools": "Odhalte historii, analýzu a nástroje pro konkrétní okamžiky podporovanou rekordérem.",
+              "enable_response_service_tools": "Vystavte služby Home Assistant, které vracejí strukturovaná data, jako jsou čtení kalendářů a prognóz.",
+              "enable_search_tool": "Vystavte vyhledávání na webu pomocí nakonfigurovaného sdíleného poskytovatele.",
+              "enable_unit_conversion_tools": "Ukažte přesné nástroje pro převod jednotek, jako je °C až °F, převod vzdálenosti, objemu kuchyně, úložiště a rychlosti přenosu dat.",
+              "enable_weather_forecast_tool": "Vystavte speciálního pomocníka pro předpověď počasí Home Assistant.",
+              "enable_wikipedia_search_tool": "Odhalte jednoduché vyhledávání článků Wikipedia pro otázky související s pozadím a referenčními otázkami.",
+              "enable_web_search": "Odhalte nástroje pro vyhledávání na webu a čtení URL.",
+              "search_provider": "Vyberte poskytovatele, který chcete použít, když je povoleno vyhledávání na webu.",
+              "brave_api_key": "Vyžadováno pouze v případě, že je povoleno vyhledávání na webu a je vybrána možnost Brave Search.",
+              "google_maps_api_key": "Vyžadováno pouze v případě, že je povoleno Google Places and Routes.",
+              "llm_api_allowlist": "Čárkou nebo novým řádkem oddělená LLM API ID třetí strany MCP Assist může kontrolovat nebo volat, jako je llm_intents. Nainstalovaný LLM API třetí strany: {installed_llm_apis}. Vestavěný asistenční modul API zůstává na Assist Bridge.",
+              "searxng_url": "Vyžadováno pouze v případě, že je povoleno vyhledávání na webu a je vybrána možnost SearXNG. Použijte základní URL pro instanci SearXNG s vlastním hostitelem."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Neplatny format IP adresy nebo CIDR rozsahu. Pouzijte hodnoty oddelene carkou jako: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Nazev profilu je vyzadovan.",
       "invalid_json": "Neplatny format JSON. Zkontrolujte prosim konfiguraci vasich MCP serveru.",
+      "searxng_url_required": "SearXNG URL je vyžadováno, když je povoleno vyhledávání SearXNG.",
+      "google_maps_api_key_required": "Google Maps Klíč API je vyžadován, když je povoleno Google Places and Routes.",
+      "mcp_apply_failed": "Nelze použít sdílená nastavení serveru MCP. Zkontrolujte port a povolené adresy IP a zkuste to znovu.",
       "invalid_api_key": "Neplatny API klic. Zkontrolujte prosim a zkuste to znovu.",
       "auth_failed": "Autentizace selhala. Overte prosim svuj API klic.",
-      "unknown": "Doslo k nezname chybe."
+      "unknown": "Doslo k nezname chybe.",
+      "openclaw_not_paired": "Zařízení ještě není schváleno na serveru OpenClaw. Schvalte to a zkuste to znovu.",
+      "openclaw_connection_failed": "Nelze se připojit k bráně OpenClaw. Zkontrolujte hostitele, port a token."
     },
     "abort": {
       "already_configured": "Profil s timto nazvem jiz existuje. Zvolte prosim jiny nazev."
@@ -85,21 +338,186 @@
           "lmstudio_url": "URL serveru",
           "api_key": "API klic",
           "model_name": "Nazev modelu",
+          "system_prompt_mode": "Zdroj výzvy systému",
           "system_prompt": "Systemove instrukce",
+          "technical_prompt_mode": "Zdroj technických pokynů",
           "technical_prompt": "Technicke instrukce",
           "temperature": "Teplota",
           "max_tokens": "Max tokenu odpovedi",
           "max_history": "Max zprav historie",
+          "context_mode": "Kontextový režim",
           "max_iterations": "Max iteraci nastroju",
           "control_home_assistant": "Ovladat Home Assistant",
           "response_mode": "Rezim odpovedi",
           "follow_up_phrases": "Navazujici fraze",
           "end_words": "Slova pro ukonceni konverzace",
+          "clean_responses": "Čisté odpovědi pro hlasový výstup",
           "timeout": "Casovy limit odpovedi",
           "debug_mode": "Rezim ladeni",
+          "chat_log_mode": "Režim protokolu chatu",
           "ollama_keep_alive": "Udrzovat Ollama aktivni",
           "ollama_num_ctx": "Kontextove okno Ollama",
-          "clean_responses": "Čisté odpovědi pro hlasový výstup"
+          "openclaw_host": "Hostitel brány",
+          "openclaw_port": "Port brány",
+          "openclaw_token": "Token brány",
+          "openclaw_use_ssl": "Použijte SSL/TLS",
+          "openclaw_session_key": "Klíč relace"
+        },
+        "data_description": {
+          "model_name": "Model LLM by tento profil měl používat.",
+          "system_prompt": "Předvyplněno aktuální výzvou systému. Upravte jej a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
+          "technical_prompt": "Předvyplněno aktuálními platnými technickými pokyny. Upravte je a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
+          "context_mode": "Standard odešle úplný kontext nástroje profilu. Light udržuje menší okno historie a inzeruje základní nástroje Home Assistant pro malé místní modely."
+        },
+        "sections": {
+          "profile": {
+            "name": "Profil",
+            "description": "Základní nastavení identity pro tento profil konverzace.",
+            "data": {
+              "profile_name": "Nazev profilu"
+            },
+            "data_description": {
+              "profile_name": "Popisný název pro tento profil konverzace."
+            }
+          },
+          "connection": {
+            "name": "Spojení",
+            "description": "Jak se tento profil připojuje k poskytovateli modelu.",
+            "data": {
+              "lmstudio_url": "URL serveru",
+              "api_key": "API klic",
+              "openclaw_host": "Hostitel brány",
+              "openclaw_port": "Port brány",
+              "openclaw_token": "Token brány",
+              "openclaw_use_ssl": "Použijte SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "Základní URL pro místní server nebo server OpenAI-compatible používaný tímto profilem.",
+              "api_key": "Klíč nebo token nosiče API požadovaný tímto poskytovatelem.",
+              "openclaw_host": "Název hostitele nebo IP adresa brány OpenClaw.",
+              "openclaw_port": "Port používaný serverem brány OpenClaw WebSocket.",
+              "openclaw_token": "Nosný token používaný k ověření s bránou OpenClaw.",
+              "openclaw_use_ssl": "Při komunikaci s bránou OpenClaw použijte zabezpečené připojení WebSocket."
+            }
+          },
+          "model_fields": {
+            "name": "Model",
+            "description": "Vyberte model, který má tento profil používat.",
+            "data": {
+              "model_name": "Nazev modelu"
+            },
+            "data_description": {
+              "model_name": "Model LLM by tento profil měl používat."
+            }
+          },
+          "prompts": {
+            "name": "Výzvy",
+            "description": "Zkontrolujte aktuální platné výzvy, zkopírujte je nebo je upravte pro tento profil.",
+            "data": {
+              "system_prompt": "Systemove instrukce",
+              "technical_prompt": "Technicke instrukce"
+            },
+            "data_description": {
+              "system_prompt": "Předvyplněno aktuální výzvou systému. Upravte jej a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
+              "technical_prompt": "Předvyplněno aktuálními platnými technickými pokyny. Upravte je a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu."
+            }
+          },
+          "conversation": {
+            "name": "Konverzace",
+            "description": "Nastavení chování, následné manipulace a hlasového výstupu pro tento profil.",
+            "data": {
+              "control_home_assistant": "Ovladat Home Assistant",
+              "response_mode": "Rezim odpovedi",
+              "follow_up_phrases": "Navazujici fraze",
+              "end_words": "Slova pro ukonceni konverzace",
+              "clean_responses": "Čisté odpovědi pro hlasový výstup"
+            },
+            "data_description": {
+              "control_home_assistant": "Povolit tomuto profilu provádět akce Home Assistant namísto pouze odpovídání na otázky.",
+              "response_mode": "Řídí, zda asistent okamžitě skončí, nebo položí přirozené doplňující otázky, když je to vhodné.",
+              "follow_up_phrases": "Čárkami oddělené fráze používané k detekci následných stylových odpovědí.",
+              "end_words": "Slova nebo fráze oddělené čárkami, které by měly konverzaci ukončit.",
+              "clean_responses": "Ořízněte zbytečné formátování nebo výplň, aby byly mluvené odpovědi čistší."
+            }
+          },
+          "provider": {
+            "name": "Poskytovatel",
+            "description": "Nastavení specifická pro poskytovatele se zobrazí pouze v případě, že platí.",
+            "data": {
+              "ollama_keep_alive": "Udrzovat Ollama aktivni",
+              "ollama_num_ctx": "Kontextove okno Ollama",
+              "openclaw_session_key": "Klíč relace"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
+              "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
+              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy."
+            }
+          },
+          "advanced_settings": {
+            "name": "Moderní",
+            "description": "Odborné ladění pro chování modelu, limity, časový limit a ladění.",
+            "data": {
+              "temperature": "Teplota",
+              "max_tokens": "Max tokenu odpovedi",
+              "max_history": "Max zprav historie",
+              "context_mode": "Kontextový režim",
+              "max_iterations": "Max iteraci nastroju",
+              "timeout": "Casovy limit odpovedi",
+              "debug_mode": "Rezim ladeni",
+              "chat_log_mode": "Režim protokolu chatu"
+            },
+            "data_description": {
+              "temperature": "Řídí náhodnost odezvy. Nižší hodnoty jsou determinističtější.",
+              "max_tokens": "Omezuje, kolik tokenů může model vygenerovat v jedné odpovědi.",
+              "max_history": "Kolik zpráv z předchozí konverzace zachovat v kontextu.",
+              "context_mode": "Standard odešle úplný kontext nástroje profilu. Light udržuje menší okno historie a inzeruje základní nástroje Home Assistant pro malé místní modely.",
+              "max_iterations": "Omezuje, kolik otočení k vyvolání nástroje může asistent použít pro jeden požadavek.",
+              "timeout": "Jak dlouho čekat na odpověď poskytovatele, než vyprší časový limit.",
+              "debug_mode": "Povolit podrobnější protokolování pro odstraňování problémů.",
+              "chat_log_mode": "Přetrvávat protokoly nedávných konverzací, včetně uživatelského textu, odpovědí asistenta, názvů nástrojů, argumentů nástrojů a výsledků nástrojů pro kontrolu."
+            }
+          },
+          "tools": {
+            "name": "Nástroje",
+            "description": "Nezaškrtnuté nástroje zůstávají dostupné, kdykoli jsou povoleny na sdíleném serveru MCP. Zaškrtnutím políčka zakážete rodinu nástrojů pouze pro tento profil.",
+            "data": {
+              "disable_assist_bridge": "Zakázat Asistenční most",
+              "disable_calculator": "Zakázat kalkulačku",
+              "disable_custom_tools": "Zakázat vlastní nástroje",
+              "disable_device": "Zakázat nástroje zařízení",
+              "disable_google_maps": "Zakázat Google Places and Routes",
+              "disable_llm_api_bridge": "Zakázat LLM API Bridge",
+              "disable_memory": "Zakázat paměť",
+              "disable_music_assistant": "Zakázat Music Assistant",
+              "disable_read_url": "Zakázat čtení URL",
+              "disable_recorder": "Zakázat historii záznamníku",
+              "disable_response_service": "Zakázat čtení služby odezvy",
+              "disable_search": "Zakázat vyhledávání",
+              "disable_unit_conversion": "Zakázat převod jednotek",
+              "disable_weather_forecast": "Zakázat předpověď počasí",
+              "disable_wikipedia_search": "Zakázat vyhledávání Wikipedia",
+              "disable_web_search": "Zakázat vyhledávání na webu"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Zabrání tomuto profilu používat nativní nástroje Assist, výzvu a kontextový snímek Home Assistant.",
+              "disable_calculator": "Zabraňuje tomuto profilu používat matematické nástroje a nástroje pro vyhodnocování výrazů.",
+              "disable_custom_tools": "Zabraňuje tomuto profilu používat externí balíčky vlastních nástrojů načtené prostřednictvím sdíleného serveru MCP.",
+              "disable_unit_conversion": "Zabraňuje tomuto profilu používat přesné nástroje pro převod jednotek, jako je °C na °F, převod vzdálenosti, objemu kuchyně, úložiště a rychlosti dat.",
+              "disable_device": "Zabrání tomuto profilu v objevování fyzických zařízení a podrobností o zařízení.",
+              "disable_google_maps": "Zabrání tomuto profilu používat nástroje Google Places and Routes.",
+              "disable_llm_api_bridge": "Zabraňuje tomuto profilu používat nástroje třetích stran Home Assistant LLM API uvedené na seznamu povolených.",
+              "disable_memory": "Zabraňuje tomuto profilu ukládat, vyvolávat nebo zapomínat sdílené trvalé vzpomínky.",
+              "disable_music_assistant": "Zabrání tomuto profilu používat nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
+              "disable_read_url": "Zabrání tomuto profilu v otevírání a extrahování obsahu stránky z URLs.",
+              "disable_recorder": "Zabraňuje tomuto profilu používat nástroje historie, počtu, trvání a časového bodu podporované záznamníkem.",
+              "disable_response_service": "Zabraňuje tomuto profilu používat služby Home Assistant, které vracejí strukturovaná data, jako jsou čtení kalendáře a prognózy.",
+              "disable_search": "Zabrání tomuto profilu používat vestavěného pomocníka pro vyhledávání na webu.",
+              "disable_weather_forecast": "Zabraňuje tomuto profilu používat vyhrazeného pomocníka pro předpověď počasí Home Assistant.",
+              "disable_wikipedia_search": "Zabrání tomuto profilu ve vyhledávání Wikipedia.",
+              "disable_web_search": "Zabraňuje tomuto profilu používat nástroje pro vyhledávání na webu a čtení URL, i když jsou povoleny na sdíleném serveru MCP."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Tato nastaveni jsou sdilena mezi VSEMI profily",
         "data": {
           "mcp_port": "Port MCP serveru",
-          "search_provider": "Webove vyhledavani",
-          "brave_api_key": "API klic Brave Search",
-          "allowed_ips": "Dalsi povolene IP/rozsahy",
-          "enable_gap_filling": "Povolit inteligentni index entit",
-          "max_entities_per_discovery": "Max entit na vyhledavani (20-500)"
+          "allowed_ips": "Dalsi povolene IP/rozsahy"
+        },
+        "data_description": {
+          "mcp_port": "Místní port používaný sdíleným serverem MCP.",
+          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Kontext",
+            "description": "Ovládejte, které podrobnosti o identitě a umístění Home Assistant jsou zahrnuty do výzev AI a užitečných zatížení volání nástroje MCP.",
+            "data": {
+              "include_current_user": "Zahrnout aktuálního uživatele do výzvy",
+              "include_home_location": "Zahrnout umístění domova do výzvy",
+              "include_current_user_in_tool_calls": "Sdílejte aktuálního uživatele pomocí nástrojů MCP",
+              "include_home_location_in_tool_calls": "Sdílejte polohu domova pomocí nástrojů MCP"
+            },
+            "data_description": {
+              "include_current_user": "Pokud je k dispozici, zahrňte do výzvy AI jméno aktuálního uživatele Home Assistant.",
+              "include_home_location": "Zahrňte do výzvy AI kompaktní shrnutí domovské polohy pomocí nakonfigurovaného názvu domova a souřadnic Home Assistant.",
+              "include_current_user_in_tool_calls": "Odešlete aktuální ID uživatele a jméno Home Assistant v kontextu nástrojů/volání MCP, aby balíčky nástrojů mohly auditovat nebo personalizovat akce.",
+              "include_home_location_in_tool_calls": "Odešlete nakonfigurovaný domovský název, zeměpisnou šířku a délku Home Assistant v nástrojích/kontextu volání MCP pro balíčky nástrojů, které potřebují metadata o poloze."
+            }
+          },
+          "discovery": {
+            "name": "Objev",
+            "description": "Řídit, jak sdílený server MCP vytváří a vrací výsledky zjišťování.",
+            "data": {
+              "enable_gap_filling": "Povolit index inteligentních entit",
+              "max_entities_per_discovery": "Maximální počet entit na objev (20–500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Vytváří kompaktní systémový index, aby bylo zjišťování rychlé a s ohledem na kontext.",
+              "max_entities_per_discovery": "Omezuje, kolik entit může vrátit jedno zjišťovací volání."
+            }
+          },
+          "memory": {
+            "name": "Paměť",
+            "description": "Nakonfigurujte, jak dlouho budou sdílené trvalé vzpomínky uchovávány, když je povolen nástroj Paměť.",
+            "data": {
+              "memory_default_ttl_days": "Výchozí paměť TTL (dny)",
+              "memory_max_ttl_days": "Maximální paměť TTL (dny)",
+              "memory_max_items": "Max uložených vzpomínek"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Výchozí počet dní, po které je nová paměť uchovávána, když volání nástroje neposkytuje ttl_days.",
+              "memory_max_ttl_days": "Maximální počet dní, po které může být uložená paměť zachována.",
+              "memory_max_items": "Horní hranice aktivních uložených pamětí. Při překročení tohoto limitu jsou nejdříve ořezány nejstarší paměti."
+            }
+          },
+          "tools": {
+            "name": "Nástroje",
+            "description": "Povolte nebo zakažte možnosti volitelných nástrojů nabízených sdíleným serverem MCP.",
+            "data": {
+              "enable_assist_bridge": "Asistenční můstek",
+              "enable_calculator_tools": "Kalkulačka",
+              "enable_external_custom_tools": "Vlastní nástroje",
+              "enable_device_tools": "Nástroje zařízení",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "Most LLM API",
+              "enable_memory_tools": "Paměť",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Přečtěte si URL",
+              "enable_recorder_tools": "Historie rekordéru",
+              "enable_response_service_tools": "Čtení služby odezvy",
+              "enable_search_tool": "Vyhledávání",
+              "enable_unit_conversion_tools": "Převod jednotek",
+              "enable_weather_forecast_tool": "Předpověď počasí",
+              "enable_wikipedia_search_tool": "Vyhledávání Wikipedia",
+              "enable_web_search": "Vyhledávání na webu",
+              "search_provider": "Poskytovatel vyhledávání na webu",
+              "brave_api_key": "Klíč Brave Search API",
+              "google_maps_api_key": "Klíč Google Maps API",
+              "llm_api_allowlist": "Povolená ID LLM API",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Vystavte nativní nástroje Assist, výzvu a kontextový snímek Home Assistant.",
+              "enable_calculator_tools": "Představte matematické nástroje a nástroje pro vyhodnocování výrazů.",
+              "enable_external_custom_tools": "Načtěte další balíčky místních nástrojů z konfiguračního adresáře Home Assistant pod mcp-assist-tools. Ve výchozím nastavení zakázáno. Povolte pouze důvěryhodné balíčky, protože běží jako kód Python uvnitř Home Assistant a mohou přidávat nástroje MCP a krátké pokyny.",
+              "enable_unit_conversion_tools": "Ukažte přesné nástroje pro převod jednotek, jako je °C až °F, převod vzdálenosti, objemu kuchyně, úložiště a rychlosti přenosu dat.",
+              "enable_device_tools": "Odhalte nástroje pro vyhledávání fyzických zařízení a podrobné informace o zařízení.",
+              "enable_google_maps_tools": "Vystavte nástroje pro vyhledávání Google Places a Google Routes. Vyžaduje klíč Google Maps API.",
+              "enable_llm_api_bridge": "Vystavte seznam povolených třetích stran Home Assistant LLM API registrovaných jinými integracemi.",
+              "enable_memory_tools": "Vystavte nástroje sdílené trvalé paměti, aby si asistent mohl zapamatovat, vyvolat a zapomenout uživatelsky schválená fakta a preference s vypršením platnosti na základě TTL.",
+              "enable_music_assistant_support": "Vystavte nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
+              "enable_read_url_tool": "Vystavte čtení URL, aby asistent mohl zkontrolovat konkrétní webové stránky.",
+              "enable_recorder_tools": "Odhalte historii, analýzu a nástroje pro konkrétní okamžiky podporovanou rekordérem.",
+              "enable_response_service_tools": "Vystavte služby Home Assistant, které vracejí strukturovaná data, jako jsou čtení kalendářů a prognóz.",
+              "enable_search_tool": "Vystavte vyhledávání na webu pomocí nakonfigurovaného sdíleného poskytovatele.",
+              "enable_weather_forecast_tool": "Vystavte speciálního pomocníka pro předpověď počasí Home Assistant.",
+              "enable_wikipedia_search_tool": "Odhalte jednoduché vyhledávání článků Wikipedia pro otázky související s pozadím a referenčními otázkami.",
+              "enable_web_search": "Odhalte nástroje pro vyhledávání na webu a čtení URL.",
+              "search_provider": "Vyberte poskytovatele, který chcete použít, když je povoleno vyhledávání na webu.",
+              "brave_api_key": "Vyžadováno pouze v případě, že je povoleno vyhledávání na webu a je vybrána možnost Brave Search.",
+              "google_maps_api_key": "Vyžadováno pouze v případě, že je povoleno Google Places and Routes.",
+              "llm_api_allowlist": "Čárkou nebo novým řádkem oddělená LLM API ID třetí strany MCP Assist může kontrolovat nebo volat, jako je llm_intents. Nainstalovaný LLM API třetí strany: {installed_llm_apis}. Vestavěný asistenční modul API zůstává na Assist Bridge.",
+              "searxng_url": "Vyžadováno pouze v případě, že je povoleno vyhledávání na webu a je vybrána možnost SearXNG. Použijte základní URL pro instanci SearXNG s vlastním hostitelem."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Výchozí",
+        "custom": "Zvyk"
       }
     }
   },

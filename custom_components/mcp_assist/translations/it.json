@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Nome profilo",
           "server_type": "Tipo di server"
+        },
+        "data_description": {
+          "profile_name": "Un nome descrittivo per questo profilo di conversazione.",
+          "server_type": "Scegli quale provider o server di inferenza utilizza questo profilo."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "URL del server",
           "api_key": "Chiave API",
-          "mcp_port": "Porta server MCP"
+          "mcp_port": "Porta server MCP",
+          "openclaw_host": "Host del gateway",
+          "openclaw_port": "Porta del gateway",
+          "openclaw_token": "Gettone del gateway",
+          "openclaw_use_ssl": "Utilizzare SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "Il URL di base per il server locale o OpenAI-compatible utilizzato da questo profilo.",
+          "api_key": "La chiave API o il token al portatore richiesto da questo provider.",
+          "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
+          "openclaw_host": "Nome host o indirizzo IP del gateway OpenClaw.",
+          "openclaw_port": "Porta utilizzata dal server WebSocket del gateway OpenClaw.",
+          "openclaw_token": "Token di connessione utilizzato per l'autenticazione con il gateway OpenClaw.",
+          "openclaw_use_ssl": "Utilizzare una connessione WebSocket sicura quando si comunica con il gateway OpenClaw."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Associazione dispositivi",
+        "description": "Il tuo dispositivo deve essere approvato sul server OpenClaw.\n\nApprovarlo eseguendo `openclaw devices approve` o utilizzando OpenClaw Control UI, quindi fare clic su Invia.\n\nID dispositivo: {device_id}"
       },
       "model": {
         "title": "Modello e istruzioni",
         "description": "{server_info}",
         "data": {
           "model_name": "Nome modello",
+          "system_prompt_mode": "Origine prompt di sistema",
           "system_prompt": "Istruzioni di sistema",
+          "technical_prompt_mode": "Fonte Istruzioni Tecniche",
           "technical_prompt": "Istruzioni tecniche"
+        },
+        "data_description": {
+          "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare.",
+          "system_prompt": "Precompilato con il prompt di sistema attualmente effettivo. Modificalo per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
+          "technical_prompt": "Precompilato con le istruzioni tecniche vigenti in vigore. Modificali per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "Modello",
+            "description": "Scegli il modello che questo profilo dovrebbe utilizzare.",
+            "data": {
+              "model_name": "Nome modello"
+            },
+            "data_description": {
+              "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare."
+            }
+          },
+          "prompts": {
+            "name": "Richiede",
+            "description": "Esamina le istruzioni attualmente efficaci, copiale o modificale per questo profilo.",
+            "data": {
+              "system_prompt": "Istruzioni di sistema",
+              "technical_prompt": "Istruzioni tecniche"
+            },
+            "data_description": {
+              "system_prompt": "Precompilato con il prompt di sistema attualmente effettivo. Modificalo per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
+              "technical_prompt": "Precompilato con le istruzioni tecniche vigenti in vigore. Modificali per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Temperatura",
           "max_tokens": "Token di risposta massimi",
           "max_history": "Messaggi di cronologia massimi",
+          "context_mode": "Modalità contesto",
           "max_iterations": "Iterazioni strumenti massime",
           "control_home_assistant": "Controlla Home Assistant",
           "response_mode": "Modalita di risposta",
           "follow_up_phrases": "Frasi di seguito",
           "end_words": "Parole per terminare conversazione",
+          "clean_responses": "Pulisci risposte per output vocale",
           "timeout": "Timeout risposta",
           "debug_mode": "Modalita debug",
+          "chat_log_mode": "Modalità registro chat",
           "ollama_keep_alive": "Mantieni Ollama attivo",
           "ollama_num_ctx": "Finestra di contesto Ollama",
-          "clean_responses": "Pulisci risposte per output vocale"
+          "openclaw_session_key": "Chiave di sessione"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Conversazione",
+            "description": "Comportamento, gestione del follow-up e impostazioni di output vocale per questo profilo.",
+            "data": {
+              "control_home_assistant": "Controlla Home Assistant",
+              "response_mode": "Modalita di risposta",
+              "follow_up_phrases": "Frasi di seguito",
+              "end_words": "Parole per terminare conversazione",
+              "clean_responses": "Pulisci risposte per output vocale"
+            },
+            "data_description": {
+              "control_home_assistant": "Consenti a questo profilo di eseguire azioni Home Assistant invece di limitarsi a rispondere alle domande.",
+              "response_mode": "Controlla se l'assistente termina immediatamente o pone domande di follow-up naturali quando appropriato.",
+              "follow_up_phrases": "Frasi separate da virgole utilizzate per rilevare le risposte in stile follow-up.",
+              "end_words": "Parole o frasi separate da virgole che dovrebbero terminare la conversazione.",
+              "clean_responses": "Elimina la formattazione o il riempimento non necessari per mantenere le risposte vocali più pulite."
+            }
+          },
+          "performance": {
+            "name": "Prestazione",
+            "description": "Limiti di risposta del modello, limiti di esecuzione, timeout e debug.",
+            "data": {
+              "temperature": "Temperatura",
+              "max_tokens": "Token di risposta massimi",
+              "max_history": "Messaggi di cronologia massimi",
+              "context_mode": "Modalità contesto",
+              "max_iterations": "Iterazioni strumenti massime",
+              "timeout": "Timeout risposta",
+              "debug_mode": "Modalita debug",
+              "chat_log_mode": "Modalità registro chat"
+            },
+            "data_description": {
+              "temperature": "Controlla la casualità della risposta. I valori più bassi sono più deterministici.",
+              "max_tokens": "Limita il numero di token che il modello può generare in una risposta.",
+              "max_history": "Quanti messaggi di conversazione precedenti mantenere nel contesto.",
+              "context_mode": "Standard invia il contesto completo dello strumento profilo. Light mantiene una finestra della cronologia più piccola e pubblicizza gli strumenti Home Assistant principali per piccoli modelli locali.",
+              "max_iterations": "Limita il numero di turni di chiamata degli strumenti che l'assistente può utilizzare per una richiesta.",
+              "timeout": "Quanto tempo attendere la risposta del fornitore prima del timeout.",
+              "debug_mode": "Abilita una registrazione più dettagliata per la risoluzione dei problemi.",
+              "chat_log_mode": "Conserva i registri delle conversazioni recenti, inclusi il testo dell'utente, le risposte dell'assistente, i nomi degli strumenti, gli argomenti degli strumenti e i risultati degli strumenti per la revisione."
+            }
+          },
+          "provider": {
+            "name": "Fornitore",
+            "description": "Impostazioni specifiche del provider visualizzate solo quando applicabili.",
+            "data": {
+              "ollama_keep_alive": "Mantieni Ollama attivo",
+              "ollama_num_ctx": "Finestra di contesto Ollama",
+              "openclaw_session_key": "Chiave di sessione"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
+              "ollama_num_ctx": "Sostituisci la dimensione della finestra di contesto passata a Ollama. Utilizzare 0 per mantenere il modello predefinito.",
+              "openclaw_session_key": "Nome della sessione OpenClaw a cui inviare i messaggi."
+            }
+          },
+          "tools": {
+            "name": "Utensili",
+            "description": "Gli strumenti non selezionati rimangono disponibili ogni volta che vengono abilitati sul server MCP condiviso. Selezionare una casella per vietare una famiglia di utensili solo per questo profilo.",
+            "data": {
+              "disable_assist_bridge": "Disabilita Assist Bridge",
+              "disable_calculator": "Disabilita calcolatrice",
+              "disable_custom_tools": "Disabilita strumenti personalizzati",
+              "disable_device": "Disabilita Strumenti dispositivo",
+              "disable_google_maps": "Disabilita Google Places and Routes",
+              "disable_llm_api_bridge": "Disabilita il bridge LLM API",
+              "disable_memory": "Disabilita memoria",
+              "disable_music_assistant": "Disabilita Music Assistant",
+              "disable_read_url": "Disabilita Lettura URL",
+              "disable_recorder": "Disabilita la cronologia del registratore",
+              "disable_response_service": "Disabilita letture del servizio di risposta",
+              "disable_search": "Disabilita ricerca",
+              "disable_unit_conversion": "Disabilita conversione unità",
+              "disable_weather_forecast": "Disattiva le previsioni del tempo",
+              "disable_wikipedia_search": "Disabilita la ricerca Wikipedia",
+              "disable_web_search": "Disattiva la ricerca sul Web"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Impedisce a questo profilo di utilizzare gli strumenti Assist nativi, il prompt e l'istantanea del contesto di Home Assistant.",
+              "disable_calculator": "Impedisce a questo profilo di utilizzare strumenti matematici e di valutazione delle espressioni.",
+              "disable_custom_tools": "Impedisce a questo profilo di utilizzare pacchetti di strumenti personalizzati esterni caricati tramite il server MCP condiviso.",
+              "disable_device": "Impedisce a questo profilo di rilevare dispositivi fisici e dettagli del dispositivo.",
+              "disable_google_maps": "Impedisce a questo profilo di utilizzare gli strumenti Google Places and Routes.",
+              "disable_llm_api_bridge": "Impedisce a questo profilo di utilizzare strumenti Home Assistant LLM API di terze parti consentiti.",
+              "disable_memory": "Impedisce a questo profilo di archiviare, richiamare o dimenticare i ricordi persistenti condivisi.",
+              "disable_music_assistant": "Impedisce a questo profilo di utilizzare gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
+              "disable_read_url": "Impedisce a questo profilo di aprire ed estrarre il contenuto della pagina da URLs.",
+              "disable_recorder": "Impedisce a questo profilo di utilizzare strumenti di cronologia, conteggio, durata e point-in-time supportati dal registratore.",
+              "disable_response_service": "Impedisce a questo profilo di utilizzare i servizi Home Assistant che restituiscono dati strutturati, come letture di calendario e previsioni.",
+              "disable_search": "Impedisce a questo profilo di utilizzare l'assistente di ricerca web integrato.",
+              "disable_unit_conversion": "Impedisce a questo profilo di utilizzare strumenti di conversione di unità esatte come da °C a °F, conversioni di distanza, volume della cucina, spazio di archiviazione e velocità dati.",
+              "disable_weather_forecast": "Impedisce a questo profilo di utilizzare l'assistente alle previsioni del tempo dedicato Home Assistant.",
+              "disable_wikipedia_search": "Impedisce a questo profilo di cercare Wikipedia.",
+              "disable_web_search": "Impedisce a questo profilo di utilizzare la ricerca Web e gli strumenti di lettura URL, anche se sono abilitati sul server MCP condiviso."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Queste impostazioni influenzano TUTTI i profili. Le modifiche qui avranno impatto su ogni agente di conversazione MCP Assist.",
         "data": {
           "mcp_port": "Porta server MCP",
-          "search_provider": "Ricerca web",
-          "brave_api_key": "Chiave API Brave Search",
-          "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
-          "enable_gap_filling": "Abilita indice intelligente entita",
-          "max_entities_per_discovery": "Max entita per ricerca (20-500)"
+          "allowed_ips": "IP/Intervalli aggiuntivi consentiti"
+        },
+        "data_description": {
+          "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
+          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Contesto",
+            "description": "Controlla quali identità Home Assistant e dettagli sulla posizione sono inclusi nei prompt AI e nei payload delle chiamate allo strumento MCP.",
+            "data": {
+              "include_current_user": "Includi l'utente corrente nel prompt",
+              "include_home_location": "Includi la posizione della casa nel prompt",
+              "include_current_user_in_tool_calls": "Condividi l'utente corrente con gli strumenti MCP",
+              "include_home_location_in_tool_calls": "Condividi la posizione di casa con gli strumenti MCP"
+            },
+            "data_description": {
+              "include_current_user": "Includere il nome dell'utente corrente Home Assistant nel prompt AI quando disponibile.",
+              "include_home_location": "Includere un riepilogo compatto della posizione della casa nel prompt AI, utilizzando il nome e le coordinate della casa configurati di Home Assistant.",
+              "include_current_user_in_tool_calls": "Invia l'ID utente e il nome Home Assistant correnti nel contesto degli strumenti/chiamate MCP in modo che i pacchetti di strumenti possano controllare o personalizzare le azioni.",
+              "include_home_location_in_tool_calls": "Invia il nome home, la latitudine e la longitudine configurati di Home Assistant nel contesto degli strumenti/chiamata MCP per i pacchetti di strumenti che necessitano di metadati di posizione."
+            }
+          },
+          "discovery": {
+            "name": "Scoperta",
+            "description": "Controlla il modo in cui il server MCP condiviso crea e restituisce i risultati del rilevamento.",
+            "data": {
+              "enable_gap_filling": "Abilita indice di entità intelligenti",
+              "max_entities_per_discovery": "Entità massime per scoperta (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Crea un indice di sistema compatto per mantenere la scoperta rapida e sensibile al contesto.",
+              "max_entities_per_discovery": "Limita il numero di entità che una singola chiamata di individuazione può restituire."
+            }
+          },
+          "memory": {
+            "name": "Memoria",
+            "description": "Configura per quanto tempo vengono conservate le memorie persistenti condivise quando lo strumento Memoria è abilitato.",
+            "data": {
+              "memory_default_ttl_days": "Memoria predefinita TTL (giorni)",
+              "memory_max_ttl_days": "Memoria massima TTL (giorni)",
+              "memory_max_items": "Numero massimo di memorie archiviate"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Numero predefinito di giorni in cui viene conservata una nuova memoria quando la chiamata dello strumento non fornisce ttl_days.",
+              "memory_max_ttl_days": "Numero massimo di giorni per cui è possibile conservare la memoria archiviata.",
+              "memory_max_items": "Limite superiore sulle memorie archiviate attive. I ricordi più vecchi vengono eliminati per primi quando viene superato questo limite."
+            }
+          },
+          "tools": {
+            "name": "Utensili",
+            "description": "Abilita o disabilita le funzionalità dello strumento facoltativo esposte dal server MCP condiviso.",
+            "data": {
+              "enable_assist_bridge": "Assistere il ponte",
+              "enable_calculator_tools": "Calcolatrice",
+              "enable_external_custom_tools": "Strumenti personalizzati",
+              "enable_device_tools": "Strumenti del dispositivo",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Ponte",
+              "enable_memory_tools": "Memoria",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Leggi URL",
+              "enable_recorder_tools": "Storia del registratore",
+              "enable_response_service_tools": "Il servizio di risposta legge",
+              "enable_search_tool": "Ricerca",
+              "enable_unit_conversion_tools": "Conversione di unità",
+              "enable_weather_forecast_tool": "Previsioni del tempo",
+              "enable_wikipedia_search_tool": "Wikipedia Cerca",
+              "enable_web_search": "Ricerca sul Web",
+              "search_provider": "Fornitore di ricerca Web",
+              "brave_api_key": "Brave Search API Chiave",
+              "google_maps_api_key": "Google Maps API Chiave",
+              "llm_api_allowlist": "ID LLM API consentiti",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Esponi gli strumenti Assist nativi, il prompt e l'istantanea del contesto di Home Assistant.",
+              "enable_calculator_tools": "Esporre strumenti matematici e di valutazione delle espressioni.",
+              "enable_external_custom_tools": "Caricare pacchetti di strumenti locali aggiuntivi dalla directory di configurazione Home Assistant in mcp-assist-tools. Disabilitato per impostazione predefinita. Abilita solo i pacchetti attendibili perché vengono eseguiti come codice Python all'interno di Home Assistant e potrebbero aggiungere strumenti MCP oltre a una breve guida rapida.",
+              "enable_device_tools": "Esporre gli strumenti di rilevamento dei dispositivi fisici e di dettaglio dei dispositivi.",
+              "enable_google_maps_tools": "Esporre gli strumenti di ricerca Google Places e di tempo di viaggio Google Routes. Richiede una chiave Google Maps API.",
+              "enable_llm_api_bridge": "Esporre Home Assistant LLM API di terze parti consentiti registrati da altre integrazioni.",
+              "enable_memory_tools": "Esponi strumenti di memoria persistente condivisa in modo che l'assistente possa ricordare, richiamare e dimenticare fatti e preferenze approvati dall'utente con scadenza basata su TTL.",
+              "enable_music_assistant_support": "Esporre gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
+              "enable_read_url_tool": "Esporre la lettura URL in modo che l'assistente possa ispezionare pagine Web specifiche.",
+              "enable_recorder_tools": "Esponi strumenti di cronologia, analisi e point-in-time supportati dal registratore.",
+              "enable_response_service_tools": "Esporre i servizi Home Assistant che restituiscono dati strutturati, come letture di calendario e previsioni.",
+              "enable_search_tool": "Esporre la ricerca Web utilizzando il provider condiviso configurato.",
+              "enable_unit_conversion_tools": "Esponi strumenti esatti di conversione delle unità come da °C a °F, conversioni di distanza, volume della cucina, spazio di archiviazione e velocità dati.",
+              "enable_weather_forecast_tool": "Esponi l'assistente dedicato alle previsioni del tempo Home Assistant.",
+              "enable_wikipedia_search_tool": "Esponi la ricerca leggera di articoli Wikipedia per domande di background e di riferimento.",
+              "enable_web_search": "Esporre strumenti di ricerca web e di lettura URL.",
+              "search_provider": "Scegli quale provider utilizzare quando Ricerca Web è abilitata.",
+              "brave_api_key": "Richiesto solo quando Ricerca Web è abilitata ed è selezionato Brave Search.",
+              "google_maps_api_key": "Richiesto solo quando Google Places and Routes è abilitato.",
+              "llm_api_allowlist": "ID LLM API di terze parti separati da virgole o nuove righe che MCP Assist può ispezionare o chiamare, ad esempio llm_intents. LLM API di terze parti installati: {installed_llm_apis}. L'assistenza integrata API rimane su Assist Bridge.",
+              "searxng_url": "Richiesto solo quando Ricerca Web è abilitata ed è selezionato SearXNG. Utilizza il URL di base per la tua istanza SearXNG ospitata autonomamente."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Formato indirizzo IP o intervallo CIDR non valido. Usa valori separati da virgola come: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Il nome del profilo e obbligatorio.",
       "invalid_json": "Formato JSON non valido. Controlla la configurazione dei tuoi server MCP.",
+      "searxng_url_required": "SearXNG URL è richiesto quando la ricerca SearXNG è abilitata.",
+      "google_maps_api_key_required": "Google Maps La chiave API è necessaria quando Google Places and Routes è abilitato.",
+      "mcp_apply_failed": "Impossibile applicare le impostazioni del server MCP condiviso. Controlla la porta e gli IP consentiti, quindi riprova.",
       "invalid_api_key": "Chiave API non valida. Controlla e riprova.",
       "auth_failed": "Autenticazione fallita. Verifica la tua chiave API.",
-      "unknown": "Si e verificato un errore sconosciuto."
+      "unknown": "Si e verificato un errore sconosciuto.",
+      "openclaw_not_paired": "Dispositivo non ancora approvato sul server OpenClaw. Per favore approvalo e riprova.",
+      "openclaw_connection_failed": "Impossibile connettersi al gateway OpenClaw. Controlla l'host, la porta e il token."
     },
     "abort": {
       "already_configured": "Esiste gia un profilo con questo nome. Scegli un nome diverso."
@@ -85,21 +338,186 @@
           "lmstudio_url": "URL del server",
           "api_key": "Chiave API",
           "model_name": "Nome modello",
+          "system_prompt_mode": "Origine prompt di sistema",
           "system_prompt": "Istruzioni di sistema",
+          "technical_prompt_mode": "Fonte Istruzioni Tecniche",
           "technical_prompt": "Istruzioni tecniche",
           "temperature": "Temperatura",
           "max_tokens": "Token di risposta massimi",
           "max_history": "Messaggi di cronologia massimi",
+          "context_mode": "Modalità contesto",
           "max_iterations": "Iterazioni strumenti massime",
           "control_home_assistant": "Controlla Home Assistant",
           "response_mode": "Modalita di risposta",
           "follow_up_phrases": "Frasi di seguito",
           "end_words": "Parole per terminare conversazione",
+          "clean_responses": "Pulisci risposte per output vocale",
           "timeout": "Timeout risposta",
           "debug_mode": "Modalita debug",
+          "chat_log_mode": "Modalità registro chat",
           "ollama_keep_alive": "Mantieni Ollama attivo",
           "ollama_num_ctx": "Finestra di contesto Ollama",
-          "clean_responses": "Pulisci risposte per output vocale"
+          "openclaw_host": "Host del gateway",
+          "openclaw_port": "Porta del gateway",
+          "openclaw_token": "Gettone del gateway",
+          "openclaw_use_ssl": "Utilizzare SSL/TLS",
+          "openclaw_session_key": "Chiave di sessione"
+        },
+        "data_description": {
+          "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare.",
+          "system_prompt": "Precompilato con il prompt di sistema attualmente effettivo. Modificalo per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
+          "technical_prompt": "Precompilato con le istruzioni tecniche vigenti in vigore. Modificali per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
+          "context_mode": "Standard invia il contesto completo dello strumento profilo. Light mantiene una finestra della cronologia più piccola e pubblicizza gli strumenti Home Assistant principali per piccoli modelli locali."
+        },
+        "sections": {
+          "profile": {
+            "name": "Profilo",
+            "description": "Impostazioni dell'identità di base per questo profilo di conversazione.",
+            "data": {
+              "profile_name": "Nome profilo"
+            },
+            "data_description": {
+              "profile_name": "Un nome descrittivo per questo profilo di conversazione."
+            }
+          },
+          "connection": {
+            "name": "Connessione",
+            "description": "In che modo questo profilo si collega al fornitore del modello.",
+            "data": {
+              "lmstudio_url": "URL del server",
+              "api_key": "Chiave API",
+              "openclaw_host": "Host del gateway",
+              "openclaw_port": "Porta del gateway",
+              "openclaw_token": "Gettone del gateway",
+              "openclaw_use_ssl": "Utilizzare SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "Il URL di base per il server locale o OpenAI-compatible utilizzato da questo profilo.",
+              "api_key": "La chiave API o il token al portatore richiesto da questo provider.",
+              "openclaw_host": "Nome host o indirizzo IP del gateway OpenClaw.",
+              "openclaw_port": "Porta utilizzata dal server WebSocket del gateway OpenClaw.",
+              "openclaw_token": "Token di connessione utilizzato per l'autenticazione con il gateway OpenClaw.",
+              "openclaw_use_ssl": "Utilizzare una connessione WebSocket sicura quando si comunica con il gateway OpenClaw."
+            }
+          },
+          "model_fields": {
+            "name": "Modello",
+            "description": "Scegli il modello che questo profilo dovrebbe utilizzare.",
+            "data": {
+              "model_name": "Nome modello"
+            },
+            "data_description": {
+              "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare."
+            }
+          },
+          "prompts": {
+            "name": "Richiede",
+            "description": "Esamina le istruzioni attualmente efficaci, copiale o modificale per questo profilo.",
+            "data": {
+              "system_prompt": "Istruzioni di sistema",
+              "technical_prompt": "Istruzioni tecniche"
+            },
+            "data_description": {
+              "system_prompt": "Precompilato con il prompt di sistema attualmente effettivo. Modificalo per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
+              "technical_prompt": "Precompilato con le istruzioni tecniche vigenti in vigore. Modificali per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice."
+            }
+          },
+          "conversation": {
+            "name": "Conversazione",
+            "description": "Comportamento, gestione del follow-up e impostazioni di output vocale per questo profilo.",
+            "data": {
+              "control_home_assistant": "Controlla Home Assistant",
+              "response_mode": "Modalita di risposta",
+              "follow_up_phrases": "Frasi di seguito",
+              "end_words": "Parole per terminare conversazione",
+              "clean_responses": "Pulisci risposte per output vocale"
+            },
+            "data_description": {
+              "control_home_assistant": "Consenti a questo profilo di eseguire azioni Home Assistant invece di limitarsi a rispondere alle domande.",
+              "response_mode": "Controlla se l'assistente termina immediatamente o pone domande di follow-up naturali quando appropriato.",
+              "follow_up_phrases": "Frasi separate da virgole utilizzate per rilevare le risposte in stile follow-up.",
+              "end_words": "Parole o frasi separate da virgole che dovrebbero terminare la conversazione.",
+              "clean_responses": "Elimina la formattazione o il riempimento non necessari per mantenere le risposte vocali più pulite."
+            }
+          },
+          "provider": {
+            "name": "Fornitore",
+            "description": "Impostazioni specifiche del provider visualizzate solo quando applicabili.",
+            "data": {
+              "ollama_keep_alive": "Mantieni Ollama attivo",
+              "ollama_num_ctx": "Finestra di contesto Ollama",
+              "openclaw_session_key": "Chiave di sessione"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
+              "ollama_num_ctx": "Sostituisci la dimensione della finestra di contesto passata a Ollama. Utilizzare 0 per mantenere il modello predefinito.",
+              "openclaw_session_key": "Nome della sessione OpenClaw a cui inviare i messaggi."
+            }
+          },
+          "advanced_settings": {
+            "name": "Avanzato",
+            "description": "Ottimizzazione avanzata del comportamento, dei limiti, del timeout e del debug del modello.",
+            "data": {
+              "temperature": "Temperatura",
+              "max_tokens": "Token di risposta massimi",
+              "max_history": "Messaggi di cronologia massimi",
+              "context_mode": "Modalità contesto",
+              "max_iterations": "Iterazioni strumenti massime",
+              "timeout": "Timeout risposta",
+              "debug_mode": "Modalita debug",
+              "chat_log_mode": "Modalità registro chat"
+            },
+            "data_description": {
+              "temperature": "Controlla la casualità della risposta. I valori più bassi sono più deterministici.",
+              "max_tokens": "Limita il numero di token che il modello può generare in una risposta.",
+              "max_history": "Quanti messaggi di conversazione precedenti mantenere nel contesto.",
+              "context_mode": "Standard invia il contesto completo dello strumento profilo. Light mantiene una finestra della cronologia più piccola e pubblicizza gli strumenti Home Assistant principali per piccoli modelli locali.",
+              "max_iterations": "Limita il numero di turni di chiamata degli strumenti che l'assistente può utilizzare per una richiesta.",
+              "timeout": "Quanto tempo attendere la risposta del fornitore prima del timeout.",
+              "debug_mode": "Abilita una registrazione più dettagliata per la risoluzione dei problemi.",
+              "chat_log_mode": "Conserva i registri delle conversazioni recenti, inclusi il testo dell'utente, le risposte dell'assistente, i nomi degli strumenti, gli argomenti degli strumenti e i risultati degli strumenti per la revisione."
+            }
+          },
+          "tools": {
+            "name": "Utensili",
+            "description": "Gli strumenti non selezionati rimangono disponibili ogni volta che vengono abilitati sul server MCP condiviso. Selezionare una casella per vietare una famiglia di utensili solo per questo profilo.",
+            "data": {
+              "disable_assist_bridge": "Disabilita Assist Bridge",
+              "disable_calculator": "Disabilita calcolatrice",
+              "disable_custom_tools": "Disabilita strumenti personalizzati",
+              "disable_device": "Disabilita Strumenti dispositivo",
+              "disable_google_maps": "Disabilita Google Places and Routes",
+              "disable_llm_api_bridge": "Disabilita il bridge LLM API",
+              "disable_memory": "Disabilita memoria",
+              "disable_music_assistant": "Disabilita Music Assistant",
+              "disable_read_url": "Disabilita Lettura URL",
+              "disable_recorder": "Disabilita la cronologia del registratore",
+              "disable_response_service": "Disabilita letture del servizio di risposta",
+              "disable_search": "Disabilita ricerca",
+              "disable_unit_conversion": "Disabilita conversione unità",
+              "disable_weather_forecast": "Disattiva le previsioni del tempo",
+              "disable_wikipedia_search": "Disabilita la ricerca Wikipedia",
+              "disable_web_search": "Disattiva la ricerca sul Web"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Impedisce a questo profilo di utilizzare gli strumenti Assist nativi, il prompt e l'istantanea del contesto di Home Assistant.",
+              "disable_calculator": "Impedisce a questo profilo di utilizzare strumenti matematici e di valutazione delle espressioni.",
+              "disable_custom_tools": "Impedisce a questo profilo di utilizzare pacchetti di strumenti personalizzati esterni caricati tramite il server MCP condiviso.",
+              "disable_unit_conversion": "Impedisce a questo profilo di utilizzare strumenti di conversione di unità esatte come da °C a °F, conversioni di distanza, volume della cucina, spazio di archiviazione e velocità dati.",
+              "disable_device": "Impedisce a questo profilo di rilevare dispositivi fisici e dettagli del dispositivo.",
+              "disable_google_maps": "Impedisce a questo profilo di utilizzare gli strumenti Google Places and Routes.",
+              "disable_llm_api_bridge": "Impedisce a questo profilo di utilizzare strumenti Home Assistant LLM API di terze parti consentiti.",
+              "disable_memory": "Impedisce a questo profilo di archiviare, richiamare o dimenticare i ricordi persistenti condivisi.",
+              "disable_music_assistant": "Impedisce a questo profilo di utilizzare gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
+              "disable_read_url": "Impedisce a questo profilo di aprire ed estrarre il contenuto della pagina da URLs.",
+              "disable_recorder": "Impedisce a questo profilo di utilizzare strumenti di cronologia, conteggio, durata e point-in-time supportati dal registratore.",
+              "disable_response_service": "Impedisce a questo profilo di utilizzare i servizi Home Assistant che restituiscono dati strutturati, come letture di calendario e previsioni.",
+              "disable_search": "Impedisce a questo profilo di utilizzare l'assistente di ricerca web integrato.",
+              "disable_weather_forecast": "Impedisce a questo profilo di utilizzare l'assistente alle previsioni del tempo dedicato Home Assistant.",
+              "disable_wikipedia_search": "Impedisce a questo profilo di cercare Wikipedia.",
+              "disable_web_search": "Impedisce a questo profilo di utilizzare la ricerca Web e gli strumenti di lettura URL, anche se sono abilitati sul server MCP condiviso."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Queste impostazioni sono condivise tra TUTTI i profili",
         "data": {
           "mcp_port": "Porta server MCP",
-          "search_provider": "Ricerca web",
-          "brave_api_key": "Chiave API Brave Search",
-          "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
-          "enable_gap_filling": "Abilita indice intelligente entita",
-          "max_entities_per_discovery": "Max entita per ricerca (20-500)"
+          "allowed_ips": "IP/Intervalli aggiuntivi consentiti"
+        },
+        "data_description": {
+          "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
+          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Contesto",
+            "description": "Controlla quali identità Home Assistant e dettagli sulla posizione sono inclusi nei prompt AI e nei payload delle chiamate allo strumento MCP.",
+            "data": {
+              "include_current_user": "Includi l'utente corrente nel prompt",
+              "include_home_location": "Includi la posizione della casa nel prompt",
+              "include_current_user_in_tool_calls": "Condividi l'utente corrente con gli strumenti MCP",
+              "include_home_location_in_tool_calls": "Condividi la posizione di casa con gli strumenti MCP"
+            },
+            "data_description": {
+              "include_current_user": "Includere il nome dell'utente corrente Home Assistant nel prompt AI quando disponibile.",
+              "include_home_location": "Includere un riepilogo compatto della posizione della casa nel prompt AI, utilizzando il nome e le coordinate della casa configurati di Home Assistant.",
+              "include_current_user_in_tool_calls": "Invia l'ID utente e il nome Home Assistant correnti nel contesto degli strumenti/chiamate MCP in modo che i pacchetti di strumenti possano controllare o personalizzare le azioni.",
+              "include_home_location_in_tool_calls": "Invia il nome home, la latitudine e la longitudine configurati di Home Assistant nel contesto degli strumenti/chiamata MCP per i pacchetti di strumenti che necessitano di metadati di posizione."
+            }
+          },
+          "discovery": {
+            "name": "Scoperta",
+            "description": "Controlla il modo in cui il server MCP condiviso crea e restituisce i risultati del rilevamento.",
+            "data": {
+              "enable_gap_filling": "Abilita indice di entità intelligenti",
+              "max_entities_per_discovery": "Entità massime per scoperta (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Crea un indice di sistema compatto per mantenere la scoperta rapida e sensibile al contesto.",
+              "max_entities_per_discovery": "Limita il numero di entità che una singola chiamata di individuazione può restituire."
+            }
+          },
+          "memory": {
+            "name": "Memoria",
+            "description": "Configura per quanto tempo vengono conservate le memorie persistenti condivise quando lo strumento Memoria è abilitato.",
+            "data": {
+              "memory_default_ttl_days": "Memoria predefinita TTL (giorni)",
+              "memory_max_ttl_days": "Memoria massima TTL (giorni)",
+              "memory_max_items": "Numero massimo di memorie archiviate"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Numero predefinito di giorni in cui viene conservata una nuova memoria quando la chiamata dello strumento non fornisce ttl_days.",
+              "memory_max_ttl_days": "Numero massimo di giorni per cui è possibile conservare la memoria archiviata.",
+              "memory_max_items": "Limite superiore sulle memorie archiviate attive. I ricordi più vecchi vengono eliminati per primi quando viene superato questo limite."
+            }
+          },
+          "tools": {
+            "name": "Utensili",
+            "description": "Abilita o disabilita le funzionalità dello strumento facoltativo esposte dal server MCP condiviso.",
+            "data": {
+              "enable_assist_bridge": "Assistere il ponte",
+              "enable_calculator_tools": "Calcolatrice",
+              "enable_external_custom_tools": "Strumenti personalizzati",
+              "enable_device_tools": "Strumenti del dispositivo",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Ponte",
+              "enable_memory_tools": "Memoria",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Leggi URL",
+              "enable_recorder_tools": "Storia del registratore",
+              "enable_response_service_tools": "Il servizio di risposta legge",
+              "enable_search_tool": "Ricerca",
+              "enable_unit_conversion_tools": "Conversione di unità",
+              "enable_weather_forecast_tool": "Previsioni del tempo",
+              "enable_wikipedia_search_tool": "Wikipedia Cerca",
+              "enable_web_search": "Ricerca sul Web",
+              "search_provider": "Fornitore di ricerca Web",
+              "brave_api_key": "Brave Search API Chiave",
+              "google_maps_api_key": "Google Maps API Chiave",
+              "llm_api_allowlist": "ID LLM API consentiti",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Esponi gli strumenti Assist nativi, il prompt e l'istantanea del contesto di Home Assistant.",
+              "enable_calculator_tools": "Esporre strumenti matematici e di valutazione delle espressioni.",
+              "enable_external_custom_tools": "Caricare pacchetti di strumenti locali aggiuntivi dalla directory di configurazione Home Assistant in mcp-assist-tools. Disabilitato per impostazione predefinita. Abilita solo i pacchetti attendibili perché vengono eseguiti come codice Python all'interno di Home Assistant e potrebbero aggiungere strumenti MCP oltre a una breve guida rapida.",
+              "enable_unit_conversion_tools": "Esponi strumenti esatti di conversione delle unità come da °C a °F, conversioni di distanza, volume della cucina, spazio di archiviazione e velocità dati.",
+              "enable_device_tools": "Esporre gli strumenti di rilevamento dei dispositivi fisici e di dettaglio dei dispositivi.",
+              "enable_google_maps_tools": "Esporre gli strumenti di ricerca Google Places e di tempo di viaggio Google Routes. Richiede una chiave Google Maps API.",
+              "enable_llm_api_bridge": "Esporre Home Assistant LLM API di terze parti consentiti registrati da altre integrazioni.",
+              "enable_memory_tools": "Esponi strumenti di memoria persistente condivisa in modo che l'assistente possa ricordare, richiamare e dimenticare fatti e preferenze approvati dall'utente con scadenza basata su TTL.",
+              "enable_music_assistant_support": "Esporre gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
+              "enable_read_url_tool": "Esporre la lettura URL in modo che l'assistente possa ispezionare pagine Web specifiche.",
+              "enable_recorder_tools": "Esponi strumenti di cronologia, analisi e point-in-time supportati dal registratore.",
+              "enable_response_service_tools": "Esporre i servizi Home Assistant che restituiscono dati strutturati, come letture di calendario e previsioni.",
+              "enable_search_tool": "Esporre la ricerca Web utilizzando il provider condiviso configurato.",
+              "enable_weather_forecast_tool": "Esponi l'assistente dedicato alle previsioni del tempo Home Assistant.",
+              "enable_wikipedia_search_tool": "Esponi la ricerca leggera di articoli Wikipedia per domande di background e di riferimento.",
+              "enable_web_search": "Esporre strumenti di ricerca web e di lettura URL.",
+              "search_provider": "Scegli quale provider utilizzare quando Ricerca Web è abilitata.",
+              "brave_api_key": "Richiesto solo quando Ricerca Web è abilitata ed è selezionato Brave Search.",
+              "google_maps_api_key": "Richiesto solo quando Google Places and Routes è abilitato.",
+              "llm_api_allowlist": "ID LLM API di terze parti separati da virgole o nuove righe che MCP Assist può ispezionare o chiamare, ad esempio llm_intents. LLM API di terze parti installati: {installed_llm_apis}. L'assistenza integrata API rimane su Assist Bridge.",
+              "searxng_url": "Richiesto solo quando Ricerca Web è abilitata ed è selezionato SearXNG. Utilizza il URL di base per la tua istanza SearXNG ospitata autonomamente."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Predefinito",
+        "custom": "Costume"
       }
     }
   },
