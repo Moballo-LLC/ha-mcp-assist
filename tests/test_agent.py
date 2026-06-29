@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -48,6 +49,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_WEB_SEARCH,
     CONF_CHAT_LOG_MODE,
     CONF_DEBUG_MODE,
+    DEFAULT_TECHNICAL_PROMPT,
     DOMAIN,
     CONTEXT_MODE_LIGHT,
     DEFAULT_CONTEXT_MODE,
@@ -1217,6 +1219,13 @@ def test_agent_does_not_expose_provider_specific_transport_helpers() -> None:
         assert not hasattr(MCPAssistConversationEntity, helper_name)
 
 
+def test_default_prompt_uses_tools_without_extra_confirmation() -> None:
+    """Routine voice-friendly home checks should happen in one assistant turn."""
+    assert "call the needed tools in the same turn" in DEFAULT_TECHNICAL_PROMPT
+    assert "Do not ask the user to confirm" in DEFAULT_TECHNICAL_PROMPT
+    assert "Treat the tool-call budget as limited" in DEFAULT_TECHNICAL_PROMPT
+
+
 @pytest.mark.asyncio
 async def test_anthropic_messages_tool_loop_uses_native_endpoint(
     hass, profile_entry_factory, monkeypatch
@@ -1340,6 +1349,117 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
             }
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_tool_budget_skips_extra_calls_and_finishes_without_tools(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Over-budget tool calls should get results and force a no-tools final answer."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC,
+            CONF_API_KEY: "anthropic-key",
+            CONF_MODEL_NAME: "claude-sonnet-4-5",
+        },
+        options={CONF_MAX_ITERATIONS: 1, CONF_MAX_TOKENS: 100},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_entity_details",
+                        "description": "Get entity details.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_call_id": "toolu_1",
+                "content": "Kitchen light is on",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_1",
+                        "name": "discover_entities",
+                        "input": {"floor": "downstairs", "domain": "light"},
+                    },
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_2",
+                        "name": "get_entity_details",
+                        "input": {"entity_id": "light.downstairs_lamp"},
+                    },
+                ],
+                "stop_reason": "tool_use",
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "content": [
+                    {"type": "text", "text": "One downstairs light is on."}
+                ],
+                "stop_reason": "end_turn",
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm(
+        [{"role": "user", "content": "Are there any lights on downstairs?"}]
+    )
+
+    assert result == "One downstairs light is on."
+    execute_mock.assert_awaited_once()
+    executed_calls = execute_mock.await_args.args[0]
+    assert [call["function"]["name"] for call in executed_calls] == [
+        "discover_entities"
+    ]
+    assert "tools" in posts[0]["json"]
+    assert "tools" not in posts[1]["json"]
+    assert "tool-call budget has been reached" in posts[1]["json"]["system"]
+
+    final_tool_result_blocks = posts[1]["json"]["messages"][-1]["content"]
+    assert [block["tool_use_id"] for block in final_tool_result_blocks] == [
+        "toolu_1",
+        "toolu_2",
+    ]
+    skipped_content = json.loads(final_tool_result_blocks[1]["content"])
+    assert skipped_content["budget_exhausted"] is True
+    assert "configured tool-call budget" in skipped_content["error"]
 
 
 def test_format_tool_result_for_llm_preserves_structured_results_without_binary(

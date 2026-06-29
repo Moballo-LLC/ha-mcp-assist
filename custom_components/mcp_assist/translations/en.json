@@ -138,7 +138,7 @@
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
               "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
-              "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
+              "max_iterations": "Caps how many MCP tool calls the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",
               "chat_log_mode": "Persist recent conversation logs, including user text, assistant replies, tool names, tool arguments, and tool results for review."
@@ -478,7 +478,7 @@
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
               "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
-              "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
+              "max_iterations": "Caps how many MCP tool calls the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",
               "chat_log_mode": "Persist recent conversation logs, including user text, assistant replies, tool names, tool arguments, and tool results for review."
