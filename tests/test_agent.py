@@ -35,6 +35,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_WEB_SEARCH,
+    CONF_CHAT_LOG_MODE,
     DOMAIN,
     PROMPT_MODE_CUSTOM,
 )
@@ -442,6 +443,23 @@ def test_build_messages_supports_zero_history(
         {"role": "system", "content": "system"},
         {"role": "user", "content": "current"},
     ]
+
+
+def test_chat_log_mode_defaults_off_and_can_be_enabled(
+    hass, profile_entry_factory
+) -> None:
+    """Persistent chat logging should be opt-in per profile."""
+    default_agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    enabled_agent = MCPAssistConversationEntity(
+        hass,
+        profile_entry_factory(
+            unique_id=f"{DOMAIN}_chat_log_profile",
+            options={CONF_CHAT_LOG_MODE: True},
+        ),
+    )
+
+    assert default_agent.chat_log_mode is False
+    assert enabled_agent.chat_log_mode is True
 
 
 @pytest.mark.asyncio
@@ -925,6 +943,93 @@ async def test_call_mcp_tool_includes_profile_context(
         "profile_entry_id": entry.entry_id,
         "profile_name": "Kitchen Profile",
     }
+
+
+@pytest.mark.asyncio
+async def test_execute_single_tool_call_records_persistent_tool_log(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Tool names, arguments, and results should be captured for Chat Log Mode."""
+    entry = profile_entry_factory(options={CONF_CHAT_LOG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_call_mcp_tool",
+        AsyncMock(
+            return_value={
+                "content": [{"type": "text", "text": "Kitchen light turned on"}],
+                "isError": False,
+            }
+        ),
+    )
+    record = {
+        "id": "record-1",
+        "created_at": "2026-06-01T00:00:00+00:00",
+        "tools": [],
+    }
+    token = agent_module._PERSISTENT_CHAT_LOG_RECORD.set(record)
+
+    try:
+        result = await agent._execute_single_tool_call(
+            {
+                "id": "call-1",
+                "function": {
+                    "name": "perform_action",
+                    "arguments": '{"entity_id":"light.kitchen","action":"turn_on"}',
+                },
+            }
+        )
+    finally:
+        agent_module._PERSISTENT_CHAT_LOG_RECORD.reset(token)
+
+    assert result["tool_call_id"] == "call-1"
+    assert record["tools"] == [
+        {
+            "id": "call-1",
+            "name": "perform_action",
+            "started_at": record["tools"][0]["started_at"],
+            "arguments": {"entity_id": "light.kitchen", "action": "turn_on"},
+            "completed_at": record["tools"][0]["completed_at"],
+            "result": {
+                "content": [{"type": "text", "text": "Kitchen light turned on"}],
+                "isError": False,
+            },
+            "llm_content": "Kitchen light turned on",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_finish_persistent_chat_log_saves_with_manager(
+    hass, profile_entry_factory
+) -> None:
+    """Completed chat log records should be persisted through the shared manager."""
+    entry = profile_entry_factory(options={CONF_CHAT_LOG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    manager = SimpleNamespace(async_record=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})["chat_log_manager"] = manager
+    record = {
+        "id": "record-1",
+        "created_at": "2026-06-01T00:00:00+00:00",
+        "_started_monotonic": 1.0,
+        "tools": [],
+    }
+    token = agent_module._PERSISTENT_CHAT_LOG_RECORD.set(record)
+
+    try:
+        await agent._finish_persistent_chat_log_record(
+            assistant_text="Done.",
+            continue_conversation=False,
+        )
+    finally:
+        agent_module._PERSISTENT_CHAT_LOG_RECORD.reset(token)
+
+    manager.async_record.assert_awaited_once()
+    saved = manager.async_record.await_args.args[0]
+    assert saved["assistant_text"] == "Done."
+    assert saved["continue_conversation"] is False
+    assert saved["completed_at"]
+    assert saved["_saved"] is True
 
 
 @pytest.mark.asyncio

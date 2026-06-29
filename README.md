@@ -24,6 +24,8 @@ web data needed for the current request.
 - Optional tool families for calculator, unit conversion, weather forecasts,
   memory, web search, URL reading, Music Assistant, images, and external custom
   tools.
+- Optional debug and chat log modes for troubleshooting provider, prompt, and
+  tool behavior.
 - Multiple conversation profiles with shared MCP server settings.
 - Local and cloud provider support, including LM Studio, llama.cpp, Ollama,
   OpenClaw, vLLM, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
@@ -57,6 +59,7 @@ The README is intentionally short. The deeper guides live under `docs/`:
 | [Usage Examples](docs/examples.md) | Voice commands, follow-ups, history, weather, memory, and web examples |
 | [Model Compatibility](docs/model-compatibility.md) | Choosing and testing models that support tool calling |
 | [Troubleshooting](docs/troubleshooting.md) | Common setup, connection, and tool-calling issues |
+| [Debugging](docs/debugging.md) | Debug mode, chat log mode, retention, and diagnostic exports |
 | [Security and Privacy](docs/security-and-privacy.md) | Entity exposure, API keys, network access, memory, and custom tools |
 | [External Custom Tools](docs/custom-tools.md) | Package format for site-specific MCP tool extensions |
 | [Releases](docs/releases.md) | Version bumps, tags, HACS packages, and generated release notes |

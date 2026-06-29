@@ -94,6 +94,7 @@
           "clean_responses": "Clean Responses for Voice Output",
           "timeout": "Response Time Out",
           "debug_mode": "Debug Mode",
+          "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Ollama Keep Alive",
           "ollama_num_ctx": "Ollama Context Window",
           "openclaw_session_key": "Session Key"
@@ -126,7 +127,8 @@
               "max_history": "Max History Messages",
               "max_iterations": "Max Tool Iterations",
               "timeout": "Response Time Out",
-              "debug_mode": "Debug Mode"
+              "debug_mode": "Debug Mode",
+              "chat_log_mode": "Chat Log Mode"
             },
             "data_description": {
               "temperature": "Controls response randomness. Lower values are more deterministic.",
@@ -134,7 +136,8 @@
               "max_history": "How many prior conversation messages to keep in context.",
               "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
-              "debug_mode": "Enable more detailed logging for troubleshooting."
+              "debug_mode": "Enable more detailed logging for troubleshooting.",
+              "chat_log_mode": "Persist recent conversation logs, including user text, assistant replies, tool names, tool arguments, and tool results for review."
             }
           },
           "provider": {
@@ -328,6 +331,7 @@
           "clean_responses": "Clean Responses for Voice Output",
           "timeout": "Response Time Out",
           "debug_mode": "Debug Mode",
+          "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Ollama Keep Alive",
           "ollama_num_ctx": "Ollama Context Window",
           "clean_responses": "Clean Responses for Voice Output",
@@ -436,7 +440,8 @@
               "max_history": "Max History Messages",
               "max_iterations": "Max Tool Iterations",
               "timeout": "Response Time Out",
-              "debug_mode": "Debug Mode"
+              "debug_mode": "Debug Mode",
+              "chat_log_mode": "Chat Log Mode"
             },
             "data_description": {
               "temperature": "Controls response randomness. Lower values are more deterministic.",
@@ -444,7 +449,8 @@
               "max_history": "How many prior conversation messages to keep in context.",
               "max_iterations": "Caps how many tool-calling turns the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
-              "debug_mode": "Enable more detailed logging for troubleshooting."
+              "debug_mode": "Enable more detailed logging for troubleshooting.",
+              "chat_log_mode": "Persist recent conversation logs, including user text, assistant replies, tool names, tool arguments, and tool results for review."
             }
           },
           "tools": {
