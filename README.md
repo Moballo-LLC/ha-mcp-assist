@@ -146,6 +146,7 @@ If you leave the prompt text effectively unchanged, MCP Assist continues using t
 - Max Tool Iterations: How many tool calls allowed per request
 - Timeout: Maximum wait time for provider responses
 - Debug Mode: Extra logging for troubleshooting
+- Chat Log Mode: Opt-in persisted conversation logs for debugging. See [Debugging](docs/debugging.md).
 - Tool Family Overrides: Optional per-profile narrowing of shared optional MCP tool families
 - **Ollama Keep Alive** (Ollama only): Control how long models stay loaded in memory
   - `-1` = Keep loaded indefinitely
@@ -282,6 +283,7 @@ See [docs/custom-tools.md](docs/custom-tools.md) for the full package spec, safe
 - **Temperature**: Response randomness (default depends on provider)
 - **Timeout**: Provider response timeout
 - **Debug Mode**: Extra logging for troubleshooting
+- **Chat Log Mode**: Opt-in persisted conversation logs with assistant replies, tool names, arguments, and results for review. See [Debugging](docs/debugging.md).
 - **Ollama Keep Alive** / **Ollama Context Window**: Ollama-specific tuning
 
 ### MCP Server Settings

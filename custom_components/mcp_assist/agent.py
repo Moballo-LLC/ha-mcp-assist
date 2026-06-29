@@ -49,6 +49,7 @@ from .const import (
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT_MODE,
     CONF_DEBUG_MODE,
+    CONF_CHAT_LOG_MODE,
     CONF_MAX_ITERATIONS,
     CONF_MAX_TOKENS,
     CONF_TEMPERATURE,
@@ -79,6 +80,7 @@ from .const import (
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
     DEFAULT_DEBUG_MODE,
+    DEFAULT_CHAT_LOG_MODE,
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
@@ -136,6 +138,9 @@ MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
+)
+_PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
+    "mcp_assist_persistent_chat_log_record", default=None
 )
 
 
@@ -381,6 +386,14 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Get debug mode (dynamic)."""
         return self.entry.options.get(
             CONF_DEBUG_MODE, self.entry.data.get(CONF_DEBUG_MODE, DEFAULT_DEBUG_MODE)
+        )
+
+    @property
+    def chat_log_mode(self) -> bool:
+        """Get persistent chat log mode (dynamic)."""
+        return self.entry.options.get(
+            CONF_CHAT_LOG_MODE,
+            self.entry.data.get(CONF_CHAT_LOG_MODE, DEFAULT_CHAT_LOG_MODE),
         )
 
     @property
@@ -1242,6 +1255,111 @@ class MCPAssistConversationEntity(ConversationEntity):
         except Exception as e:
             _LOGGER.error(f"Error recording tool result to ChatLog: {e}")
 
+    def _build_persistent_chat_log_record(
+        self, user_input: ConversationInput, conversation_id: str
+    ) -> dict[str, Any]:
+        """Build the initial persisted chat log record for an opt-in conversation."""
+        now = dt_util.utcnow()
+        return {
+            "id": uuid.uuid4().hex[:12],
+            "created_at": now.isoformat(),
+            "_started_monotonic": time.monotonic(),
+            "profile_entry_id": self.entry.entry_id,
+            "profile_name": self.entry.data.get(CONF_PROFILE_NAME, "Default"),
+            "conversation_id": conversation_id,
+            "server_type": self.server_type,
+            "model": self.model_name,
+            "language": user_input.language,
+            "user_text": user_input.text,
+            "tools": [],
+        }
+
+    async def _finish_persistent_chat_log_record(
+        self,
+        *,
+        assistant_text: str | None = None,
+        error: str | None = None,
+        continue_conversation: bool | None = None,
+    ) -> None:
+        """Persist the current chat log record, if one is active."""
+        record = _PERSISTENT_CHAT_LOG_RECORD.get()
+        if not record or record.get("_saved"):
+            return
+
+        record["_saved"] = True
+        record["completed_at"] = dt_util.utcnow().isoformat()
+        started_monotonic = record.get("_started_monotonic")
+        if isinstance(started_monotonic, (int, float)):
+            record["duration_ms"] = int(
+                max(0.0, time.monotonic() - started_monotonic) * 1000
+            )
+        if assistant_text is not None:
+            record["assistant_text"] = assistant_text
+        if error is not None:
+            record["error"] = error
+        if continue_conversation is not None:
+            record["continue_conversation"] = continue_conversation
+
+        manager = self.hass.data.get(DOMAIN, {}).get("chat_log_manager")
+        if manager is None:
+            _LOGGER.debug("Chat Log Mode enabled, but chat log manager is unavailable")
+            return
+
+        try:
+            await manager.async_record(record)
+        except Exception as err:
+            _LOGGER.error("Error persisting MCP Assist chat log: %s", err)
+
+    def _start_persistent_tool_log(
+        self,
+        *,
+        tool_call_id: str,
+        tool_name: str | None,
+        arguments: dict[str, Any],
+        raw_arguments: Any = None,
+    ) -> dict[str, Any] | None:
+        """Add a tool-call entry to the current persisted chat log."""
+        record = _PERSISTENT_CHAT_LOG_RECORD.get()
+        if not record:
+            return None
+
+        tool_entry: dict[str, Any] = {
+            "id": tool_call_id,
+            "name": tool_name or "unknown",
+            "started_at": dt_util.utcnow().isoformat(),
+            "arguments": arguments,
+        }
+        if (
+            isinstance(raw_arguments, str)
+            and raw_arguments.strip()
+            and not arguments
+            and raw_arguments.strip() != "{}"
+        ):
+            tool_entry["raw_arguments"] = raw_arguments
+
+        record.setdefault("tools", []).append(tool_entry)
+        return tool_entry
+
+    def _finish_persistent_tool_log(
+        self,
+        tool_entry: dict[str, Any] | None,
+        *,
+        result: dict[str, Any] | None = None,
+        llm_content: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Complete a tool-call entry in the current persisted chat log."""
+        if not tool_entry:
+            return
+
+        tool_entry["completed_at"] = dt_util.utcnow().isoformat()
+        if result is not None:
+            tool_entry["result"] = result
+        if llm_content is not None:
+            tool_entry["llm_content"] = llm_content
+        if error is not None:
+            tool_entry["error"] = error
+
     async def _async_handle_message(
         self, user_input: ConversationInput, chat_log_instance: chat_log.ChatLog
     ) -> ConversationResult:
@@ -1258,6 +1376,14 @@ class MCPAssistConversationEntity(ConversationEntity):
             user_input
         )
         conversation_id = chat_log_instance.conversation_id
+        persistent_chat_log = (
+            self._build_persistent_chat_log_record(user_input, conversation_id)
+            if self.chat_log_mode
+            else None
+        )
+        chat_log_token: Token[dict[str, Any] | None] = (
+            _PERSISTENT_CHAT_LOG_RECORD.set(persistent_chat_log)
+        )
 
         try:
             return await self._async_handle_message_inner(
@@ -1265,6 +1391,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
         finally:
             # Clean up
+            _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
 
@@ -1321,6 +1448,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         except Exception as err:
             _LOGGER.exception("Error processing conversation")
+            await self._finish_persistent_chat_log_record(error=str(err))
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -1433,6 +1561,11 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.info(
                 f"🎯 Follow-up mode: {self.follow_up_mode}, Continue: {continue_conversation}"
             )
+
+        await self._finish_persistent_chat_log_record(
+            assistant_text=response_text,
+            continue_conversation=continue_conversation,
+        )
 
         return ConversationResult(
             response=intent_response,
@@ -2363,14 +2496,26 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         _LOGGER.info(f"📞 Processing tool call {tool_call_id}: {tool_name}")
 
+        tool_entry: dict[str, Any] | None = None
         try:
             arguments = self._parse_tool_arguments(arguments_str)
+            tool_entry = self._start_persistent_tool_log(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                arguments=arguments,
+                raw_arguments=arguments_str,
+            )
 
             # Execute the tool
             result = await self._call_mcp_tool(tool_name, arguments)
 
             # Format result for LLM consumption
             content = self._format_tool_result_for_llm(tool_name, result)
+            self._finish_persistent_tool_log(
+                tool_entry,
+                result=result,
+                llm_content=content,
+            )
 
             if tool_name == "set_conversation_state" and content:
                 if "conversation_state:true" in content.lower():
@@ -2399,6 +2544,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         except Exception as e:
             _LOGGER.error(f"Error executing tool {tool_name}: {e}")
+            self._finish_persistent_tool_log(tool_entry, error=str(e))
             error_content = json.dumps({"error": str(e)})
             if self.server_type == SERVER_TYPE_OLLAMA:
                 return {

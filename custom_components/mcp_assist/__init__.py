@@ -12,6 +12,7 @@ from .custom_tools.builtin_catalog import (
     get_builtin_shared_setting_value,
     load_builtin_tool_toggle_specs,
 )
+from .chat_log_manager import ChatLogManager
 from .const import (
     DOMAIN,
     SYSTEM_ENTRY_UNIQUE_ID,
@@ -44,6 +45,8 @@ from .const import (
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
     SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS,
+    SERVICE_GET_CHAT_LOGS,
+    SERVICE_CLEAR_CHAT_LOGS,
     CONF_SERVER_TYPE,
     CONF_TIMEOUT,
     DEFAULT_BRAVE_API_KEY,
@@ -136,23 +139,73 @@ async def _async_handle_reload_external_custom_tools(call: ServiceCall) -> dict:
     return await reload_external_custom_tools()
 
 
+async def _async_get_chat_log_manager(hass: HomeAssistant) -> ChatLogManager:
+    """Get or create the shared chat log manager."""
+    hass.data.setdefault(DOMAIN, {})
+    manager = hass.data[DOMAIN].get("chat_log_manager")
+    if manager is None:
+        manager = ChatLogManager(hass)
+        await manager.async_initialize()
+        hass.data[DOMAIN]["chat_log_manager"] = manager
+    return manager
+
+
+async def _async_handle_get_chat_logs(call: ServiceCall) -> dict:
+    """Return persisted chat logs for review."""
+    manager = await _async_get_chat_log_manager(call.hass)
+    logs = await manager.async_list(
+        limit=call.data.get("limit"),
+        profile_entry_id=call.data.get("profile_entry_id"),
+        conversation_id=call.data.get("conversation_id"),
+    )
+    return {
+        "count": len(logs),
+        "logs": logs,
+    }
+
+
+async def _async_handle_clear_chat_logs(call: ServiceCall) -> dict:
+    """Clear persisted chat logs."""
+    manager = await _async_get_chat_log_manager(call.hass)
+    return await manager.async_clear(
+        profile_entry_id=call.data.get("profile_entry_id"),
+        conversation_id=call.data.get("conversation_id"),
+    )
+
+
 async def _async_register_services(hass: HomeAssistant) -> None:
     """Register MCP Assist domain services once."""
-    if hass.services.has_service(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS):
-        return
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS,
-        _async_handle_reload_external_custom_tools,
-        supports_response=SupportsResponse.OPTIONAL,
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS,
+            _async_handle_reload_external_custom_tools,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_GET_CHAT_LOGS,
+            _async_handle_get_chat_logs,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CLEAR_CHAT_LOGS,
+            _async_handle_clear_chat_logs,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
 
 
 async def _async_unregister_services(hass: HomeAssistant) -> None:
     """Unregister MCP Assist domain services when the last profile unloads."""
     if hass.services.has_service(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS):
         hass.services.async_remove(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS)
+    if hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS):
+        hass.services.async_remove(DOMAIN, SERVICE_GET_CHAT_LOGS)
+    if hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS):
+        hass.services.async_remove(DOMAIN, SERVICE_CLEAR_CHAT_LOGS)
 
 
 async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
@@ -421,6 +474,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _migrate_brave_search_tool_name(hass, entry)
 
     hass.data.setdefault(DOMAIN, {})
+    await _async_get_chat_log_manager(hass)
 
     # Ensure system entry exists (creates with defaults if not)
     await ensure_system_entry(hass)
@@ -590,6 +644,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN].pop("index_manager", None)
             hass.data[DOMAIN].pop("mcp_port", None)
             hass.data[DOMAIN].pop("mcp_refcount", None)
+            hass.data[DOMAIN].pop("chat_log_manager", None)
             await _async_unregister_services(hass)
         else:
             _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
