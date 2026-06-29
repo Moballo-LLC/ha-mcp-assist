@@ -11,7 +11,12 @@ from typing import Any, Dict, List
 _LOGGER = logging.getLogger(__name__)
 
 NUM_SCHEMA = {"type": "number"}
+NUMBER_OR_STRING_SCHEMA = {"anyOf": [{"type": "number"}, {"type": "string"}]}
 STRING_SCHEMA = {"type": "string"}
+FRACTION_RE = re.compile(
+    r"^(?P<sign>[+-])?(?:(?P<whole>\d+(?:\.\d+)?)\s+)?"
+    r"(?P<numerator>\d+(?:\.\d+)?)/(?P<denominator>\d+(?:\.\d+)?)$"
+)
 
 CALCULATOR_LLM_DESCRIPTIONS = {
     "add": "Add numbers.",
@@ -24,7 +29,7 @@ CALCULATOR_LLM_DESCRIPTIONS = {
     "average": "Calculate the average of a list of numbers.",
     "min_value": "Return the smallest number in a list.",
     "max_value": "Return the largest number in a list.",
-    "convert_unit": "Convert between common units.",
+    "convert_unit": "Convert between common units, including kitchen quantities.",
     "evaluate_expression": "Evaluate a math expression safely.",
 }
 
@@ -157,12 +162,12 @@ CALCULATOR_TOOLS = [
     },
     {
         "name": "convert_unit",
-        "description": "Convert between common units including temperature (°C, °F, K), length, weight, volume, speed, pressure, energy, power, time, area, illuminance, electrical units, storage sizes, and data rates. Example: convert_unit(value=22, from_unit='°C', to_unit='°F') returns 71.6 °F.",
+        "description": "Convert between common units including temperature (°C, °F, K), length, weight, cooking volume, speed, pressure, energy, power, time, area, illuminance, electrical units, storage sizes, and data rates. Fractional values such as '1/8' and '1 1/2' are supported. Example: convert_unit(value='1 1/2', from_unit='cup', to_unit='ml') returns 354.88235475 mL.",
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
             "properties": {
-                "value": NUM_SCHEMA,
+                "value": NUMBER_OR_STRING_SCHEMA,
                 "from_unit": STRING_SCHEMA,
                 "to_unit": STRING_SCHEMA,
             },
@@ -206,6 +211,8 @@ UNIT_DISPLAY = {
     "ml": "mL",
     "l": "L",
     "fl_oz": "fl oz",
+    "tsp": "tsp",
+    "tbsp": "tbsp",
     "cup": "cup",
     "pint": "pint",
     "quart": "quart",
@@ -301,6 +308,8 @@ UNIT_GROUPS = {
         "ml": 0.001,
         "l": 1.0,
         "fl_oz": 0.0295735295625,
+        "tsp": 0.00492892159375,
+        "tbsp": 0.01478676478125,
         "cup": 0.2365882365,
         "pint": 0.473176473,
         "quart": 0.946352946,
@@ -502,6 +511,8 @@ _register_unit_aliases("lb", ["lb", "lbs", "pound", "pounds"])
 _register_unit_aliases("ml", ["ml", "milliliter", "milliliters", "millilitre", "millilitres"])
 _register_unit_aliases("l", ["l", "liter", "liters", "litre", "litres"])
 _register_unit_aliases("fl_oz", ["fl oz", "floz", "fluid ounce", "fluid ounces"])
+_register_unit_aliases("tsp", ["tsp", "teaspoon", "teaspoons"])
+_register_unit_aliases("tbsp", ["tbsp", "tbs", "tablespoon", "tablespoons"])
 _register_unit_aliases("cup", ["cup", "cups"])
 _register_unit_aliases("pint", ["pint", "pints", "pt"])
 _register_unit_aliases("quart", ["quart", "quarts", "qt"])
@@ -705,6 +716,9 @@ class CalculatorTool:
             text = value.strip().replace(",", "").replace("_", "")
             if not text:
                 return None
+            fraction = self._coerce_fraction(text)
+            if fraction is not None:
+                return fraction
             try:
                 parsed = float(text)
             except ValueError:
@@ -715,6 +729,29 @@ class CalculatorTool:
                 return int(parsed)
             return parsed
         return None
+
+    def _coerce_fraction(self, text: str) -> float | int | None:
+        """Coerce a simple fraction or mixed fraction into a number."""
+        match = FRACTION_RE.fullmatch(text)
+        if match is None:
+            return None
+
+        denominator = float(match.group("denominator"))
+        if denominator == 0:
+            return None
+
+        whole_text = match.group("whole")
+        whole = float(whole_text) if whole_text else 0.0
+        numerator = float(match.group("numerator"))
+        parsed = whole + (numerator / denominator)
+        if match.group("sign") == "-":
+            parsed *= -1
+
+        if not math.isfinite(parsed):
+            return None
+        if parsed.is_integer():
+            return int(parsed)
+        return parsed
 
     def _normalize_result(self, result: float | int) -> str:
         """Normalize numeric results into compact text."""
