@@ -17,4 +17,4 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Hassfest
-        uses: home-assistant/actions/hassfest@master
+        uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c
