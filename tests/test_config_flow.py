@@ -60,6 +60,10 @@ from custom_components.mcp_assist.const import (
     CONF_ALLOWED_IPS,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
+    CONF_CLEAN_RESPONSES,
+    CONF_CONTROL_HA,
+    CONF_CONTEXT_MODE,
+    CONF_DEBUG_MODE,
     CONF_ENABLE_GAP_FILLING,
     CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_WEB_SEARCH,
@@ -72,32 +76,41 @@ from custom_components.mcp_assist.const import (
     CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_MEMORY_TOOLS,
-    CONF_MAX_ENTITIES_PER_DISCOVERY,
+    CONF_END_WORDS,
     CONF_ENABLE_ASSIST_BRIDGE,
+    CONF_FOLLOW_UP_PHRASES,
     CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
-    CONF_CONTEXT_MODE,
+    CONF_MAX_ENTITIES_PER_DISCOVERY,
+    CONF_MAX_HISTORY,
+    CONF_MAX_ITERATIONS,
+    CONF_MAX_TOKENS,
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
     CONF_MCP_PORT,
     CONF_LMSTUDIO_URL,
+    CONF_MODEL_NAME,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
     CONF_OPENCLAW_SESSION_KEY,
+    CONF_PROFILE_NAME,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_PROFILE_ENABLE_LLM_API_BRIDGE,
+    CONF_RESPONSE_MODE,
     CONF_SEARCH_PROVIDER,
     CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
+    CONF_TEMPERATURE,
     CONF_TECHNICAL_PROMPT,
     CONF_TECHNICAL_PROMPT_MODE,
+    CONF_TIMEOUT,
     DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
     DEFAULT_OLLAMA_URL,
@@ -589,6 +602,56 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     assert marker_by_key[_builtin_profile_key("search")].description is None
 
 
+async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> None:
+    """Initial setup should flatten provider-owned fields before shared MCP setup."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+    flow.step1_data = {
+        CONF_PROFILE_NAME: "Test Profile",
+        CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+    }
+    flow.step2_data = {CONF_LMSTUDIO_URL: "http://localhost:11434"}
+    flow.step3_data = {CONF_MODEL_NAME: "qwen3"}
+
+    result = await flow.async_step_advanced(
+        {
+            CONVERSATION_SECTION_KEY: {
+                CONF_CONTROL_HA: True,
+                CONF_RESPONSE_MODE: "default",
+                CONF_FOLLOW_UP_PHRASES: "Anything else?",
+                CONF_END_WORDS: "stop",
+                CONF_CLEAN_RESPONSES: True,
+            },
+            PERFORMANCE_SECTION_KEY: {
+                CONF_TEMPERATURE: 0.4,
+                CONF_MAX_TOKENS: 2048,
+                CONF_MAX_HISTORY: 8,
+                CONF_CONTEXT_MODE: "standard",
+                CONF_MAX_ITERATIONS: 6,
+                CONF_TIMEOUT: 45,
+                CONF_DEBUG_MODE: False,
+                CONF_CHAT_LOG_MODE: True,
+            },
+            PROVIDER_SECTION_KEY: {
+                CONF_OLLAMA_NUM_CTX: 12288,
+                CONF_OLLAMA_KEEP_ALIVE: "30m",
+            },
+            TOOLS_SECTION_KEY: {
+                DISABLE_DEVICE_FIELD: True,
+            },
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mcp_server"
+    assert flow.step4_data[CONF_OLLAMA_NUM_CTX] == 12288
+    assert flow.step4_data[CONF_OLLAMA_KEEP_ALIVE] == "30m"
+    assert flow.step4_data[CONF_TEMPERATURE] == 0.4
+    assert flow.step4_data[CONF_CONTEXT_MODE] == "standard"
+    assert flow.step4_data[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
+
+
 async def test_shared_mcp_step_groups_context_discovery_and_tools(
     hass, monkeypatch
 ) -> None:
@@ -1040,6 +1103,72 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     }
     assert CONF_OLLAMA_NUM_CTX not in _section_field_names(advanced_section)
     assert CONF_OLLAMA_KEEP_ALIVE not in _section_field_names(advanced_section)
+
+
+async def test_options_submit_preserves_provider_fields_from_sections(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Options flow should save provider-owned fields from the standard sectioned form."""
+    system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_LMSTUDIO_URL: "http://localhost:11434",
+        }
+    )
+    flow.handler = entry.entry_id
+
+    result = await flow.async_step_init(
+        {
+            PROFILE_SECTION_KEY: {CONF_PROFILE_NAME: "Updated Profile"},
+            CONNECTION_SECTION_KEY: {
+                CONF_LMSTUDIO_URL: "http://ollama.example.invalid:11434",
+            },
+            MODEL_SECTION_KEY: {CONF_MODEL_NAME: "qwen3"},
+            PROMPTS_SECTION_KEY: {
+                CONF_SYSTEM_PROMPT: "Use short answers",
+                CONF_TECHNICAL_PROMPT: "Prefer entity ids",
+            },
+            CONVERSATION_SECTION_KEY: {
+                CONF_CONTROL_HA: True,
+                CONF_RESPONSE_MODE: "always",
+                CONF_FOLLOW_UP_PHRASES: "Anything else?",
+                CONF_END_WORDS: "stop",
+                CONF_CLEAN_RESPONSES: False,
+            },
+            PROVIDER_SECTION_KEY: {
+                CONF_OLLAMA_NUM_CTX: 16384,
+                CONF_OLLAMA_KEEP_ALIVE: "1h",
+            },
+            ADVANCED_SECTION_KEY: {
+                CONF_TEMPERATURE: 0.2,
+                CONF_MAX_TOKENS: 4096,
+                CONF_MAX_HISTORY: 12,
+                CONF_CONTEXT_MODE: "light",
+                CONF_MAX_ITERATIONS: 7,
+                CONF_TIMEOUT: 90,
+                CONF_DEBUG_MODE: True,
+                CONF_CHAT_LOG_MODE: False,
+            },
+            TOOLS_SECTION_KEY: {
+                DISABLE_DEVICE_FIELD: True,
+            },
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mcp_server"
+    assert flow.profile_options[CONF_LMSTUDIO_URL] == (
+        "http://ollama.example.invalid:11434"
+    )
+    assert flow.profile_options[CONF_MODEL_NAME] == "qwen3"
+    assert flow.profile_options[CONF_OLLAMA_NUM_CTX] == 16384
+    assert flow.profile_options[CONF_OLLAMA_KEEP_ALIVE] == "1h"
+    assert flow.profile_options[CONF_RESPONSE_MODE] == "always"
+    assert flow.profile_options[CONF_CONTEXT_MODE] == "light"
+    assert flow.profile_options[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
 
 
 async def test_options_step_for_ollama_uses_provider_default_url_when_missing(

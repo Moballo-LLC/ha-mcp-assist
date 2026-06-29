@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from custom_components.mcp_assist.const import (
@@ -36,6 +38,7 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_VLLM,
 )
+from custom_components.mcp_assist.llm_providers import gemini as gemini_module
 from custom_components.mcp_assist.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
@@ -423,6 +426,41 @@ def test_gemini_provider_captures_streamed_thought_signature() -> None:
     }
     assert "extra_content" not in tool_calls[0]
     assert provider.missing_stream_metadata_warning(metadata) is None
+
+
+async def test_gemini_model_fetch_redacts_exception_urls(monkeypatch, caplog) -> None:
+    """Gemini model-fetch failures should not log API keys embedded in URLs."""
+
+    class RaisingSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "RaisingSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, *args: object, **kwargs: object) -> object:
+            raise RuntimeError(
+                "Cannot decode https://generativelanguage.googleapis.com/v1beta/"
+                "models?key=gemini-secret"
+            )
+
+    monkeypatch.setattr(gemini_module.aiohttp, "ClientSession", RaisingSession)
+
+    with caplog.at_level(
+        logging.ERROR,
+        logger="custom_components.mcp_assist.llm_providers.gemini",
+    ):
+        models = await GeminiProvider.fetch_models(
+            None,
+            {CONF_API_KEY: "gemini-secret"},
+        )
+
+    assert models == []
+    assert "gemini-secret" not in caplog.text
+    assert "key=[redacted]" in caplog.text
 
 
 def test_anthropic_provider_uses_native_messages_shape() -> None:

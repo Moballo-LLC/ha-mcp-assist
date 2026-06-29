@@ -64,7 +64,7 @@ class GeminiProvider(OpenAICompatibleProvider):
                         reverse=True,
                     )
         except Exception as err:
-            _LOGGER.error("Gemini model fetch failed: %s", err)
+            _LOGGER.error("Gemini model fetch failed: %s", _redacted_log_snippet(err))
             return []
 
     def update_stream_metadata(self, current: Any, delta: dict[str, Any]) -> Any:
