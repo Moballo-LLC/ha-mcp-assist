@@ -124,6 +124,7 @@ Shared settings apply to all profiles:
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |
 | Web Search Provider | None, DuckDuckGo, Brave Search, or SearXNG |
 | Memory Retention | Default TTL, max TTL, and max stored memories |
+| LLM API Bridge | Optional allowlist for third-party Home Assistant LLM APIs |
 | Shared Tool Families | Which optional built-in and external tools are exposed |
 
 Because the MCP server is shared, changing these settings from one profile's
@@ -182,6 +183,26 @@ custom categories are still accepted for existing workflows.
 Memories are shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).
 
+## Third-Party LLM API Bridge
+
+The LLM API Bridge is optional and disabled by default. When enabled, MCP Assist
+can inspect and call tools exposed by other Home Assistant integrations that
+register LLM APIs.
+
+Shared settings:
+
+- **LLM API Bridge**: Exposes bridge tools on the shared MCP server.
+- **Allowed LLM API IDs**: Comma- or newline-separated API IDs MCP Assist may
+  inspect or call, such as `llm_intents`.
+
+The shared settings form shows currently registered third-party LLM APIs beside
+the allowlist field. Copy the API ID from that list when enabling an installed
+integration.
+
+The built-in Home Assistant `assist` API remains on the separate Assist Bridge.
+Do not add third-party API IDs unless you trust the integration that registered
+them. See [Security and Privacy](security-and-privacy.md#third-party-llm-apis).
+
 ## Weather Configuration
 
 For Home Assistant-native weather answers:
@@ -195,6 +216,34 @@ For Home Assistant-native weather answers:
 
 MCP Assist falls back to a supported forecast type when a specific type is not
 available.
+
+## Google Places and Routes
+
+Google Places and Routes is disabled by default. Enable it when a profile should
+be able to look up place details or calculate travel time.
+
+Required shared setting:
+
+- **Google Maps API Key**: A Google Maps Platform API key with the Places API
+  and Routes API enabled.
+
+To create a key:
+
+1. In Google Cloud, use a project with billing enabled.
+2. Enable [Places API (New)](https://developers.google.com/maps/documentation/places/web-service/get-api-key)
+   and [Routes API](https://developers.google.com/maps/documentation/routes/get-api-key)
+   for that project.
+3. Open the [Google Maps Platform Credentials page](https://console.cloud.google.com/google/maps-apis/credentials).
+4. Choose **Create credentials** -> **API key**.
+5. Restrict the key before using it in production. For API restrictions, allow
+   only the Places API and Routes API. For application restrictions, choose the
+   restriction type that matches where Home Assistant sends requests from, such
+   as server IP address restrictions for a fixed outbound IP.
+
+When `get_google_route` is called without an origin, MCP Assist can use the Home
+Assistant home latitude and longitude as the route origin only if **Share Home
+Location with MCP Tools** is enabled. Otherwise the caller must provide an
+origin.
 
 ## Reference Tools
 

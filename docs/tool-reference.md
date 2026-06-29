@@ -46,6 +46,22 @@ enabled.
 | `get_assist_prompt` | Read Assist prompt context |
 | `get_assist_context_snapshot` | Inspect the current Assist context snapshot |
 
+## Third-Party LLM API Bridge Tools
+
+The LLM API Bridge exposes allowlisted third-party Home Assistant LLM APIs
+registered by other integrations. It is disabled by default.
+
+| Tool | Purpose |
+| --- | --- |
+| `list_llm_apis` | List registered non-Assist LLM APIs and allowlist status |
+| `list_llm_api_tools` | Inspect tools exposed by one allowlisted LLM API |
+| `call_llm_api_tool` | Call a tool on one allowlisted LLM API |
+| `get_llm_api_prompt` | Read prompt text from one allowlisted LLM API |
+
+Use `list_llm_api_tools` before `call_llm_api_tool` so arguments match the
+third-party API's schema. The built-in Home Assistant `assist` API stays on the
+Assist Bridge tools.
+
 ## Response-Service Read Tools
 
 These tools read structured data from Home Assistant services that return
@@ -133,6 +149,21 @@ Web tools are optional and controlled by shared provider settings.
 
 Use Home Assistant-native tools first for local Home Assistant data such as
 weather, calendars, history, and entity state.
+
+## Google Places and Routes
+
+Google Places and Routes tools are optional and require a Google Maps API key.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_google_places` | Search for businesses and places, including open status, address, phone, and rating when available |
+| `get_google_place_details` | Fetch details for a Google Places result |
+| `get_google_route` | Calculate travel time, distance, and traffic-aware ETAs |
+
+If `get_google_route` is called without an origin, it can use the configured
+Home Assistant home latitude and longitude only when **Share Home Location with
+MCP Tools** is enabled. Use regular web search for broad location research that
+is not a place lookup or route question.
 
 ## Wikipedia Search
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import voluptuous as vol
@@ -11,6 +12,7 @@ import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType, section
 from homeassistant.helpers.selector import TemplateSelector
 
+from custom_components.mcp_assist import config_flow as config_flow_module
 from custom_components.mcp_assist.config_flow import (
     ADVANCED_SECTION_KEY,
     CONVERSATION_SECTION_KEY,
@@ -19,6 +21,7 @@ from custom_components.mcp_assist.config_flow import (
     DISABLE_ASSIST_BRIDGE_FIELD,
     DISABLE_CUSTOM_TOOLS_FIELD,
     DISABLE_DEVICE_FIELD,
+    DISABLE_LLM_API_BRIDGE_FIELD,
     DISABLE_MEMORY_FIELD,
     DISABLE_MUSIC_ASSISTANT_FIELD,
     DISABLE_RECORDER_FIELD,
@@ -37,6 +40,7 @@ from custom_components.mcp_assist.config_flow import (
     TOOLS_SECTION_KEY,
     _build_profile_tools_section,
     _build_shared_tools_section,
+    _format_installed_llm_api_options,
     _apply_profile_tool_disables,
     _infer_prompt_mode,
     _needs_prompt_followup,
@@ -53,9 +57,11 @@ from custom_components.mcp_assist.const import (
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
     CONF_ENABLE_GAP_FILLING,
+    CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_GOOGLE_MAPS_API_KEY,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -64,6 +70,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_MEMORY_TOOLS,
     CONF_MAX_ENTITIES_PER_DISCOVERY,
     CONF_ENABLE_ASSIST_BRIDGE,
+    CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
@@ -79,6 +86,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_PROFILE_ENABLE_LLM_API_BRIDGE,
     CONF_SEARCH_PROVIDER,
     CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
@@ -124,6 +132,8 @@ PROFILE_TOOL_ORDER = [
     _builtin_profile_key("calculator"),
     DISABLE_CUSTOM_TOOLS_FIELD,
     DISABLE_DEVICE_FIELD,
+    _builtin_profile_key("google_maps"),
+    DISABLE_LLM_API_BRIDGE_FIELD,
     DISABLE_MEMORY_FIELD,
     DISABLE_MUSIC_ASSISTANT_FIELD,
     _builtin_profile_key("read_url"),
@@ -140,6 +150,8 @@ SHARED_TOOL_ORDER = [
     _builtin_shared_key("calculator"),
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_ENABLE_DEVICE_TOOLS,
+    _builtin_shared_key("google_maps"),
+    CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_MEMORY_TOOLS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     _builtin_shared_key("read_url"),
@@ -360,6 +372,7 @@ def test_apply_profile_tool_disables_marks_checked_tools_disabled() -> None:
             DISABLE_DEVICE_FIELD: True,
             DISABLE_ASSIST_BRIDGE_FIELD: True,
             DISABLE_CUSTOM_TOOLS_FIELD: True,
+            DISABLE_LLM_API_BRIDGE_FIELD: True,
             _builtin_profile_key("calculator"): True,
             _builtin_profile_key("search"): True,
         },
@@ -369,6 +382,7 @@ def test_apply_profile_tool_disables_marks_checked_tools_disabled() -> None:
     assert normalized[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
     assert normalized[CONF_PROFILE_ENABLE_ASSIST_BRIDGE] is False
     assert normalized[CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS] is False
+    assert normalized[CONF_PROFILE_ENABLE_LLM_API_BRIDGE] is False
     assert normalized["profile_enable_calculator_tools"] is False
     assert normalized["profile_enable_search_tool"] is False
 
@@ -380,10 +394,12 @@ def test_apply_profile_tool_disables_leaves_unchecked_tools_inherited() -> None:
             DISABLE_DEVICE_FIELD: False,
             DISABLE_ASSIST_BRIDGE_FIELD: False,
             DISABLE_CUSTOM_TOOLS_FIELD: False,
+            DISABLE_LLM_API_BRIDGE_FIELD: False,
             _builtin_profile_key("calculator"): False,
             CONF_PROFILE_ENABLE_DEVICE_TOOLS: False,
             CONF_PROFILE_ENABLE_ASSIST_BRIDGE: False,
             CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_PROFILE_ENABLE_LLM_API_BRIDGE: False,
             "profile_enable_calculator_tools": False,
         },
         BUILTIN_SPECS,
@@ -392,6 +408,7 @@ def test_apply_profile_tool_disables_leaves_unchecked_tools_inherited() -> None:
     assert CONF_PROFILE_ENABLE_DEVICE_TOOLS not in normalized
     assert CONF_PROFILE_ENABLE_ASSIST_BRIDGE not in normalized
     assert CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS not in normalized
+    assert CONF_PROFILE_ENABLE_LLM_API_BRIDGE not in normalized
     assert "profile_enable_calculator_tools" not in normalized
 
 
@@ -439,6 +456,42 @@ def test_normalize_shared_tool_inputs_infers_provider_from_legacy_web_search() -
     )
 
     assert normalized[CONF_SEARCH_PROVIDER] == "duckduckgo"
+
+
+def test_normalize_shared_tool_inputs_normalizes_llm_api_allowlist() -> None:
+    """LLM API allowlists should accept commas, newlines, and repeated ids."""
+    normalized = _normalize_shared_tool_inputs(
+        {
+            CONF_ENABLE_LLM_API_BRIDGE: True,
+            CONF_LLM_API_ALLOWLIST: "llm_intents\nmusic_api, llm_intents",
+        },
+        BUILTIN_SPECS,
+    )
+
+    assert normalized[CONF_ENABLE_LLM_API_BRIDGE] is True
+    assert normalized[CONF_LLM_API_ALLOWLIST] == "llm_intents, music_api"
+
+
+def test_format_installed_llm_api_options_lists_registered_third_party_apis(
+    hass, monkeypatch
+) -> None:
+    """The shared settings helper should show copyable installed third-party API ids."""
+    monkeypatch.setattr(
+        config_flow_module.llm,
+        "async_get_apis",
+        lambda hass_arg: [
+            SimpleNamespace(
+                id=config_flow_module.llm.LLM_API_ASSIST,
+                name="Assist",
+            ),
+            SimpleNamespace(id="llm_intents", name="LLM Intents"),
+            SimpleNamespace(id="calendar_tools", name="Calendar Tools"),
+        ],
+    )
+
+    assert _format_installed_llm_api_options(hass) == (
+        "Calendar Tools (calendar_tools), LLM Intents (llm_intents)"
+    )
 
 
 def test_normalize_shared_tool_inputs_clamps_memory_ttls() -> None:
@@ -496,8 +549,21 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     assert marker_by_key[_builtin_profile_key("search")].description is None
 
 
-async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
+async def test_shared_mcp_step_groups_context_discovery_and_tools(
+    hass, monkeypatch
+) -> None:
     """Shared MCP settings should group context, discovery, and tools fields into sections."""
+    monkeypatch.setattr(
+        config_flow_module.llm,
+        "async_get_apis",
+        lambda hass_arg: [
+            SimpleNamespace(
+                id=config_flow_module.llm.LLM_API_ASSIST,
+                name="Assist",
+            ),
+            SimpleNamespace(id="llm_intents", name="LLM Intents"),
+        ],
+    )
     flow = MCPAssistConfigFlow()
     flow.hass = hass
     flow.context = {"source": "user"}
@@ -546,7 +612,9 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
         *SHARED_TOOL_ORDER,
         CONF_SEARCH_PROVIDER,
         CONF_BRAVE_API_KEY,
+        CONF_GOOGLE_MAPS_API_KEY,
         CONF_SEARXNG_URL,
+        CONF_LLM_API_ALLOWLIST,
     ]
     tool_markers = {
         getattr(marker, "schema", marker): marker
@@ -564,6 +632,9 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
     assert response_default() is True if callable(response_default) else response_default is True
     assert tool_markers[_builtin_shared_key("calculator")].description is None
     assert tool_markers[_builtin_shared_key("read_url")].description is None
+    assert result["description_placeholders"]["installed_llm_apis"] == (
+        "LLM Intents (llm_intents)"
+    )
 
 
 async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:
@@ -583,6 +654,24 @@ async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_shared_mcp_step_requires_google_maps_api_key_when_enabled(hass) -> None:
+    """Google Maps tools should not save without an API key."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("google_maps"): True,
+            CONF_GOOGLE_MAPS_API_KEY: " ",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
 
 
 async def test_options_mcp_step_requires_searxng_url_when_selected(
@@ -607,6 +696,53 @@ async def test_options_mcp_step_requires_searxng_url_when_selected(
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_options_mcp_step_requires_google_maps_api_key_when_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should reject Google Maps tools without an API key."""
+    system_entry_factory()
+
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("google_maps"): True,
+            CONF_GOOGLE_MAPS_API_KEY: "",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
+
+
+async def test_options_mcp_step_preserves_google_maps_api_key_default(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should keep the saved Google Maps key in form defaults."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "saved-maps-key"})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server()
+
+    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    tool_markers = {
+        getattr(marker, "schema", marker): marker
+        for marker in tools_section.schema.schema.keys()
+    }
+    maps_default = tool_markers[CONF_GOOGLE_MAPS_API_KEY].default
+    resolved_default = maps_default() if callable(maps_default) else maps_default
+    assert resolved_default == "saved-maps-key"
 
 
 async def test_options_mcp_step_applies_shared_settings_to_running_server(

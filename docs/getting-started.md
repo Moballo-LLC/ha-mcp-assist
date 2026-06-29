@@ -120,7 +120,8 @@ server.
   clients.
 - **Discovery**: Smart Entity Index and max entities per discovery call.
 - **Tools**: Shared optional tool families, such as weather forecast, web
-  search, Wikipedia search, memory, Music Assistant, and external custom tools.
+  search, Google Places and Routes, Wikipedia search, memory, Music Assistant,
+  and external custom tools.
 
 See [Configuration](configuration.md) for the full settings reference.
 

@@ -113,6 +113,7 @@ from .const import (
     DEVICE_TECHNICAL_INSTRUCTIONS,
     MEMORY_TECHNICAL_INSTRUCTIONS,
     ASSIST_BRIDGE_TECHNICAL_INSTRUCTIONS,
+    LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS,
     MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_LLAMACPP,
@@ -128,6 +129,7 @@ from .const import (
     ANTHROPIC_BASE_URL,
     OPENROUTER_BASE_URL,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
+    TOOL_FAMILY_LLM_API_BRIDGE,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
     get_optional_tool_family,
@@ -581,6 +583,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         return self._is_optional_tool_family_enabled("assist_bridge")
 
     @property
+    def llm_api_bridge_enabled(self) -> bool:
+        """Get effective third-party LLM API bridge setting for this profile."""
+        return self._is_optional_tool_family_enabled(TOOL_FAMILY_LLM_API_BRIDGE)
+
+    @property
     def external_custom_tools_enabled(self) -> bool:
         """Get effective external custom tool setting for this profile."""
         return self._is_optional_tool_family_enabled(TOOL_FAMILY_EXTERNAL_CUSTOM)
@@ -663,6 +670,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "- Native Assist bridge tools are disabled. Do not call list_assist_tools, call_assist_tool, get_assist_prompt, or get_assist_context_snapshot."
             )
 
+        if not self.llm_api_bridge_enabled:
+            lines.append(
+                "- Third-party LLM API bridge tools are disabled. Do not call list_llm_apis, list_llm_api_tools, call_llm_api_tool, or get_llm_api_prompt."
+            )
+
         if not self.memory_tools_enabled:
             lines.append(
                 "- Memory tools are disabled. Do not call list_memory_categories, remember_memory, recall_memories, or forget_memory."
@@ -697,6 +709,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         if self.assist_bridge_enabled:
             sections.append(ASSIST_BRIDGE_TECHNICAL_INSTRUCTIONS.strip())
+
+        if self.llm_api_bridge_enabled:
+            sections.append(LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS.strip())
 
         if self.music_assistant_support_enabled:
             sections.append(
@@ -955,6 +970,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.mcp_port,
             self.search_provider,
             self.assist_bridge_enabled,
+            self.llm_api_bridge_enabled,
             self.memory_tools_enabled,
             self.external_custom_tools_enabled,
             self.device_tools_enabled,
