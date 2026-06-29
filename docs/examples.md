@@ -152,14 +152,19 @@ Remember that I prefer the bedroom thermostat at 68 degrees.
 
 Typical flow:
 
-1. `remember_memory` stores the preference with the configured TTL.
-2. Future requests can use `recall_memories` when the preference is relevant.
+1. `list_memory_categories` can inspect suggested categories if the category is
+   unclear.
+2. `remember_memory` stores the preference with the configured TTL, usually in
+   the `preference` category.
+3. Future requests can use `recall_memories` when the preference is relevant.
 
 Other examples:
 
 - "Remember for 14 days that the dog gets medicine with dinner."
+- "Remember that the den lamp is called the reading light."
+- "Remember that 72 degrees is normal for the workshop in summer."
 - "What do you remember about my coffee preferences?"
-- "Forget that reminder about the spare key."
+- "Forget that reminder about the temporary guest playlist."
 
 Memory is shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).
@@ -200,6 +205,8 @@ Other examples:
 
 - "What is playing in the living room?"
 - "Show me albums by The National."
+- "Find podcasts about home automation in my Music Assistant library."
+- "Show my audiobooks in Music Assistant."
 - "Play my dinner playlist downstairs."
 
 ## Image and Camera Questions

@@ -124,6 +124,7 @@ Recommendations:
 
 - Ask the assistant to remember only information you are comfortable storing in
   Home Assistant.
+- Use categories to make stored facts easier to find, review, and delete.
 - Use TTLs for temporary facts.
 - Use `forget_memory` for stale or sensitive stored facts.
 - Keep max TTL and max memory count aligned with your retention expectations.
