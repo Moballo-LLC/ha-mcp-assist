@@ -171,6 +171,7 @@
               "disable_search": "Disable Search",
               "disable_unit_conversion": "Disable Unit Conversion",
               "disable_weather_forecast": "Disable Weather Forecast",
+              "disable_wikipedia_search": "Disable Wikipedia Search",
               "disable_web_search": "Disable Web Search"
             },
             "data_description": {
@@ -186,6 +187,7 @@
               "disable_search": "Prevents this profile from using the built-in web search helper.",
               "disable_unit_conversion": "Prevents this profile from using exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "disable_weather_forecast": "Prevents this profile from using the dedicated Home Assistant weather forecast helper.",
+              "disable_wikipedia_search": "Prevents this profile from searching Wikipedia.",
               "disable_web_search": "Prevents this profile from using web search and URL-reading tools, even if they are enabled on the shared MCP server."
             }
           }
@@ -261,6 +263,7 @@
               "enable_search_tool": "Search",
               "enable_unit_conversion_tools": "Unit Conversion",
               "enable_weather_forecast_tool": "Weather Forecast",
+              "enable_wikipedia_search_tool": "Wikipedia Search",
               "enable_web_search": "Web Search",
               "search_provider": "Web Search Provider",
               "brave_api_key": "Brave Search API Key",
@@ -279,6 +282,7 @@
               "enable_search_tool": "Expose web search using the configured shared provider.",
               "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
               "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
+              "enable_wikipedia_search_tool": "Expose lightweight Wikipedia article search for background and reference questions.",
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
               "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
@@ -469,6 +473,7 @@
               "disable_search": "Disable Search",
               "disable_unit_conversion": "Disable Unit Conversion",
               "disable_weather_forecast": "Disable Weather Forecast",
+              "disable_wikipedia_search": "Disable Wikipedia Search",
               "disable_web_search": "Disable Web Search"
             },
             "data_description": {
@@ -484,6 +489,7 @@
               "disable_response_service": "Prevents this profile from using Home Assistant services that return structured data, such as calendar and forecast reads.",
               "disable_search": "Prevents this profile from using the built-in web search helper.",
               "disable_weather_forecast": "Prevents this profile from using the dedicated Home Assistant weather forecast helper.",
+              "disable_wikipedia_search": "Prevents this profile from searching Wikipedia.",
               "disable_web_search": "Prevents this profile from using web search and URL-reading tools, even if they are enabled on the shared MCP server."
             }
           }
@@ -559,6 +565,7 @@
               "enable_search_tool": "Search",
               "enable_unit_conversion_tools": "Unit Conversion",
               "enable_weather_forecast_tool": "Weather Forecast",
+              "enable_wikipedia_search_tool": "Wikipedia Search",
               "enable_web_search": "Web Search",
               "search_provider": "Web Search Provider",
               "brave_api_key": "Brave Search API Key",
@@ -577,6 +584,7 @@
               "enable_response_service_tools": "Expose Home Assistant services that return structured data, such as calendar and forecast reads.",
               "enable_search_tool": "Expose web search using the configured shared provider.",
               "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
+              "enable_wikipedia_search_tool": "Expose lightweight Wikipedia article search for background and reference questions.",
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
               "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
