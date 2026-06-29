@@ -132,6 +132,20 @@ MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 MAX_PROVIDER_LOG_CHARS = 500
+TOOL_BUDGET_EXHAUSTED_RESULT = (
+    "Tool call skipped because this request reached the configured tool-call "
+    "budget. Answer from the tool results already available without calling more "
+    "tools."
+)
+TOOL_BUDGET_FINAL_INSTRUCTION = (
+    "The configured MCP tool-call budget has been reached. Answer the user's "
+    "request now using only the tool results already available. Do not request "
+    "more tools. If the available results are partial, say that briefly."
+)
+TOOL_BUDGET_FALLBACK_RESPONSE = (
+    "I used the available tool budget before I could finish. Try a narrower "
+    "request, or raise Max Tool Iterations if this needs a broader check."
+)
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -2753,6 +2767,68 @@ class MCPAssistConversationEntity(ConversationEntity):
                 content=error_content,
             )
 
+    @property
+    def tool_call_budget(self) -> int:
+        """Return the per-request MCP tool-call budget."""
+        try:
+            return max(1, int(self.max_iterations))
+        except (TypeError, ValueError):
+            return max(1, int(DEFAULT_MAX_ITERATIONS))
+
+    @staticmethod
+    def _tool_call_id(tool_call: Dict[str, Any]) -> str:
+        """Return a stable ID for a provider-normalized tool call."""
+        return str(tool_call.get("id") or f"call_{uuid.uuid4().hex[:8]}")
+
+    @staticmethod
+    def _tool_call_name(tool_call: Dict[str, Any]) -> str:
+        """Return the function name for a provider-normalized tool call."""
+        function = tool_call.get("function") or {}
+        return str(function.get("name") or "unknown")
+
+    def _build_budget_skipped_tool_result(
+        self,
+        provider: LLMProvider,
+        tool_call: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build a provider-ready tool result for a skipped over-budget call."""
+        return provider.build_tool_result_message(
+            tool_call_id=self._tool_call_id(tool_call),
+            tool_name=self._tool_call_name(tool_call),
+            content=json.dumps(
+                {
+                    "error": TOOL_BUDGET_EXHAUSTED_RESULT,
+                    "budget_exhausted": True,
+                }
+            ),
+        )
+
+    def _prepare_tool_calls_for_budget(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        *,
+        tool_calls_used: int,
+        provider: LLMProvider,
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+        """Split requested tool calls into executable and skipped budget results."""
+        remaining = max(0, self.tool_call_budget - tool_calls_used)
+        executable_tool_calls = tool_calls[:remaining]
+        skipped_tool_calls = tool_calls[remaining:]
+
+        if skipped_tool_calls:
+            _LOGGER.warning(
+                "Skipping %d over-budget tool calls after %d/%d calls were used",
+                len(skipped_tool_calls),
+                tool_calls_used,
+                self.tool_call_budget,
+            )
+
+        skipped_results = [
+            self._build_budget_skipped_tool_result(provider, tool_call)
+            for tool_call in skipped_tool_calls
+        ]
+        return executable_tool_calls, skipped_results, bool(skipped_tool_calls)
+
     async def _execute_tool_calls(
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -2763,6 +2839,63 @@ class MCPAssistConversationEntity(ConversationEntity):
         return list(await asyncio.gather(
             *(self._execute_single_tool_call(tool_call) for tool_call in tool_calls)
         ))
+
+    @staticmethod
+    def _has_tool_results(messages: List[Dict[str, Any]]) -> bool:
+        """Return whether the conversation already has tool results to summarize."""
+        return any(message.get("role") == "tool" for message in messages)
+
+    async def _call_llm_final_response_without_tools(
+        self,
+        conversation_messages: List[Dict[str, Any]],
+        provider: LLMProvider,
+        *,
+        transport: str,
+    ) -> str:
+        """Ask the provider for a final answer with tools disabled."""
+        final_messages = [
+            *conversation_messages,
+            {"role": "system", "content": TOOL_BUDGET_FINAL_INSTRUCTION},
+        ]
+        payload = provider.build_payload(final_messages, [], stream=False)
+        clean_payload = provider.clean_payload(payload)
+        self._log_initial_llm_payload_metrics(
+            transport=transport,
+            iteration=-1,
+            payload=clean_payload,
+            messages=final_messages,
+            tools=clean_payload.get("tools"),
+        )
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    provider.chat_url(),
+                    headers=provider.headers(),
+                    json=clean_payload,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        _LOGGER.warning(
+                            "%s final budget response failed: status=%s body=%s",
+                            self.server_type,
+                            response.status,
+                            _provider_log_snippet(error_text),
+                        )
+                        return TOOL_BUDGET_FALLBACK_RESPONSE
+
+                    data = await response.json()
+                    message = provider.parse_http_message(data)
+                    final_content = str(message.get("content") or "").strip()
+                    return final_content or TOOL_BUDGET_FALLBACK_RESPONSE
+        except Exception as err:
+            _LOGGER.warning(
+                "%s final budget response failed: %s",
+                self.server_type,
+                _provider_log_snippet(err),
+            )
+            return TOOL_BUDGET_FALLBACK_RESPONSE
 
     async def _test_streaming_basic(self) -> bool:
         """Test basic streaming without tools to isolate connection issues."""
@@ -2835,6 +2968,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         tools = await self._get_mcp_tools()
         provider = self._get_llm_provider()
         conversation_messages = list(messages)
+        tool_calls_used = 0
 
         # Buffers for streaming
         tool_arg_buffers = {}  # index -> partial JSON string
@@ -3178,8 +3312,20 @@ class MCPAssistConversationEntity(ConversationEntity):
                 # Record tool calls to ChatLog for debug view
                 self._record_tool_calls_to_chatlog(current_tool_calls)
 
+                (
+                    executable_tool_calls,
+                    skipped_tool_results,
+                    budget_exhausted,
+                ) = self._prepare_tool_calls_for_budget(
+                    current_tool_calls,
+                    tool_calls_used=tool_calls_used,
+                    provider=provider,
+                )
+
                 # Execute tools
-                tool_results = await self._execute_tool_calls(current_tool_calls)
+                tool_results = await self._execute_tool_calls(executable_tool_calls)
+                tool_calls_used += len(executable_tool_calls)
+                tool_results.extend(skipped_tool_results)
 
                 # Record tool results to ChatLog for debug view
                 for idx, result in enumerate(tool_results):
@@ -3209,6 +3355,18 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tool_ids.clear()
                 completed_tools.clear()
 
+                if budget_exhausted or tool_calls_used >= self.tool_call_budget:
+                    _LOGGER.warning(
+                        "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
+                        tool_calls_used,
+                        self.tool_call_budget,
+                    )
+                    return await self._call_llm_final_response_without_tools(
+                        conversation_messages,
+                        provider,
+                        transport="streaming_budget_final",
+                    )
+
                 # Continue to get next response after tools
                 continue
             else:
@@ -3222,8 +3380,14 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Hit max iterations
         if response_text:
             return response_text
+        if self._has_tool_results(conversation_messages):
+            return await self._call_llm_final_response_without_tools(
+                conversation_messages,
+                provider,
+                transport="streaming_iteration_final",
+            )
         else:
-            return f"I reached the maximum of {self.max_iterations} tool calls while processing your request. Try simplifying your request, or increase the limit in Advanced Settings if you have a complex automation need."
+            return TOOL_BUDGET_FALLBACK_RESPONSE
 
     async def _call_llm(self, messages: List[Dict[str, Any]]) -> str:
         """Call LLM API with MCP tools and handle tool execution loop."""
@@ -3257,6 +3421,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Keep a mutable copy of messages for the conversation
         conversation_messages = list(messages)
+        tool_calls_used = 0
 
         # Tool execution loop
         for iteration in range(self.max_iterations):
@@ -3328,9 +3493,23 @@ class MCPAssistConversationEntity(ConversationEntity):
                         # Record tool calls to ChatLog for debug view
                         self._record_tool_calls_to_chatlog(tool_calls)
 
+                        (
+                            executable_tool_calls,
+                            skipped_tool_results,
+                            budget_exhausted,
+                        ) = self._prepare_tool_calls_for_budget(
+                            tool_calls,
+                            tool_calls_used=tool_calls_used,
+                            provider=provider,
+                        )
+
                         # Execute the tool calls
                         _LOGGER.info("⚡ Executing tool calls against MCP server...")
-                        tool_results = await self._execute_tool_calls(tool_calls)
+                        tool_results = await self._execute_tool_calls(
+                            executable_tool_calls
+                        )
+                        tool_calls_used += len(executable_tool_calls)
+                        tool_results.extend(skipped_tool_results)
 
                         # Record tool results to ChatLog for debug view
                         for idx, result in enumerate(tool_results):
@@ -3362,6 +3541,21 @@ class MCPAssistConversationEntity(ConversationEntity):
                             f"📊 Added {len(tool_results)} tool results to conversation"
                         )
 
+                        if (
+                            budget_exhausted
+                            or tool_calls_used >= self.tool_call_budget
+                        ):
+                            _LOGGER.warning(
+                                "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
+                                tool_calls_used,
+                                self.tool_call_budget,
+                            )
+                            return await self._call_llm_final_response_without_tools(
+                                conversation_messages,
+                                provider,
+                                transport="http_budget_final",
+                            )
+
                         # Continue the loop to get next response
                         continue
 
@@ -3377,7 +3571,13 @@ class MCPAssistConversationEntity(ConversationEntity):
         _LOGGER.warning(
             f"⚠️ Hit maximum iterations ({self.max_iterations}) in tool execution loop"
         )
-        return f"I reached the maximum of {self.max_iterations} tool calls while processing your request. Try simplifying your request, or increase the limit in Advanced Settings if you have a complex automation need."
+        if self._has_tool_results(conversation_messages):
+            return await self._call_llm_final_response_without_tools(
+                conversation_messages,
+                provider,
+                transport="http_iteration_final",
+            )
+        return TOOL_BUDGET_FALLBACK_RESPONSE
 
     async def _execute_actions(
         self, response_text: str, user_input: ConversationInput
