@@ -2328,6 +2328,8 @@ class MCPServer(
                 timeout=timeout,
                 base_url=str(current_base_url),
             ) as session:
+                # request_path is constrained by _resolve_fetchable_http_request_target.
+                # codeql[py/partial-ssrf]
                 async with session.get(request_path, allow_redirects=False) as response:
                     if response.status in _HTTP_REDIRECT_STATUSES:
                         location = str(response.headers.get("Location") or "").strip()
