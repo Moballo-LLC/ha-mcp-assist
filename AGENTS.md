@@ -8,14 +8,15 @@ editing this repository. It applies to the whole repository.
 - This repository is `Moballo-LLC/ha-mcp-assist`, the Moballo-maintained fork of
   upstream `mike-nott/mcp-assist`.
 - Keep upstream credit intact in user-facing docs and license text.
-- HACS should show this repo as `HA MCP Assist`, which comes from
-  `hacs.json`.
+- HACS and Home Assistant should show this repo/integration as `HA MCP Assist`.
+  HACS gets this from `hacs.json`; Home Assistant gets this from the manifest
+  and localized integration title.
 - The actual Home Assistant integration must remain a drop-in replacement for
   upstream MCP Assist:
   - Keep the integration folder at `custom_components/mcp_assist`.
   - Keep `custom_components/mcp_assist/manifest.json` domain as `mcp_assist`.
-  - Keep the Home Assistant integration name as `MCP Assist` unless there is a
-    deliberate migration plan.
+  - Do not rename the integration domain or release package to match the
+    display name.
 - Do not move files out of `custom_components/mcp_assist` for release packaging.
   The release workflow zips that folder as `mcp_assist.zip`.
 

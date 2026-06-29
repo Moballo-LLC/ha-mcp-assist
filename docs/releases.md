@@ -87,8 +87,9 @@ custom_components/mcp_assist
 ```
 
 Do not rename the integration folder or manifest domain as part of a release.
-HACS can display this repository as **HA MCP Assist** while Home Assistant still
-loads the integration as **MCP Assist**.
+HACS and Home Assistant can display this project as **HA MCP Assist** while the
+integration still loads from `custom_components/mcp_assist` with domain
+`mcp_assist`.
 
 ## Pre-Release Checklist
 

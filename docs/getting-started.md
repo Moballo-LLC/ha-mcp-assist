@@ -37,12 +37,12 @@ For model selection notes, see [Model Compatibility](model-compatibility.md).
 
 1. Go to **Settings** -> **Devices & Services**.
 2. Select **Add Integration**.
-3. Search for **MCP Assist**.
+3. Search for **HA MCP Assist**.
 4. Follow the setup flow for your provider.
 
-HACS shows this repository as **HA MCP Assist**. Inside Home Assistant, the
-integration remains **MCP Assist** so it stays a drop-in replacement for the
-upstream integration domain.
+HACS and Home Assistant show this project as **HA MCP Assist**. The installed
+integration still uses the `mcp_assist` domain and `custom_components/mcp_assist`
+folder so it stays a drop-in replacement for the upstream integration.
 
 ## Create Your First Profile
 
