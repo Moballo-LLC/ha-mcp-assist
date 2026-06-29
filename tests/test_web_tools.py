@@ -280,6 +280,7 @@ def test_duckduckgo_search_sync_normalizes_ddgs_results(monkeypatch, hass) -> No
         def text(self, query, **kwargs):
             assert query == "bus"
             assert kwargs["max_results"] == 3
+            assert kwargs["backend"] == "duckduckgo"
             return [
                 {"title": "Route 372", "href": "https://example.com/372", "body": "ETA"}
             ]
@@ -307,6 +308,7 @@ def test_duckduckgo_search_sync_uses_news_mode_for_news_queries(monkeypatch, has
         def news(self, query, **kwargs):
             assert query == "Iran latest"
             assert kwargs["max_results"] == 2
+            assert kwargs["backend"] == "duckduckgo"
             return [
                 {
                     "title": "Iran update",
@@ -335,6 +337,44 @@ def test_duckduckgo_search_sync_uses_news_mode_for_news_queries(monkeypatch, has
             "date": "2026-04-12",
         }
     ]
+
+
+def test_duckduckgo_search_sync_preserves_duckduckgo_backend_on_news_fallback(
+    monkeypatch, hass
+) -> None:
+    """News fallback should still use DuckDuckGo-only web search."""
+
+    calls = []
+
+    class _FakeDDGS:
+        def news(self, query, **kwargs):
+            assert query == "Iran latest"
+            assert kwargs["backend"] == "duckduckgo"
+            raise RuntimeError("news unavailable")
+
+        def text(self, query, **kwargs):
+            calls.append((query, kwargs))
+            return [
+                {"title": "Iran fallback", "href": "https://example.com/fallback", "body": "Fallback"}
+            ]
+
+    monkeypatch.setattr(ddg_module, "DDGS", _FakeDDGS)
+    tool = ddg_module.DuckDuckGoSearchTool(hass)
+
+    results = tool._search_sync("Iran latest", 2, "news")
+
+    assert calls == [
+        (
+            "Iran latest",
+            {
+                "max_results": 2,
+                "region": "us-en",
+                "safesearch": "moderate",
+                "backend": "duckduckgo",
+            },
+        )
+    ]
+    assert results[0]["title"] == "Iran fallback"
 
 
 @pytest.mark.asyncio

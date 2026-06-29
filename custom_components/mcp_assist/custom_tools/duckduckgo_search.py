@@ -10,6 +10,8 @@ except ImportError:  # pragma: no cover - compatibility for older installs
 
 _LOGGER = logging.getLogger(__name__)
 
+DUCKDUCKGO_BACKEND = "duckduckgo"
+
 NEWS_QUERY_HINTS = (
     "news",
     "headline",
@@ -144,7 +146,13 @@ class DuckDuckGoSearchTool:
             client = DDGS()
             if normalized_mode == "news":
                 try:
-                    raw_results = client.news(query, max_results=count)
+                    raw_results = client.news(
+                        query,
+                        max_results=count,
+                        region="us-en",
+                        safesearch="moderate",
+                        backend=DUCKDUCKGO_BACKEND,
+                    )
                 except Exception as err:
                     _LOGGER.warning(
                         "DDGS news search failed for %r, falling back to web search: %s",
@@ -156,7 +164,7 @@ class DuckDuckGoSearchTool:
                         max_results=count,
                         region="us-en",
                         safesearch="moderate",
-                        backend="auto",
+                        backend=DUCKDUCKGO_BACKEND,
                     )
             else:
                 raw_results = client.text(
@@ -164,7 +172,7 @@ class DuckDuckGoSearchTool:
                     max_results=count,
                     region="us-en",
                     safesearch="moderate",
-                    backend="auto",
+                    backend=DUCKDUCKGO_BACKEND,
                 )
 
             return [self._normalize_result(r) for r in raw_results]
