@@ -1009,7 +1009,23 @@ def test_build_anthropic_payload_uses_native_messages_shape(
                     "properties": {"area": {"type": "string"}},
                 },
             },
-        }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_image",
+                "description": "Analyze an image.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_image",
+                "description": "Generate an image.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
     ]
     messages = [
         {"role": "system", "content": "You are helpful."},

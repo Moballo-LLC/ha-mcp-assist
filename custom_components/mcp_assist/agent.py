@@ -137,6 +137,7 @@ _LOGGER = logging.getLogger(__name__)
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
+ANTHROPIC_UNSUPPORTED_TOOL_NAMES = {"analyze_image", "generate_image"}
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -2783,6 +2784,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             function = tool.get("function", {})
             name = function.get("name")
             if not name:
+                continue
+            if name in ANTHROPIC_UNSUPPORTED_TOOL_NAMES:
                 continue
             input_schema = function.get("parameters") or {
                 "type": "object",
