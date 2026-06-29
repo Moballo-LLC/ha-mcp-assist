@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "wikipedia_search",
+  "name": "Wikipedia Search",
+  "description": "Built-in Wikipedia reference search.",
+  "version": "1.0.0",
+  "entrypoint": "tool:WikipediaSearchPackageTool",
+  "prompt_append_file": "prompt.md",
+  "capabilities": [
+    "Searches Wikipedia for lightweight background and reference article results."
+  ],
+  "built_in_toggle": {
+    "tool_names": [
+      "search_wikipedia"
+    ],
+    "shared_setting_key": "enable_wikipedia_search_tool",
+    "profile_setting_key": "profile_enable_wikipedia_search_tool",
+    "shared_default": false,
+    "profile_default": true,
+    "shared_label": "Wikipedia Search",
+    "profile_disable_label": "Disable Wikipedia Search",
+    "shared_description": "Expose lightweight Wikipedia article search for background and reference questions.",
+    "profile_disable_description": "Prevents this profile from searching Wikipedia."
+  }
+}
