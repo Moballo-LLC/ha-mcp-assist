@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.mcp_assist.const import CONF_GOOGLE_MAPS_API_KEY
+from custom_components.mcp_assist.const import (
+    CONF_GOOGLE_MAPS_API_KEY,
+    CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
+)
 from custom_components.mcp_assist.custom_tools import google_maps as google_maps_module
 
 
@@ -97,7 +100,12 @@ async def test_search_google_places_returns_place_details(
 ) -> None:
     """Places Text Search should send field masks and normalize place results."""
     _set_home_coordinates(hass)
-    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    system_entry_factory(
+        data={
+            CONF_GOOGLE_MAPS_API_KEY: "maps-key",
+            CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: True,
+        }
+    )
     captured = {}
     monkeypatch.setattr(
         google_maps_module.aiohttp,
@@ -154,6 +162,31 @@ async def test_search_google_places_returns_place_details(
 
 
 @pytest.mark.asyncio
+async def test_search_google_places_omits_home_bias_when_location_context_disabled(
+    hass,
+    system_entry_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Places should not send home coordinates unless tool-call context allows it."""
+    _set_home_coordinates(hass)
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    captured = {}
+    monkeypatch.setattr(
+        google_maps_module.aiohttp,
+        "ClientSession",
+        _google_client_session(_FakeGoogleResponse(json_data={"places": []}), captured),
+    )
+
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "search_google_places",
+        {"query": "coffee"},
+    )
+
+    assert result["isError"] is False
+    assert "locationBias" not in captured["calls"][0][2]["json"]
+
+
+@pytest.mark.asyncio
 async def test_get_google_place_details_accepts_prefixed_place_id(
     hass,
     system_entry_factory,
@@ -196,7 +229,12 @@ async def test_get_google_route_defaults_origin_to_home_and_uses_traffic(
 ) -> None:
     """Routes should default origin to HA home and request traffic-aware driving."""
     _set_home_coordinates(hass)
-    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    system_entry_factory(
+        data={
+            CONF_GOOGLE_MAPS_API_KEY: "maps-key",
+            CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: True,
+        }
+    )
     captured = {}
     monkeypatch.setattr(
         google_maps_module.aiohttp,
@@ -255,6 +293,30 @@ async def test_get_google_route_defaults_origin_to_home_and_uses_traffic(
 
 
 @pytest.mark.asyncio
+async def test_get_google_route_requires_origin_when_location_context_disabled(
+    hass,
+    system_entry_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Routes should not use HA home coordinates unless tool-call context allows it."""
+    _set_home_coordinates(hass)
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+
+    def _client_session(**_kwargs):
+        raise AssertionError("HTTP should not be called without an origin")
+
+    monkeypatch.setattr(google_maps_module.aiohttp, "ClientSession", _client_session)
+
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route",
+        {"destination": "Seattle-Tacoma International Airport"},
+    )
+
+    assert result["isError"] is True
+    assert "origin is required" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
 async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_time(
     hass,
     system_entry_factory,
@@ -262,7 +324,12 @@ async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_ti
 ) -> None:
     """Drive arrival-time requests should sample future traffic and calculate leave-by."""
     _set_home_coordinates(hass)
-    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    system_entry_factory(
+        data={
+            CONF_GOOGLE_MAPS_API_KEY: "maps-key",
+            CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: True,
+        }
+    )
     captured = {}
     monkeypatch.setattr(
         google_maps_module.aiohttp,
@@ -303,6 +370,15 @@ async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_ti
     assert route["desired_arrival_time"] == "2026-06-30T01:30:00Z"
     assert route["leave_by"] == "2026-06-30T01:00:00Z"
     assert "Leave by" in result["content"][0]["text"]
+
+
+def test_google_route_waypoint_accepts_bare_place_ids(hass) -> None:
+    """Search result place IDs should be directly routeable."""
+    waypoint = google_maps_module.GoogleMapsTool(hass)._build_route_waypoint(
+        "ChIJ1234567890abcdef"
+    )
+
+    assert waypoint == {"placeId": "ChIJ1234567890abcdef"}
 
 
 @pytest.mark.asyncio

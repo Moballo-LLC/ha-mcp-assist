@@ -14,7 +14,9 @@ from homeassistant.util import dt as dt_util
 from custom_components.mcp_assist import get_system_entry
 from custom_components.mcp_assist.const import (
     CONF_GOOGLE_MAPS_API_KEY,
+    CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     DEFAULT_GOOGLE_MAPS_API_KEY,
+    DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -558,6 +560,8 @@ class GoogleMapsTool:
 
     def _home_lat_lng(self) -> tuple[float, float] | None:
         """Return configured Home Assistant latitude and longitude when available."""
+        if not self._home_location_sharing_enabled():
+            return None
         latitude = getattr(self.hass.config, "latitude", None)
         longitude = getattr(self.hass.config, "longitude", None)
         try:
@@ -568,6 +572,20 @@ class GoogleMapsTool:
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
             return None
         return lat, lng
+
+    def _home_location_sharing_enabled(self) -> bool:
+        """Return whether shared settings allow tools to receive home coordinates."""
+        system_entry = get_system_entry(self.hass)
+        if system_entry is None:
+            return DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS
+        value = system_entry.options.get(
+            CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
+            system_entry.data.get(
+                CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
+                DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
+            ),
+        )
+        return bool(value)
 
     def _build_route_waypoint(self, value: str) -> dict[str, Any]:
         """Build a Routes waypoint from address, place ID, or lat/lng input."""
@@ -580,6 +598,8 @@ class GoogleMapsTool:
             return {"placeId": self._strip_place_resource_prefix(place_id)}
         if value.casefold().startswith("places/"):
             return {"placeId": self._strip_place_resource_prefix(value)}
+        if self._looks_like_place_id(value):
+            return {"placeId": value.strip()}
         return {"address": value}
 
     @staticmethod
@@ -616,6 +636,16 @@ class GoogleMapsTool:
         if not re.fullmatch(r"[A-Za-z0-9_\-:.]+", place_id):
             return None
         return place_id
+
+    @staticmethod
+    def _looks_like_place_id(value: str) -> bool:
+        """Return whether a bare string looks like a Google Place ID."""
+        value_text = str(value or "").strip()
+        return bool(
+            len(value_text) >= 12
+            and re.fullmatch(r"[A-Za-z0-9_-]+", value_text)
+            and not re.fullmatch(r"[A-Za-z]+", value_text)
+        )
 
     @staticmethod
     def _strip_place_resource_prefix(value: str) -> str:
