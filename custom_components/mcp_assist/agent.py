@@ -1,4 +1,4 @@
-"""LM Studio MCP conversation agent."""
+"""MCP Assist conversation agent."""
 
 import asyncio
 from contextvars import ContextVar, Token
@@ -34,15 +34,20 @@ from .custom_tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     is_builtin_package_enabled_for_profile,
 )
-from .provider_runtime import (
-    build_provider_auth_headers,
-    resolve_provider_runtime_config,
+from .provider_runtime import resolve_provider_runtime_config
+from .llm_providers import (
+    LLMProvider,
+    ProviderSettings,
+    build_provider_settings,
+    create_llm_provider,
+    normalize_tool_call_arguments,
+    parse_tool_arguments,
+    stringify_tool_arguments,
 )
 from .localization import get_language_instruction
 from .const import (
     DOMAIN,
     CONF_PROFILE_NAME,
-    CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_MCP_PORT,
     CONF_SYSTEM_PROMPT,
@@ -59,10 +64,7 @@ from .const import (
     CONF_MAX_HISTORY,
     CONF_CONTEXT_MODE,
     CONF_SERVER_TYPE,
-    CONF_API_KEY,
     CONF_CONTROL_HA,
-    CONF_OLLAMA_KEEP_ALIVE,
-    CONF_OLLAMA_NUM_CTX,
     CONF_SEARCH_PROVIDER,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_CALCULATOR_TOOLS,
@@ -92,11 +94,7 @@ from .const import (
     DEFAULT_MAX_HISTORY,
     DEFAULT_CONTEXT_MODE,
     DEFAULT_MCP_PORT,
-    DEFAULT_SERVER_TYPE,
-    DEFAULT_API_KEY,
     DEFAULT_CONTROL_HA,
-    DEFAULT_OLLAMA_KEEP_ALIVE,
-    DEFAULT_OLLAMA_NUM_CTX,
     DEFAULT_FOLLOW_UP_PHRASES,
     DEFAULT_END_WORDS,
     DEFAULT_CLEAN_RESPONSES,
@@ -115,19 +113,7 @@ from .const import (
     ASSIST_BRIDGE_TECHNICAL_INSTRUCTIONS,
     LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS,
     MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS,
-    SERVER_TYPE_LMSTUDIO,
-    SERVER_TYPE_LLAMACPP,
-    SERVER_TYPE_OLLAMA,
-    SERVER_TYPE_OPENAI,
-    SERVER_TYPE_GEMINI,
-    SERVER_TYPE_ANTHROPIC,
-    SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_OPENCLAW,
-    SERVER_TYPE_VLLM,
-    OPENAI_BASE_URL,
-    GEMINI_BASE_URL,
-    ANTHROPIC_BASE_URL,
-    OPENROUTER_BASE_URL,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
     TOOL_FAMILY_LLM_API_BRIDGE,
     TOOL_FAMILY_PROFILE_SETTINGS,
@@ -146,7 +132,6 @@ MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 MAX_PROVIDER_LOG_CHARS = 500
-ANTHROPIC_UNSUPPORTED_TOOL_NAMES = {"analyze_image", "generate_image"}
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -242,24 +227,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         profile_name = entry.data.get("profile_name", "MCP Assist")
 
         # Static configuration (doesn't change)
-        data = entry.data
-        self.server_type = data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
-
-        # Server type display names
-        server_display_names = {
-            SERVER_TYPE_LMSTUDIO: "LM Studio",
-            SERVER_TYPE_LLAMACPP: "llama.cpp",
-            SERVER_TYPE_OLLAMA: "Ollama",
-            SERVER_TYPE_OPENAI: "OpenAI",
-            SERVER_TYPE_GEMINI: "Gemini",
-            SERVER_TYPE_ANTHROPIC: "Claude",
-            SERVER_TYPE_OPENROUTER: "OpenRouter",
-            SERVER_TYPE_OPENCLAW: "OpenClaw",
-            SERVER_TYPE_VLLM: "vLLM",
-        }
-        server_display_name = server_display_names.get(
-            self.server_type, self.server_type
-        )
+        runtime_config = resolve_provider_runtime_config(entry)
+        self.server_type = runtime_config.server_type
+        server_display_name = runtime_config.display_name
 
         # Set entity attributes
         self._attr_unique_id = entry.entry_id
@@ -276,27 +246,6 @@ class MCPAssistConversationEntity(ConversationEntity):
             model=server_display_name,
             entry_type=dr.DeviceEntryType.SERVICE,
         )
-
-        # Set base URL based on server type
-        # OpenAI now reads from config (like local servers) instead of static constant
-        if self.server_type == SERVER_TYPE_OPENAI:
-            # Read URL from config (defaults to official OpenAI URL if not set)
-            # Uses same CONF_LMSTUDIO_URL field as local servers
-            url = self.entry.options.get(
-                CONF_LMSTUDIO_URL,
-                self.entry.data.get(CONF_LMSTUDIO_URL, OPENAI_BASE_URL)
-            ).rstrip("/")
-            self.base_url = url
-            _LOGGER.info("🌐 AGENT: Using OpenAI-compatible URL: %s", self.base_url)
-        elif self.server_type == SERVER_TYPE_GEMINI:
-            self.base_url = GEMINI_BASE_URL
-        elif self.server_type == SERVER_TYPE_ANTHROPIC:
-            self.base_url = ANTHROPIC_BASE_URL
-        elif self.server_type == SERVER_TYPE_OPENROUTER:
-            self.base_url = OPENROUTER_BASE_URL
-        else:
-            # LM Studio or Ollama - URL can change, so make it a property below
-            pass
 
         # All other config values are now dynamic properties (see @property methods below)
 
@@ -442,13 +391,6 @@ class MCPAssistConversationEntity(ConversationEntity):
         return resolve_provider_runtime_config(self.entry).base_url
 
     @property
-    def api_key(self) -> str:
-        """Get API key (dynamic)."""
-        return self.entry.options.get(
-            CONF_API_KEY, self.entry.data.get(CONF_API_KEY, DEFAULT_API_KEY)
-        )
-
-    @property
     def model_name(self) -> str:
         """Get model name (dynamic)."""
         return self.entry.options.get(
@@ -542,21 +484,17 @@ class MCPAssistConversationEntity(ConversationEntity):
             ),
         )
 
-    @property
-    def ollama_keep_alive(self) -> str:
-        """Get Ollama keep_alive parameter."""
-        return self.entry.options.get(
-            CONF_OLLAMA_KEEP_ALIVE,
-            self.entry.data.get(CONF_OLLAMA_KEEP_ALIVE, DEFAULT_OLLAMA_KEEP_ALIVE),
+    def _build_provider_settings(self) -> ProviderSettings:
+        """Build current provider settings from dynamic profile options."""
+        return build_provider_settings(
+            self.entry,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
         )
 
-    @property
-    def ollama_num_ctx(self) -> int:
-        """Get Ollama num_ctx parameter."""
-        return self.entry.options.get(
-            CONF_OLLAMA_NUM_CTX,
-            self.entry.data.get(CONF_OLLAMA_NUM_CTX, DEFAULT_OLLAMA_NUM_CTX),
-        )
+    def _get_llm_provider(self) -> LLMProvider:
+        """Return the active provider transport."""
+        return create_llm_provider(self._build_provider_settings())
 
     @property
     def search_provider(self) -> str:
@@ -826,8 +764,8 @@ class MCPAssistConversationEntity(ConversationEntity):
     def _convert_mcp_tools_to_llm_tools(
         self, tools: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Convert MCP tools to a compact OpenAI-style tool schema."""
-        openai_tools = []
+        """Convert MCP tools to a compact provider-neutral function schema."""
+        llm_tools = []
 
         for tool in tools:
             parameters = self._compact_schema_for_llm(
@@ -851,7 +789,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             if routing_summary:
                 description_parts.append(routing_summary)
 
-            openai_tools.append(
+            llm_tools.append(
                 {
                     "type": "function",
                     "function": {
@@ -865,7 +803,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 }
             )
 
-        return openai_tools
+        return llm_tools
 
     def _build_tool_routing_summary(self, routing_hints: Any) -> str:
         """Build a compact description suffix from optional routing hints."""
@@ -1083,18 +1021,7 @@ class MCPAssistConversationEntity(ConversationEntity):
     @property
     def attribution(self) -> str:
         """Return attribution."""
-        server_name = {
-            SERVER_TYPE_LMSTUDIO: "LM Studio",
-            SERVER_TYPE_LLAMACPP: "llama.cpp",
-            SERVER_TYPE_OLLAMA: "Ollama",
-            SERVER_TYPE_OPENAI: "OpenAI",
-            SERVER_TYPE_GEMINI: "Gemini",
-            SERVER_TYPE_ANTHROPIC: "Claude",
-            SERVER_TYPE_OPENROUTER: "OpenRouter",
-            SERVER_TYPE_OPENCLAW: "OpenClaw",
-            SERVER_TYPE_VLLM: "vLLM",
-        }.get(self.server_type, "LLM")
-        return f"Powered by {server_name} with MCP entity discovery"
+        return f"Powered by {self._get_server_display_name()} with MCP entity discovery"
 
     @property
     def supported_languages(self) -> list[str] | Literal["*"]:
@@ -1175,22 +1102,13 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _get_server_display_name(self) -> str:
         """Get friendly display name for the server type."""
-        return {
-            SERVER_TYPE_LMSTUDIO: "LM Studio",
-            SERVER_TYPE_LLAMACPP: "llama.cpp",
-            SERVER_TYPE_OLLAMA: "Ollama",
-            SERVER_TYPE_OPENAI: "OpenAI",
-            SERVER_TYPE_GEMINI: "Gemini",
-            SERVER_TYPE_ANTHROPIC: "Claude",
-            SERVER_TYPE_OPENROUTER: "OpenRouter",
-            SERVER_TYPE_OPENCLAW: "OpenClaw",
-            SERVER_TYPE_VLLM: "vLLM",
-        }.get(self.server_type, "the LLM server")
+        return self._get_llm_provider().display_name
 
     def _get_friendly_error_message(self, error: Exception) -> str:
         """Convert technical errors to user-friendly TTS messages."""
         error_str = str(error).lower()
         error_full = str(error)  # Keep original case for extracting details
+        provider = self._get_llm_provider()
 
         # Category A: Connection/Network Errors
         if any(
@@ -1203,14 +1121,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "unreachable",
             ]
         ):
-            if self.server_type in [
-                SERVER_TYPE_OPENAI,
-                SERVER_TYPE_GEMINI,
-                SERVER_TYPE_ANTHROPIC,
-            ]:
+            if provider.is_remote_service:
                 return f"I couldn't reach {self._get_server_display_name()}'s API servers. Please check your internet connection and try again."
-            else:
-                return f"I couldn't connect to {self._get_server_display_name()} at {self.base_url_dynamic}. Please check that the server is running and the address is correct in your integration settings."
+            return f"I couldn't connect to {self._get_server_display_name()} at {self.base_url_dynamic}. Please check that the server is running and the address is correct in your integration settings."
 
         if "timeout" in error_str or "timed out" in error_str:
             return f"The {self._get_server_display_name()} server took too long to respond. This might be because the model is slow or busy. Try again or consider using a faster model."
@@ -1251,39 +1164,18 @@ class MCPAssistConversationEntity(ConversationEntity):
         ):
             # Try to extract token limit if present
             token_match = re.search(r"(\d+)\s*tokens?", error_str)
-            if self.server_type == SERVER_TYPE_OLLAMA:
-                token_text = (
-                    f" The request was about {token_match.group(1)} tokens."
-                    if token_match
-                    else ""
-                )
-                if self.light_context_mode:
-                    return (
-                        "Ollama rejected the request because it exceeded the "
-                        f"model's context window.{token_text} Try raising the "
-                        "Ollama Context Window if the model supports it, "
-                        "reducing Max History Messages, or disabling optional "
-                        "tool families."
-                    )
-                return (
-                    "Ollama rejected the request because it exceeded the "
-                    f"model's context window.{token_text} Enable Context Mode: "
-                    "Light for this profile, reduce Max History Messages, "
-                    "disable optional tool families, or raise the Ollama "
-                    "Context Window if the model supports it."
-                )
-            if token_match:
-                return f"The conversation has exceeded the model's {token_match.group(1)} token limit. Start a new conversation or reduce the history limit in Advanced Settings."
-            return "The conversation has exceeded the model's token limit. Start a new conversation or reduce the history limit in Advanced Settings."
+            return provider.context_window_error_message(
+                token_count=token_match.group(1) if token_match else None,
+                light_context_mode=self.light_context_mode,
+            )
 
         # Category D: Model Errors
+        provider_model_message = provider.model_unavailable_message(error_str)
+        if provider_model_message is not None:
+            return provider_model_message
+
         if "404" in error_str or ("model" in error_str and "not found" in error_str):
             return f"The model '{self.model_name}' wasn't found on {self._get_server_display_name()}. Check that the model name is correct in your integration settings."
-
-        if self.server_type == SERVER_TYPE_OLLAMA and (
-            "model not loaded" in error_str or "pull the model" in error_str
-        ):
-            return f"The model '{self.model_name}' isn't loaded in Ollama. Run 'ollama pull {self.model_name}' to download it first."
 
         # Category E: OpenClaw Gateway Errors
         if "not_paired" in error_str or "device pairing" in error_str or "not paired" in error_str:
@@ -1350,27 +1242,11 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _stringify_tool_arguments(self, arguments: Any) -> str:
         """Normalize tool arguments to a JSON string."""
-        if arguments is None:
-            return "{}"
-        if isinstance(arguments, str):
-            return arguments
-        return json.dumps(arguments, ensure_ascii=False)
+        return stringify_tool_arguments(arguments)
 
     def _parse_tool_arguments(self, arguments: Any) -> Dict[str, Any]:
         """Parse tool arguments whether they arrive as a dict or JSON string."""
-        if arguments is None:
-            return {}
-        if isinstance(arguments, dict):
-            return arguments
-        if isinstance(arguments, str):
-            if not arguments.strip():
-                return {}
-            try:
-                parsed = json.loads(arguments)
-            except json.JSONDecodeError:
-                return {}
-            return parsed if isinstance(parsed, dict) else {}
-        return {}
+        return parse_tool_arguments(arguments)
 
     def _tool_call_log_summary(
         self, tool_calls: List[Dict[str, Any]]
@@ -1399,17 +1275,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Normalize tool_call function.arguments for internal and provider use."""
-        normalized = []
-        for tool_call in tool_calls:
-            normalized_call = dict(tool_call)
-            function = dict(normalized_call.get("function", {}))
-            if function:
-                function["arguments"] = self._stringify_tool_arguments(
-                    function.get("arguments")
-                )
-                normalized_call["function"] = function
-            normalized.append(normalized_call)
-        return normalized
+        return normalize_tool_call_arguments(tool_calls)
 
     @staticmethod
     def _normalize_stream_tool_call_index(
@@ -1433,22 +1299,6 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> List[Dict[str, Any]]:
         """Drop empty streamed tool-call placeholders before execution."""
         return [tool_call for tool_call in tool_calls if tool_call]
-
-    def _format_tool_calls_for_ollama(
-        self, tool_calls: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Convert tool calls to Ollama's native argument shape."""
-        formatted = []
-        for tool_call in tool_calls:
-            formatted_call = dict(tool_call)
-            function = dict(formatted_call.get("function", {}))
-            if function:
-                function["arguments"] = self._parse_tool_arguments(
-                    function.get("arguments")
-                )
-                formatted_call["function"] = function
-            formatted.append(formatted_call)
-        return formatted
 
     def _record_tool_result_to_chatlog(
         self, tool_call_id: str, tool_name: str, tool_result: Dict[str, Any]
@@ -2373,7 +2223,7 @@ class MCPAssistConversationEntity(ConversationEntity):
     def _build_messages(
         self, system_prompt: str, user_text: str, history: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Build message list for LM Studio."""
+        """Build provider-neutral conversation messages."""
         messages = [{"role": "system", "content": system_prompt}]
 
         # OpenClaw manages its own session history on the gateway.
@@ -2846,7 +2696,7 @@ class MCPAssistConversationEntity(ConversationEntity):
     async def _execute_single_tool_call(
         self, tool_call: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Execute a single tool call and return an OpenAI/Ollama tool message."""
+        """Execute a single tool call and return a provider-ready tool message."""
         tool_call_id = tool_call.get("id", f"call_{uuid.uuid4().hex[:8]}")
         function = tool_call.get("function", {})
         tool_name = function.get("name")
@@ -2887,40 +2737,26 @@ class MCPAssistConversationEntity(ConversationEntity):
                         "🔄 Conversation will close - not expecting response"
                     )
 
-            if self.server_type == SERVER_TYPE_OLLAMA:
-                return {
-                    "role": "tool",
-                    "tool_name": tool_name,
-                    "content": content if content is not None else "",
-                }
-
-            return {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": content if content is not None else "",
-            }
+            return self._get_llm_provider().build_tool_result_message(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                content=content if content is not None else "",
+            )
 
         except Exception as e:
             _LOGGER.error(f"Error executing tool {tool_name}: {e}")
             self._finish_persistent_tool_log(tool_entry, error=str(e))
             error_content = json.dumps({"error": str(e)})
-            if self.server_type == SERVER_TYPE_OLLAMA:
-                return {
-                    "role": "tool",
-                    "tool_name": tool_name,
-                    "content": error_content,
-                }
-
-            return {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": error_content,
-            }
+            return self._get_llm_provider().build_tool_result_message(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                content=error_content,
+            )
 
     async def _execute_tool_calls(
         self, tool_calls: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Execute a list of tool calls and return results in OpenAI format."""
+        """Execute a list of tool calls and return provider-ready results."""
         if not tool_calls:
             return []
 
@@ -2930,25 +2766,23 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     async def _test_streaming_basic(self) -> bool:
         """Test basic streaming without tools to isolate connection issues."""
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": "Say hello"}],
-            "stream": True,
-            "temperature": 0.7,
-            "max_tokens": 10,
-        }
-
-        _LOGGER.info(
-            f"🧪 Testing basic streaming to: {self.base_url_dynamic}/v1/chat/completions"
+        provider = self._get_llm_provider()
+        payload = provider.build_payload(
+            [{"role": "user", "content": "Say hello"}],
+            stream=True,
         )
+
+        _LOGGER.info("🧪 Testing basic streaming to: %s", provider.chat_url())
         _LOGGER.info(f"🧪 Model: {self.model_name}")
 
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                url = f"{self.base_url_dynamic}/v1/chat/completions"
-                headers = self._get_auth_headers()
-                async with session.post(url, headers=headers, json=payload) as response:
+                async with session.post(
+                    provider.chat_url(),
+                    headers=provider.headers(),
+                    json=provider.clean_payload(payload),
+                ) as response:
                     _LOGGER.info(
                         f"✅ Basic streaming connected! Status: {response.status}"
                     )
@@ -2985,372 +2819,6 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.error(traceback.format_exc())
             return False
 
-    def _get_auth_headers(self) -> Dict[str, str]:
-        """Get authentication headers based on server type."""
-        return build_provider_auth_headers(self.server_type, self.api_key)
-
-    def _build_openai_payload(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-        stream: bool = True,
-    ) -> Dict[str, Any]:
-        """Build OpenAI-compatible payload for LM Studio, OpenAI, Gemini, Anthropic, OpenClaw, vLLM."""
-        payload = {"model": self.model_name, "messages": messages, "stream": stream}
-
-        # Temperature (skip for GPT-5+/o1 models)
-        if not (
-            self.model_name.startswith("gpt-5") or self.model_name.startswith("o1")
-        ):
-            payload["temperature"] = self.temperature
-
-        # Token limits
-        if self.max_tokens > 0:
-            if self.model_name.startswith("gpt-5") or self.model_name.startswith("o1"):
-                payload["max_completion_tokens"] = self.max_tokens
-            else:
-                payload["max_tokens"] = self.max_tokens
-
-        # Tools
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-
-        return payload
-
-    def _build_ollama_payload(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-        stream: bool = True,
-    ) -> Dict[str, Any]:
-        """Build Ollama native API payload."""
-        # Convert tool messages (Ollama doesn't use tool_call_id)
-        ollama_messages = []
-        for msg in messages:
-            if msg.get("role") == "tool":
-                tool_msg = {"role": "tool", "content": msg.get("content", "")}
-                if msg.get("tool_name"):
-                    tool_msg["tool_name"] = msg["tool_name"]
-                ollama_messages.append(tool_msg)
-            elif msg.get("role") == "assistant" and msg.get("tool_calls"):
-                assistant_msg = dict(msg)
-                assistant_msg["tool_calls"] = self._format_tool_calls_for_ollama(
-                    msg["tool_calls"]
-                )
-                ollama_messages.append(assistant_msg)
-            else:
-                ollama_messages.append(msg)
-
-        # Parse keep_alive - can be int (seconds/-1) or string (duration like "5m")
-        keep_alive_value = self.ollama_keep_alive
-        try:
-            # Try to parse as integer (for -1, 0, or seconds)
-            keep_alive_value = int(keep_alive_value)
-        except (ValueError, TypeError):
-            # Keep as string for duration format like "5m", "24h", "-1m"
-            pass
-
-        payload = {
-            "model": self.model_name,
-            "messages": ollama_messages,
-            "stream": stream,
-            "keep_alive": keep_alive_value,
-            "options": {},
-        }
-
-        # Temperature
-        if self.temperature is not None:
-            payload["options"]["temperature"] = self.temperature
-
-        # Token limits
-        if self.max_tokens > 0:
-            payload["options"]["num_predict"] = self.max_tokens
-
-        # Context window (if configured)
-        if self.ollama_num_ctx > 0:
-            payload["options"]["num_ctx"] = self.ollama_num_ctx
-
-        # Tools (same format as OpenAI)
-        if tools:
-            payload["tools"] = tools
-
-        return payload
-
-    def _get_anthropic_headers(self) -> Dict[str, str]:
-        """Build headers for Anthropic's native Messages API."""
-        return {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-
-    def _convert_openai_tools_to_anthropic(
-        self, tools: Optional[List[Dict[str, Any]]]
-    ) -> List[Dict[str, Any]]:
-        """Convert OpenAI-style function tools to Anthropic tool schemas."""
-        anthropic_tools: list[dict[str, Any]] = []
-        for tool in tools or []:
-            function = tool.get("function", {})
-            name = function.get("name")
-            if not name:
-                continue
-            if name in ANTHROPIC_UNSUPPORTED_TOOL_NAMES:
-                continue
-            input_schema = function.get("parameters") or {
-                "type": "object",
-                "properties": {},
-            }
-            anthropic_tools.append(
-                {
-                    "name": name,
-                    "description": function.get("description", ""),
-                    "input_schema": input_schema,
-                }
-            )
-        return anthropic_tools
-
-    def _append_anthropic_message(
-        self,
-        messages: list[dict[str, Any]],
-        role: str,
-        content_blocks: list[dict[str, Any]],
-    ) -> None:
-        """Append an Anthropic message, merging adjacent messages with the same role."""
-        if not content_blocks:
-            return
-        if messages and messages[-1].get("role") == role:
-            messages[-1].setdefault("content", []).extend(content_blocks)
-            return
-        messages.append({"role": role, "content": content_blocks})
-
-    def _text_content_blocks(self, content: Any) -> list[dict[str, str]]:
-        """Convert provider-neutral message content to Anthropic text blocks."""
-        if isinstance(content, list):
-            blocks: list[dict[str, str]] = []
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text = str(item.get("text") or "").strip()
-                else:
-                    text = str(item or "").strip()
-                if text:
-                    blocks.append({"type": "text", "text": text})
-            return blocks
-
-        text = str(content or "").strip()
-        return [{"type": "text", "text": text}] if text else []
-
-    def _anthropic_tool_use_blocks(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Convert internal tool calls to Anthropic tool_use blocks."""
-        blocks: list[dict[str, Any]] = []
-        for tool_call in tool_calls:
-            function = tool_call.get("function", {})
-            name = function.get("name")
-            if not name:
-                continue
-            blocks.append(
-                {
-                    "type": "tool_use",
-                    "id": tool_call.get("id", f"toolu_{uuid.uuid4().hex[:8]}"),
-                    "name": name,
-                    "input": self._parse_tool_arguments(function.get("arguments")),
-                }
-            )
-        return blocks
-
-    def _build_anthropic_payload(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """Build Anthropic's native Messages API payload."""
-        system_parts: list[str] = []
-        anthropic_messages: list[dict[str, Any]] = []
-
-        for msg in messages:
-            role = msg.get("role")
-            if role == "system":
-                content = str(msg.get("content") or "").strip()
-                if content:
-                    system_parts.append(content)
-                continue
-
-            if role == "tool":
-                self._append_anthropic_message(
-                    anthropic_messages,
-                    "user",
-                    [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": msg.get("tool_call_id", ""),
-                            "content": str(msg.get("content") or ""),
-                        }
-                    ],
-                )
-                continue
-
-            if role == "assistant" and msg.get("tool_calls"):
-                content_blocks = self._text_content_blocks(msg.get("content"))
-                content_blocks.extend(
-                    self._anthropic_tool_use_blocks(msg.get("tool_calls", []))
-                )
-                self._append_anthropic_message(
-                    anthropic_messages,
-                    "assistant",
-                    content_blocks,
-                )
-                continue
-
-            if role in {"user", "assistant"}:
-                self._append_anthropic_message(
-                    anthropic_messages,
-                    role,
-                    self._text_content_blocks(msg.get("content")),
-                )
-
-        payload: dict[str, Any] = {
-            "model": self.model_name,
-            "max_tokens": max(1, int(self.max_tokens or DEFAULT_MAX_TOKENS)),
-            "messages": anthropic_messages,
-        }
-
-        if system_parts:
-            payload["system"] = "\n\n".join(system_parts)
-        if self.temperature is not None:
-            payload["temperature"] = self.temperature
-
-        anthropic_tools = self._convert_openai_tools_to_anthropic(tools)
-        if anthropic_tools:
-            payload["tools"] = anthropic_tools
-
-        return payload
-
-    def _anthropic_response_to_tool_calls(
-        self, content_blocks: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Convert Anthropic tool_use blocks to internal OpenAI-style tool calls."""
-        tool_calls: list[dict[str, Any]] = []
-        for block in content_blocks:
-            if block.get("type") != "tool_use":
-                continue
-            tool_calls.append(
-                {
-                    "id": block.get("id", f"toolu_{uuid.uuid4().hex[:8]}"),
-                    "type": "function",
-                    "function": {
-                        "name": block.get("name", ""),
-                        "arguments": self._stringify_tool_arguments(
-                            block.get("input") or {}
-                        ),
-                    },
-                }
-            )
-        return tool_calls
-
-    async def _call_anthropic_messages(self, messages: List[Dict[str, Any]]) -> str:
-        """Call Anthropic's native Messages API with MCP tool-loop support."""
-        _LOGGER.info("🚀 Calling Anthropic Messages API")
-
-        tools = await self._get_mcp_tools()
-        if not tools:
-            _LOGGER.warning("No MCP tools available - proceeding without tools")
-
-        conversation_messages = list(messages)
-
-        for iteration in range(self.max_iterations):
-            _LOGGER.info(
-                "🔄 Anthropic iteration %d: %d messages",
-                iteration + 1,
-                len(conversation_messages),
-            )
-            payload = self._build_anthropic_payload(conversation_messages, tools)
-            self._log_initial_llm_payload_metrics(
-                transport="anthropic_messages",
-                iteration=iteration,
-                payload=payload,
-                messages=conversation_messages,
-                tools=payload.get("tools", []),
-            )
-
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{self.base_url_dynamic}/v1/messages",
-                    headers=self._get_anthropic_headers(),
-                    json=payload,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        error_snippet = _provider_log_snippet(error_text)
-                        _LOGGER.warning(
-                            "Anthropic API error: status=%s body=%s",
-                            response.status,
-                            error_snippet,
-                        )
-                        raise Exception(
-                            f"anthropic API error {response.status}: {error_snippet}"
-                        )
-                    data = await response.json()
-
-            content_blocks = [
-                block for block in data.get("content", []) if isinstance(block, dict)
-            ]
-            text_blocks = [
-                str(block.get("text") or "")
-                for block in content_blocks
-                if block.get("type") == "text"
-            ]
-            response_text = "".join(text_blocks).strip()
-            tool_calls = self._anthropic_response_to_tool_calls(content_blocks)
-
-            if tool_calls:
-                _LOGGER.info("🛠️ Anthropic requested %d tool calls", len(tool_calls))
-                assistant_msg: dict[str, Any] = {
-                    "role": "assistant",
-                    "tool_calls": tool_calls,
-                }
-                if response_text:
-                    assistant_msg["content"] = response_text
-                conversation_messages.append(assistant_msg)
-
-                self._record_tool_calls_to_chatlog(tool_calls)
-                tool_results = await self._execute_tool_calls(tool_calls)
-
-                for idx, result in enumerate(tool_results):
-                    if idx < len(tool_calls):
-                        tc = tool_calls[idx]
-                        tool_call_id = result.get(
-                            "tool_call_id", tc.get("id", "unknown")
-                        )
-                        tool_name = tc.get("function", {}).get("name", "unknown")
-                        try:
-                            tool_result_data = json.loads(result.get("content", "{}"))
-                        except Exception:
-                            tool_result_data = {"result": result.get("content", "")}
-                        self._record_tool_result_to_chatlog(
-                            tool_call_id, tool_name, tool_result_data
-                        )
-
-                conversation_messages.extend(tool_results)
-                continue
-
-            if response_text:
-                _LOGGER.info(
-                    "💬 Anthropic final response received (length: %d)",
-                    len(response_text),
-                )
-                return response_text
-
-            _LOGGER.warning("Empty Anthropic response, retrying...")
-
-        _LOGGER.warning(
-            "⚠️ Hit maximum iterations (%d) in Anthropic tool execution loop",
-            self.max_iterations,
-        )
-        return f"I reached the maximum of {self.max_iterations} tool calls while processing your request. Try simplifying your request, or increase the limit in Advanced Settings if you have a complex automation need."
-
     async def _call_llm_streaming(self, messages: List[Dict[str, Any]]) -> str:
         """Stream LLM responses with immediate TTS feedback."""
         _LOGGER.info(f"🚀 Starting streaming {self.server_type} conversation")
@@ -3365,6 +2833,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Get MCP tools once
         tools = await self._get_mcp_tools()
+        provider = self._get_llm_provider()
         conversation_messages = list(messages)
 
         # Buffers for streaming
@@ -3400,33 +2869,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                         content_len,
                     )
 
-            # Clean messages for streaming compatibility
-            cleaned_messages = []
-            for i, msg in enumerate(conversation_messages):
-                # Clean the message for streaming
-                cleaned_msg = msg.copy()
-
-                # Fix None content
-                if cleaned_msg.get("content") is None:
-                    cleaned_msg["content"] = ""
-
-                # Assistant messages with tool_calls must have NO content field at all
-                if cleaned_msg.get("role") == "assistant" and cleaned_msg.get(
-                    "tool_calls"
-                ):
-                    cleaned_msg.pop("content", None)  # Remove the field entirely
-
-                cleaned_messages.append(cleaned_msg)
-
-            # Build payload using appropriate method based on server type
-            if self.server_type == SERVER_TYPE_OLLAMA:
-                payload = self._build_ollama_payload(
-                    cleaned_messages, tools, stream=True
-                )
-            else:
-                payload = self._build_openai_payload(
-                    cleaned_messages, tools, stream=True
-                )
+            cleaned_messages = provider.prepare_messages_for_stream(
+                conversation_messages
+            )
+            payload = provider.build_payload(cleaned_messages, tools, stream=True)
 
             # Debug: Log actual cleaned payload being sent in iteration 2+
             if self.debug_mode and iteration >= 1:
@@ -3444,53 +2890,26 @@ class MCPAssistConversationEntity(ConversationEntity):
                     content_len = len(str(content)) if content else 0
                     _LOGGER.info("  [%d] %s: %d chars", i, role, content_len)
 
-            # Only clean if needed (performance optimization)
-            clean_payload = payload
-            # Quick check if cleaning is needed
-            for msg in payload.get("messages", []):
-                if (
-                    msg.get("role") == "assistant"
-                    and "tool_calls" in msg
-                    and "content" in msg
-                ):
-                    # Need to clean - remove content from assistant messages with tool_calls
-                    def clean_for_json(obj):
-                        """Remove keys with None values recursively."""
-                        if isinstance(obj, dict):
-                            return {
-                                k: clean_for_json(v)
-                                for k, v in obj.items()
-                                if v is not None
-                            }
-                        elif isinstance(obj, list):
-                            return [clean_for_json(v) for v in obj]
-                        return obj
-
-                    clean_payload = clean_for_json(payload)
-                    break
+            clean_payload = provider.clean_payload(payload)
 
             self._log_initial_llm_payload_metrics(
                 transport="streaming",
                 iteration=iteration,
                 payload=clean_payload,
                 messages=cleaned_messages,
-                tools=tools,
+                tools=clean_payload.get("tools"),
             )
 
             has_tool_calls = False
             current_tool_calls = []
             stream_tool_index_offset = None
-            current_thought_signature = None  # Track Gemini 3 thought signatures
+            stream_metadata = None
 
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    # Use appropriate endpoint based on server type
-                    if self.server_type == SERVER_TYPE_OLLAMA:
-                        url = f"{self.base_url_dynamic}/api/chat"
-                    else:
-                        url = f"{self.base_url_dynamic}/v1/chat/completions"
-                    headers = self._get_auth_headers()
+                    url = provider.chat_url()
+                    headers = provider.headers()
 
                     _LOGGER.info(f"📡 Streaming to: {url}")
                     if self.debug_mode:
@@ -3540,57 +2959,26 @@ class MCPAssistConversationEntity(ConversationEntity):
                             line_str = line.decode("utf-8").strip()
 
                             try:
-                                if self.server_type == SERVER_TYPE_OLLAMA:
-                                    # Ollama: Each line is complete JSON
-                                    if not line_str:
-                                        continue
+                                parsed_stream = provider.parse_stream_line(line_str)
+                                if parsed_stream is None:
+                                    continue
+                                if parsed_stream.done:
+                                    break
 
-                                    data = json.loads(line_str)
-
-                                    # Check for completion
-                                    if data.get("done"):
-                                        break
-
-                                    # Extract message
-                                    message = data.get("message", {})
-                                    delta = {}
-
-                                    if "content" in message and message["content"]:
-                                        delta["content"] = message["content"]
-
-                                    if "tool_calls" in message:
-                                        delta["tool_calls"] = message["tool_calls"]
-
-                                else:
-                                    # OpenAI: SSE format with "data: " prefix
-                                    if not line_str.startswith("data: "):
-                                        continue
-                                    if line_str == "data: [DONE]":
-                                        break
-
-                                    data = json.loads(line_str[6:])
-                                    choice = data["choices"][0]
-                                    delta = choice.get("delta", {})
-
-                                    # Capture thought_signature from tool_calls (it's inside the first tool_call, not at choice/delta level)
-                                    if (
-                                        "tool_calls" in delta
-                                        and current_thought_signature is None
-                                    ):
-                                        for tc_delta in delta["tool_calls"]:
-                                            if "extra_content" in tc_delta:
-                                                google_data = tc_delta.get(
-                                                    "extra_content", {}
-                                                ).get("google", {})
-                                                if "thought_signature" in google_data:
-                                                    current_thought_signature = (
-                                                        google_data["thought_signature"]
-                                                    )
-                                                    _LOGGER.debug(
-                                                        "Captured Gemini thought_signature (%d chars)",
-                                                        len(current_thought_signature),
-                                                    )
-                                                    break  # Only in first tool_call
+                                delta = parsed_stream.delta
+                                previous_stream_metadata = stream_metadata
+                                stream_metadata = provider.update_stream_metadata(
+                                    stream_metadata,
+                                    delta,
+                                )
+                                if (
+                                    stream_metadata is not None
+                                    and stream_metadata != previous_stream_metadata
+                                ):
+                                    _LOGGER.debug(
+                                        "Captured provider stream metadata (%d chars)",
+                                        len(str(stream_metadata)),
+                                    )
 
                                 # Handle streamed content
                                 if "content" in delta and delta["content"]:
@@ -3773,36 +3161,18 @@ class MCPAssistConversationEntity(ConversationEntity):
                         ),
                     )
 
-                # Add assistant message with tool calls
-                # LM Studio streaming requires NO content field at all when tool_calls exist
-                # Gemini 3: thought_signature goes INSIDE each tool_call, not at message level
-                if current_thought_signature is not None:
-                    for tool_call in current_tool_calls:
-                        tool_call["extra_content"] = {
-                            "google": {"thought_signature": current_thought_signature}
-                        }
-                    _LOGGER.debug(
-                        "Added Gemini thought_signature to %d tool calls",
-                        len(current_tool_calls),
-                    )
-                elif self.server_type == SERVER_TYPE_GEMINI:
-                    # Only warn for Gemini - other providers don't use thought_signature
-                    _LOGGER.warning(
-                        "⚠️ No thought_signature captured for Gemini 3 (this will cause 400 error on next turn)"
-                    )
+                prepared_tool_calls = provider.prepare_stream_tool_calls(
+                    current_tool_calls,
+                    stream_metadata,
+                )
+                warning = provider.missing_stream_metadata_warning(stream_metadata)
+                if warning:
+                    _LOGGER.warning(warning)
 
-                assistant_msg = {
-                    "role": "assistant",
-                    "tool_calls": current_tool_calls
-                    # NO content field - must be completely absent
-                }
-                if self.server_type == SERVER_TYPE_OLLAMA:
-                    assistant_msg["tool_calls"] = self._format_tool_calls_for_ollama(
-                        current_tool_calls
-                    )
-                    if response_text:
-                        assistant_msg["content"] = response_text
-
+                assistant_msg = provider.build_tool_call_assistant_message(
+                    prepared_tool_calls,
+                    response_text=response_text,
+                )
                 conversation_messages.append(assistant_msg)
 
                 # Record tool calls to ChatLog for debug view
@@ -3857,24 +3227,33 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     async def _call_llm(self, messages: List[Dict[str, Any]]) -> str:
         """Call LLM API with MCP tools and handle tool execution loop."""
-        if self.server_type == SERVER_TYPE_ANTHROPIC:
-            return await self._call_anthropic_messages(messages)
+        provider = self._get_llm_provider()
+        if not provider.supports_streaming:
+            return await self._call_llm_http(messages, provider=provider)
 
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
         except Exception as e:
-            _LOGGER.warning(f"Streaming failed ({e}), using HTTP fallback")
-            return await self._call_llm_http(messages)
+            _LOGGER.warning(f"Streaming failed ({e}), using provider HTTP transport")
+            return await self._call_llm_http(messages, provider=provider)
 
-    async def _call_llm_http(self, messages: List[Dict[str, Any]]) -> str:
-        """Original HTTP-based LLM call (fallback)."""
-        _LOGGER.info(f"🚀 Using HTTP fallback for {self.server_type}")
+    async def _call_llm_http(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        provider: LLMProvider | None = None,
+    ) -> str:
+        """Call the active provider with its non-streaming HTTP transport."""
+        _LOGGER.info(f"🚀 Using provider HTTP transport for {self.server_type}")
 
         # Get MCP tools once
         tools = await self._get_mcp_tools()
         if not tools:
             _LOGGER.warning("No MCP tools available - proceeding without tools")
+
+        if provider is None:
+            provider = self._get_llm_provider()
 
         # Keep a mutable copy of messages for the conversation
         conversation_messages = list(messages)
@@ -3885,63 +3264,22 @@ class MCPAssistConversationEntity(ConversationEntity):
                 f"🔄 HTTP Iteration {iteration + 1}: Calling {self.server_type} with {len(conversation_messages)} messages"
             )
 
-            # Build payload using appropriate method based on server type
-            if self.server_type == SERVER_TYPE_OLLAMA:
-                payload = self._build_ollama_payload(
-                    conversation_messages, tools, stream=False
-                )
-            else:
-                payload = self._build_openai_payload(
-                    conversation_messages, tools, stream=False
-                )
-
-            # Clean payload to remove None values and ensure no content in assistant+tool_calls
-            def clean_for_json_http(obj):
-                """Remove keys with None values recursively."""
-                if isinstance(obj, dict):
-                    cleaned = {}
-                    for k, v in obj.items():
-                        if v is not None:
-                            # Special handling for messages
-                            if k == "messages" and isinstance(v, list):
-                                cleaned_messages = []
-                                for msg in v:
-                                    cleaned_msg = clean_for_json_http(msg)
-                                    # Ensure assistant+tool_calls has no content field
-                                    if (
-                                        cleaned_msg.get("role") == "assistant"
-                                        and "tool_calls" in cleaned_msg
-                                    ):
-                                        cleaned_msg.pop("content", None)
-                                    cleaned_messages.append(cleaned_msg)
-                                cleaned[k] = cleaned_messages
-                            else:
-                                cleaned[k] = clean_for_json_http(v)
-                    return cleaned
-                elif isinstance(obj, list):
-                    return [clean_for_json_http(v) for v in obj]
-                return obj
-
-            clean_payload = clean_for_json_http(payload)
+            payload = provider.build_payload(conversation_messages, tools, stream=False)
+            clean_payload = provider.clean_payload(payload)
             self._log_initial_llm_payload_metrics(
                 transport="http",
                 iteration=iteration,
                 payload=clean_payload,
                 messages=conversation_messages,
-                tools=tools,
+                tools=clean_payload.get("tools"),
             )
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                # Use appropriate endpoint based on server type
-                if self.server_type == SERVER_TYPE_OLLAMA:
-                    url = f"{self.base_url_dynamic}/api/chat"
-                else:
-                    url = f"{self.base_url_dynamic}/v1/chat/completions"
-                headers = self._get_auth_headers()
-
                 async with session.post(
-                    url, headers=headers, json=clean_payload
+                    provider.chat_url(),
+                    headers=provider.headers(),
+                    json=clean_payload,
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -3957,43 +3295,16 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
 
                     data = await response.json()
-
-                    # Parse response based on server type
-                    thought_signature = None  # Track for Gemini 3
-                    if self.server_type == SERVER_TYPE_OLLAMA:
-                        # Ollama: Direct message field
-                        message = data.get("message", {})
-                    else:
-                        # OpenAI: Wrapped in choices array
-                        if "choices" not in data or not data["choices"]:
-                            raise Exception(f"No response from {self.server_type}")
-                        choice = data["choices"][0]
-                        message = choice.get("message", {})
+                    message = provider.parse_http_message(data)
 
                     # Check if there are tool calls to execute
                     if "tool_calls" in message and message["tool_calls"]:
-                        tool_calls = (
-                            self._format_tool_calls_for_ollama(message["tool_calls"])
-                            if self.server_type == SERVER_TYPE_OLLAMA
-                            else self._normalize_tool_call_arguments(
-                                message["tool_calls"]
-                            )
+                        tool_calls = provider.normalize_tool_calls(
+                            message["tool_calls"]
                         )
                         _LOGGER.info(
                             f"🛠️ {self.server_type} requested {len(tool_calls)} tool calls"
                         )
-
-                        # Capture thought_signature from first tool_call (Gemini 3)
-                        if tool_calls and "extra_content" in tool_calls[0]:
-                            google_data = (
-                                tool_calls[0].get("extra_content", {}).get("google", {})
-                            )
-                            if "thought_signature" in google_data:
-                                thought_signature = google_data["thought_signature"]
-                                _LOGGER.debug(
-                                    "Captured Gemini thought_signature (%d chars)",
-                                    len(thought_signature),
-                                )
 
                         # Ensure each tool_call has the required type field
                         for tc in tool_calls:
@@ -4008,20 +3319,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                                     ),
                                 )
 
-                        # Preserve thought_signature in tool_calls for Gemini 3
-                        # It should already be there from the response, just keep it
-
-                        assistant_msg = {
-                            "role": "assistant",
-                            "tool_calls": tool_calls
-                            # NO content field - must be completely absent
-                        }
-                        if (
-                            self.server_type == SERVER_TYPE_OLLAMA
-                            and message.get("content")
-                        ):
-                            assistant_msg["content"] = message.get("content")
-
+                        assistant_msg = provider.build_tool_call_assistant_message(
+                            tool_calls,
+                            response_text=str(message.get("content") or ""),
+                        )
                         conversation_messages.append(assistant_msg)
 
                         # Record tool calls to ChatLog for debug view
@@ -4083,12 +3384,12 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> List[Dict[str, Any]]:
         """Parse response for any action information.
 
-        NOTE: With MCP tools, LM Studio executes actions directly via the MCP server.
-        We don't need to parse intents or execute them - just return info about what happened.
+        NOTE: With MCP tools, the model requests actions directly via the MCP server.
+        We don't need to parse intents or execute them; this only reports what happened.
         """
         actions_taken = []
 
-        # MCP tools are executed by LM Studio directly, so we just log what was mentioned
+        # MCP tools execute actions directly, so this only logs what was mentioned.
         # The actual actions have already been performed via MCP's perform_action tool
 
         _LOGGER.info(

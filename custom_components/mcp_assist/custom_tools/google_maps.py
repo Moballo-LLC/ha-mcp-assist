@@ -360,18 +360,22 @@ class GoogleMapsTool:
             return self._text_result("Error: destination is required.", is_error=True)
 
         origin = str(arguments.get("origin") or "").strip()
-        if not origin:
-            home_waypoint = self._home_location_waypoint()
-            if home_waypoint is None:
-                return self._text_result(
-                    "Error: origin is required because Home Assistant home coordinates are unavailable.",
-                    is_error=True,
-                )
-            origin_waypoint = home_waypoint
-            origin_label = "Home Assistant home"
-        else:
-            origin_waypoint = self._build_route_waypoint(origin)
-            origin_label = origin
+        try:
+            if not origin:
+                home_waypoint = self._home_location_waypoint()
+                if home_waypoint is None:
+                    return self._text_result(
+                        "Error: origin is required because Home Assistant home coordinates are unavailable.",
+                        is_error=True,
+                    )
+                origin_waypoint = home_waypoint
+                origin_label = "Home Assistant home"
+            else:
+                origin_waypoint = self._build_route_waypoint(origin)
+                origin_label = origin
+            destination_waypoint = self._build_route_waypoint(destination)
+        except ValueError as err:
+            return self._text_result(f"Error: {err}", is_error=True)
 
         travel_mode = self._normalize_travel_mode(arguments.get("travel_mode"))
         if travel_mode is None:
@@ -414,7 +418,7 @@ class GoogleMapsTool:
 
         body: dict[str, Any] = {
             "origin": origin_waypoint,
-            "destination": self._build_route_waypoint(destination),
+            "destination": destination_waypoint,
             "travelMode": travel_mode,
             "computeAlternativeRoutes": False,
         }
@@ -611,9 +615,9 @@ class GoogleMapsTool:
 
         if value.casefold().startswith("place_id:"):
             place_id = value.split(":", 1)[1].strip()
-            return {"placeId": self._strip_place_resource_prefix(place_id)}
+            return {"placeId": self._normalize_route_place_id(place_id)}
         if value.casefold().startswith("places/"):
-            return {"placeId": self._strip_place_resource_prefix(value)}
+            return {"placeId": self._normalize_route_place_id(value)}
         if self._looks_like_place_id(value):
             return {"placeId": value.strip()}
         return {"address": value}
@@ -651,6 +655,14 @@ class GoogleMapsTool:
         place_id = GoogleMapsTool._strip_place_resource_prefix(value_text)
         if not re.fullmatch(r"[A-Za-z0-9_\-:.]+", place_id):
             return None
+        return place_id
+
+    @staticmethod
+    def _normalize_route_place_id(value: str) -> str:
+        """Normalize an explicit route Place ID or raise a user-facing error."""
+        place_id = GoogleMapsTool._normalize_place_id(value)
+        if place_id is None:
+            raise ValueError("place_id must be a valid Google Places place ID.")
         return place_id
 
     @staticmethod

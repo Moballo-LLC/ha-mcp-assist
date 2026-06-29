@@ -300,13 +300,18 @@ class MemoryManager:
         if not memory_id or not text or not created_at or not expires_at:
             return None
 
+        try:
+            ttl_days = int(item.get("ttl_days") or 0)
+        except (TypeError, ValueError):
+            ttl_days = 0
+
         return {
             "id": memory_id,
             "text": text,
             "category": self._normalize_category(item.get("category")),
             "created_at": created_at,
             "expires_at": expires_at,
-            "ttl_days": int(item.get("ttl_days") or 0),
+            "ttl_days": ttl_days,
         }
 
     def _purge_expired_locked(self) -> bool:

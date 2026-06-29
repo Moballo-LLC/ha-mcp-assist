@@ -2910,6 +2910,11 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             user_input = _normalize_shared_tool_inputs(user_input, built_in_specs)
             current_values = user_input
 
+            # Validate MCP port
+            mcp_port = user_input.get(CONF_MCP_PORT, DEFAULT_MCP_PORT)
+            if not 1024 <= mcp_port <= 65535:
+                errors[CONF_MCP_PORT] = "invalid_port"
+
             # Validate allowed IPs
             allowed_ips_str = user_input.get(CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS)
             is_valid, error_msg = validate_allowed_ips(allowed_ips_str)

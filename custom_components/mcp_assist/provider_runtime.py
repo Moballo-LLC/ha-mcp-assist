@@ -26,8 +26,10 @@ from .const import (
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
     SERVER_TYPE_LLAMACPP,
+    SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
+    SERVER_TYPE_OPENCLAW,
     SERVER_TYPE_OPENROUTER,
     SERVER_TYPE_VLLM,
 )
@@ -42,6 +44,29 @@ class ProviderRuntimeConfig:
     api_key: str
     timeout: int
     base_url: str
+    display_name: str
+    is_remote_service: bool
+
+
+PROVIDER_DISPLAY_NAMES = {
+    SERVER_TYPE_LMSTUDIO: "LM Studio",
+    SERVER_TYPE_LLAMACPP: "llama.cpp",
+    SERVER_TYPE_OLLAMA: "Ollama",
+    SERVER_TYPE_OPENAI: "OpenAI",
+    SERVER_TYPE_GEMINI: "Gemini",
+    SERVER_TYPE_ANTHROPIC: "Claude",
+    SERVER_TYPE_OPENROUTER: "OpenRouter",
+    SERVER_TYPE_OPENCLAW: "OpenClaw",
+    SERVER_TYPE_VLLM: "vLLM",
+}
+REMOTE_PROVIDER_TYPES = frozenset(
+    {
+        SERVER_TYPE_OPENAI,
+        SERVER_TYPE_GEMINI,
+        SERVER_TYPE_ANTHROPIC,
+        SERVER_TYPE_OPENROUTER,
+    }
+)
 
 
 def _get_entry_value(entry: Any, key: str, default: Any) -> Any:
@@ -104,6 +129,8 @@ def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
         api_key=api_key,
         timeout=timeout,
         base_url=base_url.rstrip("/"),
+        display_name=PROVIDER_DISPLAY_NAMES.get(server_type, server_type),
+        is_remote_service=server_type in REMOTE_PROVIDER_TYPES,
     )
 
 
