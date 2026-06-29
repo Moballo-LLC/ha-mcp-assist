@@ -43,28 +43,78 @@ The release workflow lives at:
 
 On `v*` tags, it:
 
-1. Checks that the tag starts with `v`.
-2. Checks that the tag version matches `manifest.json`.
-3. Builds `dist/mcp_assist.zip` from `custom_components/mcp_assist`.
-4. Publishes the GitHub release.
-5. Attaches the HACS zip artifact.
+1. Runs HACS validation against the tagged commit.
+2. Runs Hassfest against the tagged commit.
+3. Checks that the tag starts with `v`.
+4. Checks that the tag version matches `manifest.json`.
+5. Checks that the tagged commit is reachable from `origin/main`.
+6. Runs the local verification suite.
+7. Builds and verifies `dist/mcp_assist.zip` from
+   `custom_components/mcp_assist`.
+8. Publishes the GitHub release.
+9. Attaches the HACS zip artifact.
+
+The package job intentionally reruns validation even if the release commit was
+already green on `main`. That keeps tag-triggered publishing from relying on
+stale or skipped checks.
+
+## Local Verification
+
+Before pushing a PR branch, run the local CI mirror:
+
+```bash
+scripts/verify_local.sh
+```
+
+The script uses `PYTHON` when set, otherwise it prefers the shared local test
+environment at `/tmp/ha-mcp-assist-py314-venv/bin/python`, then `python3.14`,
+`python3`, and `python`. It runs Ruff, Python compilation, JSON validation,
+`git diff --check`, and the full pytest suite with a JUnit file under
+`test-results/`.
+
+To install or refresh test dependencies in the selected environment first:
+
+```bash
+INSTALL_DEPS=1 scripts/verify_local.sh
+```
+
+For focused CI-equivalent slices:
+
+```bash
+scripts/verify_local.sh --static
+scripts/verify_local.sh --pytest
+```
+
+Before creating a release tag, run the release-candidate gate:
+
+```bash
+RELEASE_TAG=vX.Y.Z scripts/verify_release_candidate.sh
+```
+
+This runs the local verification suite, validates the manifest version against
+`RELEASE_TAG`, builds `dist/mcp_assist.zip`, checks the zip for forbidden cache
+or bytecode files, verifies required integration files, extracts the package,
+and compiles the extracted integration.
 
 ## How to Publish a Release
 
 1. Make sure the release PRs are merged.
 2. Update `custom_components/mcp_assist/manifest.json` with the new version.
-3. Merge the version bump.
-4. Create and push a matching tag:
+3. Run `scripts/verify_release_candidate.sh` with the intended tag.
+4. Merge the version bump.
+5. Confirm CI, HACS, and Hassfest are green on `main`.
+6. Create and push a matching tag:
 
 ```bash
 git checkout main
 git pull origin main
+RELEASE_TAG=vX.Y.Z scripts/verify_release_candidate.sh
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-5. Watch the **Release** workflow.
-6. Review the generated GitHub release notes.
+7. Watch the **Release** workflow.
+8. Review the generated GitHub release notes.
 
 ## Versioning Guidance
 
@@ -94,8 +144,10 @@ integration still loads from `custom_components/mcp_assist` with domain
 ## Pre-Release Checklist
 
 - `custom_components/mcp_assist/manifest.json` version is correct.
+- `scripts/verify_release_candidate.sh` passes locally with the intended tag.
 - CI is green on `main`.
 - HACS and Hassfest validation pass.
+- The release tag will point at a commit reachable from `origin/main`.
 - The release notes generated from merged PRs read well.
 - Any user-facing docs changed with the feature or behavior change.
 - Runtime dependency bounds remain as lenient as practical.
