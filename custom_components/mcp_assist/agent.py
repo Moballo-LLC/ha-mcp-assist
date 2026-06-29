@@ -153,6 +153,20 @@ TOOL_BUDGET_FALLBACK_RESPONSE = (
     "I used the available tool budget before I could finish. Try a narrower "
     "request, or raise Max Tool Iterations if this needs a broader check."
 )
+TOOLLESS_RETRY_INSTRUCTION = (
+    "You just said you would check, but no MCP tool call was made. This is still "
+    "the same user request. Do not ask the user to wait or confirm. Call the "
+    "appropriate MCP tool now using the most specific available filters, or give "
+    "the final answer only if no tool is needed."
+)
+TOOLLESS_RESPONSE_PATTERNS = (
+    re.compile(
+        r"\b(?:i(?:'|’)?ll|i will|i(?:'|’)?m going to|i am going to|let me|i can)\s+"
+        r"(?:check|look|look up|find|see|verify|inspect|search)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^\s*checking\b", re.IGNORECASE),
+)
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -2649,6 +2663,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         except (TypeError, ValueError):
             return max(1, int(DEFAULT_MAX_ITERATIONS))
 
+    @property
+    def model_turn_limit(self) -> int:
+        """Return the per-request model-call limit around the tool budget."""
+        return self.tool_call_budget + 1
+
     @staticmethod
     def _tool_call_id(tool_call: Dict[str, Any]) -> str:
         """Return a stable ID for a provider-normalized tool call."""
@@ -2718,6 +2737,40 @@ class MCPAssistConversationEntity(ConversationEntity):
     def _has_tool_results(messages: List[Dict[str, Any]]) -> bool:
         """Return whether the conversation already has tool results to summarize."""
         return any(message.get("role") == "tool" for message in messages)
+
+    @staticmethod
+    def _is_toolless_check_preamble(response_text: str) -> bool:
+        """Return whether a response only promises to check without using tools."""
+        text = re.sub(r"\s+", " ", str(response_text or "")).strip()
+        if not text or len(text) > 240 or "?" in text:
+            return False
+        return any(pattern.search(text) for pattern in TOOLLESS_RESPONSE_PATTERNS)
+
+    def _should_retry_toolless_response(
+        self,
+        response_text: str,
+        *,
+        tools: List[Dict[str, Any]] | None,
+        retry_used: bool,
+    ) -> bool:
+        """Return whether to give the model one more chance to call a tool."""
+        if retry_used or not tools:
+            return False
+        return self._is_toolless_check_preamble(response_text)
+
+    @staticmethod
+    def _append_toolless_retry_messages(
+        conversation_messages: List[Dict[str, Any]],
+        response_text: str,
+    ) -> None:
+        """Append corrective context after a tool-less preamble response."""
+        if response_text.strip():
+            conversation_messages.append(
+                {"role": "assistant", "content": response_text.strip()}
+            )
+        conversation_messages.append(
+            {"role": "system", "content": TOOLLESS_RETRY_INSTRUCTION}
+        )
 
     async def _call_llm_final_response_without_tools(
         self,
@@ -2843,6 +2896,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         provider = self._get_llm_provider()
         conversation_messages = list(messages)
         tool_calls_used = 0
+        toolless_retry_used = False
 
         # Buffers for streaming
         tool_arg_buffers = {}  # index -> partial JSON string
@@ -2852,7 +2906,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         sentence_buffer = ""
         completed_tools = set()
 
-        for iteration in range(self.max_iterations):
+        for iteration in range(self.model_turn_limit):
             _LOGGER.info(f"🔄 Stream iteration {iteration + 1}")
             if self.debug_mode and iteration == 0:
                 _LOGGER.info(f"🎯 Using model: {self.model_name}")
@@ -3246,12 +3300,28 @@ class MCPAssistConversationEntity(ConversationEntity):
             else:
                 # No tool calls, return the response
                 if response_text:
+                    if self._should_retry_toolless_response(
+                        response_text,
+                        tools=tools,
+                        retry_used=toolless_retry_used,
+                    ):
+                        _LOGGER.info(
+                            "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
+                        )
+                        self._append_toolless_retry_messages(
+                            conversation_messages,
+                            response_text,
+                        )
+                        toolless_retry_used = True
+                        response_text = ""
+                        sentence_buffer = ""
+                        continue
                     return response_text
                 else:
                     # No content and no tools, might need another iteration
                     _LOGGER.warning("Empty response from streaming, retrying...")
 
-        # Hit max iterations
+        # Hit the model-call guard before a final response arrived.
         if response_text:
             return response_text
         if self._has_tool_results(conversation_messages):
@@ -3296,9 +3366,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Keep a mutable copy of messages for the conversation
         conversation_messages = list(messages)
         tool_calls_used = 0
+        toolless_retry_used = False
 
         # Tool execution loop
-        for iteration in range(self.max_iterations):
+        for iteration in range(self.model_turn_limit):
             _LOGGER.info(
                 f"🔄 HTTP Iteration {iteration + 1}: Calling {self.server_type} with {len(conversation_messages)} messages"
             )
@@ -3435,15 +3506,31 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                     else:
                         # No more tool calls, we have the final response
-                        final_content = message.get("content", "").strip()
+                        final_content = str(message.get("content") or "").strip()
                         _LOGGER.info(
                             f"💬 Final response received (length: {len(final_content)})"
                         )
+                        if self._should_retry_toolless_response(
+                            final_content,
+                            tools=tools,
+                            retry_used=toolless_retry_used,
+                        ):
+                            _LOGGER.info(
+                                "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
+                            )
+                            self._append_toolless_retry_messages(
+                                conversation_messages,
+                                final_content,
+                            )
+                            toolless_retry_used = True
+                            continue
                         return final_content
 
-        # If we hit max iterations, return what we have
+        # If we hit the model-call guard, return what we have.
         _LOGGER.warning(
-            f"⚠️ Hit maximum iterations ({self.max_iterations}) in tool execution loop"
+            "⚠️ Hit maximum model turns (%d) around tool-call budget (%d)",
+            self.model_turn_limit,
+            self.tool_call_budget,
         )
         if self._has_tool_results(conversation_messages):
             return await self._call_llm_final_response_without_tools(
