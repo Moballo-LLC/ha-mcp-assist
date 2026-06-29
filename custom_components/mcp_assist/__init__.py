@@ -208,6 +208,54 @@ async def _async_unregister_services(hass: HomeAssistant) -> None:
         hass.services.async_remove(DOMAIN, SERVICE_CLEAR_CHAT_LOGS)
 
 
+def _get_first_profile_entry(hass: HomeAssistant) -> ConfigEntry | None:
+    """Return the first non-system MCP Assist profile entry."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.unique_id != SYSTEM_ENTRY_UNIQUE_ID:
+            return entry
+    return None
+
+
+async def _async_apply_shared_mcp_settings(hass: HomeAssistant) -> None:
+    """Apply updated shared MCP settings to the running shared server."""
+    domain_data = hass.data.get(DOMAIN)
+    if not domain_data:
+        return
+
+    server = domain_data.get("shared_mcp_server")
+    if server is None:
+        return
+
+    system_entry = get_system_entry(hass)
+    if system_entry is None:
+        return
+
+    target_port = int(system_entry.data.get(CONF_MCP_PORT, DEFAULT_MCP_PORT))
+    current_port = int(domain_data.get("mcp_port", getattr(server, "port", target_port)))
+
+    if current_port != target_port:
+        profile_entry = _get_first_profile_entry(hass)
+        if profile_entry is None:
+            _LOGGER.debug("No profile entry available to restart shared MCP server")
+            return
+
+        _LOGGER.info(
+            "Restarting shared MCP server to apply port change: %d -> %d",
+            current_port,
+            target_port,
+        )
+        await server.stop()
+        new_server = MCPServer(hass, target_port, profile_entry)
+        await new_server.start()
+        domain_data["shared_mcp_server"] = new_server
+        domain_data["mcp_port"] = target_port
+        return
+
+    apply_shared_settings = getattr(server, "async_apply_shared_settings", None)
+    if callable(apply_shared_settings):
+        await apply_shared_settings()
+
+
 async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
     """Ensure system entry exists, create from first profile if not (self-healing)."""
     system_entry = get_system_entry(hass)

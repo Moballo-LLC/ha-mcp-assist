@@ -48,6 +48,7 @@ from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
+    CONF_ALLOWED_IPS,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
     CONF_ENABLE_GAP_FILLING,
@@ -578,6 +579,34 @@ async def test_options_mcp_step_requires_searxng_url_when_selected(
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_options_mcp_step_applies_shared_settings_to_running_server(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Saving shared MCP settings should apply them without a full HA restart."""
+    system_entry = system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+    apply_mock = AsyncMock()
+
+    with patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock):
+        result = await flow.async_step_mcp_server(
+            {
+                CONF_MCP_PORT: 8124,
+                CONF_ALLOWED_IPS: "192.168.1.25",
+                _builtin_shared_key("search"): False,
+                CONF_SEARCH_PROVIDER: "none",
+            }
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert system_entry.data[CONF_MCP_PORT] == 8124
+    assert system_entry.data[CONF_ALLOWED_IPS] == "192.168.1.25"
+    apply_mock.assert_awaited_once_with(hass)
 
 
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:

@@ -10,6 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mcp_assist import (
     _migrate_brave_search_tool_name,
+    _async_apply_shared_mcp_settings,
     async_setup_entry,
     async_unload_entry,
     ensure_system_entry,
@@ -206,6 +207,28 @@ async def test_async_setup_and_unload_reuse_shared_runtime_objects(
         assert await async_unload_entry(hass, entry_two) is True
         mcp_server.stop.assert_awaited_once()
         assert "shared_mcp_server" not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_apply_shared_mcp_settings_restarts_server_for_port_change(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared port changes should restart only the shared MCP server."""
+    system_entry_factory(data={CONF_MCP_PORT: 8124})
+    profile_entry = profile_entry_factory()
+    old_server = SimpleNamespace(port=8090, stop=AsyncMock())
+    new_server = SimpleNamespace(start=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = old_server
+    hass.data[DOMAIN]["mcp_port"] = 8090
+
+    with patch("custom_components.mcp_assist.MCPServer", return_value=new_server) as server_cls:
+        await _async_apply_shared_mcp_settings(hass)
+
+    old_server.stop.assert_awaited_once()
+    new_server.start.assert_awaited_once()
+    server_cls.assert_called_once_with(hass, 8124, profile_entry)
+    assert hass.data[DOMAIN]["shared_mcp_server"] is new_server
+    assert hass.data[DOMAIN]["mcp_port"] == 8124
 
 
 @pytest.mark.asyncio

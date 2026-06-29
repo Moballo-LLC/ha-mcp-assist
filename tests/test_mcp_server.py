@@ -125,6 +125,44 @@ def test_server_collects_allowed_ips_from_url_and_shared_settings(
 
 
 @pytest.mark.asyncio
+async def test_server_applies_shared_allowed_ips_and_reloads_tools(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Running servers should refresh shared allowlists and package tools."""
+    system_entry = system_entry_factory(
+        data={CONF_ALLOWED_IPS: "10.0.0.0/24"}
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.custom_tools = SimpleNamespace(
+        reload_tool_packages=AsyncMock(
+            return_value={
+                "external_custom_tools_enabled": False,
+                "external_packages": [],
+                "built_in_packages": [],
+            }
+        )
+    )
+    server.broadcast_notification = AsyncMock()
+
+    assert "10.0.0.0/24" in server.allowed_ips
+
+    hass.config_entries.async_update_entry(
+        system_entry,
+        data={**system_entry.data, CONF_ALLOWED_IPS: "192.168.1.25"},
+    )
+
+    result = await server.async_apply_shared_settings()
+
+    assert "192.168.1.25" in server.allowed_ips
+    assert "10.0.0.0/24" not in server.allowed_ips
+    assert result["allowed_ips"] == server.allowed_ips
+    server.custom_tools.reload_tool_packages.assert_awaited_once()
+    server.broadcast_notification.assert_awaited_once_with(
+        "notifications/tools/list_changed"
+    )
+
+
+@pytest.mark.asyncio
 async def test_detail_tools_skip_non_json_serializable_values(
     hass,
     profile_entry_factory,
