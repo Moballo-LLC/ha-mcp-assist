@@ -54,6 +54,10 @@ MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_ALIASES = {
     "audiobooks": "audiobook",
     "podcasts": "podcast",
 }
+MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_INPUTS = (
+    *MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES,
+    *MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_ALIASES,
+)
 
 MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -196,13 +200,13 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "oneOf": [
                         {
                             "type": "string",
-                            "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
+                            "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_INPUTS),
                         },
                         {
                             "type": "array",
                             "items": {
                                 "type": "string",
-                                "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
+                                "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_INPUTS),
                             },
                         },
                     ],
@@ -248,7 +252,7 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "properties": {
                 "media_type": {
                     "type": "string",
-                    "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES),
+                    "enum": list(MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPE_INPUTS),
                     "description": "The library media type to list.",
                 },
                 "search": {

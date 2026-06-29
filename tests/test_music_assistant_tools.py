@@ -273,9 +273,12 @@ def test_music_assistant_search_and_library_schemas_include_library_media_types(
     playback_types = set(playback_schema["enum"])
 
     assert {"audiobook", "podcast", "playlist"}.issubset(search_types)
+    assert {"audiobooks", "podcasts", "playlists"}.issubset(search_types)
     assert search_types == search_array_types
     assert {"audiobook", "podcast", "playlist"}.issubset(library_types)
+    assert {"audiobooks", "podcasts", "playlists"}.issubset(library_types)
     assert "podcast" not in playback_types
+    assert "podcasts" not in playback_types
 
 
 @pytest.mark.asyncio
