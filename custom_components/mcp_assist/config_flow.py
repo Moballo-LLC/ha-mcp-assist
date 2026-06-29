@@ -181,6 +181,7 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
         r"\1[redacted]",
         text,
     )
+    text = re.sub(r"://[^/\s:@]+:[^@\s/]+@", "://[redacted]@", text)
     text = re.sub(
         r"(?i)(api[_-]?key|password|secret|token|key)(\s*[:=]\s*)[^\s,;}]+",
         r"\1\2[redacted]",
@@ -871,7 +872,10 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
 
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            _LOGGER.info("📡 FETCH: Sending request to %s/v1/models", url)
+            _LOGGER.info(
+                "📡 FETCH: Sending request to %s/v1/models",
+                _redacted_log_snippet(url),
+            )
             async with session.get(f"{url}/v1/models") as resp:
                 _LOGGER.info("📥 FETCH: Got response with status %d", resp.status)
                 if resp.status != 200:
@@ -891,7 +895,6 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
         _LOGGER.error(
             "💥 FETCH: Exception during fetch: %s",
             _redacted_log_snippet(err),
-            exc_info=True,
         )
         return []
 
