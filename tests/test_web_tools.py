@@ -564,6 +564,54 @@ async def test_read_url_prefers_main_content_over_page_chrome(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_url_excludes_content_named_boilerplate(hass) -> None:
+    """Navigation ids/classes should not make boilerplate preferred content."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <nav class="content-navigation">Menu link</nav>
+            <section>
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_unwinds_malformed_preferred_markup(hass) -> None:
+    """Malformed optional tags should not leak page chrome into main content."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <main>
+              <ul>
+                <li>Useful item one
+                <li>Useful item two
+              </main>
+            <footer>Footer text</footer>
+            <section>Related link</section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful item one Useful item two"
+
+
+@pytest.mark.asyncio
 async def test_read_url_summary_keeps_longer_excerpt(hass, monkeypatch) -> None:
     """Summary mode should keep a useful excerpt instead of stopping at 1000 chars."""
     long_text = "x" * 1200

@@ -611,9 +611,7 @@ class _MainContentParser(HTMLParser):
         self._skip_depth = 0
         self._boilerplate_depth = 0
         self._preferred_depth = 0
-        self._skip_stack: List[bool] = []
-        self._boilerplate_stack: List[bool] = []
-        self._preferred_stack: List[bool] = []
+        self._tag_stack: List[Tuple[str, bool, bool, bool]] = []
         self._preferred_parts: List[str] = []
         self._body_parts: List[str] = []
 
@@ -631,11 +629,13 @@ class _MainContentParser(HTMLParser):
 
         is_skip = tag in self._SKIP_TAGS
         is_boilerplate = tag in self._BOILERPLATE_TAGS
-        is_preferred = self._is_preferred_container(tag, attrs)
+        is_preferred = (
+            not is_skip
+            and not is_boilerplate
+            and self._is_preferred_container(tag, attrs)
+        )
 
-        self._skip_stack.append(is_skip)
-        self._boilerplate_stack.append(is_boilerplate)
-        self._preferred_stack.append(is_preferred)
+        self._tag_stack.append((tag, is_skip, is_boilerplate, is_preferred))
 
         if is_skip:
             self._skip_depth += 1
@@ -661,26 +661,22 @@ class _MainContentParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         """Leave tracked tag scopes."""
         tag = tag.lower()
-        if self._skip_stack and self._skip_stack.pop() and self._skip_depth > 0:
-            self._skip_depth -= 1
-        if (
-            self._boilerplate_stack
-            and self._boilerplate_stack.pop()
-            and self._boilerplate_depth > 0
-        ):
-            self._boilerplate_depth -= 1
-        if (
-            self._preferred_stack
-            and self._preferred_stack.pop()
-            and self._preferred_depth > 0
-        ):
-            self._preferred_depth -= 1
+        matching_index = -1
+        for index in range(len(self._tag_stack) - 1, -1, -1):
+            if self._tag_stack[index][0] == tag:
+                matching_index = index
+                break
+
+        if matching_index >= 0:
+            while len(self._tag_stack) > matching_index:
+                self._pop_tag_scope()
+
         if tag in self._BLOCK_TAGS:
             self._append_separator()
 
     def handle_data(self, data: str) -> None:
         """Collect visible page text."""
-        if self._skip_depth > 0:
+        if self._skip_depth > 0 or self._boilerplate_depth > 0:
             return
         text = data.strip()
         if not text:
@@ -699,12 +695,22 @@ class _MainContentParser(HTMLParser):
 
     def _append_separator(self) -> None:
         """Add a loose text separator."""
-        if self._skip_depth > 0:
+        if self._skip_depth > 0 or self._boilerplate_depth > 0:
             return
         if self._preferred_depth > 0:
             self._preferred_parts.append(" ")
         elif self._boilerplate_depth == 0:
             self._body_parts.append(" ")
+
+    def _pop_tag_scope(self) -> None:
+        """Pop one tracked tag scope and update active depths."""
+        _, is_skip, is_boilerplate, is_preferred = self._tag_stack.pop()
+        if is_skip and self._skip_depth > 0:
+            self._skip_depth -= 1
+        if is_boilerplate and self._boilerplate_depth > 0:
+            self._boilerplate_depth -= 1
+        if is_preferred and self._preferred_depth > 0:
+            self._preferred_depth -= 1
 
     def _is_preferred_container(
         self,
