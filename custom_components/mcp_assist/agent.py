@@ -841,6 +841,68 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return ""
 
+    @staticmethod
+    def _json_size_bytes(value: Any) -> int:
+        """Return UTF-8 JSON size for debug metrics without exposing contents."""
+        try:
+            text = json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            text = str(value)
+        return len(text.encode("utf-8"))
+
+    @classmethod
+    def _content_char_count(cls, value: Any) -> int:
+        """Return an approximate text size for message content."""
+        if value is None:
+            return 0
+        if isinstance(value, str):
+            return len(value)
+        if isinstance(value, dict):
+            if "text" in value:
+                return cls._content_char_count(value.get("text"))
+            if "content" in value:
+                return cls._content_char_count(value.get("content"))
+            return sum(cls._content_char_count(item) for item in value.values())
+        if isinstance(value, list):
+            return sum(cls._content_char_count(item) for item in value)
+        return len(str(value))
+
+    @classmethod
+    def _message_content_char_count(cls, messages: list[dict[str, Any]]) -> int:
+        """Return total content characters across provider messages."""
+        return sum(
+            cls._content_char_count(message.get("content")) for message in messages
+        )
+
+    def _log_initial_llm_payload_metrics(
+        self,
+        *,
+        transport: str,
+        iteration: int,
+        payload: dict[str, Any],
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+    ) -> None:
+        """Log compact first-payload metrics for prompt latency debugging."""
+        if iteration != 0 or not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+
+        tool_count = len(tools or [])
+        _LOGGER.debug(
+            (
+                "Initial LLM payload metrics: provider=%s transport=%s "
+                "payload_bytes=%d messages=%d message_chars=%d tools=%d "
+                "tool_schema_bytes=%d"
+            ),
+            self.server_type,
+            transport,
+            self._json_size_bytes(payload),
+            len(messages),
+            self._message_content_char_count(messages),
+            tool_count,
+            self._json_size_bytes(tools or []),
+        )
+
     def _build_mcp_tool_cache_key(self) -> tuple[Any, ...]:
         """Build a cache key for the current profile-visible MCP tool surface."""
         return (
@@ -1479,11 +1541,25 @@ class MCPAssistConversationEntity(ConversationEntity):
                 return await self._handle_openclaw_message(user_input, conversation_id)
 
             # Get conversation history
+            metrics_enabled = _LOGGER.isEnabledFor(logging.DEBUG)
+            setup_started_at = time.monotonic() if metrics_enabled else 0.0
+            history_started_at = time.monotonic() if metrics_enabled else 0.0
             history = self.history.get_history(conversation_id)
+            history_ms = (
+                (time.monotonic() - history_started_at) * 1000
+                if metrics_enabled
+                else 0.0
+            )
             _LOGGER.debug("History retrieved: %d turns", len(history))
 
             # Build system prompt with context
+            prompt_started_at = time.monotonic() if metrics_enabled else 0.0
             system_prompt = await self._build_system_prompt_with_context(user_input)
+            prompt_ms = (
+                (time.monotonic() - prompt_started_at) * 1000
+                if metrics_enabled
+                else 0.0
+            )
             if self.debug_mode:
                 _LOGGER.info(
                     f"📝 System prompt built, length: {len(system_prompt)} chars"
@@ -1492,6 +1568,21 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             # Build conversation messages
             messages = self._build_messages(system_prompt, user_input.text, history)
+            if metrics_enabled:
+                _LOGGER.debug(
+                    (
+                        "Initial prompt metrics: prompt_chars=%d messages=%d "
+                        "message_chars=%d history_turns=%d history_ms=%.1f "
+                        "prompt_build_ms=%.1f setup_ms=%.1f"
+                    ),
+                    len(system_prompt),
+                    len(messages),
+                    self._message_content_char_count(messages),
+                    len(history),
+                    history_ms,
+                    prompt_ms,
+                    (time.monotonic() - setup_started_at) * 1000,
+                )
 
             self._current_conversation_id = conversation_id
 
@@ -2276,20 +2367,39 @@ class MCPAssistConversationEntity(ConversationEntity):
             and self._cached_llm_tools_key == cache_key
             and (now - self._cached_llm_tools_fetched_at) < MCP_TOOL_CACHE_TTL_SECONDS
         ):
-            _LOGGER.debug("Using cached MCP tool schema for profile")
+            _LOGGER.debug(
+                "Using cached MCP tool schema for profile: tools=%d age_ms=%.1f",
+                len(self._cached_llm_tools),
+                (now - self._cached_llm_tools_fetched_at) * 1000,
+            )
             return list(self._cached_llm_tools)
 
+        fetch_started_at = time.monotonic()
         tools = await self._fetch_mcp_tools_from_server()
+        fetch_ms = (time.monotonic() - fetch_started_at) * 1000
         if tools is not None:
             self._cached_llm_tools = list(tools)
             self._cached_llm_tools_key = cache_key
             self._cached_llm_tools_fetched_at = now
+            _LOGGER.debug(
+                "Fetched MCP tool schema for profile: tools=%d latency_ms=%.1f",
+                len(tools),
+                fetch_ms,
+            )
             return list(tools)
 
         if self._cached_llm_tools is not None and self._cached_llm_tools_key == cache_key:
-            _LOGGER.warning("Using stale cached MCP tools after refresh failure")
+            _LOGGER.warning(
+                "Using stale cached MCP tools after refresh failure: "
+                "tools=%d fetch_latency_ms=%.1f",
+                len(self._cached_llm_tools),
+                fetch_ms,
+            )
             return list(self._cached_llm_tools)
 
+        _LOGGER.debug(
+            "MCP tool schema fetch returned no tools: latency_ms=%.1f", fetch_ms
+        )
         return None
 
     def _filter_mcp_tools_for_profile(
@@ -3045,6 +3155,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                 len(conversation_messages),
             )
             payload = self._build_anthropic_payload(conversation_messages, tools)
+            self._log_initial_llm_payload_metrics(
+                transport="anthropic_messages",
+                iteration=iteration,
+                payload=payload,
+                messages=conversation_messages,
+                tools=payload.get("tools", []),
+            )
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -3237,6 +3354,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                     clean_payload = clean_for_json(payload)
                     break
+
+            self._log_initial_llm_payload_metrics(
+                transport="streaming",
+                iteration=iteration,
+                payload=clean_payload,
+                messages=cleaned_messages,
+                tools=tools,
+            )
 
             has_tool_calls = False
             current_tool_calls = []
@@ -3679,6 +3804,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                 return obj
 
             clean_payload = clean_for_json_http(payload)
+            self._log_initial_llm_payload_metrics(
+                transport="http",
+                iteration=iteration,
+                payload=clean_payload,
+                messages=conversation_messages,
+                tools=tools,
+            )
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
