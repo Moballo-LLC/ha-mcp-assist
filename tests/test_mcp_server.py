@@ -39,6 +39,7 @@ from custom_components.mcp_assist.tools.packages.response_service.response_servi
 )
 from custom_components.mcp_assist.tools.packages.weather_forecast.weather import WEATHER_TOOL_DEFINITIONS
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
     CONF_ALLOWED_IPS,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_CALCULATOR_TOOLS,
@@ -53,7 +54,10 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_LMSTUDIO_URL,
     CONF_LLM_API_ALLOWLIST,
+    CONF_MODEL_NAME,
+    CONF_SERVER_TYPE,
     DOMAIN,
+    SERVER_TYPE_OPENAI,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
 
@@ -2207,6 +2211,135 @@ async def test_tool_analyze_image_returns_answer_and_optional_image_block(
     assert result["content"][0]["text"] == "A white SUV is in the driveway."
     assert result["content"][1]["type"] == "image"
     assert result["structuredContent"]["source"]["type"] == "image_path"
+
+
+@pytest.mark.asyncio
+async def test_analyze_image_uses_provider_owned_chat_url(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Image analysis should ask the provider transport for its chat URL."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: "https://proxy.example.invalid/v1",
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4o-mini",
+        }
+    )
+    server = MCPServer(hass, 8099, entry)
+    calls: list[dict[str, Any]] = []
+
+    class _ProviderResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def json(self):
+            return {"choices": [{"message": {"content": "Looks clear."}}]}
+
+    class _ProviderSession:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]):
+            calls.append({"url": url, "headers": headers, "payload": json})
+            return _ProviderResponse()
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _ProviderSession)
+
+    result = await server._analyze_image_with_provider(
+        question="What is shown?",
+        image_bytes=b"fake-image",
+        mime_type="image/png",
+        detail="auto",
+        context=None,
+    )
+
+    assert result == "Looks clear."
+    assert calls[0]["url"] == "https://proxy.example.invalid/v1/chat/completions"
+    assert calls[0]["headers"] == {"Authorization": "Bearer sk-test"}
+    assert calls[0]["payload"]["model"] == "gpt-4o-mini"
+
+
+@pytest.mark.asyncio
+async def test_generate_image_uses_provider_owned_generation_url(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Image generation should ask the provider transport for its generation URL."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: "https://proxy.example.invalid",
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-image-1",
+        }
+    )
+    server = MCPServer(hass, 8099, entry)
+    calls: list[dict[str, Any]] = []
+
+    class _ProviderResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def json(self):
+            return {
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(b"fake-png").decode("ascii"),
+                        "revised_prompt": "A concise prompt",
+                    }
+                ]
+            }
+
+    class _ProviderSession:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]):
+            calls.append({"url": url, "headers": headers, "payload": json})
+            return _ProviderResponse()
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _ProviderSession)
+
+    image_bytes, mime_type, metadata = await server._generate_image_with_provider(
+        prompt="Draw a clean diagram.",
+        size=None,
+        quality=None,
+        style=None,
+        background=None,
+        context=None,
+    )
+
+    assert image_bytes == b"fake-png"
+    assert mime_type == "image/png"
+    assert calls[0]["url"] == "https://proxy.example.invalid/v1/images/generations"
+    assert calls[0]["headers"] == {"Authorization": "Bearer sk-test"}
+    assert calls[0]["payload"]["model"] == "gpt-image-1"
+    assert metadata["model"] == "gpt-image-1"
+    assert metadata["revised_prompt"] == "A concise prompt"
 
 
 def test_resolve_local_image_path_rejects_path_traversal(

@@ -7,13 +7,11 @@ import logging
 import re
 from typing import Any
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult, section
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -39,16 +37,12 @@ from .llm_providers import (
     get_llm_provider_class,
     provider_selector_options,
 )
-from .provider_runtime import (
-    build_openai_compatible_endpoint,
-)
 
 from .const import (
     DOMAIN,
     SYSTEM_ENTRY_UNIQUE_ID,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
-    CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_MCP_PORT,
     CONF_AUTO_START,
@@ -1104,62 +1098,6 @@ STEP_MCP_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_AUTO_START, default=True): bool,
     }
 )
-
-
-async def validate_lmstudio_connection(
-    hass: HomeAssistant, data: dict[str, Any]
-) -> dict[str, Any]:
-    """Validate LM Studio connection."""
-    url = data[CONF_LMSTUDIO_URL].rstrip("/")
-    model_name = data[CONF_MODEL_NAME]
-
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            # Test models endpoint
-            async with session.get(
-                build_openai_compatible_endpoint(url, "models")
-            ) as resp:
-                if resp.status != 200:
-                    raise CannotConnect(
-                        f"LM Studio not responding (status {resp.status})"
-                    )
-
-                models = await resp.json()
-                model_ids = [m.get("id", "") for m in models.get("data", [])]
-
-                if not model_ids:
-                    raise NoModelsLoaded("No models loaded in LM Studio")
-
-                # Check if specified model exists
-                if model_name not in model_ids:
-                    _LOGGER.warning(
-                        "Model '%s' not found. Available models: %s",
-                        model_name,
-                        model_ids,
-                    )
-
-            # Test chat completions endpoint
-            test_payload = {
-                "model": model_name,
-                "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 1,
-                "stream": False,
-            }
-
-            async with session.post(
-                build_openai_compatible_endpoint(url, "chat/completions"),
-                json=test_payload,
-            ) as resp:
-                if resp.status != 200:
-                    raise InvalidModel(
-                        f"Model '{model_name}' not working (status {resp.status})"
-                    )
-
-    except aiohttp.ClientError as err:
-        raise CannotConnect(f"Failed to connect to LM Studio: {err}") from err
-
-    return {"title": f"LM Studio ({model_name})"}
 
 
 class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -2883,15 +2821,3 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class NoModelsLoaded(HomeAssistantError):
-    """Error to indicate no models are loaded."""
-
-
-class InvalidModel(HomeAssistantError):
-    """Error to indicate the model is invalid."""

@@ -98,16 +98,6 @@ def _get_configured_base_url(entry: Any) -> str | None:
     return None
 
 
-def build_openai_compatible_endpoint(base_url: str, endpoint: str) -> str:
-    """Build an OpenAI-compatible endpoint from a root or /v1 base URL."""
-    normalized_base_url = str(base_url or "").strip().rstrip("/")
-    normalized_endpoint = str(endpoint or "").strip().lstrip("/")
-
-    if normalized_base_url.endswith("/v1"):
-        return f"{normalized_base_url}/{normalized_endpoint}"
-    return f"{normalized_base_url}/v1/{normalized_endpoint}"
-
-
 def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
     """Resolve the current provider/runtime settings for a profile entry."""
     server_type = str(_get_entry_value(entry, CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE))

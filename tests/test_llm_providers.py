@@ -39,6 +39,7 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_VLLM,
 )
 from custom_components.mcp_assist.llm_providers import gemini as gemini_module
+from custom_components.mcp_assist.llm_providers import ollama as ollama_module
 from custom_components.mcp_assist.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
@@ -77,6 +78,7 @@ def _settings(
     max_tokens: int = 100,
     temperature: float | None = 0.25,
     provider_options: dict[str, object] | None = None,
+    base_url: str = "https://provider.example.invalid",
     display_name: str = "Test Provider",
     is_remote_service: bool = False,
 ) -> ProviderSettings:
@@ -85,7 +87,7 @@ def _settings(
         server_type=server_type,
         model_name=model_name,
         api_key="test-key",
-        base_url="https://provider.example.invalid",
+        base_url=base_url,
         timeout=30,
         max_tokens=max_tokens,
         temperature=temperature,
@@ -269,6 +271,89 @@ def test_provider_classes_expose_config_metadata(
         (field.key, field.default, field.kind, field.required)
         for field in provider_class.provider_options_fields
     ) == provider_options_fields
+
+
+def test_openai_compatible_provider_owns_versioned_endpoints() -> None:
+    """OpenAI-compatible providers should own root-vs-/v1 endpoint handling."""
+    root_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url="https://api.example.invalid")
+    )
+    v1_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url="https://api.example.invalid/v1")
+    )
+
+    assert root_provider.chat_url() == (
+        "https://api.example.invalid/v1/chat/completions"
+    )
+    assert v1_provider.chat_url() == (
+        "https://api.example.invalid/v1/chat/completions"
+    )
+    assert OpenAIProvider.model_list_url(
+        {CONF_LMSTUDIO_URL: "https://api.example.invalid/v1/"}
+    ) == "https://api.example.invalid/v1/models"
+
+
+def test_gemini_provider_owns_openai_compatible_endpoint_shape() -> None:
+    """Gemini's OpenAI-compatible path should not get an extra /v1 segment."""
+    provider = GeminiProvider(
+        _settings(
+            SERVER_TYPE_GEMINI,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        )
+    )
+
+    assert provider.chat_url() == (
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    )
+
+
+async def test_ollama_provider_fetches_models_from_native_tags_endpoint(
+    monkeypatch,
+) -> None:
+    """Ollama should own native supported-model discovery."""
+    calls: list[str] = []
+
+    class TagsResponse:
+        status = 200
+
+        async def __aenter__(self) -> "TagsResponse":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def json(self) -> dict[str, list[dict[str, str]]]:
+            return {
+                "models": [
+                    {"name": "llama3.2"},
+                    {"model": "qwen3"},
+                ]
+            }
+
+    class TagsSession:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "TagsSession":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> TagsResponse:
+            calls.append(url)
+            return TagsResponse()
+
+    monkeypatch.setattr(OllamaProvider, "model_fetch_delay", 0)
+    monkeypatch.setattr(ollama_module.aiohttp, "ClientSession", TagsSession)
+
+    models = await OllamaProvider.fetch_models(
+        None,
+        {CONF_LMSTUDIO_URL: "http://ollama.example.invalid"},
+    )
+
+    assert calls == ["http://ollama.example.invalid/api/tags"]
+    assert models == ["llama3.2", "qwen3"]
 
 
 @pytest.mark.parametrize(

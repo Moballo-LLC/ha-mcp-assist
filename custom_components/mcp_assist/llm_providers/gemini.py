@@ -22,6 +22,7 @@ class GeminiProvider(OpenAICompatibleProvider):
     connection_fields = (ProviderConfigField(CONF_API_KEY, kind="password"),)
     model_fetch_error = "invalid_api_key"
     default_temperature = 1.0
+    openai_compatible_api_version = ""
 
     @classmethod
     async def fetch_models(cls, hass: Any, values: dict[str, Any]) -> list[str]:

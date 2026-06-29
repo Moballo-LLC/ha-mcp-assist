@@ -13,7 +13,6 @@ import aiohttp
 
 from ..const import CONF_API_KEY, CONF_LMSTUDIO_URL
 from ..provider_runtime import (
-    build_openai_compatible_endpoint,
     build_provider_auth_headers,
 )
 
@@ -220,8 +219,14 @@ class LLMProvider:
         return sorted(models)
 
     @classmethod
+    def model_list_url(cls, values: dict[str, Any]) -> str:
+        """Return the URL this provider uses to list supported models."""
+        del values
+        return ""
+
+    @classmethod
     async def fetch_models(cls, hass: Any, values: dict[str, Any]) -> list[str]:
-        """Fetch models for providers with an OpenAI-compatible model endpoint."""
+        """Fetch models from the provider-owned model-list endpoint."""
         del hass
         if cls.model_fetch_error is None:
             return []
@@ -230,7 +235,10 @@ class LLMProvider:
         if not base_url:
             return []
 
-        models_url = build_openai_compatible_endpoint(base_url, "models")
+        models_url = cls.model_list_url(values)
+        if not models_url:
+            return []
+
         _LOGGER.info("Starting %s model fetch from %s", cls.config_display_name(), base_url)
         try:
             if cls.model_fetch_delay > 0:
@@ -307,8 +315,12 @@ class LLMProvider:
         return build_provider_auth_headers(self.server_type, self.settings.api_key)
 
     def chat_url(self) -> str:
-        """Return the provider chat-completions endpoint."""
-        return build_openai_compatible_endpoint(self.base_url, "chat/completions")
+        """Return the provider chat endpoint."""
+        raise NotImplementedError
+
+    def image_generation_url(self) -> str:
+        """Return the provider image-generation endpoint, if supported."""
+        raise NotImplementedError
 
     def build_payload(
         self,

@@ -11,7 +11,6 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_OPENROUTER,
 )
 from custom_components.mcp_assist.provider_runtime import (
-    build_openai_compatible_endpoint,
     build_provider_auth_headers,
     resolve_provider_runtime_config,
 )
@@ -32,24 +31,6 @@ def test_resolve_provider_runtime_config_prefers_custom_openai_base_url(
 
     assert runtime_config.server_type == SERVER_TYPE_OPENAI
     assert runtime_config.base_url == "https://openai-proxy.example.com/v1"
-
-
-def test_build_openai_compatible_endpoint_accepts_root_or_v1_base_url() -> None:
-    """OpenAI-compatible base URLs may be entered with or without /v1."""
-    assert (
-        build_openai_compatible_endpoint(
-            "https://api.example.com",
-            "chat/completions",
-        )
-        == "https://api.example.com/v1/chat/completions"
-    )
-    assert (
-        build_openai_compatible_endpoint(
-            "https://api.example.com/v1/",
-            "/models",
-        )
-        == "https://api.example.com/v1/models"
-    )
 
 
 def test_resolve_provider_runtime_config_keeps_default_local_ollama_url(
