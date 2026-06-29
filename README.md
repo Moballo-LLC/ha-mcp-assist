@@ -331,7 +331,7 @@ When you change shared settings in one profile's options, they apply to all prof
 
 ## Model Compatibility Guide
 
-Not all LLM models support tool calling (function calling) equally well. **This integration works best with frontier models** (GPT-5.2, Claude Opus 4.5, Gemini 3 Flash) **or higher-spec local models**. Smaller models may struggle with complex multi-entity queries that require synthesizing large tool result sets.  
+Not all LLM models support tool calling (function calling) equally well. This integration is usually more reliable with higher-capability cloud models (GPT-5.2, Claude Opus 4.5, Gemini 3 Flash) or higher-spec local models. Smaller models may struggle with complex multi-entity queries that require synthesizing large tool result sets.
 
 ### Understanding Tool Calling Requirements
 
@@ -358,21 +358,21 @@ Tool calling (function calling) requires the model to:
 
 **Thinking/Reasoning Models** (e.g., `qwen3-8b-thinking`):
 - Slower response times (more deliberate reasoning)
-- **Much better at complex requests** requiring multiple tool calls and context
+- Often better at complex requests requiring multiple tool calls and context
 - Handles multi-step queries reliably ("check all rooms for open windows, then turn off lights in those rooms")
-- **Recommended for Home Assistant** where queries often involve discovery + action combinations
+- A good fit for Home Assistant where queries often involve discovery + action combinations
 
 Choose the model type that best fits your use case. Thinking/reasoning models offer better reliability with complex multi-tool queries, while instruct models provide faster responses for simple commands.
 
 ### Recommended Models
 
 **Consistently Reliable**:
-- ✅ **Qwen3 VL 32B Instruct** - Excellent tool calling
-- ✅ **Qwen3 30B A3B Instruct** - Very good tool calling
-- ✅ **Qwen3 8B Instruct** - Good balance, works reliably
-- ✅ **Anthropic Opus 4.5** - The very best at tool calling (cloud)
-- ✅ **OpenAI GPT-5.2** - Excellent tool calling, very fast (cloud)
-- ✅ **Google Gemini 3 Flash** - Excellent tool calling, fast, cost-effective (cloud)
+- ✅ **Qwen3 VL 32B Instruct** - Strong tool-calling support
+- ✅ **Qwen3 30B A3B Instruct** - Strong tool-calling support
+- ✅ **Qwen3 8B Instruct** - Good balance for local use
+- ✅ **Anthropic Opus 4.5** - Strong tool-calling support (cloud)
+- ✅ **OpenAI GPT-5.2** - Strong tool-calling support (cloud)
+- ✅ **Google Gemini 3 Flash** - Strong tool-calling support (cloud)
 
 ### Testing Your Model
 
