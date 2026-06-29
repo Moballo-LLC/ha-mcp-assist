@@ -1086,6 +1086,16 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Category C: Resource Limits
         if (
+            "rate limit" in error_str
+            or "429" in error_str
+            or "too many requests" in error_str
+        ):
+            return f"You've hit {self._get_server_display_name()}'s rate limit. Wait a minute and try again, or upgrade your plan for higher limits."
+
+        if "quota exceeded" in error_str or "insufficient credits" in error_str:
+            return f"Your {self._get_server_display_name()} account has run out of credits or quota. Check your billing and add credits to continue."
+
+        if (
             "maximum context length" in error_str
             or "context_length_exceeded" in error_str
             or "too many tokens" in error_str
@@ -1118,16 +1128,6 @@ class MCPAssistConversationEntity(ConversationEntity):
             if token_match:
                 return f"The conversation has exceeded the model's {token_match.group(1)} token limit. Start a new conversation or reduce the history limit in Advanced Settings."
             return "The conversation has exceeded the model's token limit. Start a new conversation or reduce the history limit in Advanced Settings."
-
-        if (
-            "rate limit" in error_str
-            or "429" in error_str
-            or "too many requests" in error_str
-        ):
-            return f"You've hit {self._get_server_display_name()}'s rate limit. Wait a minute and try again, or upgrade your plan for higher limits."
-
-        if "quota exceeded" in error_str or "insufficient credits" in error_str:
-            return f"Your {self._get_server_display_name()} account has run out of credits or quota. Check your billing and add credits to continue."
 
         # Category D: Model Errors
         if "404" in error_str or ("model" in error_str and "not found" in error_str):

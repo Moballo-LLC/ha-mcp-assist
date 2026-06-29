@@ -612,6 +612,23 @@ def test_ollama_context_error_suggests_light_context_mode(
     assert "12772 tokens" in message
 
 
+def test_ollama_token_rate_limit_is_not_reported_as_context_error(
+    hass, profile_entry_factory
+) -> None:
+    """Token-based rate limits should not trigger light-context guidance."""
+    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    message = agent._get_friendly_error_message(
+        Exception(
+            "ollama API error 429: rate limit exceeded: 1000 tokens per minute"
+        )
+    )
+
+    assert "rate limit" in message
+    assert "Context Mode: Light" not in message
+
+
 @pytest.mark.asyncio
 async def test_default_prompt_does_not_fetch_index_unless_requested(
     hass, profile_entry_factory
