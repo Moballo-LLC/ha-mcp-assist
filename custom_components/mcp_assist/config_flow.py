@@ -448,6 +448,38 @@ def _infer_web_search_enabled(
     return bool(legacy_enable_custom_tools)
 
 
+def _shared_search_provider_requires_url(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+) -> bool:
+    """Return whether the selected shared search provider needs a URL."""
+    if _normalize_search_provider(user_input.get(CONF_SEARCH_PROVIDER)) != "searxng":
+        return False
+
+    built_in_search_enabled = any(
+        bool(user_input.get(spec.shared_setting_key, spec.shared_default))
+        for spec in built_in_specs
+        if spec.requires_search_provider
+    )
+    legacy_web_search_enabled = bool(
+        user_input.get(CONF_ENABLE_WEB_SEARCH, DEFAULT_ENABLE_WEB_SEARCH)
+    )
+
+    return built_in_search_enabled or legacy_web_search_enabled
+
+
+def _validate_shared_search_settings(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+    errors: dict[str, str],
+) -> None:
+    """Validate provider-specific shared search settings."""
+    if _shared_search_provider_requires_url(user_input, built_in_specs) and not str(
+        user_input.get(CONF_SEARXNG_URL, "")
+    ).strip():
+        errors[CONF_SEARXNG_URL] = "searxng_url_required"
+
+
 def _normalize_shared_tool_inputs(
     user_input: dict[str, Any],
     built_in_specs: tuple[BuiltInToolToggleSpec, ...] = (),
@@ -1739,6 +1771,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
+            _validate_shared_search_settings(user_input, built_in_specs, errors)
+
             if not errors:
                 # Create/update system entry with shared settings
                 from . import get_system_entry
@@ -2658,6 +2692,8 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             if not is_valid:
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs in options: %s", error_msg)
+
+            _validate_shared_search_settings(user_input, built_in_specs, errors)
 
             if not errors:
                 # Import get_system_entry

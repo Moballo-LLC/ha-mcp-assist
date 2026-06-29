@@ -529,6 +529,49 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
     assert tool_markers[_builtin_shared_key("read_url")].description is None
 
 
+async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:
+    """SearXNG search should not save without a base URL."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("search"): True,
+            CONF_SEARCH_PROVIDER: "searxng",
+            CONF_SEARXNG_URL: " ",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_options_mcp_step_requires_searxng_url_when_selected(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should reject SearXNG without a base URL."""
+    system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("search"): True,
+            CONF_SEARCH_PROVIDER: "searxng",
+            CONF_SEARXNG_URL: "",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
     """Built-in packaged tool checkboxes should not override translated subtitles inline."""
     shared_section = _build_shared_tools_section({}, BUILTIN_SPECS)

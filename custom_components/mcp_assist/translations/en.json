@@ -292,6 +292,7 @@
       "invalid_ip": "Invalid IP address or CIDR range format. Use comma-separated values like: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profile name is required.",
       "invalid_json": "Invalid JSON format. Please check your MCP servers configuration.",
+      "searxng_url_required": "SearXNG URL is required when SearXNG search is enabled.",
       "invalid_api_key": "Invalid API key. Please check and try again.",
       "auth_failed": "Authentication failed. Please verify your API key.",
       "unknown": "An unknown error occurred.",
