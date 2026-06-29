@@ -185,7 +185,7 @@ async def test_async_setup_and_unload_reuse_shared_runtime_objects(
     entry_one = profile_entry_factory(title="Ollama - One", unique_id=f"{DOMAIN}_one", data={CONF_PROFILE_NAME: "One"})
     entry_two = profile_entry_factory(title="Ollama - Two", unique_id=f"{DOMAIN}_two", data={CONF_PROFILE_NAME: "Two"})
 
-    index_manager = SimpleNamespace(start=AsyncMock())
+    index_manager = SimpleNamespace(start=AsyncMock(), async_stop=AsyncMock())
     mcp_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
 
     with (
@@ -203,9 +203,11 @@ async def test_async_setup_and_unload_reuse_shared_runtime_objects(
         assert await async_unload_entry(hass, entry_one) is True
         assert hass.data[DOMAIN]["mcp_refcount"] == 1
         mcp_server.stop.assert_not_called()
+        index_manager.async_stop.assert_not_called()
 
         assert await async_unload_entry(hass, entry_two) is True
         mcp_server.stop.assert_awaited_once()
+        index_manager.async_stop.assert_awaited_once()
         assert "shared_mcp_server" not in hass.data[DOMAIN]
 
 

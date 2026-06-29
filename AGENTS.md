@@ -151,6 +151,26 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - Do not commit generated caches, `__pycache__`, `.pyc`, `.pyo`, local venvs, or
   `test-results/`.
 
+## Public Repository Data Safety
+
+- Treat this repository, commit history, PR text, tests, fixtures, docs, and
+  examples as public.
+- Do not commit real personal, customer, household, or infrastructure details.
+  This includes home or business addresses, exact private locations, real IP
+  addresses, internal hostnames, Wi-Fi/network names, device identifiers, email
+  addresses, phone numbers, tokens, API keys, or provider/account details.
+- Use mock or reserved example data instead of individual private data. Prefer
+  `example.com`, `example.invalid`, RFC 5737 IPv4 documentation ranges
+  (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), and RFC 3849 IPv6
+  examples (`2001:db8::/32`) for docs and generic tests.
+- Only use RFC1918/private addresses in tests when the behavior under test is
+  specifically about private-address handling, and keep them generic
+  (`10.0.0.5`, `192.168.1.25`, `internal.example`) rather than copied from a
+  real environment.
+- Before committing or opening a PR, scan new docs, tests, fixtures, commit
+  messages, and PR bodies for accidental private data. Replace anything real
+  with dummy values.
+
 ## Documentation Tone
 
 - Keep docs and UI copy plainspoken, concrete, and human. Explain what MCP
