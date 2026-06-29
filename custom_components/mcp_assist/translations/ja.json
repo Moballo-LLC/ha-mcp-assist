@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "プロファイル名",
           "server_type": "サーバータイプ"
+        },
+        "data_description": {
+          "profile_name": "この会話プロファイルのフレンドリ名。",
+          "server_type": "このプロファイルが使用するプロバイダーまたは推論サーバーを選択します。"
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "サーバーURL",
           "api_key": "APIキー",
-          "mcp_port": "MCPサーバーポート"
+          "mcp_port": "MCPサーバーポート",
+          "openclaw_host": "ゲートウェイ ホスト",
+          "openclaw_port": "ゲートウェイ ポート",
+          "openclaw_token": "ゲートウェイ トークン",
+          "openclaw_use_ssl": "SSL/TLSを使用"
+        },
+        "data_description": {
+          "lmstudio_url": "このプロファイルで使用されるローカルまたは OpenAI-compatible サーバーのベース URL。",
+          "api_key": "このプロバイダーに必要な API キーまたはベアラー トークン。",
+          "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
+          "openclaw_host": "OpenClaw ゲートウェイのホスト名または IP アドレス。",
+          "openclaw_port": "OpenClaw ゲートウェイ WebSocket サーバーによって使用されるポート。",
+          "openclaw_token": "OpenClaw ゲートウェイでの認証に使用されるベアラー トークン。",
+          "openclaw_use_ssl": "OpenClaw ゲートウェイと通信する場合は、安全な WebSocket 接続を使用します。"
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw デバイスのペアリング",
+        "description": "デバイスは OpenClaw サーバーで承認される必要があります。\n\n`openclaw devices approve` を実行するか OpenClaw Control UI を使用して承認し、[送信] をクリックします。\n\nデバイスID: {device_id}"
       },
       "model": {
         "title": "モデルとプロンプト",
         "description": "{server_info}",
         "data": {
           "model_name": "モデル名",
+          "system_prompt_mode": "システム プロンプト ソース",
           "system_prompt": "システムプロンプト",
+          "technical_prompt_mode": "技術説明ソース",
           "technical_prompt": "技術的な指示"
+        },
+        "data_description": {
+          "model_name": "このプロファイルが使用する LLM モデル。",
+          "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
+          "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。"
+        },
+        "sections": {
+          "model_fields": {
+            "name": "モデル",
+            "description": "このプロファイルが使用するモデルを選択してください。",
+            "data": {
+              "model_name": "モデル名"
+            },
+            "data_description": {
+              "model_name": "このプロファイルが使用する LLM モデル。"
+            }
+          },
+          "prompts": {
+            "name": "プロンプト",
+            "description": "現在有効なプロンプトを確認し、コピーするか、このプロファイルに対して編集します。",
+            "data": {
+              "system_prompt": "システムプロンプト",
+              "technical_prompt": "技術的な指示"
+            },
+            "data_description": {
+              "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
+              "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。"
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "温度",
           "max_tokens": "最大応答トークン数",
           "max_history": "最大履歴メッセージ数",
+          "context_mode": "コンテキスト モード",
           "max_iterations": "最大ツール反復回数",
           "control_home_assistant": "Home Assistantを制御",
           "response_mode": "応答モード",
           "follow_up_phrases": "フォローアップフレーズ",
           "end_words": "会話終了ワード",
+          "clean_responses": "音声出力用にレスポンスを整形",
           "timeout": "応答タイムアウト",
           "debug_mode": "デバッグモード",
+          "chat_log_mode": "チャットログモード",
           "ollama_keep_alive": "Ollamaを維持",
           "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
-          "clean_responses": "音声出力用にレスポンスを整形"
+          "openclaw_session_key": "セッションキー"
+        },
+        "sections": {
+          "conversation": {
+            "name": "会話",
+            "description": "このプロファイルの動作、フォローアップ処理、および音声出力設定。",
+            "data": {
+              "control_home_assistant": "Home Assistantを制御",
+              "response_mode": "応答モード",
+              "follow_up_phrases": "フォローアップフレーズ",
+              "end_words": "会話終了ワード",
+              "clean_responses": "音声出力用にレスポンスを整形"
+            },
+            "data_description": {
+              "control_home_assistant": "このプロファイルが質問に答えるだけでなく、Home Assistant アクションを実行できるようにします。",
+              "response_mode": "アシスタントをすぐに終了するか、必要に応じて自然なフォローアップの質問をするかを制御します。",
+              "follow_up_phrases": "フォローアップ形式の応答を検出するために使用されるカンマ区切りのフレーズ。",
+              "end_words": "会話を終了するカンマ区切りの単語またはフレーズ。",
+              "clean_responses": "不要な書式やフィラーをトリミングして、音声応答をきれいに保ちます。"
+            }
+          },
+          "performance": {
+            "name": "パフォーマンス",
+            "description": "モデル応答制限、実行制限、タイムアウト、およびデバッグ。",
+            "data": {
+              "temperature": "温度",
+              "max_tokens": "最大応答トークン数",
+              "max_history": "最大履歴メッセージ数",
+              "context_mode": "コンテキスト モード",
+              "max_iterations": "最大ツール反復回数",
+              "timeout": "応答タイムアウト",
+              "debug_mode": "デバッグモード",
+              "chat_log_mode": "チャットログモード"
+            },
+            "data_description": {
+              "temperature": "応答のランダム性を制御します。値が低いほど、より決定的になります。",
+              "max_tokens": "モデルが 1 つの応答で生成できるトークンの数を制限します。",
+              "max_history": "コンテキスト内に保持する以前の会話メッセージの数。",
+              "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。",
+              "max_iterations": "アシスタントが 1 つのリクエストに対して使用できるツール呼び出しターンの回数を制限します。",
+              "timeout": "タイムアウトになるまでにプロバイダーの応答を待機する時間。",
+              "debug_mode": "トラブルシューティングのために、より詳細なログを有効にします。",
+              "chat_log_mode": "ユーザー テキスト、アシスタントの応答、ツール名、ツールの引数、ツールの結果などの最近の会話ログをレビューのために保存します。"
+            }
+          },
+          "provider": {
+            "name": "プロバイダー",
+            "description": "プロバイダー固有の設定は、適用される場合にのみ表示されます。",
+            "data": {
+              "ollama_keep_alive": "Ollamaを維持",
+              "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
+              "openclaw_session_key": "セッションキー"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
+              "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
+              "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。"
+            }
+          },
+          "tools": {
+            "name": "ツール",
+            "description": "チェックされていないツールは、共有 MCP サーバーで有効になっている場合は常に使用可能です。このプロファイルのみに対してツール ファミリを禁止するには、ボックスをオンにします。",
+            "data": {
+              "disable_assist_bridge": "ディセーブルアシストブリッジ",
+              "disable_calculator": "無効計算機",
+              "disable_custom_tools": "カスタム ツールを無効にする",
+              "disable_device": "デバイス ツールを無効にする",
+              "disable_google_maps": "無効化 Google Places and Routes",
+              "disable_llm_api_bridge": "LLM API ブリッジを無効にする",
+              "disable_memory": "メモリを無効にする",
+              "disable_music_assistant": "無効化 Music Assistant",
+              "disable_read_url": "読み取りを無効にする URL",
+              "disable_recorder": "レコーダー履歴を無効にする",
+              "disable_response_service": "応答サービスの読み取りを無効にする",
+              "disable_search": "検索を無効にする",
+              "disable_unit_conversion": "単位変換を無効にする",
+              "disable_weather_forecast": "天気予報を無効にする",
+              "disable_wikipedia_search": "Wikipedia 検索を無効にする",
+              "disable_web_search": "Web 検索を無効にする"
+            },
+            "data_description": {
+              "disable_assist_bridge": "このプロファイルが Home Assistant のネイティブ アシスト ツール、プロンプト、およびコンテキスト スナップショットを使用できないようにします。",
+              "disable_calculator": "このプロファイルが数学および式評価ツールを使用できないようにします。",
+              "disable_custom_tools": "このプロファイルが、共有 MCP サーバーを通じてロードされた外部カスタム ツール パッケージを使用できないようにします。",
+              "disable_device": "このプロファイルが物理デバイスとデバイスの詳細を検出できないようにします。",
+              "disable_google_maps": "このプロファイルが Google Places and Routes ツールを使用できないようにします。",
+              "disable_llm_api_bridge": "このプロファイルがホワイトリストに登録されたサードパーティの Home Assistant LLM API ツールを使用できないようにします。",
+              "disable_memory": "このプロファイルが共有永続メモリの保存、呼び出し、または忘れを防止します。",
+              "disable_music_assistant": "このプロファイルが Music Assistant 検索、キュー、ライブラリ、および再生ツールを使用できないようにします。",
+              "disable_read_url": "このプロファイルが URLs を開いてページ コンテンツを抽出できないようにします。",
+              "disable_recorder": "このプロファイルがレコーダーを使用した履歴、カウント、期間、およびポイントインタイム ツールを使用できないようにします。",
+              "disable_response_service": "このプロファイルが、カレンダーや予測読み取りなどの構造化データを返す Home Assistant サービスを使用できないようにします。",
+              "disable_search": "このプロファイルが組み込みの Web 検索ヘルパーを使用できないようにします。",
+              "disable_unit_conversion": "このプロファイルが、°C から °F、距離、キッチンの体積、ストレージ、データ レートの変換などの正確な単位変換ツールを使用できないようにします。",
+              "disable_weather_forecast": "このプロファイルが専用の Home Assistant 天気予報ヘルパーを使用できないようにします。",
+              "disable_wikipedia_search": "このプロファイルが Wikipedia を検索できないようにします。",
+              "disable_web_search": "共有 MCP サーバーで有効になっている場合でも、このプロファイルが Web 検索および URL 読み取りツールを使用できないようにします。"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "これらの設定はすべてのプロファイルに影響します。ここでの変更はすべてのMCP Assist会話エージェントに影響します。",
         "data": {
           "mcp_port": "MCPサーバーポート",
-          "search_provider": "Web検索",
-          "brave_api_key": "Brave Search APIキー",
-          "allowed_ips": "追加の許可IP/範囲",
-          "enable_gap_filling": "スマートエンティティインデックスを有効化",
-          "max_entities_per_discovery": "検索あたりの最大エンティティ数 (20-500)"
+          "allowed_ips": "追加の許可IP/範囲"
+        },
+        "data_description": {
+          "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
+          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。"
+        },
+        "sections": {
+          "context": {
+            "name": "コンテキスト",
+            "description": "AI プロンプトと MCP ツール呼び出しペイロードにどの Home Assistant ID と場所の詳細を含めるかを制御します。",
+            "data": {
+              "include_current_user": "現在のユーザーをプロンプトに含める",
+              "include_home_location": "プロンプトに自宅の場所を含める",
+              "include_current_user_in_tool_calls": "現在のユーザーを MCP ツールで共有",
+              "include_home_location_in_tool_calls": "MCP ツールで自宅の場所を共有する"
+            },
+            "data_description": {
+              "include_current_user": "可能な場合は、現在の Home Assistant ユーザー名を AI プロンプトに含めます。",
+              "include_home_location": "Home Assistant で構成された自宅の名前と座標を使用して、AI プロンプトに自宅の場所の簡潔な概要を含めます。",
+              "include_current_user_in_tool_calls": "MCP ツール/呼び出しコンテキストで現在の Home Assistant ユーザー ID と名前を送信し、ツール パッケージがアクションを監査またはパーソナライズできるようにします。",
+              "include_home_location_in_tool_calls": "位置メタデータを必要とするツール パッケージの MCP ツール/呼び出しコンテキストで、Home Assistant の構成されたホーム名、緯度、経度を送信します。"
+            }
+          },
+          "discovery": {
+            "name": "ディスカバリー",
+            "description": "共有 MCP サーバーがどのように構築され、検出結果を返すかを制御します。",
+            "data": {
+              "enable_gap_filling": "スマート エンティティ インデックスを有効にする",
+              "max_entities_per_discovery": "検出ごとの最大エンティティ数 (20 ～ 500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "コンパクトなシステム インデックスを構築して、検出を高速かつコンテキストに応じた状態に保ちます。",
+              "max_entities_per_discovery": "1 回の検出呼び出しで返されるエンティティの数を制限します。"
+            }
+          },
+          "memory": {
+            "name": "メモリ",
+            "description": "メモリ ツールが有効になっている場合に、共有永続メモリを保持する期間を構成します。",
+            "data": {
+              "memory_default_ttl_days": "デフォルト メモリ TTL (日)",
+              "memory_max_ttl_days": "最大メモリ TTL (日)",
+              "memory_max_items": "最大保存メモリ数"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "ツール呼び出しで ttl_days が提供されない場合に、新しいメモリが保持されるデフォルトの日数。",
+              "memory_max_ttl_days": "保存されたメモリを保持できる最大日数。",
+              "memory_max_items": "アクティブな保存メモリの上限。この制限を超えると、最も古いメモリが最初に削除されます。"
+            }
+          },
+          "tools": {
+            "name": "ツール",
+            "description": "共有 MCP サーバーによって公開されるオプションのツール機能を有効または無効にします。",
+            "data": {
+              "enable_assist_bridge": "アシストブリッジ",
+              "enable_calculator_tools": "電卓",
+              "enable_external_custom_tools": "カスタムツール",
+              "enable_device_tools": "デバイス ツール",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API ブリッジ",
+              "enable_memory_tools": "メモリ",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL を読む",
+              "enable_recorder_tools": "レコーダーの歴史",
+              "enable_response_service_tools": "応答サービス読み取り",
+              "enable_search_tool": "検索",
+              "enable_unit_conversion_tools": "単位変換",
+              "enable_weather_forecast_tool": "天気予報",
+              "enable_wikipedia_search_tool": "Wikipedia 検索",
+              "enable_web_search": "ウェブ検索",
+              "search_provider": "Web 検索プロバイダー",
+              "brave_api_key": "Brave Search API キー",
+              "google_maps_api_key": "Google Maps API キー",
+              "llm_api_allowlist": "許可される LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Home Assistant のネイティブ Assist ツール、プロンプト、およびコンテキスト スナップショットを公開します。",
+              "enable_calculator_tools": "数学および式評価ツールを公開します。",
+              "enable_external_custom_tools": "mcp-assist-tools の下の Home Assistant config ディレクトリから追加のローカル ツール パッケージをロードします。デフォルトでは無効になっています。信頼できるパッケージのみを有効にします。これらは Home Assistant 内で Python コードとして実行され、MCP ツールと短いプロンプト ガイダンスが追加される可能性があるためです。",
+              "enable_device_tools": "物理デバイス検出ツールとデバイス詳細ツールを公開します。",
+              "enable_google_maps_tools": "Google Places ルックアップ ツールと Google Routes 移動時間ツールを公開します。 Google Maps API キーが必要です。",
+              "enable_llm_api_bridge": "他の統合によって登録されたホワイトリストに登録されたサードパーティの Home Assistant LLM API を公開します。",
+              "enable_memory_tools": "共有永続メモリ ツールを公開して、TTL ベースの有効期限を使用して、アシスタントがユーザーが承認した事実と設定を覚えたり、思い出したり、忘れたりできるようにします。",
+              "enable_music_assistant_support": "Music Assistant 検索、キュー、ライブラリ、および再生ツールを公開します。",
+              "enable_read_url_tool": "URL 読み取り値を公開して、アシスタントが特定の Web ページを検査できるようにします。",
+              "enable_recorder_tools": "レコーダーを利用した履歴、分析、ポイントインタイム ツールを公開します。",
+              "enable_response_service_tools": "カレンダーや予測読み取りなどの構造化データを返す Home Assistant サービスを公開します。",
+              "enable_search_tool": "構成された共有プロバイダーを使用して Web 検索を公開します。",
+              "enable_unit_conversion_tools": "°C から °F、距離、キッチンの容積、ストレージ、データ レートの変換などの正確な単位変換ツールを公開します。",
+              "enable_weather_forecast_tool": "専用の Home Assistant 天気予報ヘルパーを公開します。",
+              "enable_wikipedia_search_tool": "軽量 Wikipedia の記事検索を公開して、背景や参考となる質問を調べます。",
+              "enable_web_search": "Web 検索ツールと URL 読み取りツールを公開します。",
+              "search_provider": "Web 検索が有効な場合に使用するプロバイダーを選択します。",
+              "brave_api_key": "Web 検索が有効で、Brave Search が選択されている場合にのみ必須です。",
+              "google_maps_api_key": "Google Places and Routes が有効な場合にのみ必要です。",
+              "llm_api_allowlist": "コンマまたは改行で区切られたサードパーティ LLM API ID MCP Assist は、llm_intents など、検査または呼び出しを行うことができます。サードパーティの LLM API: {installed_llm_apis} がインストールされました。内蔵アシスト API はアシストブリッジに残ります。",
+              "searxng_url": "Web 検索が有効で、SearXNG が選択されている場合にのみ必須です。セルフホスト型 SearXNG インスタンスにはベース URL を使用します。"
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "IPアドレスまたはCIDR範囲の形式が無効です。カンマ区切りの値を使用してください。例：172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "プロファイル名は必須です。",
       "invalid_json": "JSON形式が無効です。MCPサーバーの設定を確認してください。",
+      "searxng_url_required": "SearXNG URL は、SearXNG 検索が有効な場合に必要です。",
+      "google_maps_api_key_required": "Google Maps API キーは、Google Places and Routes が有効な場合に必要です。",
+      "mcp_apply_failed": "共有 MCP サーバー設定を適用できませんでした。ポートと許可された IP を確認して、再試行してください。",
       "invalid_api_key": "APIキーが無効です。確認してもう一度お試しください。",
       "auth_failed": "認証に失敗しました。APIキーを確認してください。",
-      "unknown": "不明なエラーが発生しました。"
+      "unknown": "不明なエラーが発生しました。",
+      "openclaw_not_paired": "デバイスは OpenClaw サーバーでまだ承認されていません。承認して再試行してください。",
+      "openclaw_connection_failed": "OpenClaw ゲートウェイに接続できませんでした。ホスト、ポート、トークンを確認してください。"
     },
     "abort": {
       "already_configured": "この名前のプロファイルは既に存在します。別の名前を選択してください。"
@@ -85,21 +338,186 @@
           "lmstudio_url": "サーバーURL",
           "api_key": "APIキー",
           "model_name": "モデル名",
+          "system_prompt_mode": "システム プロンプト ソース",
           "system_prompt": "システムプロンプト",
+          "technical_prompt_mode": "技術説明ソース",
           "technical_prompt": "技術的な指示",
           "temperature": "温度",
           "max_tokens": "最大応答トークン数",
           "max_history": "最大履歴メッセージ数",
+          "context_mode": "コンテキスト モード",
           "max_iterations": "最大ツール反復回数",
           "control_home_assistant": "Home Assistantを制御",
           "response_mode": "応答モード",
           "follow_up_phrases": "フォローアップフレーズ",
           "end_words": "会話終了ワード",
+          "clean_responses": "音声出力用にレスポンスを整形",
           "timeout": "応答タイムアウト",
           "debug_mode": "デバッグモード",
+          "chat_log_mode": "チャットログモード",
           "ollama_keep_alive": "Ollamaを維持",
           "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
-          "clean_responses": "音声出力用にレスポンスを整形"
+          "openclaw_host": "ゲートウェイ ホスト",
+          "openclaw_port": "ゲートウェイ ポート",
+          "openclaw_token": "ゲートウェイ トークン",
+          "openclaw_use_ssl": "SSL/TLSを使用",
+          "openclaw_session_key": "セッションキー"
+        },
+        "data_description": {
+          "model_name": "このプロファイルが使用する LLM モデル。",
+          "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
+          "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
+          "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。"
+        },
+        "sections": {
+          "profile": {
+            "name": "プロフィール",
+            "description": "この会話プロファイルの基本的な ID 設定。",
+            "data": {
+              "profile_name": "プロファイル名"
+            },
+            "data_description": {
+              "profile_name": "この会話プロファイルのフレンドリ名。"
+            }
+          },
+          "connection": {
+            "name": "接続",
+            "description": "このプロファイルがモデル プロバイダーに接続する方法。",
+            "data": {
+              "lmstudio_url": "サーバーURL",
+              "api_key": "APIキー",
+              "openclaw_host": "ゲートウェイ ホスト",
+              "openclaw_port": "ゲートウェイ ポート",
+              "openclaw_token": "ゲートウェイ トークン",
+              "openclaw_use_ssl": "SSL/TLSを使用"
+            },
+            "data_description": {
+              "lmstudio_url": "このプロファイルで使用されるローカルまたは OpenAI-compatible サーバーのベース URL。",
+              "api_key": "このプロバイダーに必要な API キーまたはベアラー トークン。",
+              "openclaw_host": "OpenClaw ゲートウェイのホスト名または IP アドレス。",
+              "openclaw_port": "OpenClaw ゲートウェイ WebSocket サーバーによって使用されるポート。",
+              "openclaw_token": "OpenClaw ゲートウェイでの認証に使用されるベアラー トークン。",
+              "openclaw_use_ssl": "OpenClaw ゲートウェイと通信する場合は、安全な WebSocket 接続を使用します。"
+            }
+          },
+          "model_fields": {
+            "name": "モデル",
+            "description": "このプロファイルが使用するモデルを選択してください。",
+            "data": {
+              "model_name": "モデル名"
+            },
+            "data_description": {
+              "model_name": "このプロファイルが使用する LLM モデル。"
+            }
+          },
+          "prompts": {
+            "name": "プロンプト",
+            "description": "現在有効なプロンプトを確認し、コピーするか、このプロファイルに対して編集します。",
+            "data": {
+              "system_prompt": "システムプロンプト",
+              "technical_prompt": "技術的な指示"
+            },
+            "data_description": {
+              "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
+              "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。"
+            }
+          },
+          "conversation": {
+            "name": "会話",
+            "description": "このプロファイルの動作、フォローアップ処理、および音声出力設定。",
+            "data": {
+              "control_home_assistant": "Home Assistantを制御",
+              "response_mode": "応答モード",
+              "follow_up_phrases": "フォローアップフレーズ",
+              "end_words": "会話終了ワード",
+              "clean_responses": "音声出力用にレスポンスを整形"
+            },
+            "data_description": {
+              "control_home_assistant": "このプロファイルが質問に答えるだけでなく、Home Assistant アクションを実行できるようにします。",
+              "response_mode": "アシスタントをすぐに終了するか、必要に応じて自然なフォローアップの質問をするかを制御します。",
+              "follow_up_phrases": "フォローアップ形式の応答を検出するために使用されるカンマ区切りのフレーズ。",
+              "end_words": "会話を終了するカンマ区切りの単語またはフレーズ。",
+              "clean_responses": "不要な書式やフィラーをトリミングして、音声応答をきれいに保ちます。"
+            }
+          },
+          "provider": {
+            "name": "プロバイダー",
+            "description": "プロバイダー固有の設定は、適用される場合にのみ表示されます。",
+            "data": {
+              "ollama_keep_alive": "Ollamaを維持",
+              "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
+              "openclaw_session_key": "セッションキー"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
+              "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
+              "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。"
+            }
+          },
+          "advanced_settings": {
+            "name": "アドバンスト",
+            "description": "モデルの動作、制限、タイムアウト、およびデバッグに関するエキスパート チューニング。",
+            "data": {
+              "temperature": "温度",
+              "max_tokens": "最大応答トークン数",
+              "max_history": "最大履歴メッセージ数",
+              "context_mode": "コンテキスト モード",
+              "max_iterations": "最大ツール反復回数",
+              "timeout": "応答タイムアウト",
+              "debug_mode": "デバッグモード",
+              "chat_log_mode": "チャットログモード"
+            },
+            "data_description": {
+              "temperature": "応答のランダム性を制御します。値が低いほど、より決定的になります。",
+              "max_tokens": "モデルが 1 つの応答で生成できるトークンの数を制限します。",
+              "max_history": "コンテキスト内に保持する以前の会話メッセージの数。",
+              "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。",
+              "max_iterations": "アシスタントが 1 つのリクエストに対して使用できるツール呼び出しターンの回数を制限します。",
+              "timeout": "タイムアウトになるまでにプロバイダーの応答を待機する時間。",
+              "debug_mode": "トラブルシューティングのために、より詳細なログを有効にします。",
+              "chat_log_mode": "ユーザー テキスト、アシスタントの応答、ツール名、ツールの引数、ツールの結果などの最近の会話ログをレビューのために保存します。"
+            }
+          },
+          "tools": {
+            "name": "ツール",
+            "description": "チェックされていないツールは、共有 MCP サーバーで有効になっている場合は常に使用可能です。このプロファイルのみに対してツール ファミリを禁止するには、ボックスをオンにします。",
+            "data": {
+              "disable_assist_bridge": "ディセーブルアシストブリッジ",
+              "disable_calculator": "無効計算機",
+              "disable_custom_tools": "カスタム ツールを無効にする",
+              "disable_device": "デバイス ツールを無効にする",
+              "disable_google_maps": "無効化 Google Places and Routes",
+              "disable_llm_api_bridge": "LLM API ブリッジを無効にする",
+              "disable_memory": "メモリを無効にする",
+              "disable_music_assistant": "無効化 Music Assistant",
+              "disable_read_url": "読み取りを無効にする URL",
+              "disable_recorder": "レコーダー履歴を無効にする",
+              "disable_response_service": "応答サービスの読み取りを無効にする",
+              "disable_search": "検索を無効にする",
+              "disable_unit_conversion": "単位変換を無効にする",
+              "disable_weather_forecast": "天気予報を無効にする",
+              "disable_wikipedia_search": "Wikipedia 検索を無効にする",
+              "disable_web_search": "Web 検索を無効にする"
+            },
+            "data_description": {
+              "disable_assist_bridge": "このプロファイルが Home Assistant のネイティブ アシスト ツール、プロンプト、およびコンテキスト スナップショットを使用できないようにします。",
+              "disable_calculator": "このプロファイルが数学および式評価ツールを使用できないようにします。",
+              "disable_custom_tools": "このプロファイルが、共有 MCP サーバーを通じてロードされた外部カスタム ツール パッケージを使用できないようにします。",
+              "disable_unit_conversion": "このプロファイルが、°C から °F、距離、キッチンの体積、ストレージ、データ レートの変換などの正確な単位変換ツールを使用できないようにします。",
+              "disable_device": "このプロファイルが物理デバイスとデバイスの詳細を検出できないようにします。",
+              "disable_google_maps": "このプロファイルが Google Places and Routes ツールを使用できないようにします。",
+              "disable_llm_api_bridge": "このプロファイルがホワイトリストに登録されたサードパーティの Home Assistant LLM API ツールを使用できないようにします。",
+              "disable_memory": "このプロファイルが共有永続メモリの保存、呼び出し、または忘れを防止します。",
+              "disable_music_assistant": "このプロファイルが Music Assistant 検索、キュー、ライブラリ、および再生ツールを使用できないようにします。",
+              "disable_read_url": "このプロファイルが URLs を開いてページ コンテンツを抽出できないようにします。",
+              "disable_recorder": "このプロファイルがレコーダーを使用した履歴、カウント、期間、およびポイントインタイム ツールを使用できないようにします。",
+              "disable_response_service": "このプロファイルが、カレンダーや予測読み取りなどの構造化データを返す Home Assistant サービスを使用できないようにします。",
+              "disable_search": "このプロファイルが組み込みの Web 検索ヘルパーを使用できないようにします。",
+              "disable_weather_forecast": "このプロファイルが専用の Home Assistant 天気予報ヘルパーを使用できないようにします。",
+              "disable_wikipedia_search": "このプロファイルが Wikipedia を検索できないようにします。",
+              "disable_web_search": "共有 MCP サーバーで有効になっている場合でも、このプロファイルが Web 検索および URL 読み取りツールを使用できないようにします。"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "これらの設定はすべてのプロファイルで共有されます",
         "data": {
           "mcp_port": "MCPサーバーポート",
-          "search_provider": "Web検索",
-          "brave_api_key": "Brave Search APIキー",
-          "allowed_ips": "追加の許可IP/範囲",
-          "enable_gap_filling": "スマートエンティティインデックスを有効化",
-          "max_entities_per_discovery": "検索あたりの最大エンティティ数 (20-500)"
+          "allowed_ips": "追加の許可IP/範囲"
+        },
+        "data_description": {
+          "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
+          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。"
+        },
+        "sections": {
+          "context": {
+            "name": "コンテキスト",
+            "description": "AI プロンプトと MCP ツール呼び出しペイロードにどの Home Assistant ID と場所の詳細を含めるかを制御します。",
+            "data": {
+              "include_current_user": "現在のユーザーをプロンプトに含める",
+              "include_home_location": "プロンプトに自宅の場所を含める",
+              "include_current_user_in_tool_calls": "現在のユーザーを MCP ツールで共有",
+              "include_home_location_in_tool_calls": "MCP ツールで自宅の場所を共有する"
+            },
+            "data_description": {
+              "include_current_user": "可能な場合は、現在の Home Assistant ユーザー名を AI プロンプトに含めます。",
+              "include_home_location": "Home Assistant で構成された自宅の名前と座標を使用して、AI プロンプトに自宅の場所の簡潔な概要を含めます。",
+              "include_current_user_in_tool_calls": "MCP ツール/呼び出しコンテキストで現在の Home Assistant ユーザー ID と名前を送信し、ツール パッケージがアクションを監査またはパーソナライズできるようにします。",
+              "include_home_location_in_tool_calls": "位置メタデータを必要とするツール パッケージの MCP ツール/呼び出しコンテキストで、Home Assistant の構成されたホーム名、緯度、経度を送信します。"
+            }
+          },
+          "discovery": {
+            "name": "ディスカバリー",
+            "description": "共有 MCP サーバーがどのように構築され、検出結果を返すかを制御します。",
+            "data": {
+              "enable_gap_filling": "スマート エンティティ インデックスを有効にする",
+              "max_entities_per_discovery": "検出ごとの最大エンティティ数 (20 ～ 500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "コンパクトなシステム インデックスを構築して、検出を高速かつコンテキストに応じた状態に保ちます。",
+              "max_entities_per_discovery": "1 回の検出呼び出しで返されるエンティティの数を制限します。"
+            }
+          },
+          "memory": {
+            "name": "メモリ",
+            "description": "メモリ ツールが有効になっている場合に、共有永続メモリを保持する期間を構成します。",
+            "data": {
+              "memory_default_ttl_days": "デフォルト メモリ TTL (日)",
+              "memory_max_ttl_days": "最大メモリ TTL (日)",
+              "memory_max_items": "最大保存メモリ数"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "ツール呼び出しで ttl_days が提供されない場合に、新しいメモリが保持されるデフォルトの日数。",
+              "memory_max_ttl_days": "保存されたメモリを保持できる最大日数。",
+              "memory_max_items": "アクティブな保存メモリの上限。この制限を超えると、最も古いメモリが最初に削除されます。"
+            }
+          },
+          "tools": {
+            "name": "ツール",
+            "description": "共有 MCP サーバーによって公開されるオプションのツール機能を有効または無効にします。",
+            "data": {
+              "enable_assist_bridge": "アシストブリッジ",
+              "enable_calculator_tools": "電卓",
+              "enable_external_custom_tools": "カスタムツール",
+              "enable_device_tools": "デバイス ツール",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API ブリッジ",
+              "enable_memory_tools": "メモリ",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL を読む",
+              "enable_recorder_tools": "レコーダーの歴史",
+              "enable_response_service_tools": "応答サービス読み取り",
+              "enable_search_tool": "検索",
+              "enable_unit_conversion_tools": "単位変換",
+              "enable_weather_forecast_tool": "天気予報",
+              "enable_wikipedia_search_tool": "Wikipedia 検索",
+              "enable_web_search": "ウェブ検索",
+              "search_provider": "Web 検索プロバイダー",
+              "brave_api_key": "Brave Search API キー",
+              "google_maps_api_key": "Google Maps API キー",
+              "llm_api_allowlist": "許可される LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Home Assistant のネイティブ Assist ツール、プロンプト、およびコンテキスト スナップショットを公開します。",
+              "enable_calculator_tools": "数学および式評価ツールを公開します。",
+              "enable_external_custom_tools": "mcp-assist-tools の下の Home Assistant config ディレクトリから追加のローカル ツール パッケージをロードします。デフォルトでは無効になっています。信頼できるパッケージのみを有効にします。これらは Home Assistant 内で Python コードとして実行され、MCP ツールと短いプロンプト ガイダンスが追加される可能性があるためです。",
+              "enable_unit_conversion_tools": "°C から °F、距離、キッチンの容積、ストレージ、データ レートの変換などの正確な単位変換ツールを公開します。",
+              "enable_device_tools": "物理デバイス検出ツールとデバイス詳細ツールを公開します。",
+              "enable_google_maps_tools": "Google Places ルックアップ ツールと Google Routes 移動時間ツールを公開します。 Google Maps API キーが必要です。",
+              "enable_llm_api_bridge": "他の統合によって登録されたホワイトリストに登録されたサードパーティの Home Assistant LLM API を公開します。",
+              "enable_memory_tools": "共有永続メモリ ツールを公開して、TTL ベースの有効期限を使用して、アシスタントがユーザーが承認した事実と設定を覚えたり、思い出したり、忘れたりできるようにします。",
+              "enable_music_assistant_support": "Music Assistant 検索、キュー、ライブラリ、および再生ツールを公開します。",
+              "enable_read_url_tool": "URL 読み取り値を公開して、アシスタントが特定の Web ページを検査できるようにします。",
+              "enable_recorder_tools": "レコーダーを利用した履歴、分析、ポイントインタイム ツールを公開します。",
+              "enable_response_service_tools": "カレンダーや予測読み取りなどの構造化データを返す Home Assistant サービスを公開します。",
+              "enable_search_tool": "構成された共有プロバイダーを使用して Web 検索を公開します。",
+              "enable_weather_forecast_tool": "専用の Home Assistant 天気予報ヘルパーを公開します。",
+              "enable_wikipedia_search_tool": "軽量 Wikipedia の記事検索を公開して、背景や参考となる質問を調べます。",
+              "enable_web_search": "Web 検索ツールと URL 読み取りツールを公開します。",
+              "search_provider": "Web 検索が有効な場合に使用するプロバイダーを選択します。",
+              "brave_api_key": "Web 検索が有効で、Brave Search が選択されている場合にのみ必須です。",
+              "google_maps_api_key": "Google Places and Routes が有効な場合にのみ必要です。",
+              "llm_api_allowlist": "コンマまたは改行で区切られたサードパーティ LLM API ID MCP Assist は、llm_intents など、検査または呼び出しを行うことができます。サードパーティの LLM API: {installed_llm_apis} がインストールされました。内蔵アシスト API はアシストブリッジに残ります。",
+              "searxng_url": "Web 検索が有効で、SearXNG が選択されている場合にのみ必須です。セルフホスト型 SearXNG インスタンスにはベース URL を使用します。"
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "デフォルト",
+        "custom": "カスタム"
       }
     }
   },

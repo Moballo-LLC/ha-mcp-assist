@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Profil Adi",
           "server_type": "Sunucu Turu"
+        },
+        "data_description": {
+          "profile_name": "Bu konuşma profili için kolay bir ad.",
+          "server_type": "Bu profilin hangi sağlayıcıyı veya çıkarım sunucusunu kullanacağını seçin."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "Sunucu URL'si",
           "api_key": "API Anahtari",
-          "mcp_port": "MCP Sunucu Portu"
+          "mcp_port": "MCP Sunucu Portu",
+          "openclaw_host": "Ağ Geçidi Ana Bilgisayarı",
+          "openclaw_port": "Ağ Geçidi Bağlantı Noktası",
+          "openclaw_token": "Ağ Geçidi Jetonu",
+          "openclaw_use_ssl": "SSL/TLS'i kullanın"
+        },
+        "data_description": {
+          "lmstudio_url": "Bu profil tarafından kullanılan yerel veya OpenAI-compatible sunucusu için temel URL.",
+          "api_key": "Bu sağlayıcının gerektirdiği API anahtarı veya taşıyıcı jetonu.",
+          "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
+          "openclaw_host": "OpenClaw ağ geçidinin ana bilgisayar adı veya IP adresi.",
+          "openclaw_port": "OpenClaw ağ geçidi WebSocket sunucusu tarafından kullanılan bağlantı noktası.",
+          "openclaw_token": "OpenClaw ağ geçidiyle kimlik doğrulamak için kullanılan taşıyıcı jeton.",
+          "openclaw_use_ssl": "OpenClaw ağ geçidiyle konuşurken güvenli bir WebSocket bağlantısı kullanın."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Cihaz Eşleştirme",
+        "description": "Cihazınızın OpenClaw sunucusunda onaylanması gerekiyor.\n\n`openclaw devices approve`'i çalıştırarak veya OpenClaw Control UI'i kullanarak onaylayın ve ardından Gönder'e tıklayın.\n\nCihaz Kimliği: {device_id}"
       },
       "model": {
         "title": "Model ve Yonergeler",
         "description": "{server_info}",
         "data": {
           "model_name": "Model Adi",
+          "system_prompt_mode": "Sistem Bilgi İstemi Kaynağı",
           "system_prompt": "Sistem Yonergeleri",
+          "technical_prompt_mode": "Teknik Talimatlar Kaynağı",
           "technical_prompt": "Teknik Talimatlar"
+        },
+        "data_description": {
+          "model_name": "Bu profilin kullanması gereken LLM modeli.",
+          "system_prompt": "Geçerli etkin sistem istemiyle önceden doldurulmuştur. Bu profili özelleştirmek için düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
+          "technical_prompt": "Geçerli geçerli teknik talimatlarla önceden doldurulmuştur. Bu profili özelleştirmek için bunları düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "Modeli",
+            "description": "Bu profilin kullanması gereken modeli seçin.",
+            "data": {
+              "model_name": "Model Adi"
+            },
+            "data_description": {
+              "model_name": "Bu profilin kullanması gereken LLM modeli."
+            }
+          },
+          "prompts": {
+            "name": "İstemleri",
+            "description": "Mevcut etkili istemleri inceleyin, kopyalayın veya bu profil için düzenleyin.",
+            "data": {
+              "system_prompt": "Sistem Yonergeleri",
+              "technical_prompt": "Teknik Talimatlar"
+            },
+            "data_description": {
+              "system_prompt": "Geçerli etkin sistem istemiyle önceden doldurulmuştur. Bu profili özelleştirmek için düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
+              "technical_prompt": "Geçerli geçerli teknik talimatlarla önceden doldurulmuştur. Bu profili özelleştirmek için bunları düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Sicaklik",
           "max_tokens": "Maksimum Yanit Tokenleri",
           "max_history": "Maksimum Gecmis Mesajlari",
+          "context_mode": "Bağlam Modu",
           "max_iterations": "Maksimum Arac Yinelemeleri",
           "control_home_assistant": "Home Assistant'i Kontrol Et",
           "response_mode": "Yanit Modu",
           "follow_up_phrases": "Takip Ifadeleri",
           "end_words": "Konusmayi Bitirme Kelimeleri",
+          "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle",
           "timeout": "Yanit Zaman Asimi",
           "debug_mode": "Hata Ayiklama Modu",
+          "chat_log_mode": "Sohbet Günlüğü Modu",
           "ollama_keep_alive": "Ollama'yi Aktif Tut",
           "ollama_num_ctx": "Ollama Baglam Penceresi",
-          "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle"
+          "openclaw_session_key": "Oturum Anahtarı"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Konuşma",
+            "description": "Bu profil için davranış, takip yönetimi ve ses çıkışı ayarları.",
+            "data": {
+              "control_home_assistant": "Home Assistant'i Kontrol Et",
+              "response_mode": "Yanit Modu",
+              "follow_up_phrases": "Takip Ifadeleri",
+              "end_words": "Konusmayi Bitirme Kelimeleri",
+              "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle"
+            },
+            "data_description": {
+              "control_home_assistant": "Bu profilin yalnızca soruları yanıtlamak yerine Home Assistant işlemlerini yürütmesine izin verin.",
+              "response_mode": "Controls whether the assistant ends immediately or asks natural follow-up questions when appropriate.",
+              "follow_up_phrases": "Takip tarzı yanıtları tespit etmek için kullanılan virgülle ayrılmış ifadeler.",
+              "end_words": "Konuşmayı sonlandırması gereken virgülle ayrılmış kelimeler veya kelime öbekleri.",
+              "clean_responses": "Sözlü yanıtları daha temiz tutmak için gereksiz biçimlendirmeyi veya dolguyu kesin."
+            }
+          },
+          "performance": {
+            "name": "Performansı",
+            "description": "Model yanıt sınırları, yürütme sınırları, zaman aşımı ve hata ayıklama.",
+            "data": {
+              "temperature": "Sicaklik",
+              "max_tokens": "Maksimum Yanit Tokenleri",
+              "max_history": "Maksimum Gecmis Mesajlari",
+              "context_mode": "Bağlam Modu",
+              "max_iterations": "Maksimum Arac Yinelemeleri",
+              "timeout": "Yanit Zaman Asimi",
+              "debug_mode": "Hata Ayiklama Modu",
+              "chat_log_mode": "Sohbet Günlüğü Modu"
+            },
+            "data_description": {
+              "temperature": "Yanıt rastgeleliğini kontrol eder. Daha düşük değerler daha belirleyicidir.",
+              "max_tokens": "Modelin tek bir yanıtta kaç jeton üretebileceğini sınırlar.",
+              "max_history": "Bağlamda tutulacak önceki konuşma mesajı sayısı.",
+              "context_mode": "Standard, tam profil aracı içeriğini gönderir. Light, daha küçük bir geçmiş penceresi tutar ve küçük yerel modeller için temel Home Assistant araçlarının tanıtımını yapar.",
+              "max_iterations": "Asistanın bir istek için kaç tane araç çağırma dönüşü kullanabileceğini belirtir.",
+              "timeout": "Zaman aşımına uğramadan önce sağlayıcının yanıt vermesi için ne kadar süre bekleneceği.",
+              "debug_mode": "Enable more detailed logging for troubleshooting.",
+              "chat_log_mode": "Kullanıcı metni, asistan yanıtları, araç adları, araç argümanları ve incelenmek üzere araç sonuçları dahil olmak üzere en son konuşma günlüklerini sürdürün."
+            }
+          },
+          "provider": {
+            "name": "Sağlayıcı",
+            "description": "Sağlayıcıya özel ayarlar yalnızca geçerli olduklarında gösterilir.",
+            "data": {
+              "ollama_keep_alive": "Ollama'yi Aktif Tut",
+              "ollama_num_ctx": "Ollama Baglam Penceresi",
+              "openclaw_session_key": "Oturum Anahtarı"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
+              "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
+              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı."
+            }
+          },
+          "tools": {
+            "name": "Araçları",
+            "description": "İşaretlenmeyen araçlar, paylaşılan MCP sunucusunda etkinleştirildiklerinde kullanılabilir durumda kalır. Yalnızca bu profil için bir araç ailesini yasaklamak üzere bir kutuyu işaretleyin.",
+            "data": {
+              "disable_assist_bridge": "Destek Köprüsünü Devre Dışı Bırak",
+              "disable_calculator": "Hesap Makinesini Devre Dışı Bırak",
+              "disable_custom_tools": "Özel Araçları Devre Dışı Bırak",
+              "disable_device": "Cihaz Araçlarını Devre Dışı Bırak",
+              "disable_google_maps": "Google Places and Routes'i devre dışı bırakın",
+              "disable_llm_api_bridge": "LLM API Köprüsünü Devre Dışı Bırak",
+              "disable_memory": "Belleği Devre Dışı Bırak",
+              "disable_music_assistant": "Music Assistant'i devre dışı bırakın",
+              "disable_read_url": "Okumayı Devre Dışı Bırak URL",
+              "disable_recorder": "Kaydedici Geçmişini Devre Dışı Bırak",
+              "disable_response_service": "Yanıt Hizmeti Okumalarını Devre Dışı Bırak",
+              "disable_search": "Aramayı Devre Dışı Bırak",
+              "disable_unit_conversion": "Birim Dönüştürmeyi Devre Dışı Bırak",
+              "disable_weather_forecast": "Hava Durumu Tahminini Devre Dışı Bırak",
+              "disable_wikipedia_search": "Wikipedia Aramayı Devre Dışı Bırak",
+              "disable_web_search": "Web Aramasını Devre Dışı Bırak"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Bu profilin Home Assistant'in yerel Yardım araçlarını, istemini ve bağlam anlık görüntüsünü kullanmasını engeller.",
+              "disable_calculator": "Bu profilin matematik ve ifade değerlendirme araçlarını kullanmasını engeller.",
+              "disable_custom_tools": "Bu profilin, paylaşılan MCP sunucusu aracılığıyla yüklenen harici özel araç paketlerini kullanmasını engeller.",
+              "disable_device": "Bu profilin fiziksel cihazları ve cihaz ayrıntılarını keşfetmesini engeller.",
+              "disable_google_maps": "Bu profilin Google Places and Routes araçlarını kullanmasını engeller.",
+              "disable_llm_api_bridge": "Bu profilin, izin verilenler listesine eklenen üçüncü taraf Home Assistant LLM API araçlarını kullanmasını engeller.",
+              "disable_memory": "Bu profilin paylaşılan kalıcı anıları saklamasını, geri çağırmasını veya unutmasını engeller.",
+              "disable_music_assistant": "Bu profilin Music Assistant arama, kuyruk, kitaplık ve oynatma araçlarını kullanmasını engeller.",
+              "disable_read_url": "Bu profilin URLs'ten sayfa içeriğini açmasını ve çıkarmasını engeller.",
+              "disable_recorder": "Bu profilin, kaydedici tarafından desteklenen geçmiş, sayım, süre ve belirli bir zaman noktası araçlarını kullanmasını engeller.",
+              "disable_response_service": "Bu profilin, takvim ve tahmin okumaları gibi yapılandırılmış verileri döndüren Home Assistant hizmetlerini kullanmasını engeller.",
+              "disable_search": "Bu profilin yerleşik web arama yardımcısını kullanmasını engeller.",
+              "disable_unit_conversion": "Bu profilin, °C'ten °F'e, mesafe, mutfak hacmi, depolama ve veri hızı dönüştürmeleri gibi birim dönüştürme araçlarını tam olarak kullanmasını engeller.",
+              "disable_weather_forecast": "Bu profilin özel Home Assistant hava durumu tahmini yardımcısını kullanmasını engeller.",
+              "disable_wikipedia_search": "Bu profilin Wikipedia'i aramasını engeller.",
+              "disable_web_search": "Bu profilin, paylaşılan MCP sunucusunda etkinleştirilmiş olsalar bile web aramasını ve URL okuma araçlarını kullanmasını engeller."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Bu ayarlar TUM profilleri etkiler. Buradaki degisiklikler her MCP Assist konusma ajanini etkileyecektir.",
         "data": {
           "mcp_port": "MCP Sunucu Portu",
-          "search_provider": "Web Arama",
-          "brave_api_key": "Brave Search API Anahtari",
-          "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "enable_gap_filling": "Akilli Varlik Indeksini Etkinlestir",
-          "max_entities_per_discovery": "Arama Basina Maks Varlik (20-500)"
+          "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar"
+        },
+        "data_description": {
+          "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
+          "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları."
+        },
+        "sections": {
+          "context": {
+            "name": "Bağlamı",
+            "description": "Hangi Home Assistant kimlik ve konum ayrıntılarının AI istemlerine ve MCP araç çağrısı yüklerine dahil edildiğini kontrol edin.",
+            "data": {
+              "include_current_user": "Mevcut Kullanıcıyı İsteme Ekle",
+              "include_home_location": "İsteme Ev Konumunu Ekle",
+              "include_current_user_in_tool_calls": "Mevcut Kullanıcıyı MCP Araçlarıyla Paylaşın",
+              "include_home_location_in_tool_calls": "Ev Konumunu MCP Araçlarıyla Paylaşın"
+            },
+            "data_description": {
+              "include_current_user": "Mevcut Home Assistant kullanıcısının adını mümkün olduğunda AI istemine ekleyin.",
+              "include_home_location": "Home Assistant'in yapılandırılmış ev adını ve koordinatlarını kullanarak AI istemine kompakt bir ev konumu özeti ekleyin.",
+              "include_current_user_in_tool_calls": "Araç paketlerinin eylemleri denetleyebilmesi veya kişiselleştirebilmesi için mevcut Home Assistant kullanıcı kimliğini ve adını MCP araçları/çağrı bağlamında gönderin.",
+              "include_home_location_in_tool_calls": "Konum meta verilerine ihtiyaç duyan araç paketleri için MCP araçları/çağrı bağlamında Home Assistant'in yapılandırılmış ev adını, enlemini ve boylamını gönderin."
+            }
+          },
+          "discovery": {
+            "name": "Keşif",
+            "description": "Paylaşılan MCP sunucusunun keşif sonuçlarını nasıl oluşturup döndürdüğünü denetleyin.",
+            "data": {
+              "enable_gap_filling": "Akıllı Varlık Dizinini Etkinleştir",
+              "max_entities_per_discovery": "Keşif Başına Maksimum Varlık (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Keşfi hızlı ve bağlama duyarlı tutmak için kompakt bir sistem dizini oluşturur.",
+              "max_entities_per_discovery": "Tek bir keşif çağrısının kaç varlık döndürebileceğini sınırlar."
+            }
+          },
+          "memory": {
+            "name": "Bellek",
+            "description": "Bellek aracı etkinleştirildiğinde paylaşılan kalıcı anıların ne kadar süre saklanacağını yapılandırın.",
+            "data": {
+              "memory_default_ttl_days": "Varsayılan Bellek TTL (Gün)",
+              "memory_max_ttl_days": "Maksimum Bellek TTL (Gün)",
+              "memory_max_items": "Maksimum Saklanan Anılar"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Default number of days a new memory is kept when the tool call does not provide ttl_days.",
+              "memory_max_ttl_days": "Saklanan belleğin tutulabileceği maksimum gün sayısı.",
+              "memory_max_items": "Aktif olarak saklanan anılarda üst sınır. Bu sınır aşıldığında ilk önce en eski anılar budanır."
+            }
+          },
+          "tools": {
+            "name": "Araçları",
+            "description": "Enable or disable optional tool capabilities exposed by the shared MCP server.",
+            "data": {
+              "enable_assist_bridge": "Destek Köprüsü",
+              "enable_calculator_tools": "Hesap Makinesi",
+              "enable_external_custom_tools": "Özel Araçlar",
+              "enable_device_tools": "Cihaz Araçları",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Köprüsü",
+              "enable_memory_tools": "Bellek",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL'i okuyun",
+              "enable_recorder_tools": "Kaydedici Geçmişi",
+              "enable_response_service_tools": "Yanıt Hizmeti Okumaları",
+              "enable_search_tool": "Arama",
+              "enable_unit_conversion_tools": "Birim Dönüşümü",
+              "enable_weather_forecast_tool": "Hava Durumu Tahmini",
+              "enable_wikipedia_search_tool": "Wikipedia Arama",
+              "enable_web_search": "Web Araması",
+              "search_provider": "Web Arama Sağlayıcısı",
+              "brave_api_key": "Brave Search API Anahtarı",
+              "google_maps_api_key": "Google Maps API Anahtarı",
+              "llm_api_allowlist": "İzin Verilen LLM API Kimlikleri",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
+              "enable_calculator_tools": "Matematik ve ifade değerlendirme araçlarını kullanıma çıkarın.",
+              "enable_external_custom_tools": "mcp-assist-tools altındaki Home Assistant yapılandırma dizininden ek yerel araç paketlerini yükleyin. Varsayılan olarak devre dışıdır. Yalnızca güvenilir paketleri etkinleştirin çünkü bunlar Home Assistant içinde Python kodu olarak çalışırlar ve MCP araçlarının yanı sıra kısa istem rehberliğini de ekleyebilirler.",
+              "enable_device_tools": "Fiziksel cihaz bulma ve cihaz ayrıntısı araçlarını ortaya çıkarın.",
+              "enable_google_maps_tools": "Expose Google Places lookup and Google Routes travel-time tools. Bir Google Maps API anahtarı gerektirir.",
+              "enable_llm_api_bridge": "Diğer entegrasyonlar tarafından kaydedilen, izin verilenler listesindeki üçüncü taraf Home Assistant LLM API'leri açığa çıkarın.",
+              "enable_memory_tools": "TTL tabanlı süre sonu ile asistanın kullanıcı tarafından onaylanan gerçekleri ve tercihleri ​​hatırlayabilmesi, hatırlayabilmesi ve unutabilmesi için paylaşılan kalıcı bellek araçlarını açığa çıkarın.",
+              "enable_music_assistant_support": "Music Assistant arama, kuyruk, kitaplık ve oynatma araçlarını kullanıma çıkarın.",
+              "enable_read_url_tool": "Asistanın belirli web sayfalarını inceleyebilmesi için URL okumasını gösterin.",
+              "enable_recorder_tools": "Kaydedici tarafından desteklenen geçmişi, analizi ve belirli bir noktaya ait araçları açığa çıkarın.",
+              "enable_response_service_tools": "Expose Home Assistant services that return structured data, such as calendar and forecast reads.",
+              "enable_search_tool": "Yapılandırılmış paylaşılan sağlayıcıyı kullanarak web aramasını gösterin.",
+              "enable_unit_conversion_tools": "°C'ten °F'e, mesafe, mutfak hacmi, depolama ve veri hızı dönüşümleri gibi birim dönüştürme araçlarını tam olarak gösterin.",
+              "enable_weather_forecast_tool": "Özel Home Assistant hava tahmini yardımcısını gösterin.",
+              "enable_wikipedia_search_tool": "Arka plan ve referans soruları için hafif Wikipedia makale aramasını ortaya çıkarın.",
+              "enable_web_search": "Web aramasını ve URL okuma araçlarını gösterin.",
+              "search_provider": "Web Arama etkinleştirildiğinde hangi sağlayıcının kullanılacağını seçin.",
+              "brave_api_key": "Yalnızca Web Arama etkinleştirildiğinde ve Brave Search seçildiğinde gereklidir.",
+              "google_maps_api_key": "Yalnızca Google Places and Routes etkinleştirildiğinde gereklidir.",
+              "llm_api_allowlist": "Virgülle veya yeni satırla ayrılmış üçüncü taraf LLM API kimlikleri MCP Assist, llm_intents gibi inceleyebilir veya arayabilir. Yüklü üçüncü taraf LLM API'ler: {installed_llm_apis}. Yerleşik destek API, Destek Köprüsü'nde kalır.",
+              "searxng_url": "Yalnızca Web Arama etkinleştirildiğinde ve SearXNG seçildiğinde gereklidir. Şirket içinde barındırılan SearXNG örneğiniz için temel URL'i kullanın."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Gecersiz IP adresi veya CIDR araligi formati. Virgullerle ayrilmis degerler kullanin: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profil adi gereklidir.",
       "invalid_json": "Gecersiz JSON formati. Lutfen MCP sunuculari yapilandirmanizi kontrol edin.",
+      "searxng_url_required": "SearXNG URL, SearXNG arama etkinleştirildiğinde gereklidir.",
+      "google_maps_api_key_required": "Google Maps API anahtarı, Google Places and Routes etkinleştirildiğinde gereklidir.",
+      "mcp_apply_failed": "Could not apply shared MCP server settings. Bağlantı noktasını ve izin verilen IP'leri kontrol edip tekrar deneyin.",
       "invalid_api_key": "Gecersiz API anahtari. Lutfen kontrol edin ve tekrar deneyin.",
       "auth_failed": "Kimlik dogrulama basarisiz oldu. Lutfen API anahtarinizi dogrulayin.",
-      "unknown": "Bilinmeyen bir hata olustu."
+      "unknown": "Bilinmeyen bir hata olustu.",
+      "openclaw_not_paired": "Device not yet approved on the OpenClaw server. Lütfen onaylayın ve tekrar deneyin.",
+      "openclaw_connection_failed": "Could not connect to the OpenClaw gateway. Ana bilgisayarı, bağlantı noktasını ve belirteci kontrol edin."
     },
     "abort": {
       "already_configured": "Bu ada sahip bir profil zaten mevcut. Lutfen farkli bir ad secin."
@@ -85,21 +338,186 @@
           "lmstudio_url": "Sunucu URL'si",
           "api_key": "API Anahtari",
           "model_name": "Model Adi",
+          "system_prompt_mode": "Sistem Bilgi İstemi Kaynağı",
           "system_prompt": "Sistem Yonergeleri",
+          "technical_prompt_mode": "Teknik Talimatlar Kaynağı",
           "technical_prompt": "Teknik Talimatlar",
           "temperature": "Sicaklik",
           "max_tokens": "Maksimum Yanit Tokenleri",
           "max_history": "Maksimum Gecmis Mesajlari",
+          "context_mode": "Bağlam Modu",
           "max_iterations": "Maksimum Arac Yinelemeleri",
           "control_home_assistant": "Home Assistant'i Kontrol Et",
           "response_mode": "Yanit Modu",
           "follow_up_phrases": "Takip Ifadeleri",
           "end_words": "Konusmayi Bitirme Kelimeleri",
+          "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle",
           "timeout": "Yanit Zaman Asimi",
           "debug_mode": "Hata Ayiklama Modu",
+          "chat_log_mode": "Sohbet Günlüğü Modu",
           "ollama_keep_alive": "Ollama'yi Aktif Tut",
           "ollama_num_ctx": "Ollama Baglam Penceresi",
-          "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle"
+          "openclaw_host": "Ağ Geçidi Ana Bilgisayarı",
+          "openclaw_port": "Ağ Geçidi Bağlantı Noktası",
+          "openclaw_token": "Ağ Geçidi Jetonu",
+          "openclaw_use_ssl": "SSL/TLS'i kullanın",
+          "openclaw_session_key": "Oturum Anahtarı"
+        },
+        "data_description": {
+          "model_name": "Bu profilin kullanması gereken LLM modeli.",
+          "system_prompt": "Geçerli etkin sistem istemiyle önceden doldurulmuştur. Bu profili özelleştirmek için düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
+          "technical_prompt": "Geçerli geçerli teknik talimatlarla önceden doldurulmuştur. Bu profili özelleştirmek için bunları düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
+          "context_mode": "Standard, tam profil aracı içeriğini gönderir. Light, daha küçük bir geçmiş penceresi tutar ve küçük yerel modeller için temel Home Assistant araçlarının tanıtımını yapar."
+        },
+        "sections": {
+          "profile": {
+            "name": "Profili",
+            "description": "Bu konuşma profili için temel kimlik ayarları.",
+            "data": {
+              "profile_name": "Profil Adi"
+            },
+            "data_description": {
+              "profile_name": "Bu konuşma profili için kolay bir ad."
+            }
+          },
+          "connection": {
+            "name": "Bağlantısı",
+            "description": "Bu profilin model sağlayıcısına nasıl bağlandığı.",
+            "data": {
+              "lmstudio_url": "Sunucu URL'si",
+              "api_key": "API Anahtari",
+              "openclaw_host": "Ağ Geçidi Ana Bilgisayarı",
+              "openclaw_port": "Ağ Geçidi Bağlantı Noktası",
+              "openclaw_token": "Ağ Geçidi Jetonu",
+              "openclaw_use_ssl": "SSL/TLS'i kullanın"
+            },
+            "data_description": {
+              "lmstudio_url": "Bu profil tarafından kullanılan yerel veya OpenAI-compatible sunucusu için temel URL.",
+              "api_key": "Bu sağlayıcının gerektirdiği API anahtarı veya taşıyıcı jetonu.",
+              "openclaw_host": "OpenClaw ağ geçidinin ana bilgisayar adı veya IP adresi.",
+              "openclaw_port": "OpenClaw ağ geçidi WebSocket sunucusu tarafından kullanılan bağlantı noktası.",
+              "openclaw_token": "OpenClaw ağ geçidiyle kimlik doğrulamak için kullanılan taşıyıcı jeton.",
+              "openclaw_use_ssl": "OpenClaw ağ geçidiyle konuşurken güvenli bir WebSocket bağlantısı kullanın."
+            }
+          },
+          "model_fields": {
+            "name": "Modeli",
+            "description": "Bu profilin kullanması gereken modeli seçin.",
+            "data": {
+              "model_name": "Model Adi"
+            },
+            "data_description": {
+              "model_name": "Bu profilin kullanması gereken LLM modeli."
+            }
+          },
+          "prompts": {
+            "name": "İstemleri",
+            "description": "Mevcut etkili istemleri inceleyin, kopyalayın veya bu profil için düzenleyin.",
+            "data": {
+              "system_prompt": "Sistem Yonergeleri",
+              "technical_prompt": "Teknik Talimatlar"
+            },
+            "data_description": {
+              "system_prompt": "Geçerli etkin sistem istemiyle önceden doldurulmuştur. Bu profili özelleştirmek için düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
+              "technical_prompt": "Geçerli geçerli teknik talimatlarla önceden doldurulmuştur. Bu profili özelleştirmek için bunları düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder."
+            }
+          },
+          "conversation": {
+            "name": "Konuşma",
+            "description": "Bu profil için davranış, takip yönetimi ve ses çıkışı ayarları.",
+            "data": {
+              "control_home_assistant": "Home Assistant'i Kontrol Et",
+              "response_mode": "Yanit Modu",
+              "follow_up_phrases": "Takip Ifadeleri",
+              "end_words": "Konusmayi Bitirme Kelimeleri",
+              "clean_responses": "Sesli Çıktı İçin Yanıtları Temizle"
+            },
+            "data_description": {
+              "control_home_assistant": "Bu profilin yalnızca soruları yanıtlamak yerine Home Assistant işlemlerini yürütmesine izin verin.",
+              "response_mode": "Controls whether the assistant ends immediately or asks natural follow-up questions when appropriate.",
+              "follow_up_phrases": "Takip tarzı yanıtları tespit etmek için kullanılan virgülle ayrılmış ifadeler.",
+              "end_words": "Konuşmayı sonlandırması gereken virgülle ayrılmış kelimeler veya kelime öbekleri.",
+              "clean_responses": "Sözlü yanıtları daha temiz tutmak için gereksiz biçimlendirmeyi veya dolguyu kesin."
+            }
+          },
+          "provider": {
+            "name": "Sağlayıcı",
+            "description": "Sağlayıcıya özel ayarlar yalnızca geçerli olduklarında gösterilir.",
+            "data": {
+              "ollama_keep_alive": "Ollama'yi Aktif Tut",
+              "ollama_num_ctx": "Ollama Baglam Penceresi",
+              "openclaw_session_key": "Oturum Anahtarı"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
+              "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
+              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı."
+            }
+          },
+          "advanced_settings": {
+            "name": "Gelişmiş",
+            "description": "Expert tuning for model behavior, limits, timeout, and debugging.",
+            "data": {
+              "temperature": "Sicaklik",
+              "max_tokens": "Maksimum Yanit Tokenleri",
+              "max_history": "Maksimum Gecmis Mesajlari",
+              "context_mode": "Bağlam Modu",
+              "max_iterations": "Maksimum Arac Yinelemeleri",
+              "timeout": "Yanit Zaman Asimi",
+              "debug_mode": "Hata Ayiklama Modu",
+              "chat_log_mode": "Sohbet Günlüğü Modu"
+            },
+            "data_description": {
+              "temperature": "Yanıt rastgeleliğini kontrol eder. Daha düşük değerler daha belirleyicidir.",
+              "max_tokens": "Modelin tek bir yanıtta kaç jeton üretebileceğini sınırlar.",
+              "max_history": "Bağlamda tutulacak önceki konuşma mesajı sayısı.",
+              "context_mode": "Standard, tam profil aracı içeriğini gönderir. Light, daha küçük bir geçmiş penceresi tutar ve küçük yerel modeller için temel Home Assistant araçlarının tanıtımını yapar.",
+              "max_iterations": "Asistanın bir istek için kaç tane araç çağırma dönüşü kullanabileceğini belirtir.",
+              "timeout": "Zaman aşımına uğramadan önce sağlayıcının yanıt vermesi için ne kadar süre bekleneceği.",
+              "debug_mode": "Enable more detailed logging for troubleshooting.",
+              "chat_log_mode": "Kullanıcı metni, asistan yanıtları, araç adları, araç argümanları ve incelenmek üzere araç sonuçları dahil olmak üzere en son konuşma günlüklerini sürdürün."
+            }
+          },
+          "tools": {
+            "name": "Araçları",
+            "description": "İşaretlenmeyen araçlar, paylaşılan MCP sunucusunda etkinleştirildiklerinde kullanılabilir durumda kalır. Yalnızca bu profil için bir araç ailesini yasaklamak üzere bir kutuyu işaretleyin.",
+            "data": {
+              "disable_assist_bridge": "Destek Köprüsünü Devre Dışı Bırak",
+              "disable_calculator": "Hesap Makinesini Devre Dışı Bırak",
+              "disable_custom_tools": "Özel Araçları Devre Dışı Bırak",
+              "disable_device": "Cihaz Araçlarını Devre Dışı Bırak",
+              "disable_google_maps": "Google Places and Routes'i devre dışı bırakın",
+              "disable_llm_api_bridge": "LLM API Köprüsünü Devre Dışı Bırak",
+              "disable_memory": "Belleği Devre Dışı Bırak",
+              "disable_music_assistant": "Music Assistant'i devre dışı bırakın",
+              "disable_read_url": "Okumayı Devre Dışı Bırak URL",
+              "disable_recorder": "Kaydedici Geçmişini Devre Dışı Bırak",
+              "disable_response_service": "Yanıt Hizmeti Okumalarını Devre Dışı Bırak",
+              "disable_search": "Aramayı Devre Dışı Bırak",
+              "disable_unit_conversion": "Birim Dönüştürmeyi Devre Dışı Bırak",
+              "disable_weather_forecast": "Hava Durumu Tahminini Devre Dışı Bırak",
+              "disable_wikipedia_search": "Wikipedia Aramayı Devre Dışı Bırak",
+              "disable_web_search": "Web Aramasını Devre Dışı Bırak"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Bu profilin Home Assistant'in yerel Yardım araçlarını, istemini ve bağlam anlık görüntüsünü kullanmasını engeller.",
+              "disable_calculator": "Bu profilin matematik ve ifade değerlendirme araçlarını kullanmasını engeller.",
+              "disable_custom_tools": "Bu profilin, paylaşılan MCP sunucusu aracılığıyla yüklenen harici özel araç paketlerini kullanmasını engeller.",
+              "disable_unit_conversion": "Bu profilin, °C'ten °F'e, mesafe, mutfak hacmi, depolama ve veri hızı dönüştürmeleri gibi birim dönüştürme araçlarını tam olarak kullanmasını engeller.",
+              "disable_device": "Bu profilin fiziksel cihazları ve cihaz ayrıntılarını keşfetmesini engeller.",
+              "disable_google_maps": "Bu profilin Google Places and Routes araçlarını kullanmasını engeller.",
+              "disable_llm_api_bridge": "Bu profilin, izin verilenler listesine eklenen üçüncü taraf Home Assistant LLM API araçlarını kullanmasını engeller.",
+              "disable_memory": "Bu profilin paylaşılan kalıcı anıları saklamasını, geri çağırmasını veya unutmasını engeller.",
+              "disable_music_assistant": "Bu profilin Music Assistant arama, kuyruk, kitaplık ve oynatma araçlarını kullanmasını engeller.",
+              "disable_read_url": "Bu profilin URLs'ten sayfa içeriğini açmasını ve çıkarmasını engeller.",
+              "disable_recorder": "Bu profilin, kaydedici tarafından desteklenen geçmiş, sayım, süre ve belirli bir zaman noktası araçlarını kullanmasını engeller.",
+              "disable_response_service": "Bu profilin, takvim ve tahmin okumaları gibi yapılandırılmış verileri döndüren Home Assistant hizmetlerini kullanmasını engeller.",
+              "disable_search": "Bu profilin yerleşik web arama yardımcısını kullanmasını engeller.",
+              "disable_weather_forecast": "Bu profilin özel Home Assistant hava durumu tahmini yardımcısını kullanmasını engeller.",
+              "disable_wikipedia_search": "Bu profilin Wikipedia'i aramasını engeller.",
+              "disable_web_search": "Bu profilin, paylaşılan MCP sunucusunda etkinleştirilmiş olsalar bile web aramasını ve URL okuma araçlarını kullanmasını engeller."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Bu ayarlar TUM profiller tarafindan paylasilir",
         "data": {
           "mcp_port": "MCP Sunucu Portu",
-          "search_provider": "Web Arama",
-          "brave_api_key": "Brave Search API Anahtari",
-          "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "enable_gap_filling": "Akilli Varlik Indeksini Etkinlestir",
-          "max_entities_per_discovery": "Arama Basina Maks Varlik (20-500)"
+          "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar"
+        },
+        "data_description": {
+          "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
+          "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları."
+        },
+        "sections": {
+          "context": {
+            "name": "Bağlamı",
+            "description": "Hangi Home Assistant kimlik ve konum ayrıntılarının AI istemlerine ve MCP araç çağrısı yüklerine dahil edildiğini kontrol edin.",
+            "data": {
+              "include_current_user": "Mevcut Kullanıcıyı İsteme Ekle",
+              "include_home_location": "İsteme Ev Konumunu Ekle",
+              "include_current_user_in_tool_calls": "Mevcut Kullanıcıyı MCP Araçlarıyla Paylaşın",
+              "include_home_location_in_tool_calls": "Ev Konumunu MCP Araçlarıyla Paylaşın"
+            },
+            "data_description": {
+              "include_current_user": "Mevcut Home Assistant kullanıcısının adını mümkün olduğunda AI istemine ekleyin.",
+              "include_home_location": "Home Assistant'in yapılandırılmış ev adını ve koordinatlarını kullanarak AI istemine kompakt bir ev konumu özeti ekleyin.",
+              "include_current_user_in_tool_calls": "Araç paketlerinin eylemleri denetleyebilmesi veya kişiselleştirebilmesi için mevcut Home Assistant kullanıcı kimliğini ve adını MCP araçları/çağrı bağlamında gönderin.",
+              "include_home_location_in_tool_calls": "Konum meta verilerine ihtiyaç duyan araç paketleri için MCP araçları/çağrı bağlamında Home Assistant'in yapılandırılmış ev adını, enlemini ve boylamını gönderin."
+            }
+          },
+          "discovery": {
+            "name": "Keşif",
+            "description": "Paylaşılan MCP sunucusunun keşif sonuçlarını nasıl oluşturup döndürdüğünü denetleyin.",
+            "data": {
+              "enable_gap_filling": "Akıllı Varlık Dizinini Etkinleştir",
+              "max_entities_per_discovery": "Keşif Başına Maksimum Varlık (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Keşfi hızlı ve bağlama duyarlı tutmak için kompakt bir sistem dizini oluşturur.",
+              "max_entities_per_discovery": "Tek bir keşif çağrısının kaç varlık döndürebileceğini sınırlar."
+            }
+          },
+          "memory": {
+            "name": "Bellek",
+            "description": "Bellek aracı etkinleştirildiğinde paylaşılan kalıcı anıların ne kadar süre saklanacağını yapılandırın.",
+            "data": {
+              "memory_default_ttl_days": "Varsayılan Bellek TTL (Gün)",
+              "memory_max_ttl_days": "Maksimum Bellek TTL (Gün)",
+              "memory_max_items": "Maksimum Saklanan Anılar"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Default number of days a new memory is kept when the tool call does not provide ttl_days.",
+              "memory_max_ttl_days": "Saklanan belleğin tutulabileceği maksimum gün sayısı.",
+              "memory_max_items": "Aktif olarak saklanan anılarda üst sınır. Bu sınır aşıldığında ilk önce en eski anılar budanır."
+            }
+          },
+          "tools": {
+            "name": "Araçları",
+            "description": "Enable or disable optional tool capabilities exposed by the shared MCP server.",
+            "data": {
+              "enable_assist_bridge": "Destek Köprüsü",
+              "enable_calculator_tools": "Hesap Makinesi",
+              "enable_external_custom_tools": "Özel Araçlar",
+              "enable_device_tools": "Cihaz Araçları",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Köprüsü",
+              "enable_memory_tools": "Bellek",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "URL'i okuyun",
+              "enable_recorder_tools": "Kaydedici Geçmişi",
+              "enable_response_service_tools": "Yanıt Hizmeti Okumaları",
+              "enable_search_tool": "Arama",
+              "enable_unit_conversion_tools": "Birim Dönüşümü",
+              "enable_weather_forecast_tool": "Hava Durumu Tahmini",
+              "enable_wikipedia_search_tool": "Wikipedia Arama",
+              "enable_web_search": "Web Araması",
+              "search_provider": "Web Arama Sağlayıcısı",
+              "brave_api_key": "Brave Search API Anahtarı",
+              "google_maps_api_key": "Google Maps API Anahtarı",
+              "llm_api_allowlist": "İzin Verilen LLM API Kimlikleri",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
+              "enable_calculator_tools": "Matematik ve ifade değerlendirme araçlarını kullanıma çıkarın.",
+              "enable_external_custom_tools": "mcp-assist-tools altındaki Home Assistant yapılandırma dizininden ek yerel araç paketlerini yükleyin. Varsayılan olarak devre dışıdır. Yalnızca güvenilir paketleri etkinleştirin çünkü bunlar Home Assistant içinde Python kodu olarak çalışırlar ve MCP araçlarının yanı sıra kısa istem rehberliğini de ekleyebilirler.",
+              "enable_unit_conversion_tools": "°C'ten °F'e, mesafe, mutfak hacmi, depolama ve veri hızı dönüşümleri gibi birim dönüştürme araçlarını tam olarak gösterin.",
+              "enable_device_tools": "Fiziksel cihaz bulma ve cihaz ayrıntısı araçlarını ortaya çıkarın.",
+              "enable_google_maps_tools": "Expose Google Places lookup and Google Routes travel-time tools. Bir Google Maps API anahtarı gerektirir.",
+              "enable_llm_api_bridge": "Diğer entegrasyonlar tarafından kaydedilen, izin verilenler listesindeki üçüncü taraf Home Assistant LLM API'leri açığa çıkarın.",
+              "enable_memory_tools": "TTL tabanlı süre sonu ile asistanın kullanıcı tarafından onaylanan gerçekleri ve tercihleri ​​hatırlayabilmesi, hatırlayabilmesi ve unutabilmesi için paylaşılan kalıcı bellek araçlarını açığa çıkarın.",
+              "enable_music_assistant_support": "Music Assistant arama, kuyruk, kitaplık ve oynatma araçlarını kullanıma çıkarın.",
+              "enable_read_url_tool": "Asistanın belirli web sayfalarını inceleyebilmesi için URL okumasını gösterin.",
+              "enable_recorder_tools": "Kaydedici tarafından desteklenen geçmişi, analizi ve belirli bir noktaya ait araçları açığa çıkarın.",
+              "enable_response_service_tools": "Expose Home Assistant services that return structured data, such as calendar and forecast reads.",
+              "enable_search_tool": "Yapılandırılmış paylaşılan sağlayıcıyı kullanarak web aramasını gösterin.",
+              "enable_weather_forecast_tool": "Özel Home Assistant hava tahmini yardımcısını gösterin.",
+              "enable_wikipedia_search_tool": "Arka plan ve referans soruları için hafif Wikipedia makale aramasını ortaya çıkarın.",
+              "enable_web_search": "Web aramasını ve URL okuma araçlarını gösterin.",
+              "search_provider": "Web Arama etkinleştirildiğinde hangi sağlayıcının kullanılacağını seçin.",
+              "brave_api_key": "Yalnızca Web Arama etkinleştirildiğinde ve Brave Search seçildiğinde gereklidir.",
+              "google_maps_api_key": "Yalnızca Google Places and Routes etkinleştirildiğinde gereklidir.",
+              "llm_api_allowlist": "Virgülle veya yeni satırla ayrılmış üçüncü taraf LLM API kimlikleri MCP Assist, llm_intents gibi inceleyebilir veya arayabilir. Yüklü üçüncü taraf LLM API'ler: {installed_llm_apis}. Yerleşik destek API, Destek Köprüsü'nde kalır.",
+              "searxng_url": "Yalnızca Web Arama etkinleştirildiğinde ve SearXNG seçildiğinde gereklidir. Şirket içinde barındırılan SearXNG örneğiniz için temel URL'i kullanın."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Varsayılan",
+        "custom": "Özel"
       }
     }
   },

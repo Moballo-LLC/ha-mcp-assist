@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Profiilin nimi",
           "server_type": "Palvelintyyppi"
+        },
+        "data_description": {
+          "profile_name": "Ystävällinen nimi tälle keskusteluprofiilille.",
+          "server_type": "Valitse, mitä tarjoajaa tai päättelypalvelinta tämä profiili käyttää."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "Palvelimen URL",
           "api_key": "API-avain",
-          "mcp_port": "MCP-palvelinportti"
+          "mcp_port": "MCP-palvelinportti",
+          "openclaw_host": "Gateway Host",
+          "openclaw_port": "Gateway-portti",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Käytä SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "Tämän profiilin käyttämän paikallisen tai OpenAI-compatible-peruspalvelimen URL.",
+          "api_key": "Tämän palveluntarjoajan vaatima API-avain tai siirtotietunnus.",
+          "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
+          "openclaw_host": "OpenClaw-yhdyskäytävän isäntänimi tai IP-osoite.",
+          "openclaw_port": "Portti, jota käyttää OpenClaw-yhdyskäytävä WebSocket-palvelin.",
+          "openclaw_token": "Tiedonsiirtotunnus, jota käytetään todentamiseen OpenClaw-yhdyskäytävän kanssa.",
+          "openclaw_use_ssl": "Käytä suojattua WebSocket-yhteyttä, kun puhut OpenClaw-yhdyskäytävän kanssa."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Laitteen pariliitos",
+        "description": "Laitteesi on hyväksyttävä OpenClaw-palvelimella.\n\nHyväksy se suorittamalla `openclaw devices approve` tai käyttämällä OpenClaw Control UI ja napsauta sitten Lähetä.\n\nLaitetunnus: {device_id}"
       },
       "model": {
         "title": "Malli ja ohjeet",
         "description": "{server_info}",
         "data": {
           "model_name": "Mallin nimi",
+          "system_prompt_mode": "Järjestelmäkehotteen lähde",
           "system_prompt": "Jarjestelmaohjeet",
+          "technical_prompt_mode": "Tekniset ohjeet Lähde",
           "technical_prompt": "Tekniset ohjeet"
+        },
+        "data_description": {
+          "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
+          "system_prompt": "Esitäytetty voimassa olevalla järjestelmäkehotteella. Muokkaa tätä profiilia muokkaamalla sitä. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
+          "technical_prompt": "Esitäytetty voimassa olevilla teknisillä ohjeilla. Muokkaa niitä muokataksesi tätä profiilia. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "malli",
+            "description": "Valitse malli, jota tämän profiilin tulee käyttää.",
+            "data": {
+              "model_name": "Mallin nimi"
+            },
+            "data_description": {
+              "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää."
+            }
+          },
+          "prompts": {
+            "name": "Kehotteet",
+            "description": "Tarkista voimassa olevat kehotteet, kopioi ne tai muokkaa niitä tässä profiilissa.",
+            "data": {
+              "system_prompt": "Jarjestelmaohjeet",
+              "technical_prompt": "Tekniset ohjeet"
+            },
+            "data_description": {
+              "system_prompt": "Esitäytetty voimassa olevalla järjestelmäkehotteella. Muokkaa tätä profiilia muokkaamalla sitä. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
+              "technical_prompt": "Esitäytetty voimassa olevilla teknisillä ohjeilla. Muokkaa niitä muokataksesi tätä profiilia. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Lampotila",
           "max_tokens": "Vastauksen enimmais-tokenit",
           "max_history": "Historian enimmaisviestit",
+          "context_mode": "Kontekstitila",
           "max_iterations": "Tyokalujen enimmaisiteraatiot",
           "control_home_assistant": "Ohjaa Home Assistantia",
           "response_mode": "Vastaustila",
           "follow_up_phrases": "Jatkokysymysfraasit",
           "end_words": "Keskustelun lopetusSanat",
+          "clean_responses": "Puhdista vastaukset äänilähtöä varten",
           "timeout": "Vastauksen aikakatkaisu",
           "debug_mode": "Virheenkorjaustila",
+          "chat_log_mode": "Chat-lokitila",
           "ollama_keep_alive": "Pida Ollama aktiivisena",
           "ollama_num_ctx": "Ollaman konteksti-ikkuna",
-          "clean_responses": "Puhdista vastaukset äänilähtöä varten"
+          "openclaw_session_key": "Istuntoavain"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Keskustelu",
+            "description": "Tämän profiilin käyttäytyminen, seurantakäsittely ja äänentoistoasetukset.",
+            "data": {
+              "control_home_assistant": "Ohjaa Home Assistantia",
+              "response_mode": "Vastaustila",
+              "follow_up_phrases": "Jatkokysymysfraasit",
+              "end_words": "Keskustelun lopetusSanat",
+              "clean_responses": "Puhdista vastaukset äänilähtöä varten"
+            },
+            "data_description": {
+              "control_home_assistant": "Salli tämän profiilin suorittaa Home Assistant-toimintoja pelkän kysymyksiin vastaamisen sijaan.",
+              "response_mode": "Määrittää, lopettaako avustaja välittömästi vai kysyykö hän tarvittaessa luonnollisia jatkokysymyksiä.",
+              "follow_up_phrases": "Pilkuilla erotetut lauseet, joita käytetään seurantatyylivastausten havaitsemiseen.",
+              "end_words": "Pilkuilla erotetut sanat tai ilmaukset, joiden pitäisi lopettaa keskustelu.",
+              "clean_responses": "Leikkaa tarpeettomat muotoilut tai täyteaineet pitääksesi puhutut vastaukset puhtaana."
+            }
+          },
+          "performance": {
+            "name": "Suorituskyky",
+            "description": "Mallin vasterajoitukset, suoritusrajoitukset, aikakatkaisu ja virheenkorjaus.",
+            "data": {
+              "temperature": "Lampotila",
+              "max_tokens": "Vastauksen enimmais-tokenit",
+              "max_history": "Historian enimmaisviestit",
+              "context_mode": "Kontekstitila",
+              "max_iterations": "Tyokalujen enimmaisiteraatiot",
+              "timeout": "Vastauksen aikakatkaisu",
+              "debug_mode": "Virheenkorjaustila",
+              "chat_log_mode": "Chat-lokitila"
+            },
+            "data_description": {
+              "temperature": "Ohjaa vasteen satunnaisuutta. Pienemmät arvot ovat deterministisempiä.",
+              "max_tokens": "Rajoittaa kuinka monta merkkiä malli voi luoda yhdessä vastauksessa.",
+              "max_history": "How many prior conversation messages to keep in context.",
+              "context_mode": "Standard lähettää koko profiilityökalukontekstin. Light pitää pienemmän historiaikkunan ja mainostaa Home Assistant-ydintyökaluja pienille paikallisille malleille.",
+              "max_iterations": "Rajoittaa kuinka monta työkalukutsukierrosta avustaja voi käyttää yhteen pyyntöön.",
+              "timeout": "How long to wait for a provider response before timing out.",
+              "debug_mode": "Ota käyttöön yksityiskohtaisempi lokikirjaus vianmääritystä varten.",
+              "chat_log_mode": "Säilytä viimeisimmät keskustelulokit, mukaan lukien käyttäjän tekstit, avustajan vastaukset, työkalujen nimet, työkalun argumentit ja työkalutulokset tarkistettavaksi."
+            }
+          },
+          "provider": {
+            "name": "Toimittaja",
+            "description": "Palveluntarjoajakohtaiset asetukset näkyvät vain, kun ne ovat voimassa.",
+            "data": {
+              "ollama_keep_alive": "Pida Ollama aktiivisena",
+              "ollama_num_ctx": "Ollaman konteksti-ikkuna",
+              "openclaw_session_key": "Istuntoavain"
+            },
+            "data_description": {
+              "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
+              "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
+              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään."
+            }
+          },
+          "tools": {
+            "name": "Työkalut",
+            "description": "Valitsemattomat työkalut ovat käytettävissä aina, kun ne otetaan käyttöön jaetulla MCP-palvelimella. Valitse valintaruutu, jos haluat estää työkaluperheen käytön vain tässä profiilissa.",
+            "data": {
+              "disable_assist_bridge": "Poista Assist Bridge käytöstä",
+              "disable_calculator": "Poista laskin käytöstä",
+              "disable_custom_tools": "Poista mukautetut työkalut käytöstä",
+              "disable_device": "Poista laitetyökalut käytöstä",
+              "disable_google_maps": "Poista Google Places and Routes käytöstä",
+              "disable_llm_api_bridge": "Poista LLM API Bridge käytöstä",
+              "disable_memory": "Poista muisti käytöstä",
+              "disable_music_assistant": "Poista Music Assistant käytöstä",
+              "disable_read_url": "Poista käytöstä Lue URL",
+              "disable_recorder": "Poista tallentimen historia käytöstä",
+              "disable_response_service": "Poista vastauspalvelun lukeminen käytöstä",
+              "disable_search": "Poista haku käytöstä",
+              "disable_unit_conversion": "Poista yksikkömuunnos käytöstä",
+              "disable_weather_forecast": "Poista sääennuste käytöstä",
+              "disable_wikipedia_search": "Poista Wikipedia-haku käytöstä",
+              "disable_web_search": "Poista verkkohaku käytöstä"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Estää tätä profiilia käyttämästä Home Assistant:n alkuperäisiä Assist-työkaluja, kehotetta ja kontekstin tilannekuvaa.",
+              "disable_calculator": "Estää tätä profiilia käyttämästä matemaattisia ja lausekkeiden arviointityökaluja.",
+              "disable_custom_tools": "Estää tätä profiilia käyttämästä ulkoisia mukautettuja työkalupaketteja, jotka on ladattu jaetun MCP-palvelimen kautta.",
+              "disable_device": "Estää tätä profiilia löytämästä fyysisiä laitteita ja laitteen tietoja.",
+              "disable_google_maps": "Estää tätä profiilia käyttämästä Google Places and Routes työkaluja.",
+              "disable_llm_api_bridge": "Estää tätä profiilia käyttämästä sallittujen luettelossa olevia kolmannen osapuolen Home Assistant LLM API työkaluja.",
+              "disable_memory": "Estää tätä profiilia tallentamasta, muistamasta tai unohtamasta jaettuja säilyneitä muistoja.",
+              "disable_music_assistant": "Estää tätä profiilia käyttämästä Music Assistant-haku-, jono-, kirjasto- ja toistotyökaluja.",
+              "disable_read_url": "Estää tätä profiilia avaamasta ja poimimasta sivun sisältöä URLs:stä.",
+              "disable_recorder": "Estää tätä profiilia käyttämästä tallentimen tukemia historia-, laskenta-, kesto- ja ajankohtatyökaluja.",
+              "disable_response_service": "Estää tätä profiilia käyttämästä Home Assistant-palveluita, jotka palauttavat strukturoituja tietoja, kuten kalenterin ja ennusteen lukuja.",
+              "disable_search": "Estää tätä profiilia käyttämästä sisäänrakennettua verkkohakuapuohjelmaa.",
+              "disable_unit_conversion": "Estää tätä profiilia käyttämästä tarkkoja yksikkömuunnostyökaluja, kuten °C - °F, etäisyyttä, keittiön tilavuutta, tallennustilaa ja tiedonsiirtonopeutta.",
+              "disable_weather_forecast": "Estää tätä profiilia käyttämästä erityistä Home Assistant sääennusteapuohjelmaa.",
+              "disable_wikipedia_search": "Estää tätä profiilia tekemästä hakuja Wikipedia.",
+              "disable_web_search": "Estää tätä profiilia käyttämästä verkkohakua ja URL-lukutyökaluja, vaikka ne olisivat käytössä jaetussa MCP-palvelimessa."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Nama asetukset vaikuttavat KAIKKIIN profiileihin. Muutokset taalla vaikuttavat jokaiseen MCP Assist -keskusteluagenttiin.",
         "data": {
           "mcp_port": "MCP-palvelinportti",
-          "search_provider": "Verkkohaku",
-          "brave_api_key": "Brave Search API-avain",
-          "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "enable_gap_filling": "Ota alyas entiteetti-indeksi kayttoon",
-          "max_entities_per_discovery": "Max entiteettia per haku (20-500)"
+          "allowed_ips": "Lisat sallitut IP:t/alueet"
+        },
+        "data_description": {
+          "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
+          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi."
+        },
+        "sections": {
+          "context": {
+            "name": "Konteksti",
+            "description": "Hallitse, mitkä Home Assistant-identiteetti- ja sijaintitiedot sisältyvät tekoälykehotteisiin ja MCP-työkalukutsujen hyötykuormiin.",
+            "data": {
+              "include_current_user": "Sisällytä nykyinen käyttäjä kehotteeseen",
+              "include_home_location": "Sisällytä kodin sijainti kehotteeseen",
+              "include_current_user_in_tool_calls": "Jaa nykyinen käyttäjä MCP-työkaluilla",
+              "include_home_location_in_tool_calls": "Jaa kodin sijainti MCP-työkaluilla"
+            },
+            "data_description": {
+              "include_current_user": "Sisällytä nykyisen Home Assistant-käyttäjän nimi tekoälykehotteeseen, jos se on saatavilla.",
+              "include_home_location": "Sisällytä AI-kehotteeseen kompakti kodin sijainnin yhteenveto käyttämällä Home Assistant:n määritettyä kodin nimeä ja koordinaatteja.",
+              "include_current_user_in_tool_calls": "Lähetä nykyinen Home Assistant-käyttäjätunnus ja nimi MCP-työkaluissa/puhelukontekstissa, jotta työkalupaketit voivat tarkastaa tai mukauttaa toimintoja.",
+              "include_home_location_in_tool_calls": "Lähetä Home Assistant:n määritetty kotinimi, leveysaste ja pituusaste MCP-työkaluissa/kutsun kontekstissa työkalupaketteille, jotka tarvitsevat sijainnin metatietoja."
+            }
+          },
+          "discovery": {
+            "name": "Discovery",
+            "description": "Hallitse, kuinka jaettu MCP-palvelin rakentaa ja palauttaa etsintätuloksia.",
+            "data": {
+              "enable_gap_filling": "Ota Smart Entity Index käyttöön",
+              "max_entities_per_discovery": "Entiteettien enimmäismäärä löytöä kohti (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Muodostaa kompaktin järjestelmähakemiston, jotta etsintä pysyy nopeana ja kontekstitietoisena.",
+              "max_entities_per_discovery": "Rajoittaa kuinka monta entiteettiä yksi etsintäkutsu voi palauttaa."
+            }
+          },
+          "memory": {
+            "name": "Muisti",
+            "description": "Määritä, kuinka kauan jaettuja muisteja säilytetään, kun Muistityökalu on käytössä.",
+            "data": {
+              "memory_default_ttl_days": "oletusmuisti TTL (päiviä)",
+              "memory_max_ttl_days": "Suurin muisti TTL (päiviä)",
+              "memory_max_items": "Tallennettujen muistien enimmäismäärä"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Oletuspäivien lukumäärä, jolloin uusi muisti säilytetään, kun työkalukutsu ei tarjoa ttl_days.",
+              "memory_max_ttl_days": "Tallennetun muistin säilytyspäivien enimmäismäärä.",
+              "memory_max_items": "Aktiivisten tallennettujen muistien yläraja. Vanhimmat muistot leikataan ensin, kun tämä raja ylittyy."
+            }
+          },
+          "tools": {
+            "name": "Työkalut",
+            "description": "Enable or disable optional tool capabilities exposed by the shared MCP server.",
+            "data": {
+              "enable_assist_bridge": "Assist Bridge",
+              "enable_calculator_tools": "Laskin",
+              "enable_external_custom_tools": "mukautetut työkalut",
+              "enable_device_tools": "Laitetyökalut",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API silta",
+              "enable_memory_tools": "Muisti",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Lue URL",
+              "enable_recorder_tools": "Tallentimen historia",
+              "enable_response_service_tools": "-vastauspalvelun luku",
+              "enable_search_tool": "Haku",
+              "enable_unit_conversion_tools": "Yksikkömuunnos",
+              "enable_weather_forecast_tool": "Sääennuste",
+              "enable_wikipedia_search_tool": "Wikipedia Haku",
+              "enable_web_search": "Web-haku",
+              "search_provider": "Verkkohaun tarjoaja",
+              "brave_api_key": "Brave Search API avain",
+              "google_maps_api_key": "Google Maps API avain",
+              "llm_api_allowlist": "Sallitut LLM API-tunnukset",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
+              "enable_calculator_tools": "Expose math and expression-evaluation tools.",
+              "enable_external_custom_tools": "Load additional local tool packages from the Home Assistant config directory under mcp-assist-tools. Ei käytössä oletuksena. Ota käyttöön vain luotetut paketit, koska ne toimivat Python-koodina Home Assistant:n sisällä ja voivat lisätä MCP-työkaluja sekä lyhyttä ohjeistusta.",
+              "enable_device_tools": "Tuo esiin fyysisten laitteiden etsintä- ja laitetietojen työkalut.",
+              "enable_google_maps_tools": "Näytä Google Places-haku- ja Google Routes-matka-aikatyökalut. Vaatii Google Maps API-avaimen.",
+              "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
+              "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
+              "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
+              "enable_read_url_tool": "Näytä URL-luku, jotta avustaja voi tarkastaa tietyt verkkosivut.",
+              "enable_recorder_tools": "Näytä tallentimen tukemat historia-, analyysi- ja ajankohtaiset työkalut.",
+              "enable_response_service_tools": "Näytä Home Assistant-palvelut, jotka palauttavat strukturoituja tietoja, kuten kalenterin ja ennusteen lukuja.",
+              "enable_search_tool": "Expose web search using the configured shared provider.",
+              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
+              "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
+              "enable_wikipedia_search_tool": "Expose lightweight Wikipedia article search for background and reference questions.",
+              "enable_web_search": "Expose web search and URL-reading tools.",
+              "search_provider": "Valitse käytettävä palveluntarjoaja, kun verkkohaku on käytössä.",
+              "brave_api_key": "Vaaditaan vain, kun verkkohaku on käytössä ja Brave Search on valittuna.",
+              "google_maps_api_key": "Vaaditaan vain, kun Google Places and Routes on käytössä.",
+              "llm_api_allowlist": "Pilkulla tai rivinvaihdolla erotetut kolmannen osapuolen LLM API-tunnukset MCP Assist voivat tarkastaa tai soittaa, kuten llm_intents. Asennettu kolmannen osapuolen LLM APIs: {installed_llm_apis}. Sisäänrakennettu apu API pysyy Assist Bridgessä.",
+              "searxng_url": "Vaaditaan vain, kun verkkohaku on käytössä ja SearXNG on valittuna. Käytä URL-perustaa itseisännöityyn SearXNG-instanssiin."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Virheellinen IP-osoite- tai CIDR-aluemuoto. Kayta pilkulla erotettuja arvoja, kuten: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profiilin nimi vaaditaan.",
       "invalid_json": "Virheellinen JSON-muoto. Tarkista MCP-palvelimien maaritys.",
+      "searxng_url_required": "SearXNG URL vaaditaan, kun SearXNG-haku on käytössä.",
+      "google_maps_api_key_required": "Google Maps API key is required when Google Places and Routes is enabled.",
+      "mcp_apply_failed": "Jaettuja MCP-palvelinasetuksia ei voitu käyttää. Tarkista portti ja sallitut IP-osoitteet ja yritä sitten uudelleen.",
       "invalid_api_key": "Virheellinen API-avain. Tarkista ja yrita uudelleen.",
       "auth_failed": "Todennus epaonnistui. Vahvista API-avaimesi.",
-      "unknown": "Tuntematon virhe tapahtui."
+      "unknown": "Tuntematon virhe tapahtui.",
+      "openclaw_not_paired": "Laitetta ei ole vielä hyväksytty OpenClaw-palvelimella. Hyväksy se ja yritä uudelleen.",
+      "openclaw_connection_failed": "Ei voitu muodostaa yhteyttä OpenClaw-yhdyskäytävään. Tarkista isäntä, portti ja tunnus."
     },
     "abort": {
       "already_configured": "Taman niminen profiili on jo olemassa. Valitse toinen nimi."
@@ -85,21 +338,186 @@
           "lmstudio_url": "Palvelimen URL",
           "api_key": "API-avain",
           "model_name": "Mallin nimi",
+          "system_prompt_mode": "Järjestelmäkehotteen lähde",
           "system_prompt": "Jarjestelmaohjeet",
+          "technical_prompt_mode": "Tekniset ohjeet Lähde",
           "technical_prompt": "Tekniset ohjeet",
           "temperature": "Lampotila",
           "max_tokens": "Vastauksen enimmais-tokenit",
           "max_history": "Historian enimmaisviestit",
+          "context_mode": "Kontekstitila",
           "max_iterations": "Tyokalujen enimmaisiteraatiot",
           "control_home_assistant": "Ohjaa Home Assistantia",
           "response_mode": "Vastaustila",
           "follow_up_phrases": "Jatkokysymysfraasit",
           "end_words": "Keskustelun lopetusSanat",
+          "clean_responses": "Puhdista vastaukset äänilähtöä varten",
           "timeout": "Vastauksen aikakatkaisu",
           "debug_mode": "Virheenkorjaustila",
+          "chat_log_mode": "Chat-lokitila",
           "ollama_keep_alive": "Pida Ollama aktiivisena",
           "ollama_num_ctx": "Ollaman konteksti-ikkuna",
-          "clean_responses": "Puhdista vastaukset äänilähtöä varten"
+          "openclaw_host": "Gateway Host",
+          "openclaw_port": "Gateway-portti",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Käytä SSL/TLS",
+          "openclaw_session_key": "Istuntoavain"
+        },
+        "data_description": {
+          "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
+          "system_prompt": "Esitäytetty voimassa olevalla järjestelmäkehotteella. Muokkaa tätä profiilia muokkaamalla sitä. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
+          "technical_prompt": "Esitäytetty voimassa olevilla teknisillä ohjeilla. Muokkaa niitä muokataksesi tätä profiilia. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
+          "context_mode": "Standard lähettää koko profiilityökalukontekstin. Light pitää pienemmän historiaikkunan ja mainostaa Home Assistant-ydintyökaluja pienille paikallisille malleille."
+        },
+        "sections": {
+          "profile": {
+            "name": "profiili",
+            "description": "Tämän keskusteluprofiilin perusidentiteetin asetukset.",
+            "data": {
+              "profile_name": "Profiilin nimi"
+            },
+            "data_description": {
+              "profile_name": "Ystävällinen nimi tälle keskusteluprofiilille."
+            }
+          },
+          "connection": {
+            "name": "-liitäntä",
+            "description": "How this profile connects to its model provider.",
+            "data": {
+              "lmstudio_url": "Palvelimen URL",
+              "api_key": "API-avain",
+              "openclaw_host": "Gateway Host",
+              "openclaw_port": "Gateway-portti",
+              "openclaw_token": "Gateway Token",
+              "openclaw_use_ssl": "Käytä SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "Tämän profiilin käyttämän paikallisen tai OpenAI-compatible-peruspalvelimen URL.",
+              "api_key": "Tämän palveluntarjoajan vaatima API-avain tai siirtotietunnus.",
+              "openclaw_host": "OpenClaw-yhdyskäytävän isäntänimi tai IP-osoite.",
+              "openclaw_port": "Portti, jota käyttää OpenClaw-yhdyskäytävä WebSocket-palvelin.",
+              "openclaw_token": "Tiedonsiirtotunnus, jota käytetään todentamiseen OpenClaw-yhdyskäytävän kanssa.",
+              "openclaw_use_ssl": "Käytä suojattua WebSocket-yhteyttä, kun puhut OpenClaw-yhdyskäytävän kanssa."
+            }
+          },
+          "model_fields": {
+            "name": "malli",
+            "description": "Valitse malli, jota tämän profiilin tulee käyttää.",
+            "data": {
+              "model_name": "Mallin nimi"
+            },
+            "data_description": {
+              "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää."
+            }
+          },
+          "prompts": {
+            "name": "Kehotteet",
+            "description": "Tarkista voimassa olevat kehotteet, kopioi ne tai muokkaa niitä tässä profiilissa.",
+            "data": {
+              "system_prompt": "Jarjestelmaohjeet",
+              "technical_prompt": "Tekniset ohjeet"
+            },
+            "data_description": {
+              "system_prompt": "Esitäytetty voimassa olevalla järjestelmäkehotteella. Muokkaa tätä profiilia muokkaamalla sitä. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
+              "technical_prompt": "Esitäytetty voimassa olevilla teknisillä ohjeilla. Muokkaa niitä muokataksesi tätä profiilia. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä."
+            }
+          },
+          "conversation": {
+            "name": "Keskustelu",
+            "description": "Tämän profiilin käyttäytyminen, seurantakäsittely ja äänentoistoasetukset.",
+            "data": {
+              "control_home_assistant": "Ohjaa Home Assistantia",
+              "response_mode": "Vastaustila",
+              "follow_up_phrases": "Jatkokysymysfraasit",
+              "end_words": "Keskustelun lopetusSanat",
+              "clean_responses": "Puhdista vastaukset äänilähtöä varten"
+            },
+            "data_description": {
+              "control_home_assistant": "Salli tämän profiilin suorittaa Home Assistant-toimintoja pelkän kysymyksiin vastaamisen sijaan.",
+              "response_mode": "Määrittää, lopettaako avustaja välittömästi vai kysyykö hän tarvittaessa luonnollisia jatkokysymyksiä.",
+              "follow_up_phrases": "Pilkuilla erotetut lauseet, joita käytetään seurantatyylivastausten havaitsemiseen.",
+              "end_words": "Pilkuilla erotetut sanat tai ilmaukset, joiden pitäisi lopettaa keskustelu.",
+              "clean_responses": "Leikkaa tarpeettomat muotoilut tai täyteaineet pitääksesi puhutut vastaukset puhtaana."
+            }
+          },
+          "provider": {
+            "name": "Toimittaja",
+            "description": "Palveluntarjoajakohtaiset asetukset näkyvät vain, kun ne ovat voimassa.",
+            "data": {
+              "ollama_keep_alive": "Pida Ollama aktiivisena",
+              "ollama_num_ctx": "Ollaman konteksti-ikkuna",
+              "openclaw_session_key": "Istuntoavain"
+            },
+            "data_description": {
+              "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
+              "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
+              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään."
+            }
+          },
+          "advanced_settings": {
+            "name": "Advanced",
+            "description": "Expert tuning for model behavior, limits, timeout, and debugging.",
+            "data": {
+              "temperature": "Lampotila",
+              "max_tokens": "Vastauksen enimmais-tokenit",
+              "max_history": "Historian enimmaisviestit",
+              "context_mode": "Kontekstitila",
+              "max_iterations": "Tyokalujen enimmaisiteraatiot",
+              "timeout": "Vastauksen aikakatkaisu",
+              "debug_mode": "Virheenkorjaustila",
+              "chat_log_mode": "Chat-lokitila"
+            },
+            "data_description": {
+              "temperature": "Ohjaa vasteen satunnaisuutta. Pienemmät arvot ovat deterministisempiä.",
+              "max_tokens": "Rajoittaa kuinka monta merkkiä malli voi luoda yhdessä vastauksessa.",
+              "max_history": "How many prior conversation messages to keep in context.",
+              "context_mode": "Standard lähettää koko profiilityökalukontekstin. Light pitää pienemmän historiaikkunan ja mainostaa Home Assistant-ydintyökaluja pienille paikallisille malleille.",
+              "max_iterations": "Rajoittaa kuinka monta työkalukutsukierrosta avustaja voi käyttää yhteen pyyntöön.",
+              "timeout": "How long to wait for a provider response before timing out.",
+              "debug_mode": "Ota käyttöön yksityiskohtaisempi lokikirjaus vianmääritystä varten.",
+              "chat_log_mode": "Säilytä viimeisimmät keskustelulokit, mukaan lukien käyttäjän tekstit, avustajan vastaukset, työkalujen nimet, työkalun argumentit ja työkalutulokset tarkistettavaksi."
+            }
+          },
+          "tools": {
+            "name": "Työkalut",
+            "description": "Valitsemattomat työkalut ovat käytettävissä aina, kun ne otetaan käyttöön jaetulla MCP-palvelimella. Valitse valintaruutu, jos haluat estää työkaluperheen käytön vain tässä profiilissa.",
+            "data": {
+              "disable_assist_bridge": "Poista Assist Bridge käytöstä",
+              "disable_calculator": "Poista laskin käytöstä",
+              "disable_custom_tools": "Poista mukautetut työkalut käytöstä",
+              "disable_device": "Poista laitetyökalut käytöstä",
+              "disable_google_maps": "Poista Google Places and Routes käytöstä",
+              "disable_llm_api_bridge": "Poista LLM API Bridge käytöstä",
+              "disable_memory": "Poista muisti käytöstä",
+              "disable_music_assistant": "Poista Music Assistant käytöstä",
+              "disable_read_url": "Poista käytöstä Lue URL",
+              "disable_recorder": "Poista tallentimen historia käytöstä",
+              "disable_response_service": "Poista vastauspalvelun lukeminen käytöstä",
+              "disable_search": "Poista haku käytöstä",
+              "disable_unit_conversion": "Poista yksikkömuunnos käytöstä",
+              "disable_weather_forecast": "Poista sääennuste käytöstä",
+              "disable_wikipedia_search": "Poista Wikipedia-haku käytöstä",
+              "disable_web_search": "Poista verkkohaku käytöstä"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Estää tätä profiilia käyttämästä Home Assistant:n alkuperäisiä Assist-työkaluja, kehotetta ja kontekstin tilannekuvaa.",
+              "disable_calculator": "Estää tätä profiilia käyttämästä matemaattisia ja lausekkeiden arviointityökaluja.",
+              "disable_custom_tools": "Estää tätä profiilia käyttämästä ulkoisia mukautettuja työkalupaketteja, jotka on ladattu jaetun MCP-palvelimen kautta.",
+              "disable_unit_conversion": "Estää tätä profiilia käyttämästä tarkkoja yksikkömuunnostyökaluja, kuten °C - °F, etäisyyttä, keittiön tilavuutta, tallennustilaa ja tiedonsiirtonopeutta.",
+              "disable_device": "Estää tätä profiilia löytämästä fyysisiä laitteita ja laitteen tietoja.",
+              "disable_google_maps": "Estää tätä profiilia käyttämästä Google Places and Routes työkaluja.",
+              "disable_llm_api_bridge": "Estää tätä profiilia käyttämästä sallittujen luettelossa olevia kolmannen osapuolen Home Assistant LLM API työkaluja.",
+              "disable_memory": "Estää tätä profiilia tallentamasta, muistamasta tai unohtamasta jaettuja säilyneitä muistoja.",
+              "disable_music_assistant": "Estää tätä profiilia käyttämästä Music Assistant-haku-, jono-, kirjasto- ja toistotyökaluja.",
+              "disable_read_url": "Estää tätä profiilia avaamasta ja poimimasta sivun sisältöä URLs:stä.",
+              "disable_recorder": "Estää tätä profiilia käyttämästä tallentimen tukemia historia-, laskenta-, kesto- ja ajankohtatyökaluja.",
+              "disable_response_service": "Estää tätä profiilia käyttämästä Home Assistant-palveluita, jotka palauttavat strukturoituja tietoja, kuten kalenterin ja ennusteen lukuja.",
+              "disable_search": "Estää tätä profiilia käyttämästä sisäänrakennettua verkkohakuapuohjelmaa.",
+              "disable_weather_forecast": "Estää tätä profiilia käyttämästä erityistä Home Assistant sääennusteapuohjelmaa.",
+              "disable_wikipedia_search": "Estää tätä profiilia tekemästä hakuja Wikipedia.",
+              "disable_web_search": "Estää tätä profiilia käyttämästä verkkohakua ja URL-lukutyökaluja, vaikka ne olisivat käytössä jaetussa MCP-palvelimessa."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Nama asetukset jaetaan KAIKKIEN profiilien kesken",
         "data": {
           "mcp_port": "MCP-palvelinportti",
-          "search_provider": "Verkkohaku",
-          "brave_api_key": "Brave Search API-avain",
-          "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "enable_gap_filling": "Ota alyas entiteetti-indeksi kayttoon",
-          "max_entities_per_discovery": "Max entiteettia per haku (20-500)"
+          "allowed_ips": "Lisat sallitut IP:t/alueet"
+        },
+        "data_description": {
+          "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
+          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi."
+        },
+        "sections": {
+          "context": {
+            "name": "Konteksti",
+            "description": "Hallitse, mitkä Home Assistant-identiteetti- ja sijaintitiedot sisältyvät tekoälykehotteisiin ja MCP-työkalukutsujen hyötykuormiin.",
+            "data": {
+              "include_current_user": "Sisällytä nykyinen käyttäjä kehotteeseen",
+              "include_home_location": "Sisällytä kodin sijainti kehotteeseen",
+              "include_current_user_in_tool_calls": "Jaa nykyinen käyttäjä MCP-työkaluilla",
+              "include_home_location_in_tool_calls": "Jaa kodin sijainti MCP-työkaluilla"
+            },
+            "data_description": {
+              "include_current_user": "Sisällytä nykyisen Home Assistant-käyttäjän nimi tekoälykehotteeseen, jos se on saatavilla.",
+              "include_home_location": "Sisällytä AI-kehotteeseen kompakti kodin sijainnin yhteenveto käyttämällä Home Assistant:n määritettyä kodin nimeä ja koordinaatteja.",
+              "include_current_user_in_tool_calls": "Lähetä nykyinen Home Assistant-käyttäjätunnus ja nimi MCP-työkaluissa/puhelukontekstissa, jotta työkalupaketit voivat tarkastaa tai mukauttaa toimintoja.",
+              "include_home_location_in_tool_calls": "Lähetä Home Assistant:n määritetty kotinimi, leveysaste ja pituusaste MCP-työkaluissa/kutsun kontekstissa työkalupaketteille, jotka tarvitsevat sijainnin metatietoja."
+            }
+          },
+          "discovery": {
+            "name": "Discovery",
+            "description": "Hallitse, kuinka jaettu MCP-palvelin rakentaa ja palauttaa etsintätuloksia.",
+            "data": {
+              "enable_gap_filling": "Ota Smart Entity Index käyttöön",
+              "max_entities_per_discovery": "Entiteettien enimmäismäärä löytöä kohti (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Muodostaa kompaktin järjestelmähakemiston, jotta etsintä pysyy nopeana ja kontekstitietoisena.",
+              "max_entities_per_discovery": "Rajoittaa kuinka monta entiteettiä yksi etsintäkutsu voi palauttaa."
+            }
+          },
+          "memory": {
+            "name": "Muisti",
+            "description": "Määritä, kuinka kauan jaettuja muisteja säilytetään, kun Muistityökalu on käytössä.",
+            "data": {
+              "memory_default_ttl_days": "oletusmuisti TTL (päiviä)",
+              "memory_max_ttl_days": "Suurin muisti TTL (päiviä)",
+              "memory_max_items": "Tallennettujen muistien enimmäismäärä"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Oletuspäivien lukumäärä, jolloin uusi muisti säilytetään, kun työkalukutsu ei tarjoa ttl_days.",
+              "memory_max_ttl_days": "Tallennetun muistin säilytyspäivien enimmäismäärä.",
+              "memory_max_items": "Aktiivisten tallennettujen muistien yläraja. Vanhimmat muistot leikataan ensin, kun tämä raja ylittyy."
+            }
+          },
+          "tools": {
+            "name": "Työkalut",
+            "description": "Enable or disable optional tool capabilities exposed by the shared MCP server.",
+            "data": {
+              "enable_assist_bridge": "Assist Bridge",
+              "enable_calculator_tools": "Laskin",
+              "enable_external_custom_tools": "mukautetut työkalut",
+              "enable_device_tools": "Laitetyökalut",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API silta",
+              "enable_memory_tools": "Muisti",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Lue URL",
+              "enable_recorder_tools": "Tallentimen historia",
+              "enable_response_service_tools": "-vastauspalvelun luku",
+              "enable_search_tool": "Haku",
+              "enable_unit_conversion_tools": "Yksikkömuunnos",
+              "enable_weather_forecast_tool": "Sääennuste",
+              "enable_wikipedia_search_tool": "Wikipedia Haku",
+              "enable_web_search": "Web-haku",
+              "search_provider": "Verkkohaun tarjoaja",
+              "brave_api_key": "Brave Search API avain",
+              "google_maps_api_key": "Google Maps API avain",
+              "llm_api_allowlist": "Sallitut LLM API-tunnukset",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
+              "enable_calculator_tools": "Expose math and expression-evaluation tools.",
+              "enable_external_custom_tools": "Load additional local tool packages from the Home Assistant config directory under mcp-assist-tools. Ei käytössä oletuksena. Ota käyttöön vain luotetut paketit, koska ne toimivat Python-koodina Home Assistant:n sisällä ja voivat lisätä MCP-työkaluja sekä lyhyttä ohjeistusta.",
+              "enable_unit_conversion_tools": "Expose exact unit-conversion tools such as °C to °F, distance, kitchen volume, storage, and data-rate conversions.",
+              "enable_device_tools": "Tuo esiin fyysisten laitteiden etsintä- ja laitetietojen työkalut.",
+              "enable_google_maps_tools": "Näytä Google Places-haku- ja Google Routes-matka-aikatyökalut. Vaatii Google Maps API-avaimen.",
+              "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
+              "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
+              "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
+              "enable_read_url_tool": "Näytä URL-luku, jotta avustaja voi tarkastaa tietyt verkkosivut.",
+              "enable_recorder_tools": "Näytä tallentimen tukemat historia-, analyysi- ja ajankohtaiset työkalut.",
+              "enable_response_service_tools": "Näytä Home Assistant-palvelut, jotka palauttavat strukturoituja tietoja, kuten kalenterin ja ennusteen lukuja.",
+              "enable_search_tool": "Expose web search using the configured shared provider.",
+              "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
+              "enable_wikipedia_search_tool": "Expose lightweight Wikipedia article search for background and reference questions.",
+              "enable_web_search": "Expose web search and URL-reading tools.",
+              "search_provider": "Valitse käytettävä palveluntarjoaja, kun verkkohaku on käytössä.",
+              "brave_api_key": "Vaaditaan vain, kun verkkohaku on käytössä ja Brave Search on valittuna.",
+              "google_maps_api_key": "Vaaditaan vain, kun Google Places and Routes on käytössä.",
+              "llm_api_allowlist": "Pilkulla tai rivinvaihdolla erotetut kolmannen osapuolen LLM API-tunnukset MCP Assist voivat tarkastaa tai soittaa, kuten llm_intents. Asennettu kolmannen osapuolen LLM APIs: {installed_llm_apis}. Sisäänrakennettu apu API pysyy Assist Bridgessä.",
+              "searxng_url": "Vaaditaan vain, kun verkkohaku on käytössä ja SearXNG on valittuna. Käytä URL-perustaa itseisännöityyn SearXNG-instanssiin."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Oletus",
+        "custom": "Mukautettu"
       }
     }
   },

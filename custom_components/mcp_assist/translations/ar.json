@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "اسم الملف الشخصي",
           "server_type": "نوع الخادم"
+        },
+        "data_description": {
+          "profile_name": "اسم مألوف لملف تعريف المحادثة هذا.",
+          "server_type": "اختر الموفر أو خادم الاستدلال الذي يستخدمه ملف التعريف هذا."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "عنوان URL للخادم",
           "api_key": "مفتاح API",
-          "mcp_port": "منفذ خادم MCP"
+          "mcp_port": "منفذ خادم MCP",
+          "openclaw_host": "مضيف البوابة",
+          "openclaw_port": "ميناء البوابة",
+          "openclaw_token": "رمز البوابة",
+          "openclaw_use_ssl": "استخدم SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "URL الأساسي للخادم المحلي أو خادم OpenAI-compatible الذي يستخدمه ملف التعريف هذا.",
+          "api_key": "مفتاح API أو الرمز المميز للحامل المطلوب من قبل هذا المزود.",
+          "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
+          "openclaw_host": "اسم المضيف أو عنوان IP لبوابة OpenClaw.",
+          "openclaw_port": "المنفذ المستخدم بواسطة خادم OpenClaw لبوابة WebSocket.",
+          "openclaw_token": "يتم استخدام الرمز المميز للحامل للمصادقة مع بوابة OpenClaw.",
+          "openclaw_use_ssl": "استخدم اتصال WebSocket الآمن عند التحدث إلى بوابة OpenClaw."
         }
+      },
+      "openclaw_pairing": {
+        "title": "اقتران جهاز OpenClaw",
+        "description": "يحتاج جهازك إلى الموافقة على خادم OpenClaw.\n\nقم بالموافقة عليه عن طريق تشغيل `openclaw devices approve` أو استخدام OpenClaw Control UI، ثم انقر فوق إرسال.\n\nمعرف الجهاز: {device_id}"
       },
       "model": {
         "title": "النموذج والتعليمات",
         "description": "{server_info}",
         "data": {
           "model_name": "اسم النموذج",
+          "system_prompt_mode": "مصدر موجه النظام",
           "system_prompt": "تعليمات النظام",
+          "technical_prompt_mode": "مصدر التعليمات الفنية",
           "technical_prompt": "التعليمات التقنية"
+        },
+        "data_description": {
+          "model_name": "نموذج LLM الذي يجب أن يستخدمه ملف التعريف هذا.",
+          "system_prompt": "مملوء مسبقًا بموجه النظام الفعال الحالي. قم بتحريره لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية.",
+          "technical_prompt": "مملوء مسبقًا بالتعليمات الفنية الفعالة الحالية. قم بتحريرها لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "نموذج",
+            "description": "اختر النموذج الذي يجب أن يستخدمه ملف التعريف هذا.",
+            "data": {
+              "model_name": "اسم النموذج"
+            },
+            "data_description": {
+              "model_name": "نموذج LLM الذي يجب أن يستخدمه ملف التعريف هذا."
+            }
+          },
+          "prompts": {
+            "name": "يطالب",
+            "description": "قم بمراجعة المطالبات الفعالة الحالية أو نسخها أو تحريرها لملف التعريف هذا.",
+            "data": {
+              "system_prompt": "تعليمات النظام",
+              "technical_prompt": "التعليمات التقنية"
+            },
+            "data_description": {
+              "system_prompt": "مملوء مسبقًا بموجه النظام الفعال الحالي. قم بتحريره لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية.",
+              "technical_prompt": "مملوء مسبقًا بالتعليمات الفنية الفعالة الحالية. قم بتحريرها لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "درجة الحرارة",
           "max_tokens": "الحد الاقصى لرموز الاستجابة",
           "max_history": "الحد الاقصى لرسائل السجل",
+          "context_mode": "وضع السياق",
           "max_iterations": "الحد الاقصى لتكرارات الادوات",
           "control_home_assistant": "التحكم في Home Assistant",
           "response_mode": "وضع الاستجابة",
           "follow_up_phrases": "عبارات المتابعة",
           "end_words": "كلمات انهاء المحادثة",
+          "clean_responses": "تنظيف الردود للإخراج الصوتي",
           "timeout": "انتهاء مهلة الاستجابة",
           "debug_mode": "وضع التصحيح",
+          "chat_log_mode": "وضع سجل الدردشة",
           "ollama_keep_alive": "ابق Ollama نشطا",
           "ollama_num_ctx": "نافذة سياق Ollama",
-          "clean_responses": "تنظيف الردود للإخراج الصوتي"
+          "openclaw_session_key": "مفتاح الجلسة"
+        },
+        "sections": {
+          "conversation": {
+            "name": "محادثة",
+            "description": "إعدادات السلوك ومعالجة المتابعة والإخراج الصوتي لهذا الملف الشخصي.",
+            "data": {
+              "control_home_assistant": "التحكم في Home Assistant",
+              "response_mode": "وضع الاستجابة",
+              "follow_up_phrases": "عبارات المتابعة",
+              "end_words": "كلمات انهاء المحادثة",
+              "clean_responses": "تنظيف الردود للإخراج الصوتي"
+            },
+            "data_description": {
+              "control_home_assistant": "السماح لملف التعريف هذا بتنفيذ إجراءات Home Assistant بدلاً من الإجابة على الأسئلة فقط.",
+              "response_mode": "يتحكم في ما إذا كان المساعد سينتهي فورًا أو يطرح أسئلة متابعة طبيعية عندما يكون ذلك مناسبًا.",
+              "follow_up_phrases": "عبارات مفصولة بفواصل تستخدم للكشف عن استجابات نمط المتابعة.",
+              "end_words": "الكلمات أو العبارات المفصولة بفواصل والتي يجب أن تنهي المحادثة.",
+              "clean_responses": "قم بقص التنسيق أو الحشو غير الضروري للحفاظ على نظافة الاستجابات المنطوقة."
+            }
+          },
+          "performance": {
+            "name": "أداء",
+            "description": "حدود الاستجابة للنموذج، وحدود التنفيذ، والمهلة، وتصحيح الأخطاء.",
+            "data": {
+              "temperature": "درجة الحرارة",
+              "max_tokens": "الحد الاقصى لرموز الاستجابة",
+              "max_history": "الحد الاقصى لرسائل السجل",
+              "context_mode": "وضع السياق",
+              "max_iterations": "الحد الاقصى لتكرارات الادوات",
+              "timeout": "انتهاء مهلة الاستجابة",
+              "debug_mode": "وضع التصحيح",
+              "chat_log_mode": "وضع سجل الدردشة"
+            },
+            "data_description": {
+              "temperature": "يتحكم في عشوائية الاستجابة. القيم الدنيا هي أكثر حتمية.",
+              "max_tokens": "يحدد عدد الرموز المميزة التي قد ينشئها النموذج في استجابة واحدة.",
+              "max_history": "كم عدد رسائل المحادثة السابقة التي يجب الاحتفاظ بها في سياقها.",
+              "context_mode": "يرسل المعيار سياق أداة الملف الشخصي الكامل. يحتفظ Light بنافذة سجل أصغر ويعلن عن أدوات Home Assistant الأساسية للنماذج المحلية الصغيرة.",
+              "max_iterations": "يحدد عدد دورات استدعاء الأدوات التي قد يستخدمها المساعد لطلب واحد.",
+              "timeout": "كم من الوقت يجب انتظار استجابة الموفر قبل انتهاء المهلة.",
+              "debug_mode": "تمكين تسجيل أكثر تفصيلاً لاستكشاف الأخطاء وإصلاحها.",
+              "chat_log_mode": "الاحتفاظ بسجلات المحادثات الأخيرة، بما في ذلك نص المستخدم وردود المساعد وأسماء الأدوات ووسائط الأداة ونتائج الأداة للمراجعة."
+            }
+          },
+          "provider": {
+            "name": "مزود",
+            "description": "تظهر الإعدادات الخاصة بالموفر فقط عند تطبيقها.",
+            "data": {
+              "ollama_keep_alive": "ابق Ollama نشطا",
+              "ollama_num_ctx": "نافذة سياق Ollama",
+              "openclaw_session_key": "مفتاح الجلسة"
+            },
+            "data_description": {
+              "ollama_keep_alive": "كم من الوقت يجب أن يحتفظ Ollama بالنموذج المحدد محملاً في الذاكرة.",
+              "ollama_num_ctx": "تجاوز حجم نافذة السياق الذي تم تمريره إلى Ollama. استخدم 0 للحفاظ على النموذج الافتراضي.",
+              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها."
+            }
+          },
+          "tools": {
+            "name": "أدوات",
+            "description": "تظل الأدوات التي لم يتم تحديدها متاحة عندما يتم تمكينها على خادم MCP المشترك. حدد المربع لمنع مجموعة الأدوات لهذا الملف الشخصي فقط.",
+            "data": {
+              "disable_assist_bridge": "تعطيل الجسر المساعد",
+              "disable_calculator": "تعطيل الآلة الحاسبة",
+              "disable_custom_tools": "تعطيل الأدوات المخصصة",
+              "disable_device": "تعطيل أدوات الجهاز",
+              "disable_google_maps": "تعطيل Google Places and Routes",
+              "disable_llm_api_bridge": "تعطيل جسر LLM API",
+              "disable_memory": "تعطيل الذاكرة",
+              "disable_music_assistant": "تعطيل Music Assistant",
+              "disable_read_url": "تعطيل قراءة URL",
+              "disable_recorder": "تعطيل سجل المسجل",
+              "disable_response_service": "تعطيل قراءات خدمة الاستجابة",
+              "disable_search": "تعطيل البحث",
+              "disable_unit_conversion": "تعطيل تحويل الوحدة",
+              "disable_weather_forecast": "تعطيل توقعات الطقس",
+              "disable_wikipedia_search": "تعطيل بحث Wikipedia",
+              "disable_web_search": "تعطيل بحث الويب"
+            },
+            "data_description": {
+              "disable_assist_bridge": "يمنع ملف التعريف هذا من استخدام أدوات المساعدة الأصلية والموجه ولقطات السياق الخاصة بـ Home Assistant.",
+              "disable_calculator": "منع ملف التعريف هذا من استخدام أدوات الرياضيات وتقييم التعبيرات.",
+              "disable_custom_tools": "يمنع ملف التعريف هذا من استخدام حزم الأدوات المخصصة الخارجية التي تم تحميلها من خلال خادم MCP المشترك.",
+              "disable_device": "يمنع ملف التعريف هذا من اكتشاف الأجهزة الفعلية وتفاصيل الجهاز.",
+              "disable_google_maps": "يمنع ملف التعريف هذا من استخدام أدوات Google Places and Routes.",
+              "disable_llm_api_bridge": "يمنع ملف التعريف هذا من استخدام أدوات Home Assistant LLM API التابعة لجهات خارجية والمدرجة في القائمة المسموح بها.",
+              "disable_memory": "يمنع ملف التعريف هذا من تخزين الذكريات المستمرة المشتركة أو استرجاعها أو نسيانها.",
+              "disable_music_assistant": "يمنع ملف التعريف هذا من استخدام أدوات البحث وقائمة الانتظار والمكتبة والتشغيل في Music Assistant.",
+              "disable_read_url": "يمنع ملف التعريف هذا من فتح واستخراج محتوى الصفحة من URLs.",
+              "disable_recorder": "يمنع ملف التعريف هذا من استخدام أدوات السجل والعدد والمدة وأدوات النقطة الزمنية المدعومة بالمسجل.",
+              "disable_response_service": "يمنع ملف التعريف هذا من استخدام خدمات Home Assistant التي تقوم بإرجاع البيانات المنظمة، مثل قراءات التقويم والتنبؤات.",
+              "disable_search": "يمنع ملف التعريف هذا من استخدام مساعد بحث الويب المدمج.",
+              "disable_unit_conversion": "يمنع ملف التعريف هذا من استخدام أدوات تحويل الوحدات الدقيقة مثل °C إلى °F، والمسافة، وحجم المطبخ، والتخزين، وتحويلات معدل البيانات.",
+              "disable_weather_forecast": "يمنع ملف التعريف هذا من استخدام مساعد توقعات الطقس Home Assistant المخصص.",
+              "disable_wikipedia_search": "يمنع ملف التعريف هذا من البحث في Wikipedia.",
+              "disable_web_search": "يمنع ملف التعريف هذا من استخدام بحث الويب وأدوات القراءة URL، حتى إذا تم تمكينها على خادم MCP المشترك."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "تؤثر هذه الاعدادات على جميع الملفات الشخصية. ستؤثر التغييرات هنا على كل وكيل محادثة MCP Assist.",
         "data": {
           "mcp_port": "منفذ خادم MCP",
-          "search_provider": "البحث على الويب",
-          "brave_api_key": "مفتاح API لـ Brave Search",
-          "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "enable_gap_filling": "تمكين فهرس الكيانات الذكي",
-          "max_entities_per_discovery": "الحد الاقصى للكيانات لكل اكتشاف (20-500)"
+          "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها"
+        },
+        "data_description": {
+          "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
+          "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "سياق",
+            "description": "التحكم في هوية Home Assistant وتفاصيل الموقع المضمنة في مطالبات الذكاء الاصطناعي وحمولات استدعاء الأدوات MCP.",
+            "data": {
+              "include_current_user": "تضمين المستخدم الحالي في الموجه",
+              "include_home_location": "قم بتضمين موقع المنزل بشكل سريع",
+              "include_current_user_in_tool_calls": "مشاركة المستخدم الحالي مع أدوات MCP",
+              "include_home_location_in_tool_calls": "مشاركة موقع المنزل باستخدام أدوات MCP"
+            },
+            "data_description": {
+              "include_current_user": "قم بتضمين اسم مستخدم Home Assistant الحالي في موجه AI عندما يكون ذلك متاحًا.",
+              "include_home_location": "قم بتضمين ملخص موقع المنزل المدمج في موجه الذكاء الاصطناعي، باستخدام اسم المنزل الذي تم تكوينه وإحداثياته ​​في Home Assistant.",
+              "include_current_user_in_tool_calls": "أرسل معرف مستخدم Home Assistant الحالي واسمه في سياق أدوات/استدعاء MCP حتى تتمكن حزم الأدوات من تدقيق الإجراءات أو تخصيصها.",
+              "include_home_location_in_tool_calls": "أرسل اسم المنزل وخط العرض وخط الطول الذي تم تكوينه لـ Home Assistant في أدوات MCP/سياق الاتصال لحزم الأدوات التي تحتاج إلى بيانات تعريف الموقع."
+            }
+          },
+          "discovery": {
+            "name": "اكتشاف",
+            "description": "التحكم في كيفية قيام خادم MCP المشترك بإنشاء نتائج الاكتشاف وإرجاعها.",
+            "data": {
+              "enable_gap_filling": "تمكين فهرس الكيان الذكي",
+              "max_entities_per_discovery": "الحد الأقصى للكيانات لكل اكتشاف (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "ينشئ فهرس نظام مدمج لإبقاء الاكتشاف سريعًا ومراعيًا للسياق.",
+              "max_entities_per_discovery": "يحدد عدد الكيانات التي قد ترجعها مكالمة اكتشاف واحدة."
+            }
+          },
+          "memory": {
+            "name": "ذاكرة",
+            "description": "قم بتكوين مدة الاحتفاظ بالذكريات الدائمة المشتركة عند تمكين أداة الذاكرة.",
+            "data": {
+              "memory_default_ttl_days": "الذاكرة الافتراضية TTL (أيام)",
+              "memory_max_ttl_days": "الحد الأقصى للذاكرة TTL (أيام)",
+              "memory_max_items": "ماكس الذكريات المخزنة"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "العدد الافتراضي للأيام التي يتم الاحتفاظ بالذاكرة الجديدة فيها عندما لا يوفر استدعاء الأداة ttl_days.",
+              "memory_max_ttl_days": "الحد الأقصى لعدد الأيام التي يمكن الاحتفاظ بأي ذاكرة مخزنة فيها.",
+              "memory_max_items": "الحد الأعلى للذكريات المخزنة النشطة. يتم تشذيب الذكريات الأقدم أولاً عند تجاوز هذا الحد."
+            }
+          },
+          "tools": {
+            "name": "أدوات",
+            "description": "تمكين أو تعطيل إمكانيات الأداة الاختيارية التي يكشفها خادم MCP المشترك.",
+            "data": {
+              "enable_assist_bridge": "جسر المساعدة",
+              "enable_calculator_tools": "آلة حاسبة",
+              "enable_external_custom_tools": "أدوات مخصصة",
+              "enable_device_tools": "أدوات الجهاز",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "جسر LLM API",
+              "enable_memory_tools": "ذاكرة",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "قراءة URL",
+              "enable_recorder_tools": "تاريخ المسجل",
+              "enable_response_service_tools": "قراءة خدمة الاستجابة",
+              "enable_search_tool": "يبحث",
+              "enable_unit_conversion_tools": "تحويل الوحدة",
+              "enable_weather_forecast_tool": "توقعات الطقس",
+              "enable_wikipedia_search_tool": "بحث Wikipedia",
+              "enable_web_search": "بحث الويب",
+              "search_provider": "مزود بحث الويب",
+              "brave_api_key": "Brave Search API مفتاح",
+              "google_maps_api_key": "Google Maps API مفتاح",
+              "llm_api_allowlist": "معرفات LLM API المسموح بها",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "كشف أدوات المساعدة الأصلية لـ Home Assistant، والموجه، ولقطات السياق.",
+              "enable_calculator_tools": "كشف أدوات الرياضيات وتقييم التعبير.",
+              "enable_external_custom_tools": "قم بتحميل حزم الأدوات المحلية الإضافية من دليل التكوين Home Assistant ضمن mcp-assist-tools. معطل افتراضيا. قم بتمكين الحزم الموثوقة فقط لأنها تعمل كرمز Python داخل Home Assistant وقد تضيف أدوات MCP بالإضافة إلى إرشادات سريعة سريعة.",
+              "enable_device_tools": "كشف اكتشاف الأجهزة الفعلية وأدوات تفاصيل الجهاز.",
+              "enable_google_maps_tools": "كشف Google Places وأدوات وقت السفر Google Routes. يتطلب مفتاح Google Maps API.",
+              "enable_llm_api_bridge": "كشف Home Assistant LLM API للجهات الخارجية المسجلة بواسطة عمليات التكامل الأخرى.",
+              "enable_memory_tools": "اكشف عن أدوات الذاكرة المستمرة المشتركة حتى يتمكن المساعد من تذكر الحقائق والتفضيلات التي وافق عليها المستخدم واسترجاعها ونسيانها من خلال انتهاء الصلاحية المستند إلى TTL.",
+              "enable_music_assistant_support": "كشف أدوات البحث وقائمة الانتظار والمكتبة والتشغيل Music Assistant.",
+              "enable_read_url_tool": "كشف قراءة URL حتى يتمكن المساعد من فحص صفحات ويب محددة.",
+              "enable_recorder_tools": "كشف التاريخ والتحليل وأدوات النقطة الزمنية المدعومة بالمسجل.",
+              "enable_response_service_tools": "اعرض خدمات Home Assistant التي تُرجع البيانات المنظمة، مثل قراءات التقويم والتنبؤات.",
+              "enable_search_tool": "كشف بحث الويب باستخدام الموفر المشترك الذي تم تكوينه.",
+              "enable_unit_conversion_tools": "اكشف عن أدوات تحويل الوحدات الدقيقة مثل °C إلى °F، والمسافة، وحجم المطبخ، والتخزين، وتحويلات معدل البيانات.",
+              "enable_weather_forecast_tool": "كشف مساعد توقعات الطقس Home Assistant المخصص.",
+              "enable_wikipedia_search_tool": "كشف مقالة Wikipedia خفيفة الوزن للبحث عن الأسئلة الأساسية والمرجعية.",
+              "enable_web_search": "كشف بحث الويب وأدوات القراءة URL.",
+              "search_provider": "اختر الموفر الذي تريد استخدامه عند تمكين بحث الويب.",
+              "brave_api_key": "مطلوب فقط عند تمكين بحث الويب وتحديد Brave Search.",
+              "google_maps_api_key": "مطلوب فقط عند تمكين Google Places and Routes.",
+              "llm_api_allowlist": "معرفات MCP Assist لجهة خارجية مفصولة بفواصل أو أسطر جديدة قد تقوم بفحصها أو الاتصال بها، مثل llm_intents. تم تثبيت LLM APIs من جهة خارجية: {installed_llm_apis}. تظل المساعدة المضمنة API موجودة على Assist Bridge.",
+              "searxng_url": "مطلوب فقط عند تمكين بحث الويب وتحديد SearXNG. استخدم URL الأساسي لمثيل SearXNG المستضاف ذاتيًا."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "تنسيق عنوان IP او نطاق CIDR غير صالح. استخدم قيما مفصولة بفواصل مثل: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "اسم الملف الشخصي مطلوب.",
       "invalid_json": "تنسيق JSON غير صالح. يرجى التحقق من تكوين خوادم MCP الخاصة بك.",
+      "searxng_url_required": "SearXNG URL مطلوب عند تمكين بحث SearXNG.",
+      "google_maps_api_key_required": "مطلوب مفتاح Google Maps API عند تمكين Google Places and Routes.",
+      "mcp_apply_failed": "تعذر تطبيق إعدادات خادم MCP المشتركة. تحقق من المنفذ وعناوين IP المسموح بها، ثم حاول مرة أخرى.",
       "invalid_api_key": "مفتاح API غير صالح. يرجى التحقق والمحاولة مرة اخرى.",
       "auth_failed": "فشلت المصادقة. يرجى التحقق من مفتاح API الخاص بك.",
-      "unknown": "حدث خطا غير معروف."
+      "unknown": "حدث خطا غير معروف.",
+      "openclaw_not_paired": "الجهاز لم تتم الموافقة عليه بعد على خادم OpenClaw. يرجى الموافقة عليه والمحاولة مرة أخرى.",
+      "openclaw_connection_failed": "تعذر الاتصال ببوابة OpenClaw. تحقق من المضيف والمنفذ والرمز المميز."
     },
     "abort": {
       "already_configured": "يوجد ملف شخصي بهذا الاسم بالفعل. يرجى اختيار اسم مختلف."
@@ -85,21 +338,186 @@
           "lmstudio_url": "عنوان URL للخادم",
           "api_key": "مفتاح API",
           "model_name": "اسم النموذج",
+          "system_prompt_mode": "مصدر موجه النظام",
           "system_prompt": "تعليمات النظام",
+          "technical_prompt_mode": "مصدر التعليمات الفنية",
           "technical_prompt": "التعليمات التقنية",
           "temperature": "درجة الحرارة",
           "max_tokens": "الحد الاقصى لرموز الاستجابة",
           "max_history": "الحد الاقصى لرسائل السجل",
+          "context_mode": "وضع السياق",
           "max_iterations": "الحد الاقصى لتكرارات الادوات",
           "control_home_assistant": "التحكم في Home Assistant",
           "response_mode": "وضع الاستجابة",
           "follow_up_phrases": "عبارات المتابعة",
           "end_words": "كلمات انهاء المحادثة",
+          "clean_responses": "تنظيف الردود للإخراج الصوتي",
           "timeout": "انتهاء مهلة الاستجابة",
           "debug_mode": "وضع التصحيح",
+          "chat_log_mode": "وضع سجل الدردشة",
           "ollama_keep_alive": "ابق Ollama نشطا",
           "ollama_num_ctx": "نافذة سياق Ollama",
-          "clean_responses": "تنظيف الردود للإخراج الصوتي"
+          "openclaw_host": "مضيف البوابة",
+          "openclaw_port": "ميناء البوابة",
+          "openclaw_token": "رمز البوابة",
+          "openclaw_use_ssl": "استخدم SSL/TLS",
+          "openclaw_session_key": "مفتاح الجلسة"
+        },
+        "data_description": {
+          "model_name": "نموذج LLM الذي يجب أن يستخدمه ملف التعريف هذا.",
+          "system_prompt": "مملوء مسبقًا بموجه النظام الفعال الحالي. قم بتحريره لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية.",
+          "technical_prompt": "مملوء مسبقًا بالتعليمات الفنية الفعالة الحالية. قم بتحريرها لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية.",
+          "context_mode": "يرسل المعيار سياق أداة الملف الشخصي الكامل. يحتفظ Light بنافذة سجل أصغر ويعلن عن أدوات Home Assistant الأساسية للنماذج المحلية الصغيرة."
+        },
+        "sections": {
+          "profile": {
+            "name": "حساب تعريفي",
+            "description": "إعدادات الهوية الأساسية لملف تعريف المحادثة هذا.",
+            "data": {
+              "profile_name": "اسم الملف الشخصي"
+            },
+            "data_description": {
+              "profile_name": "اسم مألوف لملف تعريف المحادثة هذا."
+            }
+          },
+          "connection": {
+            "name": "اتصال",
+            "description": "كيف يتصل ملف التعريف هذا بموفر النموذج الخاص به.",
+            "data": {
+              "lmstudio_url": "عنوان URL للخادم",
+              "api_key": "مفتاح API",
+              "openclaw_host": "مضيف البوابة",
+              "openclaw_port": "ميناء البوابة",
+              "openclaw_token": "رمز البوابة",
+              "openclaw_use_ssl": "استخدم SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "URL الأساسي للخادم المحلي أو خادم OpenAI-compatible الذي يستخدمه ملف التعريف هذا.",
+              "api_key": "مفتاح API أو الرمز المميز للحامل المطلوب من قبل هذا المزود.",
+              "openclaw_host": "اسم المضيف أو عنوان IP لبوابة OpenClaw.",
+              "openclaw_port": "المنفذ المستخدم بواسطة خادم OpenClaw لبوابة WebSocket.",
+              "openclaw_token": "يتم استخدام الرمز المميز للحامل للمصادقة مع بوابة OpenClaw.",
+              "openclaw_use_ssl": "استخدم اتصال WebSocket الآمن عند التحدث إلى بوابة OpenClaw."
+            }
+          },
+          "model_fields": {
+            "name": "نموذج",
+            "description": "اختر النموذج الذي يجب أن يستخدمه ملف التعريف هذا.",
+            "data": {
+              "model_name": "اسم النموذج"
+            },
+            "data_description": {
+              "model_name": "نموذج LLM الذي يجب أن يستخدمه ملف التعريف هذا."
+            }
+          },
+          "prompts": {
+            "name": "يطالب",
+            "description": "قم بمراجعة المطالبات الفعالة الحالية أو نسخها أو تحريرها لملف التعريف هذا.",
+            "data": {
+              "system_prompt": "تعليمات النظام",
+              "technical_prompt": "التعليمات التقنية"
+            },
+            "data_description": {
+              "system_prompt": "مملوء مسبقًا بموجه النظام الفعال الحالي. قم بتحريره لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية.",
+              "technical_prompt": "مملوء مسبقًا بالتعليمات الفنية الفعالة الحالية. قم بتحريرها لتخصيص ملف التعريف هذا. إذا تركت دون تغيير، فإن التكامل يستمر في استخدام الموجه المدمج من التعليمات البرمجية."
+            }
+          },
+          "conversation": {
+            "name": "محادثة",
+            "description": "إعدادات السلوك ومعالجة المتابعة والإخراج الصوتي لهذا الملف الشخصي.",
+            "data": {
+              "control_home_assistant": "التحكم في Home Assistant",
+              "response_mode": "وضع الاستجابة",
+              "follow_up_phrases": "عبارات المتابعة",
+              "end_words": "كلمات انهاء المحادثة",
+              "clean_responses": "تنظيف الردود للإخراج الصوتي"
+            },
+            "data_description": {
+              "control_home_assistant": "السماح لملف التعريف هذا بتنفيذ إجراءات Home Assistant بدلاً من الإجابة على الأسئلة فقط.",
+              "response_mode": "يتحكم في ما إذا كان المساعد سينتهي فورًا أو يطرح أسئلة متابعة طبيعية عندما يكون ذلك مناسبًا.",
+              "follow_up_phrases": "عبارات مفصولة بفواصل تستخدم للكشف عن استجابات نمط المتابعة.",
+              "end_words": "الكلمات أو العبارات المفصولة بفواصل والتي يجب أن تنهي المحادثة.",
+              "clean_responses": "قم بقص التنسيق أو الحشو غير الضروري للحفاظ على نظافة الاستجابات المنطوقة."
+            }
+          },
+          "provider": {
+            "name": "مزود",
+            "description": "تظهر الإعدادات الخاصة بالموفر فقط عند تطبيقها.",
+            "data": {
+              "ollama_keep_alive": "ابق Ollama نشطا",
+              "ollama_num_ctx": "نافذة سياق Ollama",
+              "openclaw_session_key": "مفتاح الجلسة"
+            },
+            "data_description": {
+              "ollama_keep_alive": "كم من الوقت يجب أن يحتفظ Ollama بالنموذج المحدد محملاً في الذاكرة.",
+              "ollama_num_ctx": "تجاوز حجم نافذة السياق الذي تم تمريره إلى Ollama. استخدم 0 للحفاظ على النموذج الافتراضي.",
+              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها."
+            }
+          },
+          "advanced_settings": {
+            "name": "متقدم",
+            "description": "ضبط الخبراء لسلوك النموذج والحدود والمهلة وتصحيح الأخطاء.",
+            "data": {
+              "temperature": "درجة الحرارة",
+              "max_tokens": "الحد الاقصى لرموز الاستجابة",
+              "max_history": "الحد الاقصى لرسائل السجل",
+              "context_mode": "وضع السياق",
+              "max_iterations": "الحد الاقصى لتكرارات الادوات",
+              "timeout": "انتهاء مهلة الاستجابة",
+              "debug_mode": "وضع التصحيح",
+              "chat_log_mode": "وضع سجل الدردشة"
+            },
+            "data_description": {
+              "temperature": "يتحكم في عشوائية الاستجابة. القيم الدنيا هي أكثر حتمية.",
+              "max_tokens": "يحدد عدد الرموز المميزة التي قد ينشئها النموذج في استجابة واحدة.",
+              "max_history": "كم عدد رسائل المحادثة السابقة التي يجب الاحتفاظ بها في سياقها.",
+              "context_mode": "يرسل المعيار سياق أداة الملف الشخصي الكامل. يحتفظ Light بنافذة سجل أصغر ويعلن عن أدوات Home Assistant الأساسية للنماذج المحلية الصغيرة.",
+              "max_iterations": "يحدد عدد دورات استدعاء الأدوات التي قد يستخدمها المساعد لطلب واحد.",
+              "timeout": "كم من الوقت يجب انتظار استجابة الموفر قبل انتهاء المهلة.",
+              "debug_mode": "تمكين تسجيل أكثر تفصيلاً لاستكشاف الأخطاء وإصلاحها.",
+              "chat_log_mode": "الاحتفاظ بسجلات المحادثات الأخيرة، بما في ذلك نص المستخدم وردود المساعد وأسماء الأدوات ووسائط الأداة ونتائج الأداة للمراجعة."
+            }
+          },
+          "tools": {
+            "name": "أدوات",
+            "description": "تظل الأدوات التي لم يتم تحديدها متاحة عندما يتم تمكينها على خادم MCP المشترك. حدد المربع لمنع مجموعة الأدوات لهذا الملف الشخصي فقط.",
+            "data": {
+              "disable_assist_bridge": "تعطيل الجسر المساعد",
+              "disable_calculator": "تعطيل الآلة الحاسبة",
+              "disable_custom_tools": "تعطيل الأدوات المخصصة",
+              "disable_device": "تعطيل أدوات الجهاز",
+              "disable_google_maps": "تعطيل Google Places and Routes",
+              "disable_llm_api_bridge": "تعطيل جسر LLM API",
+              "disable_memory": "تعطيل الذاكرة",
+              "disable_music_assistant": "تعطيل Music Assistant",
+              "disable_read_url": "تعطيل قراءة URL",
+              "disable_recorder": "تعطيل سجل المسجل",
+              "disable_response_service": "تعطيل قراءات خدمة الاستجابة",
+              "disable_search": "تعطيل البحث",
+              "disable_unit_conversion": "تعطيل تحويل الوحدة",
+              "disable_weather_forecast": "تعطيل توقعات الطقس",
+              "disable_wikipedia_search": "تعطيل بحث Wikipedia",
+              "disable_web_search": "تعطيل بحث الويب"
+            },
+            "data_description": {
+              "disable_assist_bridge": "يمنع ملف التعريف هذا من استخدام أدوات المساعدة الأصلية والموجه ولقطات السياق الخاصة بـ Home Assistant.",
+              "disable_calculator": "منع ملف التعريف هذا من استخدام أدوات الرياضيات وتقييم التعبيرات.",
+              "disable_custom_tools": "يمنع ملف التعريف هذا من استخدام حزم الأدوات المخصصة الخارجية التي تم تحميلها من خلال خادم MCP المشترك.",
+              "disable_unit_conversion": "يمنع ملف التعريف هذا من استخدام أدوات تحويل الوحدات الدقيقة مثل °C إلى °F، والمسافة، وحجم المطبخ، والتخزين، وتحويلات معدل البيانات.",
+              "disable_device": "يمنع ملف التعريف هذا من اكتشاف الأجهزة الفعلية وتفاصيل الجهاز.",
+              "disable_google_maps": "يمنع ملف التعريف هذا من استخدام أدوات Google Places and Routes.",
+              "disable_llm_api_bridge": "يمنع ملف التعريف هذا من استخدام أدوات Home Assistant LLM API التابعة لجهات خارجية والمدرجة في القائمة المسموح بها.",
+              "disable_memory": "يمنع ملف التعريف هذا من تخزين الذكريات المستمرة المشتركة أو استرجاعها أو نسيانها.",
+              "disable_music_assistant": "يمنع ملف التعريف هذا من استخدام أدوات البحث وقائمة الانتظار والمكتبة والتشغيل في Music Assistant.",
+              "disable_read_url": "يمنع ملف التعريف هذا من فتح واستخراج محتوى الصفحة من URLs.",
+              "disable_recorder": "يمنع ملف التعريف هذا من استخدام أدوات السجل والعدد والمدة وأدوات النقطة الزمنية المدعومة بالمسجل.",
+              "disable_response_service": "يمنع ملف التعريف هذا من استخدام خدمات Home Assistant التي تقوم بإرجاع البيانات المنظمة، مثل قراءات التقويم والتنبؤات.",
+              "disable_search": "يمنع ملف التعريف هذا من استخدام مساعد بحث الويب المدمج.",
+              "disable_weather_forecast": "يمنع ملف التعريف هذا من استخدام مساعد توقعات الطقس Home Assistant المخصص.",
+              "disable_wikipedia_search": "يمنع ملف التعريف هذا من البحث في Wikipedia.",
+              "disable_web_search": "يمنع ملف التعريف هذا من استخدام بحث الويب وأدوات القراءة URL، حتى إذا تم تمكينها على خادم MCP المشترك."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "هذه الاعدادات مشتركة بين جميع الملفات الشخصية",
         "data": {
           "mcp_port": "منفذ خادم MCP",
-          "search_provider": "البحث على الويب",
-          "brave_api_key": "مفتاح API لـ Brave Search",
-          "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "enable_gap_filling": "تمكين فهرس الكيانات الذكي",
-          "max_entities_per_discovery": "الحد الاقصى للكيانات لكل اكتشاف (20-500)"
+          "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها"
+        },
+        "data_description": {
+          "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
+          "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "سياق",
+            "description": "التحكم في هوية Home Assistant وتفاصيل الموقع المضمنة في مطالبات الذكاء الاصطناعي وحمولات استدعاء الأدوات MCP.",
+            "data": {
+              "include_current_user": "تضمين المستخدم الحالي في الموجه",
+              "include_home_location": "قم بتضمين موقع المنزل بشكل سريع",
+              "include_current_user_in_tool_calls": "مشاركة المستخدم الحالي مع أدوات MCP",
+              "include_home_location_in_tool_calls": "مشاركة موقع المنزل باستخدام أدوات MCP"
+            },
+            "data_description": {
+              "include_current_user": "قم بتضمين اسم مستخدم Home Assistant الحالي في موجه AI عندما يكون ذلك متاحًا.",
+              "include_home_location": "قم بتضمين ملخص موقع المنزل المدمج في موجه الذكاء الاصطناعي، باستخدام اسم المنزل الذي تم تكوينه وإحداثياته ​​في Home Assistant.",
+              "include_current_user_in_tool_calls": "أرسل معرف مستخدم Home Assistant الحالي واسمه في سياق أدوات/استدعاء MCP حتى تتمكن حزم الأدوات من تدقيق الإجراءات أو تخصيصها.",
+              "include_home_location_in_tool_calls": "أرسل اسم المنزل وخط العرض وخط الطول الذي تم تكوينه لـ Home Assistant في أدوات MCP/سياق الاتصال لحزم الأدوات التي تحتاج إلى بيانات تعريف الموقع."
+            }
+          },
+          "discovery": {
+            "name": "اكتشاف",
+            "description": "التحكم في كيفية قيام خادم MCP المشترك بإنشاء نتائج الاكتشاف وإرجاعها.",
+            "data": {
+              "enable_gap_filling": "تمكين فهرس الكيان الذكي",
+              "max_entities_per_discovery": "الحد الأقصى للكيانات لكل اكتشاف (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "ينشئ فهرس نظام مدمج لإبقاء الاكتشاف سريعًا ومراعيًا للسياق.",
+              "max_entities_per_discovery": "يحدد عدد الكيانات التي قد ترجعها مكالمة اكتشاف واحدة."
+            }
+          },
+          "memory": {
+            "name": "ذاكرة",
+            "description": "قم بتكوين مدة الاحتفاظ بالذكريات الدائمة المشتركة عند تمكين أداة الذاكرة.",
+            "data": {
+              "memory_default_ttl_days": "الذاكرة الافتراضية TTL (أيام)",
+              "memory_max_ttl_days": "الحد الأقصى للذاكرة TTL (أيام)",
+              "memory_max_items": "ماكس الذكريات المخزنة"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "العدد الافتراضي للأيام التي يتم الاحتفاظ بالذاكرة الجديدة فيها عندما لا يوفر استدعاء الأداة ttl_days.",
+              "memory_max_ttl_days": "الحد الأقصى لعدد الأيام التي يمكن الاحتفاظ بأي ذاكرة مخزنة فيها.",
+              "memory_max_items": "الحد الأعلى للذكريات المخزنة النشطة. يتم تشذيب الذكريات الأقدم أولاً عند تجاوز هذا الحد."
+            }
+          },
+          "tools": {
+            "name": "أدوات",
+            "description": "تمكين أو تعطيل إمكانيات الأداة الاختيارية التي يكشفها خادم MCP المشترك.",
+            "data": {
+              "enable_assist_bridge": "جسر المساعدة",
+              "enable_calculator_tools": "آلة حاسبة",
+              "enable_external_custom_tools": "أدوات مخصصة",
+              "enable_device_tools": "أدوات الجهاز",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "جسر LLM API",
+              "enable_memory_tools": "ذاكرة",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "قراءة URL",
+              "enable_recorder_tools": "تاريخ المسجل",
+              "enable_response_service_tools": "قراءة خدمة الاستجابة",
+              "enable_search_tool": "يبحث",
+              "enable_unit_conversion_tools": "تحويل الوحدة",
+              "enable_weather_forecast_tool": "توقعات الطقس",
+              "enable_wikipedia_search_tool": "بحث Wikipedia",
+              "enable_web_search": "بحث الويب",
+              "search_provider": "مزود بحث الويب",
+              "brave_api_key": "Brave Search API مفتاح",
+              "google_maps_api_key": "Google Maps API مفتاح",
+              "llm_api_allowlist": "معرفات LLM API المسموح بها",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "كشف أدوات المساعدة الأصلية لـ Home Assistant، والموجه، ولقطات السياق.",
+              "enable_calculator_tools": "كشف أدوات الرياضيات وتقييم التعبير.",
+              "enable_external_custom_tools": "قم بتحميل حزم الأدوات المحلية الإضافية من دليل التكوين Home Assistant ضمن mcp-assist-tools. معطل افتراضيا. قم بتمكين الحزم الموثوقة فقط لأنها تعمل كرمز Python داخل Home Assistant وقد تضيف أدوات MCP بالإضافة إلى إرشادات سريعة سريعة.",
+              "enable_unit_conversion_tools": "اكشف عن أدوات تحويل الوحدات الدقيقة مثل °C إلى °F، والمسافة، وحجم المطبخ، والتخزين، وتحويلات معدل البيانات.",
+              "enable_device_tools": "كشف اكتشاف الأجهزة الفعلية وأدوات تفاصيل الجهاز.",
+              "enable_google_maps_tools": "كشف Google Places وأدوات وقت السفر Google Routes. يتطلب مفتاح Google Maps API.",
+              "enable_llm_api_bridge": "كشف Home Assistant LLM API للجهات الخارجية المسجلة بواسطة عمليات التكامل الأخرى.",
+              "enable_memory_tools": "اكشف عن أدوات الذاكرة المستمرة المشتركة حتى يتمكن المساعد من تذكر الحقائق والتفضيلات التي وافق عليها المستخدم واسترجاعها ونسيانها من خلال انتهاء الصلاحية المستند إلى TTL.",
+              "enable_music_assistant_support": "كشف أدوات البحث وقائمة الانتظار والمكتبة والتشغيل Music Assistant.",
+              "enable_read_url_tool": "كشف قراءة URL حتى يتمكن المساعد من فحص صفحات ويب محددة.",
+              "enable_recorder_tools": "كشف التاريخ والتحليل وأدوات النقطة الزمنية المدعومة بالمسجل.",
+              "enable_response_service_tools": "اعرض خدمات Home Assistant التي تُرجع البيانات المنظمة، مثل قراءات التقويم والتنبؤات.",
+              "enable_search_tool": "كشف بحث الويب باستخدام الموفر المشترك الذي تم تكوينه.",
+              "enable_weather_forecast_tool": "كشف مساعد توقعات الطقس Home Assistant المخصص.",
+              "enable_wikipedia_search_tool": "كشف مقالة Wikipedia خفيفة الوزن للبحث عن الأسئلة الأساسية والمرجعية.",
+              "enable_web_search": "كشف بحث الويب وأدوات القراءة URL.",
+              "search_provider": "اختر الموفر الذي تريد استخدامه عند تمكين بحث الويب.",
+              "brave_api_key": "مطلوب فقط عند تمكين بحث الويب وتحديد Brave Search.",
+              "google_maps_api_key": "مطلوب فقط عند تمكين Google Places and Routes.",
+              "llm_api_allowlist": "معرفات MCP Assist لجهة خارجية مفصولة بفواصل أو أسطر جديدة قد تقوم بفحصها أو الاتصال بها، مثل llm_intents. تم تثبيت LLM APIs من جهة خارجية: {installed_llm_apis}. تظل المساعدة المضمنة API موجودة على Assist Bridge.",
+              "searxng_url": "مطلوب فقط عند تمكين بحث الويب وتحديد SearXNG. استخدم URL الأساسي لمثيل SearXNG المستضاف ذاتيًا."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "تقصير",
+        "custom": "مخصص"
       }
     }
   },

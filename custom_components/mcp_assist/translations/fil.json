@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Pangalan ng Profile",
           "server_type": "Uri ng Server"
+        },
+        "data_description": {
+          "profile_name": "Isang magiliw na pangalan para sa profile ng pag-uusap na ito.",
+          "server_type": "Piliin kung aling provider o inference server ang ginagamit ng profile na ito."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "URL ng Server",
           "api_key": "API Key",
-          "mcp_port": "Port ng MCP Server"
+          "mcp_port": "Port ng MCP Server",
+          "openclaw_host": "Gateway Host",
+          "openclaw_port": "Gateway Port",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Gamitin ang SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "Ang batayang URL para sa lokal o OpenAI-compatible server na ginagamit ng profile na ito.",
+          "api_key": "Ang API key o bearer token na kinakailangan ng provider na ito.",
+          "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
+          "openclaw_host": "Pangalan ng host o IP address ng OpenClaw gateway.",
+          "openclaw_port": "Port na ginagamit ng OpenClaw gateway na WebSocket server.",
+          "openclaw_token": "Ang bearer token ay ginamit para mag-authenticate gamit ang OpenClaw gateway.",
+          "openclaw_use_ssl": "Gumamit ng secure na WebSocket na koneksyon kapag nakikipag-usap sa OpenClaw gateway."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Pagpares ng Device",
+        "description": "Kailangang maaprubahan ang iyong device sa OpenClaw server.\n\nAprubahan ito sa pamamagitan ng pagpapatakbo ng `openclaw devices approve` o paggamit ng OpenClaw Control UI, pagkatapos ay i-click ang Isumite.\n\nDevice ID: {device_id}"
       },
       "model": {
         "title": "Modelo at mga Tagubilin",
         "description": "{server_info}",
         "data": {
           "model_name": "Pangalan ng Modelo",
+          "system_prompt_mode": "Pinagmulan ng Prompt ng System",
           "system_prompt": "Mga Tagubilin ng Sistema",
+          "technical_prompt_mode": "Pinagmulan ng Mga Teknikal na Tagubilin",
           "technical_prompt": "Mga Teknikal na Tagubilin"
+        },
+        "data_description": {
+          "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
+          "system_prompt": "Prefilled ng kasalukuyang epektibong prompt ng system. I-edit ito para i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
+          "technical_prompt": "Prefilled ng kasalukuyang epektibong teknikal na tagubilin. I-edit ang mga ito upang i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "Modelo",
+            "description": "Piliin ang modelong dapat gamitin ng profile na ito.",
+            "data": {
+              "model_name": "Pangalan ng Modelo"
+            },
+            "data_description": {
+              "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito."
+            }
+          },
+          "prompts": {
+            "name": "Mga senyales",
+            "description": "Suriin ang kasalukuyang epektibong mga prompt, kopyahin ang mga ito, o i-edit ang mga ito para sa profile na ito.",
+            "data": {
+              "system_prompt": "Mga Tagubilin ng Sistema",
+              "technical_prompt": "Mga Teknikal na Tagubilin"
+            },
+            "data_description": {
+              "system_prompt": "Prefilled ng kasalukuyang epektibong prompt ng system. I-edit ito para i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
+              "technical_prompt": "Prefilled ng kasalukuyang epektibong teknikal na tagubilin. I-edit ang mga ito upang i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Temperatura",
           "max_tokens": "Max na Token ng Tugon",
           "max_history": "Max na Mensahe ng Kasaysayan",
+          "context_mode": "Mode ng Konteksto",
           "max_iterations": "Max na Pag-uulit ng Tool",
           "control_home_assistant": "Kontrolin ang Home Assistant",
           "response_mode": "Mode ng Tugon",
           "follow_up_phrases": "Mga Follow-up na Parirala",
           "end_words": "Mga Salita para Tapusin ang Usapan",
+          "clean_responses": "Linisin ang mga Tugon para sa Voice Output",
           "timeout": "Response Time Out",
           "debug_mode": "Debug Mode",
+          "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
           "ollama_num_ctx": "Ollama Context Window",
-          "clean_responses": "Linisin ang mga Tugon para sa Voice Output"
+          "openclaw_session_key": "Susi ng Sesyon"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Pag-uusap",
+            "description": "Mga setting ng gawi, follow-up na paghawak, at voice-output para sa profile na ito.",
+            "data": {
+              "control_home_assistant": "Kontrolin ang Home Assistant",
+              "response_mode": "Mode ng Tugon",
+              "follow_up_phrases": "Mga Follow-up na Parirala",
+              "end_words": "Mga Salita para Tapusin ang Usapan",
+              "clean_responses": "Linisin ang mga Tugon para sa Voice Output"
+            },
+            "data_description": {
+              "control_home_assistant": "Pahintulutan ang profile na ito na magsagawa ng mga pagkilos na Home Assistant sa halip na sagutin lamang ang mga tanong.",
+              "response_mode": "Kinokontrol kung tatapusin kaagad ang assistant o magtatanong ng mga natural na follow-up na tanong kapag naaangkop.",
+              "follow_up_phrases": "Mga pariralang pinaghihiwalay ng kuwit na ginagamit upang makita ang mga follow-up na istilong tugon.",
+              "end_words": "Mga salita o pariralang pinaghihiwalay ng kuwit na dapat magtapos sa pag-uusap.",
+              "clean_responses": "I-trim ang hindi kinakailangang pag-format o tagapuno upang mapanatiling mas malinis ang mga sinasalitang tugon."
+            }
+          },
+          "performance": {
+            "name": "Pagganap",
+            "description": "Mga limitasyon sa pagtugon sa modelo, mga limitasyon sa pagpapatupad, pag-timeout, at pag-debug.",
+            "data": {
+              "temperature": "Temperatura",
+              "max_tokens": "Max na Token ng Tugon",
+              "max_history": "Max na Mensahe ng Kasaysayan",
+              "context_mode": "Mode ng Konteksto",
+              "max_iterations": "Max na Pag-uulit ng Tool",
+              "timeout": "Response Time Out",
+              "debug_mode": "Debug Mode",
+              "chat_log_mode": "Chat Log Mode"
+            },
+            "data_description": {
+              "temperature": "Kinokontrol ang randomness ng tugon. Ang mas mababang mga halaga ay mas deterministiko.",
+              "max_tokens": "Nililimitahan kung gaano karaming mga token ang maaaring mabuo ng modelo sa isang tugon.",
+              "max_history": "Ilang naunang mensahe ng pag-uusap ang dapat panatilihin sa konteksto.",
+              "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo.",
+              "max_iterations": "Nililimitahan kung gaano karaming mga pagliko ng tool-calling ang maaaring gamitin ng assistant para sa isang kahilingan.",
+              "timeout": "Gaano katagal maghintay para sa tugon ng provider bago mag-time out.",
+              "debug_mode": "Paganahin ang mas detalyadong pag-log para sa pag-troubleshoot.",
+              "chat_log_mode": "Ipagpatuloy ang mga kamakailang log ng pag-uusap, kabilang ang text ng user, mga tugon ng assistant, pangalan ng tool, argumento ng tool, at resulta ng tool para sa pagsusuri."
+            }
+          },
+          "provider": {
+            "name": "Provider",
+            "description": "Ipinapakita lang ang mga setting na partikular sa provider kapag nalalapat ang mga ito.",
+            "data": {
+              "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
+              "ollama_num_ctx": "Ollama Context Window",
+              "openclaw_session_key": "Susi ng Sesyon"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
+              "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
+              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe."
+            }
+          },
+          "tools": {
+            "name": "Mga gamit",
+            "description": "Ang mga tool na walang check ay mananatiling available sa tuwing pinapagana ang mga ito sa nakabahaging MCP server. Lagyan ng check ang isang kahon upang ipagbawal ang isang tool family para lamang sa profile na ito.",
+            "data": {
+              "disable_assist_bridge": "I-disable ang Assist Bridge",
+              "disable_calculator": "Huwag paganahin ang Calculator",
+              "disable_custom_tools": "Huwag paganahin ang Mga Custom na Tool",
+              "disable_device": "Huwag paganahin ang Mga Tool ng Device",
+              "disable_google_maps": "Huwag paganahin ang Google Places and Routes",
+              "disable_llm_api_bridge": "Huwag paganahin ang LLM API Bridge",
+              "disable_memory": "Huwag paganahin ang Memory",
+              "disable_music_assistant": "Huwag paganahin ang Music Assistant",
+              "disable_read_url": "Huwag paganahin ang Read URL",
+              "disable_recorder": "Huwag paganahin ang Recorder History",
+              "disable_response_service": "Huwag paganahin ang Pagbasa ng Serbisyo sa Pagtugon",
+              "disable_search": "Huwag paganahin ang Paghahanap",
+              "disable_unit_conversion": "I-disable ang Unit Conversion",
+              "disable_weather_forecast": "Huwag paganahin ang Pagtataya ng Panahon",
+              "disable_wikipedia_search": "Huwag paganahin ang Wikipedia Search",
+              "disable_web_search": "Huwag paganahin ang Paghahanap sa Web"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Pinipigilan ang profile na ito sa paggamit ng mga native na tool ng Assist, prompt, at context snapshot ng Home Assistant.",
+              "disable_calculator": "Pinipigilan ang profile na ito sa paggamit ng mga tool sa matematika at expression-evaluation.",
+              "disable_custom_tools": "Pinipigilan ang profile na ito mula sa paggamit ng mga panlabas na custom na tool package na na-load sa pamamagitan ng nakabahaging MCP server.",
+              "disable_device": "Pinipigilan ang profile na ito sa pagtuklas ng mga pisikal na device at mga detalye ng device.",
+              "disable_google_maps": "Pinipigilan ang profile na ito sa paggamit ng mga tool na Google Places and Routes.",
+              "disable_llm_api_bridge": "Pinipigilan ang profile na ito sa paggamit ng mga pinapahintulutang third-party na Home Assistant LLM API na mga tool.",
+              "disable_memory": "Pinipigilan ang profile na ito mula sa pag-iimbak, pag-alala, o paglimot sa mga nakabahaging patuloy na alaala.",
+              "disable_music_assistant": "Pinipigilan ang profile na ito mula sa paggamit ng Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
+              "disable_read_url": "Pinipigilan ang profile na ito sa pagbubukas at pagkuha ng nilalaman ng pahina mula sa URLs.",
+              "disable_recorder": "Pinipigilan ang profile na ito mula sa paggamit ng recorder-backed history, bilang, tagal, at point-in-time na mga tool.",
+              "disable_response_service": "Pinipigilan ang profile na ito mula sa paggamit ng mga serbisyo ng Home Assistant na nagbabalik ng structured na data, gaya ng kalendaryo at mga pagbabasa ng hula.",
+              "disable_search": "Pinipigilan ang profile na ito mula sa paggamit ng built-in na web search helper.",
+              "disable_unit_conversion": "Pinipigilan ang profile na ito sa paggamit ng eksaktong mga tool sa conversion ng unit gaya ng °C hanggang °F, distansya, dami ng kusina, storage, at mga conversion na rate ng data.",
+              "disable_weather_forecast": "Pinipigilan ang profile na ito mula sa paggamit ng nakalaang Home Assistant na katulong sa pagtataya ng panahon.",
+              "disable_wikipedia_search": "Pinipigilan ang profile na ito na maghanap sa Wikipedia.",
+              "disable_web_search": "Pinipigilan ang profile na ito mula sa paggamit ng paghahanap sa web at mga tool sa pagbabasa ng URL, kahit na pinagana ang mga ito sa nakabahaging server ng MCP."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Ang mga setting na ito ay nakakaapekto sa LAHAT ng profile. Ang mga pagbabago dito ay makakaapekto sa bawat MCP Assist conversation agent.",
         "data": {
           "mcp_port": "Port ng MCP Server",
-          "search_provider": "Web Search",
-          "brave_api_key": "Brave Search API Key",
-          "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
-          "enable_gap_filling": "I-enable ang Smart Entity Index",
-          "max_entities_per_discovery": "Max na Entity Bawat Paghahanap (20-500)"
+          "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw"
+        },
+        "data_description": {
+          "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
+          "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Konteksto",
+            "description": "Kontrolin kung aling Home Assistant na pagkakakilanlan at mga detalye ng lokasyon ang kasama sa mga prompt ng AI at MCP na mga tool-call payload.",
+            "data": {
+              "include_current_user": "Isama ang Kasalukuyang User sa Prompt",
+              "include_home_location": "Isama ang Lokasyon ng Tahanan sa Prompt",
+              "include_current_user_in_tool_calls": "Ibahagi ang Kasalukuyang Gumagamit sa MCP Tools",
+              "include_home_location_in_tool_calls": "Ibahagi ang Lokasyon ng Tahanan sa MCP Tools"
+            },
+            "data_description": {
+              "include_current_user": "Isama ang kasalukuyang Home Assistant na pangalan ng user sa AI prompt kapag available.",
+              "include_home_location": "Isama ang isang compact na buod ng lokasyon ng tahanan sa AI prompt, gamit ang naka-configure na pangalan at coordinate ng tahanan ng Home Assistant.",
+              "include_current_user_in_tool_calls": "Ipadala ang kasalukuyang Home Assistant user ID at pangalan sa MCP na mga tool/konteksto ng tawag para ma-audit o ma-personalize ng mga tool package ang mga aksyon.",
+              "include_home_location_in_tool_calls": "Ipadala ang Home Assistant na naka-configure na pangalan ng tahanan, latitude, at longitude sa MCP na mga tool/konteksto ng tawag para sa mga tool package na nangangailangan ng metadata ng lokasyon."
+            }
+          },
+          "discovery": {
+            "name": "Pagtuklas",
+            "description": "Kontrolin kung paano bumubuo at nagbabalik ng mga resulta ng pagtuklas ang nakabahaging MCP server.",
+            "data": {
+              "enable_gap_filling": "Paganahin ang Smart Entity Index",
+              "max_entities_per_discovery": "Max na Entity Bawat Pagtuklas (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bumubuo ng isang compact system index upang mapanatiling mabilis ang pagtuklas at may kamalayan sa konteksto.",
+              "max_entities_per_discovery": "Nililimitahan kung ilang entity ang maaaring ibalik ng isang pagtuklas na tawag."
+            }
+          },
+          "memory": {
+            "name": "Alaala",
+            "description": "I-configure kung gaano katagal pinapanatili ang nakabahaging mga persisted na alaala kapag pinagana ang Memory tool.",
+            "data": {
+              "memory_default_ttl_days": "Default na Memory TTL (Mga Araw)",
+              "memory_max_ttl_days": "Max Memory TTL (Mga Araw)",
+              "memory_max_items": "Max na Naka-imbak na Alaala"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Default na bilang ng mga araw ang isang bagong memorya ay pinapanatili kapag ang tool call ay hindi nagbibigay ng ttl_days.",
+              "memory_max_ttl_days": "Pinakamataas na bilang ng mga araw na maaaring mapanatili ang anumang nakaimbak na memorya.",
+              "memory_max_items": "Upper bound sa mga aktibong nakaimbak na alaala. Ang mga pinakalumang alaala ay pinuputol muna kapag nalampasan ang limitasyong ito."
+            }
+          },
+          "tools": {
+            "name": "Mga gamit",
+            "description": "Paganahin o huwag paganahin ang mga opsyonal na kakayahan ng tool na inilantad ng nakabahaging MCP server.",
+            "data": {
+              "enable_assist_bridge": "Tulungan ang Tulay",
+              "enable_calculator_tools": "Calculator",
+              "enable_external_custom_tools": "Mga Custom na Tool",
+              "enable_device_tools": "Mga Tool ng Device",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Bridge",
+              "enable_memory_tools": "Alaala",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Basahin ang URL",
+              "enable_recorder_tools": "Kasaysayan ng Recorder",
+              "enable_response_service_tools": "Mga Pagbabasa ng Serbisyo sa Pagtugon",
+              "enable_search_tool": "Maghanap",
+              "enable_unit_conversion_tools": "Conversion ng Yunit",
+              "enable_weather_forecast_tool": "Pagtataya ng Panahon",
+              "enable_wikipedia_search_tool": "Wikipedia Paghahanap",
+              "enable_web_search": "Paghahanap sa Web",
+              "search_provider": "Web Search Provider",
+              "brave_api_key": "Brave Search API Key",
+              "google_maps_api_key": "Google Maps API Key",
+              "llm_api_allowlist": "Mga pinapayagang LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Ilantad ang mga native na tool ng Assist, prompt, at context snapshot ng Home Assistant.",
+              "enable_calculator_tools": "Ilantad ang mga tool sa matematika at expression-evaluation.",
+              "enable_external_custom_tools": "Mag-load ng mga karagdagang lokal na pakete ng tool mula sa Home Assistant config directory sa ilalim ng mcp-assist-tools. Hindi pinagana bilang default. I-enable lang ang mga pinagkakatiwalaang package dahil tumatakbo ang mga ito bilang Python code sa loob ng Home Assistant at maaaring magdagdag ng mga tool na MCP kasama ang maikling agarang gabay.",
+              "enable_device_tools": "Ilantad ang pagtuklas ng pisikal na device at mga tool sa detalye ng device.",
+              "enable_google_maps_tools": "Ilantad ang Google Places lookup at Google Routes na mga tool sa oras ng paglalakbay. Nangangailangan ng Google Maps API key.",
+              "enable_llm_api_bridge": "Ilantad ang mga pinahihintulutang third-party na Home Assistant LLM API na nakarehistro ng iba pang mga pagsasama.",
+              "enable_memory_tools": "Ilantad ang mga nakabahaging persisted memory tool upang matandaan, maalala, at makalimutan ng katulong ang mga katotohanan at kagustuhan na inaprubahan ng user na may TTL-based na expiry.",
+              "enable_music_assistant_support": "Ilantad ang Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
+              "enable_read_url_tool": "Ilantad ang URL na pagbabasa upang masuri ng assistant ang mga partikular na web page.",
+              "enable_recorder_tools": "Ilantad ang kasaysayan, pagsusuri, at point-in-time na tool na sinusuportahan ng recorder.",
+              "enable_response_service_tools": "Ilantad ang mga serbisyong Home Assistant na nagbabalik ng structured na data, gaya ng kalendaryo at mga pagbabasa ng hula.",
+              "enable_search_tool": "Ilantad ang paghahanap sa web gamit ang naka-configure na nakabahaging provider.",
+              "enable_unit_conversion_tools": "Ilantad ang eksaktong mga tool sa conversion ng unit gaya ng °C hanggang °F, distansya, dami ng kusina, storage, at mga conversion na rate ng data.",
+              "enable_weather_forecast_tool": "Ilantad ang nakalaang Home Assistant na katulong sa pagtataya ng panahon.",
+              "enable_wikipedia_search_tool": "Ilantad ang magaan na Wikipedia na paghahanap ng artikulo para sa background at mga reference na tanong.",
+              "enable_web_search": "Ilantad ang paghahanap sa web at mga tool sa pagbabasa ng URL.",
+              "search_provider": "Piliin kung aling provider ang gagamitin kapag pinagana ang Paghahanap sa Web.",
+              "brave_api_key": "Kinakailangan lamang kapag pinagana ang Paghahanap sa Web at napili ang Brave Search.",
+              "google_maps_api_key": "Kailangan lang kapag naka-enable ang Google Places and Routes.",
+              "llm_api_allowlist": "Ang mga third-party na LLM API ID na MCP Assist na MCP Assist na pinaghihiwalay ng comma o newline ay maaaring suriin, gaya ng llm_intents. Mga naka-install na third-party na LLM API: {installed_llm_apis}. Ang built-in na tulong na API ay nananatili sa Assist Bridge.",
+              "searxng_url": "Kinakailangan lamang kapag pinagana ang Paghahanap sa Web at napili ang SearXNG. Gamitin ang base URL para sa iyong self-hosted na SearXNG instance."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Hindi wastong format ng IP address o CIDR range. Gumamit ng mga halaga na pinaghihiwalay ng kuwit tulad ng: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Kinakailangan ang pangalan ng profile.",
       "invalid_json": "Hindi wastong format ng JSON. Suriin ang iyong pagsasaayos ng mga MCP server.",
+      "searxng_url_required": "Kinakailangan ang SearXNG URL kapag pinagana ang paghahanap sa SearXNG.",
+      "google_maps_api_key_required": "Google Maps API key ay kinakailangan kapag Google Places and Routes ay pinagana.",
+      "mcp_apply_failed": "Hindi mailapat ang nakabahaging mga setting ng server ng MCP. Suriin ang port at mga pinapayagang IP, pagkatapos ay subukang muli.",
       "invalid_api_key": "Hindi wastong API key. Suriin at subukan muli.",
       "auth_failed": "Nabigo ang pagpapatunay. I-verify ang iyong API key.",
-      "unknown": "Isang hindi kilalang error ang naganap."
+      "unknown": "Isang hindi kilalang error ang naganap.",
+      "openclaw_not_paired": "Hindi pa naaprubahan ang device sa OpenClaw server. Mangyaring aprubahan ito at subukang muli.",
+      "openclaw_connection_failed": "Hindi makakonekta sa OpenClaw gateway. Suriin ang host, port, at token."
     },
     "abort": {
       "already_configured": "Mayroon nang profile na may ganitong pangalan. Pumili ng ibang pangalan."
@@ -85,21 +338,186 @@
           "lmstudio_url": "URL ng Server",
           "api_key": "API Key",
           "model_name": "Pangalan ng Modelo",
+          "system_prompt_mode": "Pinagmulan ng Prompt ng System",
           "system_prompt": "Mga Tagubilin ng Sistema",
+          "technical_prompt_mode": "Pinagmulan ng Mga Teknikal na Tagubilin",
           "technical_prompt": "Mga Teknikal na Tagubilin",
           "temperature": "Temperatura",
           "max_tokens": "Max na Token ng Tugon",
           "max_history": "Max na Mensahe ng Kasaysayan",
+          "context_mode": "Mode ng Konteksto",
           "max_iterations": "Max na Pag-uulit ng Tool",
           "control_home_assistant": "Kontrolin ang Home Assistant",
           "response_mode": "Mode ng Tugon",
           "follow_up_phrases": "Mga Follow-up na Parirala",
           "end_words": "Mga Salita para Tapusin ang Usapan",
+          "clean_responses": "Linisin ang mga Tugon para sa Voice Output",
           "timeout": "Response Time Out",
           "debug_mode": "Debug Mode",
+          "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
           "ollama_num_ctx": "Ollama Context Window",
-          "clean_responses": "Linisin ang mga Tugon para sa Voice Output"
+          "openclaw_host": "Gateway Host",
+          "openclaw_port": "Gateway Port",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Gamitin ang SSL/TLS",
+          "openclaw_session_key": "Susi ng Sesyon"
+        },
+        "data_description": {
+          "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
+          "system_prompt": "Prefilled ng kasalukuyang epektibong prompt ng system. I-edit ito para i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
+          "technical_prompt": "Prefilled ng kasalukuyang epektibong teknikal na tagubilin. I-edit ang mga ito upang i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
+          "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo."
+        },
+        "sections": {
+          "profile": {
+            "name": "Profile",
+            "description": "Mga pangunahing setting ng pagkakakilanlan para sa profile ng pag-uusap na ito.",
+            "data": {
+              "profile_name": "Pangalan ng Profile"
+            },
+            "data_description": {
+              "profile_name": "Isang magiliw na pangalan para sa profile ng pag-uusap na ito."
+            }
+          },
+          "connection": {
+            "name": "Koneksyon",
+            "description": "Paano kumokonekta ang profile na ito sa provider ng modelo nito.",
+            "data": {
+              "lmstudio_url": "URL ng Server",
+              "api_key": "API Key",
+              "openclaw_host": "Gateway Host",
+              "openclaw_port": "Gateway Port",
+              "openclaw_token": "Gateway Token",
+              "openclaw_use_ssl": "Gamitin ang SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "Ang batayang URL para sa lokal o OpenAI-compatible server na ginagamit ng profile na ito.",
+              "api_key": "Ang API key o bearer token na kinakailangan ng provider na ito.",
+              "openclaw_host": "Pangalan ng host o IP address ng OpenClaw gateway.",
+              "openclaw_port": "Port na ginagamit ng OpenClaw gateway na WebSocket server.",
+              "openclaw_token": "Ang bearer token ay ginamit para mag-authenticate gamit ang OpenClaw gateway.",
+              "openclaw_use_ssl": "Gumamit ng secure na WebSocket na koneksyon kapag nakikipag-usap sa OpenClaw gateway."
+            }
+          },
+          "model_fields": {
+            "name": "Modelo",
+            "description": "Piliin ang modelong dapat gamitin ng profile na ito.",
+            "data": {
+              "model_name": "Pangalan ng Modelo"
+            },
+            "data_description": {
+              "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito."
+            }
+          },
+          "prompts": {
+            "name": "Mga senyales",
+            "description": "Suriin ang kasalukuyang epektibong mga prompt, kopyahin ang mga ito, o i-edit ang mga ito para sa profile na ito.",
+            "data": {
+              "system_prompt": "Mga Tagubilin ng Sistema",
+              "technical_prompt": "Mga Teknikal na Tagubilin"
+            },
+            "data_description": {
+              "system_prompt": "Prefilled ng kasalukuyang epektibong prompt ng system. I-edit ito para i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
+              "technical_prompt": "Prefilled ng kasalukuyang epektibong teknikal na tagubilin. I-edit ang mga ito upang i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code."
+            }
+          },
+          "conversation": {
+            "name": "Pag-uusap",
+            "description": "Mga setting ng gawi, follow-up na paghawak, at voice-output para sa profile na ito.",
+            "data": {
+              "control_home_assistant": "Kontrolin ang Home Assistant",
+              "response_mode": "Mode ng Tugon",
+              "follow_up_phrases": "Mga Follow-up na Parirala",
+              "end_words": "Mga Salita para Tapusin ang Usapan",
+              "clean_responses": "Linisin ang mga Tugon para sa Voice Output"
+            },
+            "data_description": {
+              "control_home_assistant": "Pahintulutan ang profile na ito na magsagawa ng mga pagkilos na Home Assistant sa halip na sagutin lamang ang mga tanong.",
+              "response_mode": "Kinokontrol kung tatapusin kaagad ang assistant o magtatanong ng mga natural na follow-up na tanong kapag naaangkop.",
+              "follow_up_phrases": "Mga pariralang pinaghihiwalay ng kuwit na ginagamit upang makita ang mga follow-up na istilong tugon.",
+              "end_words": "Mga salita o pariralang pinaghihiwalay ng kuwit na dapat magtapos sa pag-uusap.",
+              "clean_responses": "I-trim ang hindi kinakailangang pag-format o tagapuno upang mapanatiling mas malinis ang mga sinasalitang tugon."
+            }
+          },
+          "provider": {
+            "name": "Provider",
+            "description": "Ipinapakita lang ang mga setting na partikular sa provider kapag nalalapat ang mga ito.",
+            "data": {
+              "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
+              "ollama_num_ctx": "Ollama Context Window",
+              "openclaw_session_key": "Susi ng Sesyon"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
+              "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
+              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe."
+            }
+          },
+          "advanced_settings": {
+            "name": "Advanced",
+            "description": "Eksperto sa pag-tune para sa gawi ng modelo, mga limitasyon, timeout, at pag-debug.",
+            "data": {
+              "temperature": "Temperatura",
+              "max_tokens": "Max na Token ng Tugon",
+              "max_history": "Max na Mensahe ng Kasaysayan",
+              "context_mode": "Mode ng Konteksto",
+              "max_iterations": "Max na Pag-uulit ng Tool",
+              "timeout": "Response Time Out",
+              "debug_mode": "Debug Mode",
+              "chat_log_mode": "Chat Log Mode"
+            },
+            "data_description": {
+              "temperature": "Kinokontrol ang randomness ng tugon. Ang mas mababang mga halaga ay mas deterministiko.",
+              "max_tokens": "Nililimitahan kung gaano karaming mga token ang maaaring mabuo ng modelo sa isang tugon.",
+              "max_history": "Ilang naunang mensahe ng pag-uusap ang dapat panatilihin sa konteksto.",
+              "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo.",
+              "max_iterations": "Nililimitahan kung gaano karaming mga pagliko ng tool-calling ang maaaring gamitin ng assistant para sa isang kahilingan.",
+              "timeout": "Gaano katagal maghintay para sa tugon ng provider bago mag-time out.",
+              "debug_mode": "Paganahin ang mas detalyadong pag-log para sa pag-troubleshoot.",
+              "chat_log_mode": "Ipagpatuloy ang mga kamakailang log ng pag-uusap, kabilang ang text ng user, mga tugon ng assistant, pangalan ng tool, argumento ng tool, at resulta ng tool para sa pagsusuri."
+            }
+          },
+          "tools": {
+            "name": "Mga gamit",
+            "description": "Ang mga tool na walang check ay mananatiling available sa tuwing pinapagana ang mga ito sa nakabahaging MCP server. Lagyan ng check ang isang kahon upang ipagbawal ang isang tool family para lamang sa profile na ito.",
+            "data": {
+              "disable_assist_bridge": "I-disable ang Assist Bridge",
+              "disable_calculator": "Huwag paganahin ang Calculator",
+              "disable_custom_tools": "Huwag paganahin ang Mga Custom na Tool",
+              "disable_device": "Huwag paganahin ang Mga Tool ng Device",
+              "disable_google_maps": "Huwag paganahin ang Google Places and Routes",
+              "disable_llm_api_bridge": "Huwag paganahin ang LLM API Bridge",
+              "disable_memory": "Huwag paganahin ang Memory",
+              "disable_music_assistant": "Huwag paganahin ang Music Assistant",
+              "disable_read_url": "Huwag paganahin ang Read URL",
+              "disable_recorder": "Huwag paganahin ang Recorder History",
+              "disable_response_service": "Huwag paganahin ang Pagbasa ng Serbisyo sa Pagtugon",
+              "disable_search": "Huwag paganahin ang Paghahanap",
+              "disable_unit_conversion": "I-disable ang Unit Conversion",
+              "disable_weather_forecast": "Huwag paganahin ang Pagtataya ng Panahon",
+              "disable_wikipedia_search": "Huwag paganahin ang Wikipedia Search",
+              "disable_web_search": "Huwag paganahin ang Paghahanap sa Web"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Pinipigilan ang profile na ito sa paggamit ng mga native na tool ng Assist, prompt, at context snapshot ng Home Assistant.",
+              "disable_calculator": "Pinipigilan ang profile na ito sa paggamit ng mga tool sa matematika at expression-evaluation.",
+              "disable_custom_tools": "Pinipigilan ang profile na ito mula sa paggamit ng mga panlabas na custom na tool package na na-load sa pamamagitan ng nakabahaging MCP server.",
+              "disable_unit_conversion": "Pinipigilan ang profile na ito sa paggamit ng eksaktong mga tool sa conversion ng unit gaya ng °C hanggang °F, distansya, dami ng kusina, storage, at mga conversion na rate ng data.",
+              "disable_device": "Pinipigilan ang profile na ito sa pagtuklas ng mga pisikal na device at mga detalye ng device.",
+              "disable_google_maps": "Pinipigilan ang profile na ito sa paggamit ng mga tool na Google Places and Routes.",
+              "disable_llm_api_bridge": "Pinipigilan ang profile na ito sa paggamit ng mga pinapahintulutang third-party na Home Assistant LLM API na mga tool.",
+              "disable_memory": "Pinipigilan ang profile na ito mula sa pag-iimbak, pag-alala, o paglimot sa mga nakabahaging patuloy na alaala.",
+              "disable_music_assistant": "Pinipigilan ang profile na ito mula sa paggamit ng Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
+              "disable_read_url": "Pinipigilan ang profile na ito sa pagbubukas at pagkuha ng nilalaman ng pahina mula sa URLs.",
+              "disable_recorder": "Pinipigilan ang profile na ito mula sa paggamit ng recorder-backed history, bilang, tagal, at point-in-time na mga tool.",
+              "disable_response_service": "Pinipigilan ang profile na ito mula sa paggamit ng mga serbisyo ng Home Assistant na nagbabalik ng structured na data, gaya ng kalendaryo at mga pagbabasa ng hula.",
+              "disable_search": "Pinipigilan ang profile na ito mula sa paggamit ng built-in na web search helper.",
+              "disable_weather_forecast": "Pinipigilan ang profile na ito mula sa paggamit ng nakalaang Home Assistant na katulong sa pagtataya ng panahon.",
+              "disable_wikipedia_search": "Pinipigilan ang profile na ito na maghanap sa Wikipedia.",
+              "disable_web_search": "Pinipigilan ang profile na ito mula sa paggamit ng paghahanap sa web at mga tool sa pagbabasa ng URL, kahit na pinagana ang mga ito sa nakabahaging server ng MCP."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Ang mga setting na ito ay ibinabahagi sa LAHAT ng profile",
         "data": {
           "mcp_port": "Port ng MCP Server",
-          "search_provider": "Web Search",
-          "brave_api_key": "Brave Search API Key",
-          "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
-          "enable_gap_filling": "I-enable ang Smart Entity Index",
-          "max_entities_per_discovery": "Max na Entity Bawat Paghahanap (20-500)"
+          "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw"
+        },
+        "data_description": {
+          "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
+          "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Konteksto",
+            "description": "Kontrolin kung aling Home Assistant na pagkakakilanlan at mga detalye ng lokasyon ang kasama sa mga prompt ng AI at MCP na mga tool-call payload.",
+            "data": {
+              "include_current_user": "Isama ang Kasalukuyang User sa Prompt",
+              "include_home_location": "Isama ang Lokasyon ng Tahanan sa Prompt",
+              "include_current_user_in_tool_calls": "Ibahagi ang Kasalukuyang Gumagamit sa MCP Tools",
+              "include_home_location_in_tool_calls": "Ibahagi ang Lokasyon ng Tahanan sa MCP Tools"
+            },
+            "data_description": {
+              "include_current_user": "Isama ang kasalukuyang Home Assistant na pangalan ng user sa AI prompt kapag available.",
+              "include_home_location": "Isama ang isang compact na buod ng lokasyon ng tahanan sa AI prompt, gamit ang naka-configure na pangalan at coordinate ng tahanan ng Home Assistant.",
+              "include_current_user_in_tool_calls": "Ipadala ang kasalukuyang Home Assistant user ID at pangalan sa MCP na mga tool/konteksto ng tawag para ma-audit o ma-personalize ng mga tool package ang mga aksyon.",
+              "include_home_location_in_tool_calls": "Ipadala ang Home Assistant na naka-configure na pangalan ng tahanan, latitude, at longitude sa MCP na mga tool/konteksto ng tawag para sa mga tool package na nangangailangan ng metadata ng lokasyon."
+            }
+          },
+          "discovery": {
+            "name": "Pagtuklas",
+            "description": "Kontrolin kung paano bumubuo at nagbabalik ng mga resulta ng pagtuklas ang nakabahaging MCP server.",
+            "data": {
+              "enable_gap_filling": "Paganahin ang Smart Entity Index",
+              "max_entities_per_discovery": "Max na Entity Bawat Pagtuklas (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bumubuo ng isang compact system index upang mapanatiling mabilis ang pagtuklas at may kamalayan sa konteksto.",
+              "max_entities_per_discovery": "Nililimitahan kung ilang entity ang maaaring ibalik ng isang pagtuklas na tawag."
+            }
+          },
+          "memory": {
+            "name": "Alaala",
+            "description": "I-configure kung gaano katagal pinapanatili ang nakabahaging mga persisted na alaala kapag pinagana ang Memory tool.",
+            "data": {
+              "memory_default_ttl_days": "Default na Memory TTL (Mga Araw)",
+              "memory_max_ttl_days": "Max Memory TTL (Mga Araw)",
+              "memory_max_items": "Max na Naka-imbak na Alaala"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Default na bilang ng mga araw ang isang bagong memorya ay pinapanatili kapag ang tool call ay hindi nagbibigay ng ttl_days.",
+              "memory_max_ttl_days": "Pinakamataas na bilang ng mga araw na maaaring mapanatili ang anumang nakaimbak na memorya.",
+              "memory_max_items": "Upper bound sa mga aktibong nakaimbak na alaala. Ang mga pinakalumang alaala ay pinuputol muna kapag nalampasan ang limitasyong ito."
+            }
+          },
+          "tools": {
+            "name": "Mga gamit",
+            "description": "Paganahin o huwag paganahin ang mga opsyonal na kakayahan ng tool na inilantad ng nakabahaging MCP server.",
+            "data": {
+              "enable_assist_bridge": "Tulungan ang Tulay",
+              "enable_calculator_tools": "Calculator",
+              "enable_external_custom_tools": "Mga Custom na Tool",
+              "enable_device_tools": "Mga Tool ng Device",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Bridge",
+              "enable_memory_tools": "Alaala",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Basahin ang URL",
+              "enable_recorder_tools": "Kasaysayan ng Recorder",
+              "enable_response_service_tools": "Mga Pagbabasa ng Serbisyo sa Pagtugon",
+              "enable_search_tool": "Maghanap",
+              "enable_unit_conversion_tools": "Conversion ng Yunit",
+              "enable_weather_forecast_tool": "Pagtataya ng Panahon",
+              "enable_wikipedia_search_tool": "Wikipedia Paghahanap",
+              "enable_web_search": "Paghahanap sa Web",
+              "search_provider": "Web Search Provider",
+              "brave_api_key": "Brave Search API Key",
+              "google_maps_api_key": "Google Maps API Key",
+              "llm_api_allowlist": "Mga pinapayagang LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Ilantad ang mga native na tool ng Assist, prompt, at context snapshot ng Home Assistant.",
+              "enable_calculator_tools": "Ilantad ang mga tool sa matematika at expression-evaluation.",
+              "enable_external_custom_tools": "Mag-load ng mga karagdagang lokal na pakete ng tool mula sa Home Assistant config directory sa ilalim ng mcp-assist-tools. Hindi pinagana bilang default. I-enable lang ang mga pinagkakatiwalaang package dahil tumatakbo ang mga ito bilang Python code sa loob ng Home Assistant at maaaring magdagdag ng mga tool na MCP kasama ang maikling agarang gabay.",
+              "enable_unit_conversion_tools": "Ilantad ang eksaktong mga tool sa conversion ng unit gaya ng °C hanggang °F, distansya, dami ng kusina, storage, at mga conversion na rate ng data.",
+              "enable_device_tools": "Ilantad ang pagtuklas ng pisikal na device at mga tool sa detalye ng device.",
+              "enable_google_maps_tools": "Ilantad ang Google Places lookup at Google Routes na mga tool sa oras ng paglalakbay. Nangangailangan ng Google Maps API key.",
+              "enable_llm_api_bridge": "Ilantad ang mga pinahihintulutang third-party na Home Assistant LLM API na nakarehistro ng iba pang mga pagsasama.",
+              "enable_memory_tools": "Ilantad ang mga nakabahaging persisted memory tool upang matandaan, maalala, at makalimutan ng katulong ang mga katotohanan at kagustuhan na inaprubahan ng user na may TTL-based na expiry.",
+              "enable_music_assistant_support": "Ilantad ang Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
+              "enable_read_url_tool": "Ilantad ang URL na pagbabasa upang masuri ng assistant ang mga partikular na web page.",
+              "enable_recorder_tools": "Ilantad ang kasaysayan, pagsusuri, at point-in-time na tool na sinusuportahan ng recorder.",
+              "enable_response_service_tools": "Ilantad ang mga serbisyong Home Assistant na nagbabalik ng structured na data, gaya ng kalendaryo at mga pagbabasa ng hula.",
+              "enable_search_tool": "Ilantad ang paghahanap sa web gamit ang naka-configure na nakabahaging provider.",
+              "enable_weather_forecast_tool": "Ilantad ang nakalaang Home Assistant na katulong sa pagtataya ng panahon.",
+              "enable_wikipedia_search_tool": "Ilantad ang magaan na Wikipedia na paghahanap ng artikulo para sa background at mga reference na tanong.",
+              "enable_web_search": "Ilantad ang paghahanap sa web at mga tool sa pagbabasa ng URL.",
+              "search_provider": "Piliin kung aling provider ang gagamitin kapag pinagana ang Paghahanap sa Web.",
+              "brave_api_key": "Kinakailangan lamang kapag pinagana ang Paghahanap sa Web at napili ang Brave Search.",
+              "google_maps_api_key": "Kailangan lang kapag naka-enable ang Google Places and Routes.",
+              "llm_api_allowlist": "Ang mga third-party na LLM API ID na MCP Assist na MCP Assist na pinaghihiwalay ng comma o newline ay maaaring suriin, gaya ng llm_intents. Mga naka-install na third-party na LLM API: {installed_llm_apis}. Ang built-in na tulong na API ay nananatili sa Assist Bridge.",
+              "searxng_url": "Kinakailangan lamang kapag pinagana ang Paghahanap sa Web at napili ang SearXNG. Gamitin ang base URL para sa iyong self-hosted na SearXNG instance."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Default",
+        "custom": "Custom"
       }
     }
   },

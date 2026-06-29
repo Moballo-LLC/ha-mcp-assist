@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Profielnaam",
           "server_type": "Servertype"
+        },
+        "data_description": {
+          "profile_name": "Een vriendelijke naam voor dit gespreksprofiel.",
+          "server_type": "Kies welke provider of inferentieserver dit profiel gebruikt."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "Server-URL",
           "api_key": "API-sleutel",
-          "mcp_port": "MCP-serverpoort"
+          "mcp_port": "MCP-serverpoort",
+          "openclaw_host": "Gatewayhost",
+          "openclaw_port": "Gateway-poort",
+          "openclaw_token": "Gatewaytoken",
+          "openclaw_use_ssl": "Gebruik SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "De basis URL voor de lokale of OpenAI-compatible-server die door dit profiel wordt gebruikt.",
+          "api_key": "De sleutel of het dragertoken API vereist door deze provider.",
+          "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
+          "openclaw_host": "Hostnaam of IP-adres van de OpenClaw-gateway.",
+          "openclaw_port": "Poort gebruikt door de OpenClaw-gateway WebSocket-server.",
+          "openclaw_token": "Bearer-token gebruikt voor authenticatie bij de OpenClaw-gateway.",
+          "openclaw_use_ssl": "Gebruik een veilige WebSocket-verbinding wanneer u met de OpenClaw-gateway praat."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Apparaat koppelen",
+        "description": "Uw apparaat moet worden goedgekeurd op de OpenClaw-server.\n\nKeur het goed door `openclaw devices approve` uit te voeren of OpenClaw Control UI te gebruiken en klik vervolgens op Verzenden.\n\nApparaat-ID: {device_id}"
       },
       "model": {
         "title": "Model & instructies",
         "description": "{server_info}",
         "data": {
           "model_name": "Modelnaam",
+          "system_prompt_mode": "Systeempromptbron",
           "system_prompt": "Systeeminstructies",
+          "technical_prompt_mode": "Technische instructies Bron",
           "technical_prompt": "Technische instructies"
+        },
+        "data_description": {
+          "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
+          "system_prompt": "Vooraf ingevuld met de huidige effectieve systeemprompt. Bewerk het om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken.",
+          "technical_prompt": "Vooraf gevuld met de huidige effectieve technische instructies. Bewerk ze om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "-model",
+            "description": "Kies het model dat dit profiel moet gebruiken.",
+            "data": {
+              "model_name": "Modelnaam"
+            },
+            "data_description": {
+              "model_name": "Het LLM-model dat dit profiel moet gebruiken."
+            }
+          },
+          "prompts": {
+            "name": "-aanwijzingen",
+            "description": "Bekijk de huidige effectieve aanwijzingen, kopieer ze of bewerk ze voor dit profiel.",
+            "data": {
+              "system_prompt": "Systeeminstructies",
+              "technical_prompt": "Technische instructies"
+            },
+            "data_description": {
+              "system_prompt": "Vooraf ingevuld met de huidige effectieve systeemprompt. Bewerk het om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken.",
+              "technical_prompt": "Vooraf gevuld met de huidige effectieve technische instructies. Bewerk ze om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Temperatuur",
           "max_tokens": "Maximale antwoordtokens",
           "max_history": "Maximale geschiedenisberichten",
+          "context_mode": "Contextmodus",
           "max_iterations": "Maximale tooliteraties",
           "control_home_assistant": "Home Assistant bedienen",
           "response_mode": "Antwoordmodus",
           "follow_up_phrases": "Vervolgzinnen",
           "end_words": "Gesprek-beeindigingswoorden",
+          "clean_responses": "Antwoorden opschonen voor spraakuitvoer",
           "timeout": "Antwoord time-out",
           "debug_mode": "Debugmodus",
+          "chat_log_mode": "Chatlogmodus",
           "ollama_keep_alive": "Ollama actief houden",
           "ollama_num_ctx": "Ollama contextvenster",
-          "clean_responses": "Antwoorden opschonen voor spraakuitvoer"
+          "openclaw_session_key": "Sessiesleutel"
+        },
+        "sections": {
+          "conversation": {
+            "name": "-gesprek",
+            "description": "Gedrag, vervolgafhandeling en instellingen voor stemuitvoer voor dit profiel.",
+            "data": {
+              "control_home_assistant": "Home Assistant bedienen",
+              "response_mode": "Antwoordmodus",
+              "follow_up_phrases": "Vervolgzinnen",
+              "end_words": "Gesprek-beeindigingswoorden",
+              "clean_responses": "Antwoorden opschonen voor spraakuitvoer"
+            },
+            "data_description": {
+              "control_home_assistant": "Sta toe dat dit profiel Home Assistant-acties uitvoert in plaats van alleen vragen te beantwoorden.",
+              "response_mode": "Bepaalt of de assistent onmiddellijk beëindigt of indien nodig natuurlijke vervolgvragen stelt.",
+              "follow_up_phrases": "Door komma's gescheiden zinnen die worden gebruikt om vervolgreacties te detecteren.",
+              "end_words": "Door komma's gescheiden woorden of zinsdelen die het gesprek moeten beëindigen.",
+              "clean_responses": "Verwijder onnodige opmaak of opvulling om de gesproken reacties overzichtelijker te houden."
+            }
+          },
+          "performance": {
+            "name": "Prestaties",
+            "description": "Modelresponslimieten, uitvoeringslimieten, time-out en foutopsporing.",
+            "data": {
+              "temperature": "Temperatuur",
+              "max_tokens": "Maximale antwoordtokens",
+              "max_history": "Maximale geschiedenisberichten",
+              "context_mode": "Contextmodus",
+              "max_iterations": "Maximale tooliteraties",
+              "timeout": "Antwoord time-out",
+              "debug_mode": "Debugmodus",
+              "chat_log_mode": "Chatlogmodus"
+            },
+            "data_description": {
+              "temperature": "Regelt de willekeur van de reacties. Lagere waarden zijn deterministischer.",
+              "max_tokens": "Beperkt hoeveel tokens het model in één reactie kan genereren.",
+              "max_history": "Hoeveel eerdere gespreksberichten in context moeten blijven.",
+              "context_mode": "Standaard verzendt de volledige context van de profieltool. Light houdt een kleiner geschiedenisvenster bij en maakt reclame voor de belangrijkste Home Assistant-tools voor kleine lokale modellen.",
+              "max_iterations": "Bepaalt hoeveel gereedschapsoproepbeurten de assistent mag gebruiken voor één verzoek.",
+              "timeout": "Hoe lang moet worden gewacht op een reactie van de provider voordat er een time-out optreedt.",
+              "debug_mode": "Schakel meer gedetailleerde logboekregistratie in voor probleemoplossing.",
+              "chat_log_mode": "Bewaar recente gesprekslogboeken, inclusief gebruikerstekst, antwoorden van assistenten, toolnamen, toolargumenten en toolresultaten, ter beoordeling."
+            }
+          },
+          "provider": {
+            "name": "-aanbieder",
+            "description": "Providerspecifieke instellingen worden alleen weergegeven als ze van toepassing zijn.",
+            "data": {
+              "ollama_keep_alive": "Ollama actief houden",
+              "ollama_num_ctx": "Ollama contextvenster",
+              "openclaw_session_key": "Sessiesleutel"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
+              "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
+              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden."
+            }
+          },
+          "tools": {
+            "name": "Gereedschap",
+            "description": "Niet-aangevinkte tools blijven beschikbaar wanneer ze zijn ingeschakeld op de gedeelde MCP-server. Vink een vakje aan om een ​​gereedschapsfamilie alleen voor dit profiel te verbieden.",
+            "data": {
+              "disable_assist_bridge": "Assist-brug uitschakelen",
+              "disable_calculator": "Rekenmachine uitschakelen",
+              "disable_custom_tools": "Aangepaste tools uitschakelen",
+              "disable_device": "Apparaathulpmiddelen uitschakelen",
+              "disable_google_maps": "Schakel Google Places and Routes uit",
+              "disable_llm_api_bridge": "Uitschakelen LLM API Brug",
+              "disable_memory": "Geheugen uitschakelen",
+              "disable_music_assistant": "Schakel Music Assistant uit",
+              "disable_read_url": "Uitschakelen Lezen URL",
+              "disable_recorder": "Recordergeschiedenis uitschakelen",
+              "disable_response_service": "Reactieservicelezingen uitschakelen",
+              "disable_search": "Zoeken uitschakelen",
+              "disable_unit_conversion": "Eenheidsconversie uitschakelen",
+              "disable_weather_forecast": "Weersvoorspelling uitschakelen",
+              "disable_wikipedia_search": "Zoekopdracht Wikipedia uitschakelen",
+              "disable_web_search": "Zoekopdracht op internet uitschakelen"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Voorkomt dat dit profiel de eigen Assist-tools, prompt en context-snapshot van Home Assistant gebruikt.",
+              "disable_calculator": "Voorkomt dat dit profiel hulpmiddelen voor wiskunde en expressie-evaluatie gebruikt.",
+              "disable_custom_tools": "Voorkomt dat dit profiel externe aangepaste gereedschapspakketten gebruikt die zijn geladen via de gedeelde MCP-server.",
+              "disable_device": "Voorkomt dat dit profiel fysieke apparaten en apparaatdetails ontdekt.",
+              "disable_google_maps": "Voorkomt dat dit profiel Google Places and Routes-tools gebruikt.",
+              "disable_llm_api_bridge": "Voorkomt dat dit profiel Home Assistant LLM API-tools van derden op de toelatingslijst gebruikt.",
+              "disable_memory": "Voorkomt dat dit profiel gedeelde, persistente herinneringen opslaat, oproept of vergeet.",
+              "disable_music_assistant": "Voorkomt dat dit profiel de zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen van Music Assistant gebruikt.",
+              "disable_read_url": "Voorkomt dat dit profiel pagina-inhoud opent en uit URLs haalt.",
+              "disable_recorder": "Voorkomt dat dit profiel gebruikmaakt van door de recorder ondersteunde hulpmiddelen voor geschiedenis, telling, duur en tijdstip.",
+              "disable_response_service": "Voorkomt dat dit profiel Home Assistant-services gebruikt die gestructureerde gegevens retourneren, zoals agenda- en prognosegegevens.",
+              "disable_search": "Voorkomt dat dit profiel de ingebouwde webzoekhulp gebruikt.",
+              "disable_unit_conversion": "Voorkomt dat dit profiel gebruikmaakt van exacte eenhedenconversietools zoals °C naar °F, conversies van afstand, keukenvolume, opslag en datasnelheid.",
+              "disable_weather_forecast": "Voorkomt dat dit profiel de speciale Home Assistant weersvoorspellingshulp gebruikt.",
+              "disable_wikipedia_search": "Voorkomt dat dit profiel Wikipedia doorzoekt.",
+              "disable_web_search": "Voorkomt dat dit profiel gebruikmaakt van internetzoekopdrachten en URL-leestools, zelfs als deze zijn ingeschakeld op de gedeelde MCP-server."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Deze instellingen zijn van invloed op ALLE profielen. Wijzigingen hier hebben invloed op elke MCP Assist-conversatieagent.",
         "data": {
           "mcp_port": "MCP-serverpoort",
-          "search_provider": "Webzoeken",
-          "brave_api_key": "Brave Search API-sleutel",
-          "allowed_ips": "Extra toegestane IPs/bereiken",
-          "enable_gap_filling": "Slimme entiteitsindex inschakelen",
-          "max_entities_per_discovery": "Max entiteiten per zoekopdracht (20-500)"
+          "allowed_ips": "Extra toegestane IPs/bereiken"
+        },
+        "data_description": {
+          "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
+          "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "-context",
+            "description": "Bepaal welke Home Assistant identiteits- en locatiegegevens worden opgenomen in AI-prompts en MCP tool-call-payloads.",
+            "data": {
+              "include_current_user": "Huidige gebruiker opnemen in prompt",
+              "include_home_location": "Thuislocatie opnemen in prompt",
+              "include_current_user_in_tool_calls": "Deel huidige gebruiker met MCP Tools",
+              "include_home_location_in_tool_calls": "Deel thuislocatie met MCP Tools"
+            },
+            "data_description": {
+              "include_current_user": "Neem de huidige gebruikersnaam Home Assistant op in de AI-prompt, indien beschikbaar.",
+              "include_home_location": "Voeg een compact overzicht van de thuislocatie toe aan de AI-prompt, met behulp van de geconfigureerde thuisnaam en coördinaten van Home Assistant.",
+              "include_current_user_in_tool_calls": "Verzend het huidige Home Assistant gebruikers-ID en de naam in MCP tools/oproepcontext, zodat toolpakketten acties kunnen controleren of personaliseren.",
+              "include_home_location_in_tool_calls": "Verzend de geconfigureerde thuisnaam, breedtegraad en lengtegraad van Home Assistant in MCP tools/aanroepcontext voor toolpakketten die locatiemetagegevens nodig hebben."
+            }
+          },
+          "discovery": {
+            "name": "-ontdekking",
+            "description": "Bepaal hoe de gedeelde MCP-server detectieresultaten opbouwt en retourneert.",
+            "data": {
+              "enable_gap_filling": "Slimme entiteitsindex inschakelen",
+              "max_entities_per_discovery": "Max. aantal entiteiten per ontdekking (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bouwt een compacte systeemindex om ontdekking snel en contextbewust te houden.",
+              "max_entities_per_discovery": "Beperkt hoeveel entiteiten een enkele ontdekkingsoproep kan retourneren."
+            }
+          },
+          "memory": {
+            "name": "-geheugen",
+            "description": "Configureer hoe lang gedeelde persistente herinneringen worden bewaard wanneer de Geheugentool is ingeschakeld.",
+            "data": {
+              "memory_default_ttl_days": "Standaardgeheugen TTL (dagen)",
+              "memory_max_ttl_days": "Maximaal geheugen TTL (dagen)",
+              "memory_max_items": "Maximaal aantal opgeslagen herinneringen"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Standaard aantal dagen dat een nieuw geheugen wordt bewaard als de gereedschapsoproep geen ttl_days oplevert.",
+              "memory_max_ttl_days": "Maximaal aantal dagen dat opgeslagen geheugen mag worden bewaard.",
+              "memory_max_items": "Bovengrens voor actieve opgeslagen geheugens. De oudste herinneringen worden als eerste gesnoeid wanneer deze limiet wordt overschreden."
+            }
+          },
+          "tools": {
+            "name": "Gereedschap",
+            "description": "Schakel optionele toolmogelijkheden in of uit die beschikbaar worden gesteld door de gedeelde MCP-server.",
+            "data": {
+              "enable_assist_bridge": "Assist-brug",
+              "enable_calculator_tools": "Rekenmachine",
+              "enable_external_custom_tools": "Aangepaste gereedschappen",
+              "enable_device_tools": "Apparaathulpmiddelen",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Brug",
+              "enable_memory_tools": "-geheugen",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Lees URL",
+              "enable_recorder_tools": "Recordergeschiedenis",
+              "enable_response_service_tools": "Response Service leest",
+              "enable_search_tool": "Zoeken",
+              "enable_unit_conversion_tools": "Eenheidsconversie",
+              "enable_weather_forecast_tool": "Weersverwachting",
+              "enable_wikipedia_search_tool": "Wikipedia Zoeken",
+              "enable_web_search": "zoeken op internet",
+              "search_provider": "webzoekmachine",
+              "brave_api_key": "Brave Search API Sleutel",
+              "google_maps_api_key": "Google Maps API Sleutel",
+              "llm_api_allowlist": "Toegestane LLM API ID's",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Toon de eigen Assist-hulpmiddelen, prompts en context-snapshot van Home Assistant.",
+              "enable_calculator_tools": "Leg tools voor wiskunde en expressie-evaluatie bloot.",
+              "enable_external_custom_tools": "Laad extra lokale toolpakketten uit de configuratiemap Home Assistant onder mcp-assist-tools. Standaard uitgeschakeld. Schakel alleen vertrouwde pakketten in, omdat deze als Python-code binnen Home Assistant worden uitgevoerd en mogelijk MCP-hulpmiddelen plus korte promptbegeleiding toevoegen.",
+              "enable_device_tools": "Maak tools voor het ontdekken van fysieke apparaten en apparaatdetails zichtbaar.",
+              "enable_google_maps_tools": "Toon tools voor het opzoeken van Google Places en Google Routes voor reistijd. Vereist een Google Maps API-sleutel.",
+              "enable_llm_api_bridge": "Maak derde partijen op de toelatingslijst zichtbaar Home Assistant LLM API's die door andere integraties zijn geregistreerd.",
+              "enable_memory_tools": "Stel gedeelde permanente geheugenhulpmiddelen bloot, zodat de assistent door de gebruiker goedgekeurde feiten en voorkeuren kan onthouden, oproepen en vergeten met op TTL gebaseerde vervaldatum.",
+              "enable_music_assistant_support": "Stel Music Assistant zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen bloot.",
+              "enable_read_url_tool": "Stel URL-gegevens beschikbaar zodat de assistent specifieke webpagina's kan inspecteren.",
+              "enable_recorder_tools": "Leg door recorder ondersteunde geschiedenis, analyse en point-in-time tools bloot.",
+              "enable_response_service_tools": "Stel Home Assistant-services bloot die gestructureerde gegevens retourneren, zoals kalender- en prognosegegevens.",
+              "enable_search_tool": "Maak zoekopdrachten op internet zichtbaar met behulp van de geconfigureerde gedeelde provider.",
+              "enable_unit_conversion_tools": "Toon tools voor exacte eenheidconversie, zoals °C naar °F, afstand, keukenvolume, opslag en datasnelheidconversies.",
+              "enable_weather_forecast_tool": "Stel de speciale Home Assistant weersvoorspellingshelper bloot.",
+              "enable_wikipedia_search_tool": "Expose lichtgewicht Wikipedia artikel zoeken naar achtergrond- en referentievragen.",
+              "enable_web_search": "Maak zoek- en URL-leestools zichtbaar.",
+              "search_provider": "Kies welke provider u wilt gebruiken wanneer Zoeken op internet is ingeschakeld.",
+              "brave_api_key": "Alleen vereist wanneer Zoeken op internet is ingeschakeld en Brave Search is geselecteerd.",
+              "google_maps_api_key": "Alleen vereist wanneer Google Places and Routes is ingeschakeld.",
+              "llm_api_allowlist": "Door komma's of nieuwe regels gescheiden derde partij LLM API ID's MCP Assist die kunnen inspecteren of bellen, zoals llm_intents. LLM APIs van derden geïnstalleerd: {installed_llm_apis}. De ingebouwde assist API blijft op Assist Bridge.",
+              "searxng_url": "Alleen vereist wanneer Zoeken op internet is ingeschakeld en SearXNG is geselecteerd. Gebruik de basis URL voor uw zelf-hostende SearXNG-instantie."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Ongeldig IP-adres of CIDR-bereikformaat. Gebruik kommagescheiden waarden zoals: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profielnaam is verplicht.",
       "invalid_json": "Ongeldig JSON-formaat. Controleer je MCP-serversconfiguratie.",
+      "searxng_url_required": "SearXNG URL is vereist wanneer zoeken naar SearXNG is ingeschakeld.",
+      "google_maps_api_key_required": "Google Maps API-sleutel is vereist wanneer Google Places and Routes is ingeschakeld.",
+      "mcp_apply_failed": "Kan gedeelde MCP-serverinstellingen niet toepassen. Controleer de poort en toegestane IP-adressen en probeer het opnieuw.",
       "invalid_api_key": "Ongeldige API-sleutel. Controleer en probeer opnieuw.",
       "auth_failed": "Authenticatie mislukt. Controleer je API-sleutel.",
-      "unknown": "Er is een onbekende fout opgetreden."
+      "unknown": "Er is een onbekende fout opgetreden.",
+      "openclaw_not_paired": "Apparaat nog niet goedgekeurd op de OpenClaw-server. Keur het goed en probeer het opnieuw.",
+      "openclaw_connection_failed": "Kan geen verbinding maken met de OpenClaw-gateway. Controleer de host, poort en token."
     },
     "abort": {
       "already_configured": "Een profiel met deze naam bestaat al. Kies een andere naam."
@@ -85,21 +338,186 @@
           "lmstudio_url": "Server-URL",
           "api_key": "API-sleutel",
           "model_name": "Modelnaam",
+          "system_prompt_mode": "Systeempromptbron",
           "system_prompt": "Systeeminstructies",
+          "technical_prompt_mode": "Technische instructies Bron",
           "technical_prompt": "Technische instructies",
           "temperature": "Temperatuur",
           "max_tokens": "Maximale antwoordtokens",
           "max_history": "Maximale geschiedenisberichten",
+          "context_mode": "Contextmodus",
           "max_iterations": "Maximale tooliteraties",
           "control_home_assistant": "Home Assistant bedienen",
           "response_mode": "Antwoordmodus",
           "follow_up_phrases": "Vervolgzinnen",
           "end_words": "Gesprek-beeindigingswoorden",
+          "clean_responses": "Antwoorden opschonen voor spraakuitvoer",
           "timeout": "Antwoord time-out",
           "debug_mode": "Debugmodus",
+          "chat_log_mode": "Chatlogmodus",
           "ollama_keep_alive": "Ollama actief houden",
           "ollama_num_ctx": "Ollama contextvenster",
-          "clean_responses": "Antwoorden opschonen voor spraakuitvoer"
+          "openclaw_host": "Gatewayhost",
+          "openclaw_port": "Gateway-poort",
+          "openclaw_token": "Gatewaytoken",
+          "openclaw_use_ssl": "Gebruik SSL/TLS",
+          "openclaw_session_key": "Sessiesleutel"
+        },
+        "data_description": {
+          "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
+          "system_prompt": "Vooraf ingevuld met de huidige effectieve systeemprompt. Bewerk het om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken.",
+          "technical_prompt": "Vooraf gevuld met de huidige effectieve technische instructies. Bewerk ze om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken.",
+          "context_mode": "Standaard verzendt de volledige context van de profieltool. Light houdt een kleiner geschiedenisvenster bij en maakt reclame voor de belangrijkste Home Assistant-tools voor kleine lokale modellen."
+        },
+        "sections": {
+          "profile": {
+            "name": "-profiel",
+            "description": "Basisidentiteitsinstellingen voor dit gespreksprofiel.",
+            "data": {
+              "profile_name": "Profielnaam"
+            },
+            "data_description": {
+              "profile_name": "Een vriendelijke naam voor dit gespreksprofiel."
+            }
+          },
+          "connection": {
+            "name": "-verbinding",
+            "description": "Hoe dit profiel verbinding maakt met de modelaanbieder.",
+            "data": {
+              "lmstudio_url": "Server-URL",
+              "api_key": "API-sleutel",
+              "openclaw_host": "Gatewayhost",
+              "openclaw_port": "Gateway-poort",
+              "openclaw_token": "Gatewaytoken",
+              "openclaw_use_ssl": "Gebruik SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "De basis URL voor de lokale of OpenAI-compatible-server die door dit profiel wordt gebruikt.",
+              "api_key": "De sleutel of het dragertoken API vereist door deze provider.",
+              "openclaw_host": "Hostnaam of IP-adres van de OpenClaw-gateway.",
+              "openclaw_port": "Poort gebruikt door de OpenClaw-gateway WebSocket-server.",
+              "openclaw_token": "Bearer-token gebruikt voor authenticatie bij de OpenClaw-gateway.",
+              "openclaw_use_ssl": "Gebruik een veilige WebSocket-verbinding wanneer u met de OpenClaw-gateway praat."
+            }
+          },
+          "model_fields": {
+            "name": "-model",
+            "description": "Kies het model dat dit profiel moet gebruiken.",
+            "data": {
+              "model_name": "Modelnaam"
+            },
+            "data_description": {
+              "model_name": "Het LLM-model dat dit profiel moet gebruiken."
+            }
+          },
+          "prompts": {
+            "name": "-aanwijzingen",
+            "description": "Bekijk de huidige effectieve aanwijzingen, kopieer ze of bewerk ze voor dit profiel.",
+            "data": {
+              "system_prompt": "Systeeminstructies",
+              "technical_prompt": "Technische instructies"
+            },
+            "data_description": {
+              "system_prompt": "Vooraf ingevuld met de huidige effectieve systeemprompt. Bewerk het om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken.",
+              "technical_prompt": "Vooraf gevuld met de huidige effectieve technische instructies. Bewerk ze om dit profiel aan te passen. Indien ongewijzigd blijft de integratie de ingebouwde codeprompt gebruiken."
+            }
+          },
+          "conversation": {
+            "name": "-gesprek",
+            "description": "Gedrag, vervolgafhandeling en instellingen voor stemuitvoer voor dit profiel.",
+            "data": {
+              "control_home_assistant": "Home Assistant bedienen",
+              "response_mode": "Antwoordmodus",
+              "follow_up_phrases": "Vervolgzinnen",
+              "end_words": "Gesprek-beeindigingswoorden",
+              "clean_responses": "Antwoorden opschonen voor spraakuitvoer"
+            },
+            "data_description": {
+              "control_home_assistant": "Sta toe dat dit profiel Home Assistant-acties uitvoert in plaats van alleen vragen te beantwoorden.",
+              "response_mode": "Bepaalt of de assistent onmiddellijk beëindigt of indien nodig natuurlijke vervolgvragen stelt.",
+              "follow_up_phrases": "Door komma's gescheiden zinnen die worden gebruikt om vervolgreacties te detecteren.",
+              "end_words": "Door komma's gescheiden woorden of zinsdelen die het gesprek moeten beëindigen.",
+              "clean_responses": "Verwijder onnodige opmaak of opvulling om de gesproken reacties overzichtelijker te houden."
+            }
+          },
+          "provider": {
+            "name": "-aanbieder",
+            "description": "Providerspecifieke instellingen worden alleen weergegeven als ze van toepassing zijn.",
+            "data": {
+              "ollama_keep_alive": "Ollama actief houden",
+              "ollama_num_ctx": "Ollama contextvenster",
+              "openclaw_session_key": "Sessiesleutel"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
+              "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
+              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden."
+            }
+          },
+          "advanced_settings": {
+            "name": "Geavanceerd",
+            "description": "Deskundige afstemming voor modelgedrag, limieten, time-out en foutopsporing.",
+            "data": {
+              "temperature": "Temperatuur",
+              "max_tokens": "Maximale antwoordtokens",
+              "max_history": "Maximale geschiedenisberichten",
+              "context_mode": "Contextmodus",
+              "max_iterations": "Maximale tooliteraties",
+              "timeout": "Antwoord time-out",
+              "debug_mode": "Debugmodus",
+              "chat_log_mode": "Chatlogmodus"
+            },
+            "data_description": {
+              "temperature": "Regelt de willekeur van de reacties. Lagere waarden zijn deterministischer.",
+              "max_tokens": "Beperkt hoeveel tokens het model in één reactie kan genereren.",
+              "max_history": "Hoeveel eerdere gespreksberichten in context moeten blijven.",
+              "context_mode": "Standaard verzendt de volledige context van de profieltool. Light houdt een kleiner geschiedenisvenster bij en maakt reclame voor de belangrijkste Home Assistant-tools voor kleine lokale modellen.",
+              "max_iterations": "Bepaalt hoeveel gereedschapsoproepbeurten de assistent mag gebruiken voor één verzoek.",
+              "timeout": "Hoe lang moet worden gewacht op een reactie van de provider voordat er een time-out optreedt.",
+              "debug_mode": "Schakel meer gedetailleerde logboekregistratie in voor probleemoplossing.",
+              "chat_log_mode": "Bewaar recente gesprekslogboeken, inclusief gebruikerstekst, antwoorden van assistenten, toolnamen, toolargumenten en toolresultaten, ter beoordeling."
+            }
+          },
+          "tools": {
+            "name": "Gereedschap",
+            "description": "Niet-aangevinkte tools blijven beschikbaar wanneer ze zijn ingeschakeld op de gedeelde MCP-server. Vink een vakje aan om een ​​gereedschapsfamilie alleen voor dit profiel te verbieden.",
+            "data": {
+              "disable_assist_bridge": "Assist-brug uitschakelen",
+              "disable_calculator": "Rekenmachine uitschakelen",
+              "disable_custom_tools": "Aangepaste tools uitschakelen",
+              "disable_device": "Apparaathulpmiddelen uitschakelen",
+              "disable_google_maps": "Schakel Google Places and Routes uit",
+              "disable_llm_api_bridge": "Uitschakelen LLM API Brug",
+              "disable_memory": "Geheugen uitschakelen",
+              "disable_music_assistant": "Schakel Music Assistant uit",
+              "disable_read_url": "Uitschakelen Lezen URL",
+              "disable_recorder": "Recordergeschiedenis uitschakelen",
+              "disable_response_service": "Reactieservicelezingen uitschakelen",
+              "disable_search": "Zoeken uitschakelen",
+              "disable_unit_conversion": "Eenheidsconversie uitschakelen",
+              "disable_weather_forecast": "Weersvoorspelling uitschakelen",
+              "disable_wikipedia_search": "Zoekopdracht Wikipedia uitschakelen",
+              "disable_web_search": "Zoekopdracht op internet uitschakelen"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Voorkomt dat dit profiel de eigen Assist-tools, prompt en context-snapshot van Home Assistant gebruikt.",
+              "disable_calculator": "Voorkomt dat dit profiel hulpmiddelen voor wiskunde en expressie-evaluatie gebruikt.",
+              "disable_custom_tools": "Voorkomt dat dit profiel externe aangepaste gereedschapspakketten gebruikt die zijn geladen via de gedeelde MCP-server.",
+              "disable_unit_conversion": "Voorkomt dat dit profiel gebruikmaakt van exacte eenhedenconversietools zoals °C naar °F, conversies van afstand, keukenvolume, opslag en datasnelheid.",
+              "disable_device": "Voorkomt dat dit profiel fysieke apparaten en apparaatdetails ontdekt.",
+              "disable_google_maps": "Voorkomt dat dit profiel Google Places and Routes-tools gebruikt.",
+              "disable_llm_api_bridge": "Voorkomt dat dit profiel Home Assistant LLM API-tools van derden op de toelatingslijst gebruikt.",
+              "disable_memory": "Voorkomt dat dit profiel gedeelde, persistente herinneringen opslaat, oproept of vergeet.",
+              "disable_music_assistant": "Voorkomt dat dit profiel de zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen van Music Assistant gebruikt.",
+              "disable_read_url": "Voorkomt dat dit profiel pagina-inhoud opent en uit URLs haalt.",
+              "disable_recorder": "Voorkomt dat dit profiel gebruikmaakt van door de recorder ondersteunde hulpmiddelen voor geschiedenis, telling, duur en tijdstip.",
+              "disable_response_service": "Voorkomt dat dit profiel Home Assistant-services gebruikt die gestructureerde gegevens retourneren, zoals agenda- en prognosegegevens.",
+              "disable_search": "Voorkomt dat dit profiel de ingebouwde webzoekhulp gebruikt.",
+              "disable_weather_forecast": "Voorkomt dat dit profiel de speciale Home Assistant weersvoorspellingshulp gebruikt.",
+              "disable_wikipedia_search": "Voorkomt dat dit profiel Wikipedia doorzoekt.",
+              "disable_web_search": "Voorkomt dat dit profiel gebruikmaakt van internetzoekopdrachten en URL-leestools, zelfs als deze zijn ingeschakeld op de gedeelde MCP-server."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Deze instellingen worden gedeeld door ALLE profielen",
         "data": {
           "mcp_port": "MCP-serverpoort",
-          "search_provider": "Webzoeken",
-          "brave_api_key": "Brave Search API-sleutel",
-          "allowed_ips": "Extra toegestane IPs/bereiken",
-          "enable_gap_filling": "Slimme entiteitsindex inschakelen",
-          "max_entities_per_discovery": "Max entiteiten per zoekopdracht (20-500)"
+          "allowed_ips": "Extra toegestane IPs/bereiken"
+        },
+        "data_description": {
+          "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
+          "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "-context",
+            "description": "Bepaal welke Home Assistant identiteits- en locatiegegevens worden opgenomen in AI-prompts en MCP tool-call-payloads.",
+            "data": {
+              "include_current_user": "Huidige gebruiker opnemen in prompt",
+              "include_home_location": "Thuislocatie opnemen in prompt",
+              "include_current_user_in_tool_calls": "Deel huidige gebruiker met MCP Tools",
+              "include_home_location_in_tool_calls": "Deel thuislocatie met MCP Tools"
+            },
+            "data_description": {
+              "include_current_user": "Neem de huidige gebruikersnaam Home Assistant op in de AI-prompt, indien beschikbaar.",
+              "include_home_location": "Voeg een compact overzicht van de thuislocatie toe aan de AI-prompt, met behulp van de geconfigureerde thuisnaam en coördinaten van Home Assistant.",
+              "include_current_user_in_tool_calls": "Verzend het huidige Home Assistant gebruikers-ID en de naam in MCP tools/oproepcontext, zodat toolpakketten acties kunnen controleren of personaliseren.",
+              "include_home_location_in_tool_calls": "Verzend de geconfigureerde thuisnaam, breedtegraad en lengtegraad van Home Assistant in MCP tools/aanroepcontext voor toolpakketten die locatiemetagegevens nodig hebben."
+            }
+          },
+          "discovery": {
+            "name": "-ontdekking",
+            "description": "Bepaal hoe de gedeelde MCP-server detectieresultaten opbouwt en retourneert.",
+            "data": {
+              "enable_gap_filling": "Slimme entiteitsindex inschakelen",
+              "max_entities_per_discovery": "Max. aantal entiteiten per ontdekking (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bouwt een compacte systeemindex om ontdekking snel en contextbewust te houden.",
+              "max_entities_per_discovery": "Beperkt hoeveel entiteiten een enkele ontdekkingsoproep kan retourneren."
+            }
+          },
+          "memory": {
+            "name": "-geheugen",
+            "description": "Configureer hoe lang gedeelde persistente herinneringen worden bewaard wanneer de Geheugentool is ingeschakeld.",
+            "data": {
+              "memory_default_ttl_days": "Standaardgeheugen TTL (dagen)",
+              "memory_max_ttl_days": "Maximaal geheugen TTL (dagen)",
+              "memory_max_items": "Maximaal aantal opgeslagen herinneringen"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Standaard aantal dagen dat een nieuw geheugen wordt bewaard als de gereedschapsoproep geen ttl_days oplevert.",
+              "memory_max_ttl_days": "Maximaal aantal dagen dat opgeslagen geheugen mag worden bewaard.",
+              "memory_max_items": "Bovengrens voor actieve opgeslagen geheugens. De oudste herinneringen worden als eerste gesnoeid wanneer deze limiet wordt overschreden."
+            }
+          },
+          "tools": {
+            "name": "Gereedschap",
+            "description": "Schakel optionele toolmogelijkheden in of uit die beschikbaar worden gesteld door de gedeelde MCP-server.",
+            "data": {
+              "enable_assist_bridge": "Assist-brug",
+              "enable_calculator_tools": "Rekenmachine",
+              "enable_external_custom_tools": "Aangepaste gereedschappen",
+              "enable_device_tools": "Apparaathulpmiddelen",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Brug",
+              "enable_memory_tools": "-geheugen",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Lees URL",
+              "enable_recorder_tools": "Recordergeschiedenis",
+              "enable_response_service_tools": "Response Service leest",
+              "enable_search_tool": "Zoeken",
+              "enable_unit_conversion_tools": "Eenheidsconversie",
+              "enable_weather_forecast_tool": "Weersverwachting",
+              "enable_wikipedia_search_tool": "Wikipedia Zoeken",
+              "enable_web_search": "zoeken op internet",
+              "search_provider": "webzoekmachine",
+              "brave_api_key": "Brave Search API Sleutel",
+              "google_maps_api_key": "Google Maps API Sleutel",
+              "llm_api_allowlist": "Toegestane LLM API ID's",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Toon de eigen Assist-hulpmiddelen, prompts en context-snapshot van Home Assistant.",
+              "enable_calculator_tools": "Leg tools voor wiskunde en expressie-evaluatie bloot.",
+              "enable_external_custom_tools": "Laad extra lokale toolpakketten uit de configuratiemap Home Assistant onder mcp-assist-tools. Standaard uitgeschakeld. Schakel alleen vertrouwde pakketten in, omdat deze als Python-code binnen Home Assistant worden uitgevoerd en mogelijk MCP-hulpmiddelen plus korte promptbegeleiding toevoegen.",
+              "enable_unit_conversion_tools": "Toon tools voor exacte eenheidconversie, zoals °C naar °F, afstand, keukenvolume, opslag en datasnelheidconversies.",
+              "enable_device_tools": "Maak tools voor het ontdekken van fysieke apparaten en apparaatdetails zichtbaar.",
+              "enable_google_maps_tools": "Toon tools voor het opzoeken van Google Places en Google Routes voor reistijd. Vereist een Google Maps API-sleutel.",
+              "enable_llm_api_bridge": "Maak derde partijen op de toelatingslijst zichtbaar Home Assistant LLM API's die door andere integraties zijn geregistreerd.",
+              "enable_memory_tools": "Stel gedeelde permanente geheugenhulpmiddelen bloot, zodat de assistent door de gebruiker goedgekeurde feiten en voorkeuren kan onthouden, oproepen en vergeten met op TTL gebaseerde vervaldatum.",
+              "enable_music_assistant_support": "Stel Music Assistant zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen bloot.",
+              "enable_read_url_tool": "Stel URL-gegevens beschikbaar zodat de assistent specifieke webpagina's kan inspecteren.",
+              "enable_recorder_tools": "Leg door recorder ondersteunde geschiedenis, analyse en point-in-time tools bloot.",
+              "enable_response_service_tools": "Stel Home Assistant-services bloot die gestructureerde gegevens retourneren, zoals kalender- en prognosegegevens.",
+              "enable_search_tool": "Maak zoekopdrachten op internet zichtbaar met behulp van de geconfigureerde gedeelde provider.",
+              "enable_weather_forecast_tool": "Stel de speciale Home Assistant weersvoorspellingshelper bloot.",
+              "enable_wikipedia_search_tool": "Expose lichtgewicht Wikipedia artikel zoeken naar achtergrond- en referentievragen.",
+              "enable_web_search": "Maak zoek- en URL-leestools zichtbaar.",
+              "search_provider": "Kies welke provider u wilt gebruiken wanneer Zoeken op internet is ingeschakeld.",
+              "brave_api_key": "Alleen vereist wanneer Zoeken op internet is ingeschakeld en Brave Search is geselecteerd.",
+              "google_maps_api_key": "Alleen vereist wanneer Google Places and Routes is ingeschakeld.",
+              "llm_api_allowlist": "Door komma's of nieuwe regels gescheiden derde partij LLM API ID's MCP Assist die kunnen inspecteren of bellen, zoals llm_intents. LLM APIs van derden geïnstalleerd: {installed_llm_apis}. De ingebouwde assist API blijft op Assist Bridge.",
+              "searxng_url": "Alleen vereist wanneer Zoeken op internet is ingeschakeld en SearXNG is geselecteerd. Gebruik de basis URL voor uw zelf-hostende SearXNG-instantie."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Standaard",
+        "custom": "Aangepast"
       }
     }
   },

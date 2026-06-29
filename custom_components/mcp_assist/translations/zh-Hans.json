@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "配置文件名称",
           "server_type": "服务器类型"
+        },
+        "data_description": {
+          "profile_name": "此对话配置文件的友好名称。",
+          "server_type": "选择此配置文件使用的提供程序或推理服务器。"
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "服务器URL",
           "api_key": "API密钥",
-          "mcp_port": "MCP服务器端口"
+          "mcp_port": "MCP服务器端口",
+          "openclaw_host": "网关主机",
+          "openclaw_port": "网关端口",
+          "openclaw_token": "网关令牌",
+          "openclaw_use_ssl": "使用SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "此配置文件使用的本地或 OpenAI-compatible 服务器的基础 URL。",
+          "api_key": "该提供商所需的 API 密钥或不记名令牌。",
+          "mcp_port": "共享MCP服务器使用的本地端口。",
+          "openclaw_host": "OpenClaw网关的主机名或IP地址。",
+          "openclaw_port": "OpenClaw网关WebSocket服务器使用的端口。",
+          "openclaw_token": "承载令牌用于通过 OpenClaw 网关进行身份验证。",
+          "openclaw_use_ssl": "与 OpenClaw 网关通信时，使用安全的 WebSocket 连接。"
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw 设备配对",
+        "description": "您的设备需要在 OpenClaw 服务器上获得批准。\n\n通过运行 `openclaw devices approve` 或使用 OpenClaw Control UI 进行批准，然后单击“提交”。\n\n设备 ID：{device_id}"
       },
       "model": {
         "title": "模型和提示词",
         "description": "{server_info}",
         "data": {
           "model_name": "模型名称",
+          "system_prompt_mode": "系统提示源",
           "system_prompt": "系统提示词",
+          "technical_prompt_mode": "技术说明来源",
           "technical_prompt": "技术指令"
+        },
+        "data_description": {
+          "model_name": "此配置文件应使用的 LLM 型号。",
+          "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
+          "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。"
+        },
+        "sections": {
+          "model_fields": {
+            "name": "模型",
+            "description": "选择此配置文件应使用的模型。",
+            "data": {
+              "model_name": "模型名称"
+            },
+            "data_description": {
+              "model_name": "此配置文件应使用的 LLM 型号。"
+            }
+          },
+          "prompts": {
+            "name": "提示",
+            "description": "查看当前有效的提示，复制它们，或为此配置文件编辑它们。",
+            "data": {
+              "system_prompt": "系统提示词",
+              "technical_prompt": "技术指令"
+            },
+            "data_description": {
+              "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
+              "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。"
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "温度",
           "max_tokens": "最大响应令牌数",
           "max_history": "最大历史消息数",
+          "context_mode": "上下文模式",
           "max_iterations": "最大工具迭代次数",
           "control_home_assistant": "控制Home Assistant",
           "response_mode": "响应模式",
           "follow_up_phrases": "后续跟进短语",
           "end_words": "结束对话词语",
+          "clean_responses": "清理语音输出响应",
           "timeout": "响应超时",
           "debug_mode": "调试模式",
+          "chat_log_mode": "聊天记录模式",
           "ollama_keep_alive": "保持Ollama活跃",
           "ollama_num_ctx": "Ollama上下文窗口",
-          "clean_responses": "清理语音输出响应"
+          "openclaw_session_key": "会话密钥"
+        },
+        "sections": {
+          "conversation": {
+            "name": "对话",
+            "description": "此配置文件的行为、后续处理和语音输出设置。",
+            "data": {
+              "control_home_assistant": "控制Home Assistant",
+              "response_mode": "响应模式",
+              "follow_up_phrases": "后续跟进短语",
+              "end_words": "结束对话词语",
+              "clean_responses": "清理语音输出响应"
+            },
+            "data_description": {
+              "control_home_assistant": "允许此配置文件执行 Home Assistant 操作，而不仅仅是回答问题。",
+              "response_mode": "控制助理是立即结束还是在适当的时候自然地提出后续问题。",
+              "follow_up_phrases": "用于检测后续风格响应的逗号分隔短语。",
+              "end_words": "应结束对话的以逗号分隔的单词或短语。",
+              "clean_responses": "修剪不必要的格式或填充符，以保持口头回复简洁。"
+            }
+          },
+          "performance": {
+            "name": "表现",
+            "description": "模型响应限制、执行限制、超时和调试。",
+            "data": {
+              "temperature": "温度",
+              "max_tokens": "最大响应令牌数",
+              "max_history": "最大历史消息数",
+              "context_mode": "上下文模式",
+              "max_iterations": "最大工具迭代次数",
+              "timeout": "响应超时",
+              "debug_mode": "调试模式",
+              "chat_log_mode": "聊天记录模式"
+            },
+            "data_description": {
+              "temperature": "控制响应随机性。较低的值更具确定性。",
+              "max_tokens": "限制模型在一次响应中可以生成的令牌数量。",
+              "max_history": "在上下文中要保留多少先前的对话消息。",
+              "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。",
+              "max_iterations": "限制助手针对一个请求可以使用的工具调用次数。",
+              "timeout": "超时之前等待提供商响应的时间。",
+              "debug_mode": "启用更详细的日志记录以进行故障排除。",
+              "chat_log_mode": "保留最近的对话日志，包括用户文本、助理回复、工具名称、工具参数和工具结果以供查看。"
+            }
+          },
+          "provider": {
+            "name": "提供者",
+            "description": "仅在应用时显示特定于提供商的设置。",
+            "data": {
+              "ollama_keep_alive": "保持Ollama活跃",
+              "ollama_num_ctx": "Ollama上下文窗口",
+              "openclaw_session_key": "会话密钥"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
+              "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
+              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。"
+            }
+          },
+          "tools": {
+            "name": "工具",
+            "description": "只要在共享 MCP 服务器上启用未经检查的工具，它们仍然可用。选中一个框以禁止仅用于此配置文件的工具系列。",
+            "data": {
+              "disable_assist_bridge": "禁用辅助桥",
+              "disable_calculator": "禁用计算器",
+              "disable_custom_tools": "禁用自定义工具",
+              "disable_device": "禁用设备工具",
+              "disable_google_maps": "禁用 Google Places and Routes",
+              "disable_llm_api_bridge": "禁用 LLM API 桥",
+              "disable_memory": "禁用内存",
+              "disable_music_assistant": "禁用 Music Assistant",
+              "disable_read_url": "禁用读取 URL",
+              "disable_recorder": "禁用记录器历史记录",
+              "disable_response_service": "禁用响应服务读取",
+              "disable_search": "禁用搜索",
+              "disable_unit_conversion": "禁用单位转换",
+              "disable_weather_forecast": "禁用天气预报",
+              "disable_wikipedia_search": "禁用 Wikipedia 搜索",
+              "disable_web_search": "禁用网页搜索"
+            },
+            "data_description": {
+              "disable_assist_bridge": "阻止此配置文件使用 Home Assistant 的本机辅助工具、提示和上下文快照。",
+              "disable_calculator": "阻止此配置文件使用数学和表达式评估工具。",
+              "disable_custom_tools": "防止此配置文件使用通过共享 MCP 服务器加载的外部自定义工具包。",
+              "disable_device": "阻止此配置文件发现物理设备和设备详细信息。",
+              "disable_google_maps": "阻止此配置文件使用 Google Places and Routes 工具。",
+              "disable_llm_api_bridge": "阻止此配置文件使用列入许可名单的第三方 Home Assistant LLM API 工具。",
+              "disable_memory": "防止此配置文件存储、调用或忘记共享的持久内存。",
+              "disable_music_assistant": "阻止此配置文件使用 Music Assistant 搜索、队列、库和播放工具。",
+              "disable_read_url": "阻止此配置文件打开 URLs 并从中提取页面内容。",
+              "disable_recorder": "防止此配置文件使用记录器支持的历史记录、计数、持续时间和时间点工具。",
+              "disable_response_service": "阻止此配置文件使用返回结构化数据（例如日历和预测读取）的 Home Assistant 服务。",
+              "disable_search": "阻止此配置文件使用内置的 Web 搜索帮助程序。",
+              "disable_unit_conversion": "防止此配置文件使用精确的单位转换工具，例如 °C 到 °F、距离、厨房体积、存储和数据速率转换。",
+              "disable_weather_forecast": "阻止此配置文件使用专用的 Home Assistant 天气预报助手。",
+              "disable_wikipedia_search": "阻止此配置文件搜索 Wikipedia。",
+              "disable_web_search": "阻止此配置文件使用 Web 搜索和 URL 读取工具，即使它们在共享 MCP 服务器上启用也是如此。"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "这些设置影响所有配置文件。此处的更改将影响每个MCP Assist对话代理。",
         "data": {
           "mcp_port": "MCP服务器端口",
-          "search_provider": "网络搜索",
-          "brave_api_key": "Brave搜索API密钥",
-          "allowed_ips": "额外允许的IP/范围",
-          "enable_gap_filling": "启用智能实体索引",
-          "max_entities_per_discovery": "每次发现最大实体数 (20-500)"
+          "allowed_ips": "额外允许的IP/范围"
+        },
+        "data_description": {
+          "mcp_port": "共享MCP服务器使用的本地端口。",
+          "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。"
+        },
+        "sections": {
+          "context": {
+            "name": "语境",
+            "description": "控制 AI 提示和 MCP 工具调用负载中包含哪些 Home Assistant 身份和位置详细信息。",
+            "data": {
+              "include_current_user": "在提示中包含当前用户",
+              "include_home_location": "在提示中包含家庭位置",
+              "include_current_user_in_tool_calls": "使用 MCP 工具共享当前用户",
+              "include_home_location_in_tool_calls": "使用 MCP 工具共享家庭位置"
+            },
+            "data_description": {
+              "include_current_user": "如果可用，请在 AI 提示中包含当前 Home Assistant 用户名。",
+              "include_home_location": "使用 Home Assistant 配置的家庭名称和坐标，在 AI 提示中包含紧凑的家庭位置摘要。",
+              "include_current_user_in_tool_calls": "在 MCP 工具/调用上下文中发送当前 Home Assistant 用户 ID 和名称，以便工具包可以审核或个性化操作。",
+              "include_home_location_in_tool_calls": "对于需要位置元数据的工具包，在 MCP 工具/调用上下文中发送 Home Assistant 配置的家庭名称、纬度和经度。"
+            }
+          },
+          "discovery": {
+            "name": "发现",
+            "description": "控制共享 MCP 服务器如何构建和返回发现结果。",
+            "data": {
+              "enable_gap_filling": "启用智能实体索引",
+              "max_entities_per_discovery": "每次发现的最大实体数 (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "构建紧凑的系统索引，以保持快速发现和上下文感知。",
+              "max_entities_per_discovery": "限制单个发现调用可以返回的实体数量。"
+            }
+          },
+          "memory": {
+            "name": "记忆",
+            "description": "配置启用内存工具时共享持久内存的保留时间。",
+            "data": {
+              "memory_default_ttl_days": "默认内存 TTL（天）",
+              "memory_max_ttl_days": "最大内存 TTL（天）",
+              "memory_max_items": "最大存储内存"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "当工具调用未提供 ttl_days 时，新内存的默认保留天数。",
+              "memory_max_ttl_days": "任何存储的内存可以保留的最大天数。",
+              "memory_max_items": "活动存储内存的上限。当超过此限制时，最旧的内存将首先被修剪。"
+            }
+          },
+          "tools": {
+            "name": "工具",
+            "description": "启用或禁用共享 MCP 服务器公开的可选工具功能。",
+            "data": {
+              "enable_assist_bridge": "辅助桥",
+              "enable_calculator_tools": "计算器",
+              "enable_external_custom_tools": "定制工具",
+              "enable_device_tools": "设备工具",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API 桥",
+              "enable_memory_tools": "记忆",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "读取 URL",
+              "enable_recorder_tools": "录音机历史",
+              "enable_response_service_tools": "响应服务读取",
+              "enable_search_tool": "搜索",
+              "enable_unit_conversion_tools": "单位换算",
+              "enable_weather_forecast_tool": "天气预报",
+              "enable_wikipedia_search_tool": "Wikipedia 搜索",
+              "enable_web_search": "网页搜索",
+              "search_provider": "网络搜索提供商",
+              "brave_api_key": "Brave Search API 钥匙",
+              "google_maps_api_key": "Google Maps API 钥匙",
+              "llm_api_allowlist": "允许的 LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "公开 Home Assistant 的本机辅助工具、提示和上下文快照。",
+              "enable_calculator_tools": "公开数学和表达式评估工具。",
+              "enable_external_custom_tools": "从 mcp-assist-tools 下的 Home Assistant config 目录加载其他本地工具包。默认禁用。仅启用受信任的软件包，因为它们在 Home Assistant 内作为 Python 代码运行，并且可能添加 MCP 工具和简短的提示指导。",
+              "enable_device_tools": "公开物理设备发现和设备详细信息工具。",
+              "enable_google_maps_tools": "公开 Google Places 查找和 Google Routes 旅行时间工具。需要 Google Maps API 密钥。",
+              "enable_llm_api_bridge": "公开由其他集成注册的列入白名单的第三方 Home Assistant LLM API。",
+              "enable_memory_tools": "公开共享的持久内存工具，以便助手可以通过基于 TTL 的过期来记住、回忆和忘记用户批准的事实和偏好。",
+              "enable_music_assistant_support": "公开 Music Assistant 搜索、队列、库和播放工具。",
+              "enable_read_url_tool": "公开 URL 读取内容，以便助手可以检查特定网页。",
+              "enable_recorder_tools": "公开记录器支持的历史记录、分析和时间点工具。",
+              "enable_response_service_tools": "公开返回结构化数据（例如日历和预测读取）的 Home Assistant 服务。",
+              "enable_search_tool": "使用配置的共享提供程序公开网络搜索。",
+              "enable_unit_conversion_tools": "提供精确的单位转换工具，例如 °C 到 °F、距离、厨房体积、存储和数据速率转换。",
+              "enable_weather_forecast_tool": "暴露专用的Home Assistant天气预报助手。",
+              "enable_wikipedia_search_tool": "公开轻量级 Wikipedia 文章搜索背景和参考问题。",
+              "enable_web_search": "公开网络搜索和 URL 阅读工具。",
+              "search_provider": "选择启用 Web 搜索时要使用的提供商。",
+              "brave_api_key": "仅当启用 Web 搜索并选择 Brave Search 时才需要。",
+              "google_maps_api_key": "仅当启用 Google Places and Routes 时才需要。",
+              "llm_api_allowlist": "以逗号或换行符分隔的第三方 LLM API ID MCP Assist 可以检查或调用，例如 llm_intents。安装第三方 LLM API：{installed_llm_apis}。内置辅助 API 保留在辅助桥上。",
+              "searxng_url": "仅当启用 Web 搜索并选择 SearXNG 时才需要。将基础 URL 用于您的自托管 SearXNG 实例。"
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "IP地址或CIDR范围格式无效。请使用逗号分隔的值，如：172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "配置文件名称为必填项。",
       "invalid_json": "JSON格式无效。请检查您的MCP服务器配置。",
+      "searxng_url_required": "当启用 SearXNG 搜索时，需要 SearXNG URL。",
+      "google_maps_api_key_required": "当启用 Google Places and Routes 时，需要 Google Maps API 密钥。",
+      "mcp_apply_failed": "无法应用共享 MCP 服务器设置。检查端口和允许的 IP，然后重试。",
       "invalid_api_key": "API密钥无效。请检查后重试。",
       "auth_failed": "身份验证失败。请验证您的API密钥。",
-      "unknown": "发生未知错误。"
+      "unknown": "发生未知错误。",
+      "openclaw_not_paired": "设备尚未在 OpenClaw 服务器上获得批准。请批准并重试。",
+      "openclaw_connection_failed": "无法连接到 OpenClaw 网关。检查主机、端口和令牌。"
     },
     "abort": {
       "already_configured": "已存在同名配置文件。请选择其他名称。"
@@ -85,21 +338,186 @@
           "lmstudio_url": "服务器URL",
           "api_key": "API密钥",
           "model_name": "模型名称",
+          "system_prompt_mode": "系统提示源",
           "system_prompt": "系统提示词",
+          "technical_prompt_mode": "技术说明来源",
           "technical_prompt": "技术指令",
           "temperature": "温度",
           "max_tokens": "最大响应令牌数",
           "max_history": "最大历史消息数",
+          "context_mode": "上下文模式",
           "max_iterations": "最大工具迭代次数",
           "control_home_assistant": "控制Home Assistant",
           "response_mode": "响应模式",
           "follow_up_phrases": "后续跟进短语",
           "end_words": "结束对话词语",
+          "clean_responses": "清理语音输出响应",
           "timeout": "响应超时",
           "debug_mode": "调试模式",
+          "chat_log_mode": "聊天记录模式",
           "ollama_keep_alive": "保持Ollama活跃",
           "ollama_num_ctx": "Ollama上下文窗口",
-          "clean_responses": "清理语音输出响应"
+          "openclaw_host": "网关主机",
+          "openclaw_port": "网关端口",
+          "openclaw_token": "网关令牌",
+          "openclaw_use_ssl": "使用SSL/TLS",
+          "openclaw_session_key": "会话密钥"
+        },
+        "data_description": {
+          "model_name": "此配置文件应使用的 LLM 型号。",
+          "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
+          "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
+          "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。"
+        },
+        "sections": {
+          "profile": {
+            "name": "轮廓",
+            "description": "此对话配置文件的基本身份设置。",
+            "data": {
+              "profile_name": "配置文件名称"
+            },
+            "data_description": {
+              "profile_name": "此对话配置文件的友好名称。"
+            }
+          },
+          "connection": {
+            "name": "联系",
+            "description": "此配置文件如何连接到其模型提供者。",
+            "data": {
+              "lmstudio_url": "服务器URL",
+              "api_key": "API密钥",
+              "openclaw_host": "网关主机",
+              "openclaw_port": "网关端口",
+              "openclaw_token": "网关令牌",
+              "openclaw_use_ssl": "使用SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "此配置文件使用的本地或 OpenAI-compatible 服务器的基础 URL。",
+              "api_key": "该提供商所需的 API 密钥或不记名令牌。",
+              "openclaw_host": "OpenClaw网关的主机名或IP地址。",
+              "openclaw_port": "OpenClaw网关WebSocket服务器使用的端口。",
+              "openclaw_token": "承载令牌用于通过 OpenClaw 网关进行身份验证。",
+              "openclaw_use_ssl": "与 OpenClaw 网关通信时，使用安全的 WebSocket 连接。"
+            }
+          },
+          "model_fields": {
+            "name": "模型",
+            "description": "选择此配置文件应使用的模型。",
+            "data": {
+              "model_name": "模型名称"
+            },
+            "data_description": {
+              "model_name": "此配置文件应使用的 LLM 型号。"
+            }
+          },
+          "prompts": {
+            "name": "提示",
+            "description": "查看当前有效的提示，复制它们，或为此配置文件编辑它们。",
+            "data": {
+              "system_prompt": "系统提示词",
+              "technical_prompt": "技术指令"
+            },
+            "data_description": {
+              "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
+              "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。"
+            }
+          },
+          "conversation": {
+            "name": "对话",
+            "description": "此配置文件的行为、后续处理和语音输出设置。",
+            "data": {
+              "control_home_assistant": "控制Home Assistant",
+              "response_mode": "响应模式",
+              "follow_up_phrases": "后续跟进短语",
+              "end_words": "结束对话词语",
+              "clean_responses": "清理语音输出响应"
+            },
+            "data_description": {
+              "control_home_assistant": "允许此配置文件执行 Home Assistant 操作，而不仅仅是回答问题。",
+              "response_mode": "控制助理是立即结束还是在适当的时候自然地提出后续问题。",
+              "follow_up_phrases": "用于检测后续风格响应的逗号分隔短语。",
+              "end_words": "应结束对话的以逗号分隔的单词或短语。",
+              "clean_responses": "修剪不必要的格式或填充符，以保持口头回复简洁。"
+            }
+          },
+          "provider": {
+            "name": "提供者",
+            "description": "仅在应用时显示特定于提供商的设置。",
+            "data": {
+              "ollama_keep_alive": "保持Ollama活跃",
+              "ollama_num_ctx": "Ollama上下文窗口",
+              "openclaw_session_key": "会话密钥"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
+              "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
+              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。"
+            }
+          },
+          "advanced_settings": {
+            "name": "先进的",
+            "description": "对模型行为、限制、超时和调试进行专家调整。",
+            "data": {
+              "temperature": "温度",
+              "max_tokens": "最大响应令牌数",
+              "max_history": "最大历史消息数",
+              "context_mode": "上下文模式",
+              "max_iterations": "最大工具迭代次数",
+              "timeout": "响应超时",
+              "debug_mode": "调试模式",
+              "chat_log_mode": "聊天记录模式"
+            },
+            "data_description": {
+              "temperature": "控制响应随机性。较低的值更具确定性。",
+              "max_tokens": "限制模型在一次响应中可以生成的令牌数量。",
+              "max_history": "在上下文中要保留多少先前的对话消息。",
+              "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。",
+              "max_iterations": "限制助手针对一个请求可以使用的工具调用次数。",
+              "timeout": "超时之前等待提供商响应的时间。",
+              "debug_mode": "启用更详细的日志记录以进行故障排除。",
+              "chat_log_mode": "保留最近的对话日志，包括用户文本、助理回复、工具名称、工具参数和工具结果以供查看。"
+            }
+          },
+          "tools": {
+            "name": "工具",
+            "description": "只要在共享 MCP 服务器上启用未经检查的工具，它们仍然可用。选中一个框以禁止仅用于此配置文件的工具系列。",
+            "data": {
+              "disable_assist_bridge": "禁用辅助桥",
+              "disable_calculator": "禁用计算器",
+              "disable_custom_tools": "禁用自定义工具",
+              "disable_device": "禁用设备工具",
+              "disable_google_maps": "禁用 Google Places and Routes",
+              "disable_llm_api_bridge": "禁用 LLM API 桥",
+              "disable_memory": "禁用内存",
+              "disable_music_assistant": "禁用 Music Assistant",
+              "disable_read_url": "禁用读取 URL",
+              "disable_recorder": "禁用记录器历史记录",
+              "disable_response_service": "禁用响应服务读取",
+              "disable_search": "禁用搜索",
+              "disable_unit_conversion": "禁用单位转换",
+              "disable_weather_forecast": "禁用天气预报",
+              "disable_wikipedia_search": "禁用 Wikipedia 搜索",
+              "disable_web_search": "禁用网页搜索"
+            },
+            "data_description": {
+              "disable_assist_bridge": "阻止此配置文件使用 Home Assistant 的本机辅助工具、提示和上下文快照。",
+              "disable_calculator": "阻止此配置文件使用数学和表达式评估工具。",
+              "disable_custom_tools": "防止此配置文件使用通过共享 MCP 服务器加载的外部自定义工具包。",
+              "disable_unit_conversion": "防止此配置文件使用精确的单位转换工具，例如 °C 到 °F、距离、厨房体积、存储和数据速率转换。",
+              "disable_device": "阻止此配置文件发现物理设备和设备详细信息。",
+              "disable_google_maps": "阻止此配置文件使用 Google Places and Routes 工具。",
+              "disable_llm_api_bridge": "阻止此配置文件使用列入许可名单的第三方 Home Assistant LLM API 工具。",
+              "disable_memory": "防止此配置文件存储、调用或忘记共享的持久内存。",
+              "disable_music_assistant": "阻止此配置文件使用 Music Assistant 搜索、队列、库和播放工具。",
+              "disable_read_url": "阻止此配置文件打开 URLs 并从中提取页面内容。",
+              "disable_recorder": "防止此配置文件使用记录器支持的历史记录、计数、持续时间和时间点工具。",
+              "disable_response_service": "阻止此配置文件使用返回结构化数据（例如日历和预测读取）的 Home Assistant 服务。",
+              "disable_search": "阻止此配置文件使用内置的 Web 搜索帮助程序。",
+              "disable_weather_forecast": "阻止此配置文件使用专用的 Home Assistant 天气预报助手。",
+              "disable_wikipedia_search": "阻止此配置文件搜索 Wikipedia。",
+              "disable_web_search": "阻止此配置文件使用 Web 搜索和 URL 读取工具，即使它们在共享 MCP 服务器上启用也是如此。"
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "这些设置在所有配置文件之间共享",
         "data": {
           "mcp_port": "MCP服务器端口",
-          "search_provider": "网络搜索",
-          "brave_api_key": "Brave搜索API密钥",
-          "allowed_ips": "额外允许的IP/范围",
-          "enable_gap_filling": "启用智能实体索引",
-          "max_entities_per_discovery": "每次发现最大实体数 (20-500)"
+          "allowed_ips": "额外允许的IP/范围"
+        },
+        "data_description": {
+          "mcp_port": "共享MCP服务器使用的本地端口。",
+          "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。"
+        },
+        "sections": {
+          "context": {
+            "name": "语境",
+            "description": "控制 AI 提示和 MCP 工具调用负载中包含哪些 Home Assistant 身份和位置详细信息。",
+            "data": {
+              "include_current_user": "在提示中包含当前用户",
+              "include_home_location": "在提示中包含家庭位置",
+              "include_current_user_in_tool_calls": "使用 MCP 工具共享当前用户",
+              "include_home_location_in_tool_calls": "使用 MCP 工具共享家庭位置"
+            },
+            "data_description": {
+              "include_current_user": "如果可用，请在 AI 提示中包含当前 Home Assistant 用户名。",
+              "include_home_location": "使用 Home Assistant 配置的家庭名称和坐标，在 AI 提示中包含紧凑的家庭位置摘要。",
+              "include_current_user_in_tool_calls": "在 MCP 工具/调用上下文中发送当前 Home Assistant 用户 ID 和名称，以便工具包可以审核或个性化操作。",
+              "include_home_location_in_tool_calls": "对于需要位置元数据的工具包，在 MCP 工具/调用上下文中发送 Home Assistant 配置的家庭名称、纬度和经度。"
+            }
+          },
+          "discovery": {
+            "name": "发现",
+            "description": "控制共享 MCP 服务器如何构建和返回发现结果。",
+            "data": {
+              "enable_gap_filling": "启用智能实体索引",
+              "max_entities_per_discovery": "每次发现的最大实体数 (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "构建紧凑的系统索引，以保持快速发现和上下文感知。",
+              "max_entities_per_discovery": "限制单个发现调用可以返回的实体数量。"
+            }
+          },
+          "memory": {
+            "name": "记忆",
+            "description": "配置启用内存工具时共享持久内存的保留时间。",
+            "data": {
+              "memory_default_ttl_days": "默认内存 TTL（天）",
+              "memory_max_ttl_days": "最大内存 TTL（天）",
+              "memory_max_items": "最大存储内存"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "当工具调用未提供 ttl_days 时，新内存的默认保留天数。",
+              "memory_max_ttl_days": "任何存储的内存可以保留的最大天数。",
+              "memory_max_items": "活动存储内存的上限。当超过此限制时，最旧的内存将首先被修剪。"
+            }
+          },
+          "tools": {
+            "name": "工具",
+            "description": "启用或禁用共享 MCP 服务器公开的可选工具功能。",
+            "data": {
+              "enable_assist_bridge": "辅助桥",
+              "enable_calculator_tools": "计算器",
+              "enable_external_custom_tools": "定制工具",
+              "enable_device_tools": "设备工具",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API 桥",
+              "enable_memory_tools": "记忆",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "读取 URL",
+              "enable_recorder_tools": "录音机历史",
+              "enable_response_service_tools": "响应服务读取",
+              "enable_search_tool": "搜索",
+              "enable_unit_conversion_tools": "单位换算",
+              "enable_weather_forecast_tool": "天气预报",
+              "enable_wikipedia_search_tool": "Wikipedia 搜索",
+              "enable_web_search": "网页搜索",
+              "search_provider": "网络搜索提供商",
+              "brave_api_key": "Brave Search API 钥匙",
+              "google_maps_api_key": "Google Maps API 钥匙",
+              "llm_api_allowlist": "允许的 LLM API ID",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "公开 Home Assistant 的本机辅助工具、提示和上下文快照。",
+              "enable_calculator_tools": "公开数学和表达式评估工具。",
+              "enable_external_custom_tools": "从 mcp-assist-tools 下的 Home Assistant config 目录加载其他本地工具包。默认禁用。仅启用受信任的软件包，因为它们在 Home Assistant 内作为 Python 代码运行，并且可能添加 MCP 工具和简短的提示指导。",
+              "enable_unit_conversion_tools": "提供精确的单位转换工具，例如 °C 到 °F、距离、厨房体积、存储和数据速率转换。",
+              "enable_device_tools": "公开物理设备发现和设备详细信息工具。",
+              "enable_google_maps_tools": "公开 Google Places 查找和 Google Routes 旅行时间工具。需要 Google Maps API 密钥。",
+              "enable_llm_api_bridge": "公开由其他集成注册的列入白名单的第三方 Home Assistant LLM API。",
+              "enable_memory_tools": "公开共享的持久内存工具，以便助手可以通过基于 TTL 的过期来记住、回忆和忘记用户批准的事实和偏好。",
+              "enable_music_assistant_support": "公开 Music Assistant 搜索、队列、库和播放工具。",
+              "enable_read_url_tool": "公开 URL 读取内容，以便助手可以检查特定网页。",
+              "enable_recorder_tools": "公开记录器支持的历史记录、分析和时间点工具。",
+              "enable_response_service_tools": "公开返回结构化数据（例如日历和预测读取）的 Home Assistant 服务。",
+              "enable_search_tool": "使用配置的共享提供程序公开网络搜索。",
+              "enable_weather_forecast_tool": "暴露专用的Home Assistant天气预报助手。",
+              "enable_wikipedia_search_tool": "公开轻量级 Wikipedia 文章搜索背景和参考问题。",
+              "enable_web_search": "公开网络搜索和 URL 阅读工具。",
+              "search_provider": "选择启用 Web 搜索时要使用的提供商。",
+              "brave_api_key": "仅当启用 Web 搜索并选择 Brave Search 时才需要。",
+              "google_maps_api_key": "仅当启用 Google Places and Routes 时才需要。",
+              "llm_api_allowlist": "以逗号或换行符分隔的第三方 LLM API ID MCP Assist 可以检查或调用，例如 llm_intents。安装第三方 LLM API：{installed_llm_apis}。内置辅助 API 保留在辅助桥上。",
+              "searxng_url": "仅当启用 Web 搜索并选择 SearXNG 时才需要。将基础 URL 用于您的自托管 SearXNG 实例。"
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "默认",
+        "custom": "风俗"
       }
     }
   },

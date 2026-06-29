@@ -1,4 +1,5 @@
 {
+  "title": "HA MCP Assist",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,10 @@
         "data": {
           "profile_name": "Profilnamn",
           "server_type": "Servertyp"
+        },
+        "data_description": {
+          "profile_name": "Ett vänligt namn för denna konversationsprofil.",
+          "server_type": "Välj vilken leverantör eller slutledningsserver som denna profil använder."
         }
       },
       "server": {
@@ -15,16 +20,64 @@
         "data": {
           "lmstudio_url": "Server-URL",
           "api_key": "API-nyckel",
-          "mcp_port": "MCP-serverport"
+          "mcp_port": "MCP-serverport",
+          "openclaw_host": "Gateway-värd",
+          "openclaw_port": "Gateway-port",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Använd SSL/TLS"
+        },
+        "data_description": {
+          "lmstudio_url": "Basen URL för den lokala eller OpenAI-compatible-servern som används av denna profil.",
+          "api_key": "API-nyckeln eller bärartoken som krävs av denna leverantör.",
+          "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
+          "openclaw_host": "Värdnamn eller IP-adress för OpenClaw-gatewayen.",
+          "openclaw_port": "Port som används av OpenClaw-gateway WebSocket-servern.",
+          "openclaw_token": "Bärartoken som används för att autentisera med OpenClaw-gatewayen.",
+          "openclaw_use_ssl": "Använd en säker WebSocket-anslutning när du pratar med OpenClaw-gatewayen."
         }
+      },
+      "openclaw_pairing": {
+        "title": "OpenClaw Enhetsparning",
+        "description": "Din enhet måste godkännas på OpenClaw-servern.\n\nGodkänn det genom att köra `openclaw devices approve` eller använda OpenClaw Control UI och klicka sedan på Skicka.\n\nEnhets-ID: {device_id}"
       },
       "model": {
         "title": "Modell och instruktioner",
         "description": "{server_info}",
         "data": {
           "model_name": "Modellnamn",
+          "system_prompt_mode": "Systempromptkälla",
           "system_prompt": "Systeminstruktioner",
+          "technical_prompt_mode": "Tekniska instruktioner Källa",
           "technical_prompt": "Tekniska instruktioner"
+        },
+        "data_description": {
+          "model_name": "LLM-modellen som denna profil ska använda.",
+          "system_prompt": "Förfylld med den nuvarande effektiva systemprompten. Redigera den för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden.",
+          "technical_prompt": "Förfylld med aktuella effektiva tekniska instruktioner. Redigera dem för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden."
+        },
+        "sections": {
+          "model_fields": {
+            "name": "Modell",
+            "description": "Välj den modell som denna profil ska använda.",
+            "data": {
+              "model_name": "Modellnamn"
+            },
+            "data_description": {
+              "model_name": "LLM-modellen som denna profil ska använda."
+            }
+          },
+          "prompts": {
+            "name": "Uppmaningar",
+            "description": "Granska de aktuella effektiva uppmaningarna, kopiera dem eller redigera dem för den här profilen.",
+            "data": {
+              "system_prompt": "Systeminstruktioner",
+              "technical_prompt": "Tekniska instruktioner"
+            },
+            "data_description": {
+              "system_prompt": "Förfylld med den nuvarande effektiva systemprompten. Redigera den för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden.",
+              "technical_prompt": "Förfylld med aktuella effektiva tekniska instruktioner. Redigera dem för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden."
+            }
+          }
         }
       },
       "advanced": {
@@ -34,16 +87,117 @@
           "temperature": "Temperatur",
           "max_tokens": "Max svarstoken",
           "max_history": "Max historikmeddelanden",
+          "context_mode": "Kontextläge",
           "max_iterations": "Max verktygsiterationer",
           "control_home_assistant": "Styr Home Assistant",
           "response_mode": "Svarslage",
           "follow_up_phrases": "Uppfoljningsfraser",
           "end_words": "Avsluta konversation-ord",
+          "clean_responses": "Rensa svar för röstutmatning",
           "timeout": "Svarstimeout",
           "debug_mode": "Felsokningslage",
+          "chat_log_mode": "Chattloggläge",
           "ollama_keep_alive": "Hall Ollama aktiv",
           "ollama_num_ctx": "Ollama kontextfonster",
-          "clean_responses": "Rensa svar för röstutmatning"
+          "openclaw_session_key": "Sessionsnyckel"
+        },
+        "sections": {
+          "conversation": {
+            "name": "Konversation",
+            "description": "Inställningar för beteende, uppföljning och röstutgång för denna profil.",
+            "data": {
+              "control_home_assistant": "Styr Home Assistant",
+              "response_mode": "Svarslage",
+              "follow_up_phrases": "Uppfoljningsfraser",
+              "end_words": "Avsluta konversation-ord",
+              "clean_responses": "Rensa svar för röstutmatning"
+            },
+            "data_description": {
+              "control_home_assistant": "Tillåt den här profilen att utföra Home Assistant-åtgärder istället för att bara svara på frågor.",
+              "response_mode": "Styr om assistenten slutar omedelbart eller ställer naturliga följdfrågor när så är lämpligt.",
+              "follow_up_phrases": "Kommaseparerade fraser som används för att upptäcka uppföljande stilsvar.",
+              "end_words": "Kommaseparerade ord eller fraser som ska avsluta konversationen.",
+              "clean_responses": "Trimma onödig formatering eller fyllnadsmedel för att hålla talade svar renare."
+            }
+          },
+          "performance": {
+            "name": "Prestanda",
+            "description": "Modellsvarsgränser, exekveringsgränser, timeout och felsökning.",
+            "data": {
+              "temperature": "Temperatur",
+              "max_tokens": "Max svarstoken",
+              "max_history": "Max historikmeddelanden",
+              "context_mode": "Kontextläge",
+              "max_iterations": "Max verktygsiterationer",
+              "timeout": "Svarstimeout",
+              "debug_mode": "Felsokningslage",
+              "chat_log_mode": "Chattloggläge"
+            },
+            "data_description": {
+              "temperature": "Kontrollerar svarsslumpmässighet. Lägre värden är mer deterministiska.",
+              "max_tokens": "Begränsar hur många tokens modellen kan generera i ett svar.",
+              "max_history": "Hur många tidigare konversationsmeddelanden som ska hållas i sitt sammanhang.",
+              "context_mode": "Standard skickar hela profilverktygskontexten. Light håller ett mindre historikfönster och annonserar Home Assistant kärnverktyg för små lokala modeller.",
+              "max_iterations": "Begränsar hur många verktygsanrop assistenten kan använda för en begäran.",
+              "timeout": "Hur länge ska man vänta på ett svar från leverantören innan tidsgränsen tar slut.",
+              "debug_mode": "Aktivera mer detaljerad loggning för felsökning.",
+              "chat_log_mode": "Bevara senaste konversationsloggar, inklusive användartext, assistentsvar, verktygsnamn, verktygsargument och verktygsresultat för granskning."
+            }
+          },
+          "provider": {
+            "name": "-leverantör",
+            "description": "Leverantörsspecifika inställningar visas endast när de gäller.",
+            "data": {
+              "ollama_keep_alive": "Hall Ollama aktiv",
+              "ollama_num_ctx": "Ollama kontextfonster",
+              "openclaw_session_key": "Sessionsnyckel"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
+              "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
+              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till."
+            }
+          },
+          "tools": {
+            "name": "Verktyg",
+            "description": "Omarkerade verktyg förblir tillgängliga när de är aktiverade på den delade MCP-servern. Markera en ruta för att förbjuda en verktygsfamilj för just denna profil.",
+            "data": {
+              "disable_assist_bridge": "Inaktivera Assist Bridge",
+              "disable_calculator": "Inaktivera kalkylator",
+              "disable_custom_tools": "Inaktivera anpassade verktyg",
+              "disable_device": "Inaktivera enhetsverktyg",
+              "disable_google_maps": "Inaktivera Google Places and Routes",
+              "disable_llm_api_bridge": "Inaktivera LLM API Bridge",
+              "disable_memory": "Inaktivera minne",
+              "disable_music_assistant": "Inaktivera Music Assistant",
+              "disable_read_url": "Inaktivera Läs URL",
+              "disable_recorder": "Inaktivera inspelningshistorik",
+              "disable_response_service": "Inaktivera svarstjänstläsningar",
+              "disable_search": "Inaktivera sökning",
+              "disable_unit_conversion": "Inaktivera enhetsomvandling",
+              "disable_weather_forecast": "Inaktivera väderprognos",
+              "disable_wikipedia_search": "Inaktivera Wikipedia-sökning",
+              "disable_web_search": "Inaktivera webbsökning"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Förhindrar den här profilen från att använda Home Assistant:s inbyggda Assist-verktyg, prompt och ögonblicksbild av sammanhanget.",
+              "disable_calculator": "Förhindrar den här profilen från att använda matematiska och uttrycksutvärderingsverktyg.",
+              "disable_custom_tools": "Förhindrar att den här profilen använder externa anpassade verktygspaket som laddas via den delade MCP-servern.",
+              "disable_device": "Förhindrar den här profilen från att upptäcka fysiska enheter och enhetsdetaljer.",
+              "disable_google_maps": "Förhindrar att denna profil använder Google Places and Routes-verktyg.",
+              "disable_llm_api_bridge": "Förhindrar att den här profilen använder tillståndslistade Home Assistant LLM API verktyg från tredje part.",
+              "disable_memory": "Förhindrar den här profilen från att lagra, återkalla eller glömma delade kvarvarande minnen.",
+              "disable_music_assistant": "Förhindrar den här profilen från att använda Music Assistant sök-, kö-, biblioteks- och uppspelningsverktyg.",
+              "disable_read_url": "Förhindrar den här profilen från att öppna och extrahera sidinnehåll från URLs.",
+              "disable_recorder": "Förhindrar den här profilen från att använda inspelare-stödd historik, räkning, varaktighet och punkt-i-tid-verktyg.",
+              "disable_response_service": "Förhindrar den här profilen från att använda Home Assistant-tjänster som returnerar strukturerad data, såsom kalender- och prognosläsningar.",
+              "disable_search": "Förhindrar den här profilen från att använda den inbyggda webbsökningshjälpen.",
+              "disable_unit_conversion": "Förhindrar den här profilen från att använda exakta enhetskonverteringsverktyg som °C till °F, avstånd, köksvolym, lagring och datahastighetsomvandlingar.",
+              "disable_weather_forecast": "Förhindrar den här profilen från att använda den dedikerade Home Assistant väderprognoshjälpen.",
+              "disable_wikipedia_search": "Förhindrar den här profilen från att söka efter Wikipedia.",
+              "disable_web_search": "Förhindrar att den här profilen använder webbsökning och URL-läsverktyg, även om de är aktiverade på den delade MCP-servern."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -51,11 +205,105 @@
         "description": "Dessa installningar paverkar ALLA profiler. Andringar har kommer att paverka varje MCP Assist-konversationsagent.",
         "data": {
           "mcp_port": "MCP-serverport",
-          "search_provider": "Webbsokning",
-          "brave_api_key": "Brave Search API-nyckel",
-          "allowed_ips": "Ytterligare tillatna IP/intervall",
-          "enable_gap_filling": "Aktivera smart entitetsindex",
-          "max_entities_per_discovery": "Max entiteter per sokning (20-500)"
+          "allowed_ips": "Ytterligare tillatna IP/intervall"
+        },
+        "data_description": {
+          "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
+          "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Kontext",
+            "description": "Kontrollera vilka Home Assistant-identitets- och platsdetaljer som ingår i AI-prompter och MCP verktygssamtal nyttolaster.",
+            "data": {
+              "include_current_user": "Inkludera aktuell användare i prompt",
+              "include_home_location": "Inkludera hemplats i prompt",
+              "include_current_user_in_tool_calls": "Dela nuvarande användare med MCP-verktyg",
+              "include_home_location_in_tool_calls": "Dela hemplats med MCP-verktyg"
+            },
+            "data_description": {
+              "include_current_user": "Inkludera den nuvarande Home Assistant-användarens namn i AI-prompten när det är tillgängligt.",
+              "include_home_location": "Inkludera en kompakt hempositionssammanfattning i AI-prompten, med hjälp av Home Assistant:s konfigurerade hemnamn och koordinater.",
+              "include_current_user_in_tool_calls": "Skicka det aktuella Home Assistant användar-ID och namn i MCP verktyg/anropssammanhang så att verktygspaket kan granska eller anpassa åtgärder.",
+              "include_home_location_in_tool_calls": "Skicka Home Assistant:s konfigurerade hemnamn, latitud och longitud i MCP verktyg/anropssammanhang för verktygspaket som behöver platsmetadata."
+            }
+          },
+          "discovery": {
+            "name": "Discovery",
+            "description": "Styr hur den delade MCP-servern bygger och returnerar upptäcktsresultat.",
+            "data": {
+              "enable_gap_filling": "Aktivera Smart Entity Index",
+              "max_entities_per_discovery": "Max antal enheter per upptäckt (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bygger ett kompakt systemindex för att hålla upptäckten snabb och sammanhangsmedveten.",
+              "max_entities_per_discovery": "Begränsar hur många enheter ett enstaka upptäcktsanrop kan returnera."
+            }
+          },
+          "memory": {
+            "name": "Minne",
+            "description": "Konfigurera hur länge delade kvarvarande minnen bevaras när minnesverktyget är aktiverat.",
+            "data": {
+              "memory_default_ttl_days": "Standardminne TTL (dagar)",
+              "memory_max_ttl_days": "Max minne TTL (dagar)",
+              "memory_max_items": "Max lagrade minnen"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Standardantal dagar ett nytt minne bevaras när verktygsanropet inte tillhandahåller ttl_days.",
+              "memory_max_ttl_days": "Maximalt antal dagar något lagrat minne kan behållas.",
+              "memory_max_items": "Övre gräns för aktiva lagrade minnen. De äldsta minnena beskärs först när denna gräns överskrids."
+            }
+          },
+          "tools": {
+            "name": "Verktyg",
+            "description": "Aktivera eller inaktivera valfria verktygsfunktioner som exponeras av den delade MCP-servern.",
+            "data": {
+              "enable_assist_bridge": "Assist Bridge",
+              "enable_calculator_tools": "Kalkylator",
+              "enable_external_custom_tools": "Anpassade verktyg",
+              "enable_device_tools": "Enhetsverktyg",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Bridge",
+              "enable_memory_tools": "Minne",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Läs URL",
+              "enable_recorder_tools": "Inspelningshistorik",
+              "enable_response_service_tools": "Svarstjänst läser",
+              "enable_search_tool": "Sök",
+              "enable_unit_conversion_tools": "Enhetskonvertering",
+              "enable_weather_forecast_tool": "Väderprognos",
+              "enable_wikipedia_search_tool": "Wikipedia Sök",
+              "enable_web_search": "Webbsökning",
+              "search_provider": "webbsökningsleverantör",
+              "brave_api_key": "Brave Search API Nyckel",
+              "google_maps_api_key": "Google Maps API Nyckel",
+              "llm_api_allowlist": "Tillåtet LLM API ID:n",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Visa Home Assistant:s inbyggda Assist-verktyg, prompt och ögonblicksbild av sammanhanget.",
+              "enable_calculator_tools": "Exponera matematiska och uttrycksutvärderingsverktyg.",
+              "enable_external_custom_tools": "Ladda ytterligare lokala verktygspaket från Home Assistant-konfigurationskatalogen under mcp-assist-tools. Inaktiverad som standard. Aktivera endast betrodda paket eftersom de körs som Python-kod inuti Home Assistant och kan lägga till MCP-verktyg plus kort snabb vägledning.",
+              "enable_device_tools": "Exponera verktyg för upptäckt av fysiska enheter och enhetsdetaljer.",
+              "enable_google_maps_tools": "Visa Google Places-sökning och Google Routes restidsverktyg. Kräver en Google Maps API-nyckel.",
+              "enable_llm_api_bridge": "Visa godkända tredjeparts Home Assistant LLM API registrerade av andra integrationer.",
+              "enable_memory_tools": "Visa verktyg för delat beständigt minne så att assistenten kan komma ihåg, återkalla och glömma användargodkända fakta och preferenser med TTL-baserat utgångsdatum.",
+              "enable_music_assistant_support": "Visa Music Assistant sök-, kö-, biblioteks- och uppspelningsverktyg.",
+              "enable_read_url_tool": "Visa URL-läsning så att assistenten kan inspektera specifika webbsidor.",
+              "enable_recorder_tools": "Exponera inspelare-stödd historik, analys och punkt-i-tid verktyg.",
+              "enable_response_service_tools": "Exponera Home Assistant-tjänster som returnerar strukturerad data, såsom kalender- och prognosläsningar.",
+              "enable_search_tool": "Visa webbsökning med den konfigurerade delade leverantören.",
+              "enable_unit_conversion_tools": "Visa exakta enhetskonverteringsverktyg som °C till °F, avstånd, köksvolym, lagring och datahastighetsomvandlingar.",
+              "enable_weather_forecast_tool": "Visa den dedikerade Home Assistant väderprognoshjälpen.",
+              "enable_wikipedia_search_tool": "Visa lättviktssökning i Wikipedia efter bakgrunds- och referensfrågor.",
+              "enable_web_search": "Visa webbsökning och URL-läsverktyg.",
+              "search_provider": "Välj vilken leverantör som ska användas när webbsökning är aktiverad.",
+              "brave_api_key": "Krävs endast när webbsökning är aktiverad och Brave Search är valt.",
+              "google_maps_api_key": "Krävs endast när Google Places and Routes är aktiverat.",
+              "llm_api_allowlist": "Komma- eller nyradseparerade tredje part LLM API ID:n MCP Assist kan inspektera eller ringa, till exempel llm_intents. Installerade tredjeparts LLM API: {installed_llm_apis}. Den inbyggda assisten API finns kvar på Assist Bridge.",
+              "searxng_url": "Krävs endast när webbsökning är aktiverad och SearXNG är valt. Använd basen URL för din egen värd SearXNG-instans."
+            }
+          }
         }
       }
     },
@@ -67,9 +315,14 @@
       "invalid_ip": "Ogiltigt IP-adress- eller CIDR-intervallformat. Anvand kommaseparerade varden som: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profilnamn kravs.",
       "invalid_json": "Ogiltigt JSON-format. Kontrollera din MCP-serverkonfiguration.",
+      "searxng_url_required": "SearXNG URL krävs när SearXNG-sökning är aktiverad.",
+      "google_maps_api_key_required": "Google Maps API-nyckel krävs när Google Places and Routes är aktiverat.",
+      "mcp_apply_failed": "Kunde inte tillämpa delade MCP-serverinställningar. Kontrollera porten och tillåtna IP-adresser och försök sedan igen.",
       "invalid_api_key": "Ogiltig API-nyckel. Kontrollera och forsok igen.",
       "auth_failed": "Autentisering misslyckades. Verifiera din API-nyckel.",
-      "unknown": "Ett okant fel intraffade."
+      "unknown": "Ett okant fel intraffade.",
+      "openclaw_not_paired": "Enheten ännu inte godkänd på OpenClaw-servern. Vänligen godkänn det och försök igen.",
+      "openclaw_connection_failed": "Kunde inte ansluta till OpenClaw-gatewayen. Kontrollera värden, porten och token."
     },
     "abort": {
       "already_configured": "En profil med detta namn finns redan. Valj ett annat namn."
@@ -85,21 +338,186 @@
           "lmstudio_url": "Server-URL",
           "api_key": "API-nyckel",
           "model_name": "Modellnamn",
+          "system_prompt_mode": "Systempromptkälla",
           "system_prompt": "Systeminstruktioner",
+          "technical_prompt_mode": "Tekniska instruktioner Källa",
           "technical_prompt": "Tekniska instruktioner",
           "temperature": "Temperatur",
           "max_tokens": "Max svarstoken",
           "max_history": "Max historikmeddelanden",
+          "context_mode": "Kontextläge",
           "max_iterations": "Max verktygsiterationer",
           "control_home_assistant": "Styr Home Assistant",
           "response_mode": "Svarslage",
           "follow_up_phrases": "Uppfoljningsfraser",
           "end_words": "Avsluta konversation-ord",
+          "clean_responses": "Rensa svar för röstutmatning",
           "timeout": "Svarstimeout",
           "debug_mode": "Felsokningslage",
+          "chat_log_mode": "Chattloggläge",
           "ollama_keep_alive": "Hall Ollama aktiv",
           "ollama_num_ctx": "Ollama kontextfonster",
-          "clean_responses": "Rensa svar för röstutmatning"
+          "openclaw_host": "Gateway-värd",
+          "openclaw_port": "Gateway-port",
+          "openclaw_token": "Gateway Token",
+          "openclaw_use_ssl": "Använd SSL/TLS",
+          "openclaw_session_key": "Sessionsnyckel"
+        },
+        "data_description": {
+          "model_name": "LLM-modellen som denna profil ska använda.",
+          "system_prompt": "Förfylld med den nuvarande effektiva systemprompten. Redigera den för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden.",
+          "technical_prompt": "Förfylld med aktuella effektiva tekniska instruktioner. Redigera dem för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden.",
+          "context_mode": "Standard skickar hela profilverktygskontexten. Light håller ett mindre historikfönster och annonserar Home Assistant kärnverktyg för små lokala modeller."
+        },
+        "sections": {
+          "profile": {
+            "name": "-profil",
+            "description": "Grundläggande identitetsinställningar för denna konversationsprofil.",
+            "data": {
+              "profile_name": "Profilnamn"
+            },
+            "data_description": {
+              "profile_name": "Ett vänligt namn för denna konversationsprofil."
+            }
+          },
+          "connection": {
+            "name": "Anslutning",
+            "description": "Hur den här profilen ansluter till sin modellleverantör.",
+            "data": {
+              "lmstudio_url": "Server-URL",
+              "api_key": "API-nyckel",
+              "openclaw_host": "Gateway-värd",
+              "openclaw_port": "Gateway-port",
+              "openclaw_token": "Gateway Token",
+              "openclaw_use_ssl": "Använd SSL/TLS"
+            },
+            "data_description": {
+              "lmstudio_url": "Basen URL för den lokala eller OpenAI-compatible-servern som används av denna profil.",
+              "api_key": "API-nyckeln eller bärartoken som krävs av denna leverantör.",
+              "openclaw_host": "Värdnamn eller IP-adress för OpenClaw-gatewayen.",
+              "openclaw_port": "Port som används av OpenClaw-gateway WebSocket-servern.",
+              "openclaw_token": "Bärartoken som används för att autentisera med OpenClaw-gatewayen.",
+              "openclaw_use_ssl": "Använd en säker WebSocket-anslutning när du pratar med OpenClaw-gatewayen."
+            }
+          },
+          "model_fields": {
+            "name": "Modell",
+            "description": "Välj den modell som denna profil ska använda.",
+            "data": {
+              "model_name": "Modellnamn"
+            },
+            "data_description": {
+              "model_name": "LLM-modellen som denna profil ska använda."
+            }
+          },
+          "prompts": {
+            "name": "Uppmaningar",
+            "description": "Granska de aktuella effektiva uppmaningarna, kopiera dem eller redigera dem för den här profilen.",
+            "data": {
+              "system_prompt": "Systeminstruktioner",
+              "technical_prompt": "Tekniska instruktioner"
+            },
+            "data_description": {
+              "system_prompt": "Förfylld med den nuvarande effektiva systemprompten. Redigera den för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden.",
+              "technical_prompt": "Förfylld med aktuella effektiva tekniska instruktioner. Redigera dem för att anpassa den här profilen. Om den lämnas oförändrad fortsätter integrationen att använda den inbyggda prompten från koden."
+            }
+          },
+          "conversation": {
+            "name": "Konversation",
+            "description": "Inställningar för beteende, uppföljning och röstutgång för denna profil.",
+            "data": {
+              "control_home_assistant": "Styr Home Assistant",
+              "response_mode": "Svarslage",
+              "follow_up_phrases": "Uppfoljningsfraser",
+              "end_words": "Avsluta konversation-ord",
+              "clean_responses": "Rensa svar för röstutmatning"
+            },
+            "data_description": {
+              "control_home_assistant": "Tillåt den här profilen att utföra Home Assistant-åtgärder istället för att bara svara på frågor.",
+              "response_mode": "Styr om assistenten slutar omedelbart eller ställer naturliga följdfrågor när så är lämpligt.",
+              "follow_up_phrases": "Kommaseparerade fraser som används för att upptäcka uppföljande stilsvar.",
+              "end_words": "Kommaseparerade ord eller fraser som ska avsluta konversationen.",
+              "clean_responses": "Trimma onödig formatering eller fyllnadsmedel för att hålla talade svar renare."
+            }
+          },
+          "provider": {
+            "name": "-leverantör",
+            "description": "Leverantörsspecifika inställningar visas endast när de gäller.",
+            "data": {
+              "ollama_keep_alive": "Hall Ollama aktiv",
+              "ollama_num_ctx": "Ollama kontextfonster",
+              "openclaw_session_key": "Sessionsnyckel"
+            },
+            "data_description": {
+              "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
+              "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
+              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till."
+            }
+          },
+          "advanced_settings": {
+            "name": "Avancerat",
+            "description": "Expertinställning för modellbeteende, gränser, timeout och felsökning.",
+            "data": {
+              "temperature": "Temperatur",
+              "max_tokens": "Max svarstoken",
+              "max_history": "Max historikmeddelanden",
+              "context_mode": "Kontextläge",
+              "max_iterations": "Max verktygsiterationer",
+              "timeout": "Svarstimeout",
+              "debug_mode": "Felsokningslage",
+              "chat_log_mode": "Chattloggläge"
+            },
+            "data_description": {
+              "temperature": "Kontrollerar svarsslumpmässighet. Lägre värden är mer deterministiska.",
+              "max_tokens": "Begränsar hur många tokens modellen kan generera i ett svar.",
+              "max_history": "Hur många tidigare konversationsmeddelanden som ska hållas i sitt sammanhang.",
+              "context_mode": "Standard skickar hela profilverktygskontexten. Light håller ett mindre historikfönster och annonserar Home Assistant kärnverktyg för små lokala modeller.",
+              "max_iterations": "Begränsar hur många verktygsanrop assistenten kan använda för en begäran.",
+              "timeout": "Hur länge ska man vänta på ett svar från leverantören innan tidsgränsen tar slut.",
+              "debug_mode": "Aktivera mer detaljerad loggning för felsökning.",
+              "chat_log_mode": "Bevara senaste konversationsloggar, inklusive användartext, assistentsvar, verktygsnamn, verktygsargument och verktygsresultat för granskning."
+            }
+          },
+          "tools": {
+            "name": "Verktyg",
+            "description": "Omarkerade verktyg förblir tillgängliga när de är aktiverade på den delade MCP-servern. Markera en ruta för att förbjuda en verktygsfamilj för just denna profil.",
+            "data": {
+              "disable_assist_bridge": "Inaktivera Assist Bridge",
+              "disable_calculator": "Inaktivera kalkylator",
+              "disable_custom_tools": "Inaktivera anpassade verktyg",
+              "disable_device": "Inaktivera enhetsverktyg",
+              "disable_google_maps": "Inaktivera Google Places and Routes",
+              "disable_llm_api_bridge": "Inaktivera LLM API Bridge",
+              "disable_memory": "Inaktivera minne",
+              "disable_music_assistant": "Inaktivera Music Assistant",
+              "disable_read_url": "Inaktivera Läs URL",
+              "disable_recorder": "Inaktivera inspelningshistorik",
+              "disable_response_service": "Inaktivera svarstjänstläsningar",
+              "disable_search": "Inaktivera sökning",
+              "disable_unit_conversion": "Inaktivera enhetsomvandling",
+              "disable_weather_forecast": "Inaktivera väderprognos",
+              "disable_wikipedia_search": "Inaktivera Wikipedia-sökning",
+              "disable_web_search": "Inaktivera webbsökning"
+            },
+            "data_description": {
+              "disable_assist_bridge": "Förhindrar den här profilen från att använda Home Assistant:s inbyggda Assist-verktyg, prompt och ögonblicksbild av sammanhanget.",
+              "disable_calculator": "Förhindrar den här profilen från att använda matematiska och uttrycksutvärderingsverktyg.",
+              "disable_custom_tools": "Förhindrar att den här profilen använder externa anpassade verktygspaket som laddas via den delade MCP-servern.",
+              "disable_unit_conversion": "Förhindrar den här profilen från att använda exakta enhetskonverteringsverktyg som °C till °F, avstånd, köksvolym, lagring och datahastighetsomvandlingar.",
+              "disable_device": "Förhindrar den här profilen från att upptäcka fysiska enheter och enhetsdetaljer.",
+              "disable_google_maps": "Förhindrar att denna profil använder Google Places and Routes-verktyg.",
+              "disable_llm_api_bridge": "Förhindrar att den här profilen använder tillståndslistade Home Assistant LLM API verktyg från tredje part.",
+              "disable_memory": "Förhindrar den här profilen från att lagra, återkalla eller glömma delade kvarvarande minnen.",
+              "disable_music_assistant": "Förhindrar den här profilen från att använda Music Assistant sök-, kö-, biblioteks- och uppspelningsverktyg.",
+              "disable_read_url": "Förhindrar den här profilen från att öppna och extrahera sidinnehåll från URLs.",
+              "disable_recorder": "Förhindrar den här profilen från att använda inspelare-stödd historik, räkning, varaktighet och punkt-i-tid-verktyg.",
+              "disable_response_service": "Förhindrar den här profilen från att använda Home Assistant-tjänster som returnerar strukturerad data, såsom kalender- och prognosläsningar.",
+              "disable_search": "Förhindrar den här profilen från att använda den inbyggda webbsökningshjälpen.",
+              "disable_weather_forecast": "Förhindrar den här profilen från att använda den dedikerade Home Assistant väderprognoshjälpen.",
+              "disable_wikipedia_search": "Förhindrar den här profilen från att söka efter Wikipedia.",
+              "disable_web_search": "Förhindrar att den här profilen använder webbsökning och URL-läsverktyg, även om de är aktiverade på den delade MCP-servern."
+            }
+          }
         }
       },
       "mcp_server": {
@@ -107,12 +525,114 @@
         "description": "Dessa installningar delas av ALLA profiler",
         "data": {
           "mcp_port": "MCP-serverport",
-          "search_provider": "Webbsokning",
-          "brave_api_key": "Brave Search API-nyckel",
-          "allowed_ips": "Ytterligare tillatna IP/intervall",
-          "enable_gap_filling": "Aktivera smart entitetsindex",
-          "max_entities_per_discovery": "Max entiteter per sokning (20-500)"
+          "allowed_ips": "Ytterligare tillatna IP/intervall"
+        },
+        "data_description": {
+          "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
+          "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost."
+        },
+        "sections": {
+          "context": {
+            "name": "Kontext",
+            "description": "Kontrollera vilka Home Assistant-identitets- och platsdetaljer som ingår i AI-prompter och MCP verktygssamtal nyttolaster.",
+            "data": {
+              "include_current_user": "Inkludera aktuell användare i prompt",
+              "include_home_location": "Inkludera hemplats i prompt",
+              "include_current_user_in_tool_calls": "Dela nuvarande användare med MCP-verktyg",
+              "include_home_location_in_tool_calls": "Dela hemplats med MCP-verktyg"
+            },
+            "data_description": {
+              "include_current_user": "Inkludera den nuvarande Home Assistant-användarens namn i AI-prompten när det är tillgängligt.",
+              "include_home_location": "Inkludera en kompakt hempositionssammanfattning i AI-prompten, med hjälp av Home Assistant:s konfigurerade hemnamn och koordinater.",
+              "include_current_user_in_tool_calls": "Skicka det aktuella Home Assistant användar-ID och namn i MCP verktyg/anropssammanhang så att verktygspaket kan granska eller anpassa åtgärder.",
+              "include_home_location_in_tool_calls": "Skicka Home Assistant:s konfigurerade hemnamn, latitud och longitud i MCP verktyg/anropssammanhang för verktygspaket som behöver platsmetadata."
+            }
+          },
+          "discovery": {
+            "name": "Discovery",
+            "description": "Styr hur den delade MCP-servern bygger och returnerar upptäcktsresultat.",
+            "data": {
+              "enable_gap_filling": "Aktivera Smart Entity Index",
+              "max_entities_per_discovery": "Max antal enheter per upptäckt (20-500)"
+            },
+            "data_description": {
+              "enable_gap_filling": "Bygger ett kompakt systemindex för att hålla upptäckten snabb och sammanhangsmedveten.",
+              "max_entities_per_discovery": "Begränsar hur många enheter ett enstaka upptäcktsanrop kan returnera."
+            }
+          },
+          "memory": {
+            "name": "Minne",
+            "description": "Konfigurera hur länge delade kvarvarande minnen bevaras när minnesverktyget är aktiverat.",
+            "data": {
+              "memory_default_ttl_days": "Standardminne TTL (dagar)",
+              "memory_max_ttl_days": "Max minne TTL (dagar)",
+              "memory_max_items": "Max lagrade minnen"
+            },
+            "data_description": {
+              "memory_default_ttl_days": "Standardantal dagar ett nytt minne bevaras när verktygsanropet inte tillhandahåller ttl_days.",
+              "memory_max_ttl_days": "Maximalt antal dagar något lagrat minne kan behållas.",
+              "memory_max_items": "Övre gräns för aktiva lagrade minnen. De äldsta minnena beskärs först när denna gräns överskrids."
+            }
+          },
+          "tools": {
+            "name": "Verktyg",
+            "description": "Aktivera eller inaktivera valfria verktygsfunktioner som exponeras av den delade MCP-servern.",
+            "data": {
+              "enable_assist_bridge": "Assist Bridge",
+              "enable_calculator_tools": "Kalkylator",
+              "enable_external_custom_tools": "Anpassade verktyg",
+              "enable_device_tools": "Enhetsverktyg",
+              "enable_google_maps_tools": "Google Places and Routes",
+              "enable_llm_api_bridge": "LLM API Bridge",
+              "enable_memory_tools": "Minne",
+              "enable_music_assistant_support": "Music Assistant",
+              "enable_read_url_tool": "Läs URL",
+              "enable_recorder_tools": "Inspelningshistorik",
+              "enable_response_service_tools": "Svarstjänst läser",
+              "enable_search_tool": "Sök",
+              "enable_unit_conversion_tools": "Enhetskonvertering",
+              "enable_weather_forecast_tool": "Väderprognos",
+              "enable_wikipedia_search_tool": "Wikipedia Sök",
+              "enable_web_search": "Webbsökning",
+              "search_provider": "webbsökningsleverantör",
+              "brave_api_key": "Brave Search API Nyckel",
+              "google_maps_api_key": "Google Maps API Nyckel",
+              "llm_api_allowlist": "Tillåtet LLM API ID:n",
+              "searxng_url": "SearXNG URL"
+            },
+            "data_description": {
+              "enable_assist_bridge": "Visa Home Assistant:s inbyggda Assist-verktyg, prompt och ögonblicksbild av sammanhanget.",
+              "enable_calculator_tools": "Exponera matematiska och uttrycksutvärderingsverktyg.",
+              "enable_external_custom_tools": "Ladda ytterligare lokala verktygspaket från Home Assistant-konfigurationskatalogen under mcp-assist-tools. Inaktiverad som standard. Aktivera endast betrodda paket eftersom de körs som Python-kod inuti Home Assistant och kan lägga till MCP-verktyg plus kort snabb vägledning.",
+              "enable_unit_conversion_tools": "Visa exakta enhetskonverteringsverktyg som °C till °F, avstånd, köksvolym, lagring och datahastighetsomvandlingar.",
+              "enable_device_tools": "Exponera verktyg för upptäckt av fysiska enheter och enhetsdetaljer.",
+              "enable_google_maps_tools": "Visa Google Places-sökning och Google Routes restidsverktyg. Kräver en Google Maps API-nyckel.",
+              "enable_llm_api_bridge": "Visa godkända tredjeparts Home Assistant LLM API registrerade av andra integrationer.",
+              "enable_memory_tools": "Visa verktyg för delat beständigt minne så att assistenten kan komma ihåg, återkalla och glömma användargodkända fakta och preferenser med TTL-baserat utgångsdatum.",
+              "enable_music_assistant_support": "Visa Music Assistant sök-, kö-, biblioteks- och uppspelningsverktyg.",
+              "enable_read_url_tool": "Visa URL-läsning så att assistenten kan inspektera specifika webbsidor.",
+              "enable_recorder_tools": "Exponera inspelare-stödd historik, analys och punkt-i-tid verktyg.",
+              "enable_response_service_tools": "Exponera Home Assistant-tjänster som returnerar strukturerad data, såsom kalender- och prognosläsningar.",
+              "enable_search_tool": "Visa webbsökning med den konfigurerade delade leverantören.",
+              "enable_weather_forecast_tool": "Visa den dedikerade Home Assistant väderprognoshjälpen.",
+              "enable_wikipedia_search_tool": "Visa lättviktssökning i Wikipedia efter bakgrunds- och referensfrågor.",
+              "enable_web_search": "Visa webbsökning och URL-läsverktyg.",
+              "search_provider": "Välj vilken leverantör som ska användas när webbsökning är aktiverad.",
+              "brave_api_key": "Krävs endast när webbsökning är aktiverad och Brave Search är valt.",
+              "google_maps_api_key": "Krävs endast när Google Places and Routes är aktiverat.",
+              "llm_api_allowlist": "Komma- eller nyradseparerade tredje part LLM API ID:n MCP Assist kan inspektera eller ringa, till exempel llm_intents. Installerade tredjeparts LLM API: {installed_llm_apis}. Den inbyggda assisten API finns kvar på Assist Bridge.",
+              "searxng_url": "Krävs endast när webbsökning är aktiverad och SearXNG är valt. Använd basen URL för din egen värd SearXNG-instans."
+            }
+          }
         }
+      }
+    }
+  },
+  "selector": {
+    "prompt_source_mode": {
+      "options": {
+        "default": "Standard",
+        "custom": "Anpassad"
       }
     }
   },
