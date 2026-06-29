@@ -592,6 +592,29 @@ async def test_read_url_preserves_article_header_inside_main_content(hass) -> No
 
 
 @pytest.mark.asyncio
+async def test_read_url_preserves_top_level_article_header_without_main(hass) -> None:
+    """Top-level article headers should be kept when no preferred container exists."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <header>
+              <h1>Useful article</h1>
+              <p>By Example Author</p>
+            </header>
+            <p>Important body text.</p>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article By Example Author Important body text."
+
+
+@pytest.mark.asyncio
 async def test_read_url_excludes_content_named_boilerplate(hass) -> None:
     """Navigation ids/classes should not make boilerplate preferred content."""
     tool = read_url_module.ReadUrlTool(hass)

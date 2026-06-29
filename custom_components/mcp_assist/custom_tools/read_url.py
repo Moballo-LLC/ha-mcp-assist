@@ -562,7 +562,7 @@ class _MainContentParser(HTMLParser):
     """Lightweight HTML parser that favors article and main content."""
 
     _SKIP_TAGS = {"head", "noscript", "script", "style", "title"}
-    _BOILERPLATE_TAGS = {"nav", "header", "footer", "aside"}
+    _BOILERPLATE_TAGS = {"nav", "footer", "aside"}
     _LITERAL_TAGS = {"code", "kbd", "pre", "samp"}
     _VOID_TAGS = {
         "area",
@@ -630,9 +630,7 @@ class _MainContentParser(HTMLParser):
             return
 
         is_skip = tag in self._SKIP_TAGS
-        is_boilerplate = tag in self._BOILERPLATE_TAGS and not (
-            tag == "header" and self._preferred_depth > 0
-        )
+        is_boilerplate = tag in self._BOILERPLATE_TAGS
         is_literal = tag in self._LITERAL_TAGS
         is_preferred = (
             not is_skip
