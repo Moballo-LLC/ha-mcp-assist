@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "memory",
+  "name": "Memory",
+  "description": "Built-in persisted memory tools for MCP Assist.",
+  "version": "1.0.0",
+  "entrypoint": "tool:MemoryPackageTool",
+  "capabilities": [],
+  "built_in_toggle": {
+    "tool_names": [
+      "list_memory_categories",
+      "remember_memory",
+      "recall_memories",
+      "forget_memory"
+    ],
+    "shared_setting_key": "enable_memory_tools",
+    "profile_setting_key": "profile_enable_memory_tools",
+    "shared_default": false,
+    "profile_default": true,
+    "shared_label": "Memory",
+    "shared_description": "Expose persisted memory tools for storing, recalling, and deleting user-approved memories.",
+    "profile_disable_label": "Disable Memory",
+    "profile_disable_description": "Prevents this profile from storing, recalling, or deleting persisted memories."
+  }
+}

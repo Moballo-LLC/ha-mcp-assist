@@ -15,6 +15,8 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_ENABLE_LLM_API_BRIDGE,
+    CONF_ENABLE_MEMORY_TOOLS,
     CONF_GOOGLE_MAPS_API_KEY,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_RECORDER_TOOLS,
@@ -22,6 +24,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    CONF_LLM_API_ALLOWLIST,
     CONF_SEARCH_PROVIDER,
     CONF_SEARXNG_URL,
     CUSTOM_TOOL_MANIFEST_FILENAME,
@@ -204,6 +207,74 @@ async def test_initialize_loads_music_assistant_bundle_when_enabled(
         loader.get_builtin_toggle_spec("control_music_assistant_player")
         == music_assistant_spec
     )
+
+
+@pytest.mark.asyncio
+async def test_initialize_loads_llm_api_bridge_bundle_when_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """LLM API Bridge should load as a built-in packaged tool when enabled."""
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            CONF_ENABLE_LLM_API_BRIDGE: True,
+            CONF_LLM_API_ALLOWLIST: "llm_intents",
+            CONF_ENABLE_RECORDER_TOOLS: False,
+            CONF_ENABLE_RESPONSE_SERVICE_TOOLS: False,
+            CONF_ENABLE_WEATHER_FORECAST_TOOL: False,
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+    loader = CustomToolsLoader(hass, profile_entry)
+
+    await loader.initialize()
+
+    assert "llm_api_bridge" in loader.tools
+    tool_names = {tool["name"] for tool in loader.get_tool_definitions()}
+    assert {
+        "list_llm_apis",
+        "list_llm_api_tools",
+        "call_llm_api_tool",
+        "get_llm_api_prompt",
+    } <= tool_names
+    llm_api_bridge_spec = loader.get_builtin_toggle_spec("list_llm_apis")
+    assert llm_api_bridge_spec is not None
+    assert llm_api_bridge_spec.package_id == "llm_api_bridge"
+    assert "list_llm_apis" in loader.get_builtin_prompt_instructions()
+
+
+@pytest.mark.asyncio
+async def test_initialize_loads_memory_bundle_when_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Memory tools should load as a built-in packaged tool when enabled."""
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            CONF_ENABLE_MEMORY_TOOLS: True,
+            CONF_ENABLE_RECORDER_TOOLS: False,
+            CONF_ENABLE_RESPONSE_SERVICE_TOOLS: False,
+            CONF_ENABLE_WEATHER_FORECAST_TOOL: False,
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+    loader = CustomToolsLoader(hass, profile_entry)
+
+    await loader.initialize()
+
+    assert "memory" in loader.tools
+    tool_names = {tool["name"] for tool in loader.get_tool_definitions()}
+    assert {
+        "list_memory_categories",
+        "remember_memory",
+        "recall_memories",
+        "forget_memory",
+    } <= tool_names
+    memory_spec = loader.get_builtin_toggle_spec("remember_memory")
+    assert memory_spec is not None
+    assert memory_spec.package_id == "memory"
 
 
 @pytest.mark.asyncio

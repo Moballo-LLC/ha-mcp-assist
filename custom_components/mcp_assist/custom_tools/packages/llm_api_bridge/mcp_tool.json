@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "llm_api_bridge",
+  "name": "LLM API Bridge",
+  "description": "Built-in bridge for allowlisted third-party Home Assistant LLM APIs.",
+  "version": "1.0.0",
+  "entrypoint": "tool:LLMApiBridgePackageTool",
+  "capabilities": [],
+  "built_in_toggle": {
+    "tool_names": [
+      "list_llm_apis",
+      "list_llm_api_tools",
+      "call_llm_api_tool",
+      "get_llm_api_prompt"
+    ],
+    "shared_setting_key": "enable_llm_api_bridge",
+    "profile_setting_key": "profile_enable_llm_api_bridge",
+    "shared_default": false,
+    "profile_default": true,
+    "shared_label": "LLM API Bridge",
+    "shared_description": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
+    "profile_disable_label": "Disable LLM API Bridge",
+    "profile_disable_description": "Prevents this profile from using allowlisted third-party Home Assistant LLM API tools."
+  }
+}
