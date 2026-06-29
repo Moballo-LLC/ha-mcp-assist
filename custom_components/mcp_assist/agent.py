@@ -1712,13 +1712,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         legacy_placeholder = f"{{{variable_name}}}"
         if legacy_placeholder in template_text:
             return True
-        return (
-            re.search(
-                r"{{\s*" + re.escape(variable_name) + r"\b",
-                template_text,
-            )
-            is not None
-        )
+        for block in re.findall(r"{[{%#]-?.*?-?[}%]}", template_text, re.DOTALL):
+            if re.search(r"\b" + re.escape(variable_name) + r"\b", block):
+                return True
+        return False
 
     def _replace_legacy_prompt_placeholders(
         self,
