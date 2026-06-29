@@ -325,6 +325,7 @@ def test_tool_enablement_follows_shared_settings(
     assert server._is_tool_enabled("call_service_with_response") is False
     assert server._is_tool_enabled("get_weather_forecast") is False
     assert server._is_tool_enabled("analyze_entity_history") is False
+    assert server._is_tool_enabled("list_memory_categories") is False
     assert server._is_tool_enabled("remember_memory") is False
     assert server._is_tool_enabled("add") is False
     assert server._is_tool_enabled("convert_unit") is False
@@ -404,6 +405,7 @@ async def test_handle_tools_list_filters_disabled_tool_families(
     assert "call_service_with_response" not in tool_names
     assert "get_weather_forecast" not in tool_names
     assert "get_entity_history" not in tool_names
+    assert "list_memory_categories" not in tool_names
     assert "remember_memory" not in tool_names
     assert "play_music_assistant" not in tool_names
     assert "add" not in tool_names
@@ -625,6 +627,7 @@ async def test_default_tool_list_stays_streamlined(
 
     assert "get_entity_history" in tool_names
     assert "get_calendar_events" in tool_names
+    assert "list_memory_categories" not in tool_names
     assert "remember_memory" not in tool_names
     assert "get_last_entity_event" not in tool_names
     assert "list_assist_tools" not in tool_names
@@ -739,6 +742,31 @@ async def test_memory_tools_store_recall_and_forget(
     assert recalled["result_count"] == 1
     assert forgotten["deleted_count"] == 1
     assert recalled_again["result_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_memory_categories_reports_suggestions_and_counts(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Memory category discovery should report suggestions and active counts."""
+    system_entry_factory(data={CONF_ENABLE_MEMORY_TOOLS: True})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    await server.memory_manager.async_initialize()
+
+    await server.tool_remember_memory(
+        {"memory": "The den lamp is called the reading light", "category": "alias"}
+    )
+    await server.tool_remember_memory(
+        {"memory": "The office is usually 69 degrees overnight", "category": "normal"}
+    )
+
+    result = await server.tool_list_memory_categories({})
+    category_counts = {item["category"]: item["count"] for item in result["categories"]}
+
+    assert "Suggested memory categories" in result["content"][0]["text"]
+    assert category_counts["device_alias"] == 1
+    assert category_counts["baseline"] == 1
+    assert result["total_count"] == 2
 
 
 @pytest.mark.asyncio

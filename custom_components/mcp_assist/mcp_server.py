@@ -1967,6 +1967,17 @@ class MCPServer(
                 },
             },
             {
+                "name": "list_memory_categories",
+                "description": "List suggested memory categories and active counts. Use this before storing or filtering memories when the right category is unclear.",
+                "inputSchema": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": False,
+                },
+            },
+            {
                 "name": "remember_memory",
                 "description": "Store a short fact, preference, or instruction for later recall. Use this only when the user explicitly asks you to remember something. Memories persist across conversations and automatically expire after a TTL.",
                 "inputSchema": {
@@ -1979,7 +1990,7 @@ class MCPServer(
                         },
                         "category": {
                             "type": "string",
-                            "description": "Optional short category such as 'preference', 'household', or 'schedule'.",
+                            "description": "Optional short category. Prefer list_memory_categories suggestions such as 'preference', 'routine', 'device_alias', 'automation_note', 'baseline', 'correction', 'maintenance', or 'household'.",
                         },
                         "ttl_days": {
                             "type": "integer",
@@ -2005,7 +2016,7 @@ class MCPServer(
                         },
                         "category": {
                             "type": "string",
-                            "description": "Optional category filter.",
+                            "description": "Optional category filter. Use list_memory_categories to inspect suggested categories and active counts.",
                         },
                         "limit": {
                             "type": "integer",
@@ -2036,7 +2047,7 @@ class MCPServer(
                         },
                         "category": {
                             "type": "string",
-                            "description": "Optional category filter when deleting by query.",
+                            "description": "Optional category filter when deleting by query. Use list_memory_categories if the category is unclear.",
                         },
                         "forget_all_matches": {
                             "type": "boolean",
@@ -2117,6 +2128,8 @@ class MCPServer(
             return await self.tool_run_script(arguments)
         elif tool_name == "run_automation":
             return await self.tool_run_automation(arguments)
+        elif tool_name == "list_memory_categories":
+            return await self.tool_list_memory_categories(arguments)
         elif tool_name == "remember_memory":
             return await self.tool_remember_memory(arguments)
         elif tool_name == "recall_memories":
@@ -4183,6 +4196,56 @@ class MCPServer(
             error_msg = f"Automation trigger failed: {err}"
             _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
+
+    async def tool_list_memory_categories(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """List suggested memory categories and active counts."""
+        del args
+
+        self.publish_progress(
+            "tool_start",
+            "Listing memory categories",
+            tool="list_memory_categories",
+        )
+
+        try:
+            result = await self.memory_manager.list_categories()
+        except Exception as err:
+            _LOGGER.error("Failed to list memory categories: %s", _sanitize_log_value(err))
+            return {
+                "content": [
+                    {"type": "text", "text": f"Failed to list memory categories: {err}"}
+                ],
+                "isError": True,
+            }
+
+        self.publish_progress(
+            "tool_complete",
+            "Memory categories listed",
+            tool="list_memory_categories",
+            count=result["total_count"],
+        )
+
+        lines = ["Suggested memory categories:"]
+        for category in result["categories"]:
+            lines.append(
+                f"- {category['category']}: {category['description']} "
+                f"({category['count']} active)"
+            )
+
+        custom_categories = result["custom_categories"]
+        if custom_categories:
+            lines.append("Custom categories already in use:")
+            for category in custom_categories:
+                lines.append(f"- {category['category']}: {category['count']} active")
+
+        if result["uncategorized_count"]:
+            lines.append(f"Uncategorized active memories: {result['uncategorized_count']}")
+        lines.append(f"Total active memories: {result['total_count']}")
+
+        return {
+            "content": [{"type": "text", "text": "\n".join(lines)}],
+            **result,
+        }
 
     async def tool_remember_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Store a persisted memory with TTL."""
