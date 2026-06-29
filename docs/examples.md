@@ -202,6 +202,24 @@ Other examples:
 - "Show me albums by The National."
 - "Play my dinner playlist downstairs."
 
+## Wikipedia Reference
+
+User:
+
+```text
+Search Wikipedia for heat pumps.
+```
+
+Typical flow:
+
+1. `search_wikipedia` finds matching Wikipedia article results.
+2. The assistant answers from the returned titles, descriptions, and links.
+
+Other examples:
+
+- "Find the Wikipedia page for Ada Lovelace."
+- "Look up Home Assistant on Wikipedia."
+
 ## Image and Camera Questions
 
 User:

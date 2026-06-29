@@ -180,6 +180,12 @@ For Home Assistant-native weather answers:
 MCP Assist falls back to a supported forecast type when a specific type is not
 available.
 
+## Reference Tools
+
+Wikipedia Search is disabled by default. Enable it when a profile should be able
+to search Wikipedia for lightweight background or encyclopedia-style reference
+results without using the broader web-search provider.
+
 ## External Custom Tools
 
 External custom tools are disabled by default. When enabled, MCP Assist loads
