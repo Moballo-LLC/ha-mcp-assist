@@ -74,6 +74,7 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
         'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
         '"error":"Incorrect API key: sk-live-secret1234567890",'
         '"google":"AIzaSyExampleKeyValue1234567890",'
+        '"local":"API key: my-local-secret",'
         '"message":"'
         + ("x" * 80)
         + '"}',
@@ -85,6 +86,7 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     assert "sk-leaked-value" not in snippet
     assert "sk-live-secret1234567890" not in snippet
     assert "AIzaSyExampleKeyValue1234567890" not in snippet
+    assert "my-local-secret" not in snippet
     assert 'api_key":"[redacted]' in snippet
     assert 'Authorization":"[redacted]' in snippet
     assert "truncated" in snippet
