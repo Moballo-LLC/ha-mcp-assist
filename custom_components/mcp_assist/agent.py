@@ -144,8 +144,15 @@ _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
 )
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
 _SENSITIVE_LOG_FIELD_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer|password|secret|token)"
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
 )
 
 
@@ -173,20 +180,11 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 500) -> str:
     text = str(value or "")
     text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
     text = re.sub(
-        r"(?i)([\"']?(?:api[_-]?key|authorization|password|secret|token)[\"']?\s*[:=]\s*[\"'])([^\"'\s,;}]+)([\"']?)",
-        r"\1[redacted]\3",
-        text,
-    )
-    text = re.sub(
         r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
         r"\1[redacted]",
         text,
     )
-    text = re.sub(
-        r"(?i)(api[_-]?key|password|secret|token)(\s*[:=]\s*)[^\s,;}]+",
-        r"\1\2[redacted]",
-        text,
-    )
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
     text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
     text = " ".join(text.split())
     if len(text) <= max_chars:
@@ -1114,6 +1112,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             "maximum context length" in error_str
             or "context_length_exceeded" in error_str
             or "too many tokens" in error_str
+            or ("tokens" in error_str and "exceed" in error_str)
         ):
             # Try to extract token limit if present
             token_match = re.search(r"(\d+)\s*tokens?", error_str)
@@ -3040,13 +3039,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
+                        error_snippet = _redacted_log_snippet(error_text)
                         _LOGGER.warning(
                             "Anthropic API error: status=%s body=%s",
                             response.status,
-                            _redacted_log_snippet(error_text),
+                            error_snippet,
                         )
                         raise Exception(
-                            f"anthropic API error {response.status}"
+                            f"anthropic API error {response.status}: {error_snippet}"
                         )
                     data = await response.json()
 
@@ -3680,14 +3680,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
+                        error_snippet = _redacted_log_snippet(error_text)
                         _LOGGER.warning(
                             "%s API error: status=%s body=%s",
                             self.server_type,
                             response.status,
-                            _redacted_log_snippet(error_text),
+                            error_snippet,
                         )
                         raise Exception(
-                            f"{self.server_type} API error {response.status}"
+                            f"{self.server_type} API error {response.status}: {error_snippet}"
                         )
 
                     data = await response.json()

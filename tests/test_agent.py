@@ -1221,7 +1221,8 @@ def test_redacted_log_snippet_removes_common_secret_markers() -> None:
     """Log snippets should redact common secret-bearing field names."""
     snippet = agent_module._redacted_log_snippet(
         'Authorization: Bearer abc123 api_key=secret-token password=hunter2 '
-        '{"api_key":"quoted-secret","token":"quoted-token"}',
+        '{"api_key":"quoted-secret","token":"quoted-token"} '
+        '{"error":"API key provided: sk-prose-secret"}',
     )
 
     assert "Authorization" not in snippet
@@ -1233,7 +1234,26 @@ def test_redacted_log_snippet_removes_common_secret_markers() -> None:
     assert "hunter2" not in snippet
     assert "quoted-secret" not in snippet
     assert "quoted-token" not in snippet
+    assert "sk-prose-secret" not in snippet
     assert "[redacted]" in snippet
+
+
+def test_friendly_error_message_uses_sanitized_provider_token_details(
+    hass, profile_entry_factory
+) -> None:
+    """Provider errors should keep token-limit context after body redaction."""
+    entry = profile_entry_factory()
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    message = agent._get_friendly_error_message(
+        Exception(
+            'ollama API error 400: {"error":{"message":"request (12772 tokens) '
+            'exceed maximum context length","api_key":"[redacted]"}}'
+        )
+    )
+
+    assert "12772 token limit" in message
+    assert "api_key" not in message
 
 
 def test_follow_up_pattern_debug_logs_do_not_include_response_tail(

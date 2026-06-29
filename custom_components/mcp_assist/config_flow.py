@@ -167,8 +167,15 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
 _SENSITIVE_LOG_FIELD_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer|password|secret|token|\bkey\b)"
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
 )
 
 
@@ -182,11 +189,7 @@ def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
         text,
     )
     text = re.sub(r"://[^/\s:@]+:[^@\s/]+@", "://[redacted]@", text)
-    text = re.sub(
-        r"(?i)(api[_-]?key|password|secret|token|key)(\s*[:=]\s*)[^\s,;}]+",
-        r"\1\2[redacted]",
-        text,
-    )
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
     text = re.sub(
         r"(?i)([?&]key=)[^&\s]+",
         r"\1[redacted]",

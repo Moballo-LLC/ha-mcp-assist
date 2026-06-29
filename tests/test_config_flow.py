@@ -262,7 +262,8 @@ def test_redacted_log_snippet_removes_provider_secret_markers() -> None:
         "request failed: https://api.example/models?key=gemini-secret "
         "https://api.example/models?key=sk-live-value "
         "https://user:password@example.local/v1/models "
-        "Authorization: Bearer openai-secret api_key=custom-secret"
+        "Authorization: Bearer openai-secret api_key=custom-secret "
+        '{"api_key":"quoted-secret","error":"API key provided: sk-prose-secret"}'
     )
 
     assert "gemini-secret" not in snippet
@@ -270,6 +271,8 @@ def test_redacted_log_snippet_removes_provider_secret_markers() -> None:
     assert "password" not in snippet
     assert "openai-secret" not in snippet
     assert "custom-secret" not in snippet
+    assert "quoted-secret" not in snippet
+    assert "sk-prose-secret" not in snippet
     assert "Authorization" not in snippet
     assert "Bearer" not in snippet
     assert "api_key" not in snippet
