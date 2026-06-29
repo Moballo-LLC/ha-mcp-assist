@@ -235,7 +235,7 @@ async def _async_apply_shared_mcp_settings(hass: HomeAssistant) -> None:
     current_port = int(domain_data.get("mcp_port", getattr(server, "port", target_port)))
 
     if current_port != target_port:
-        profile_entry = _get_first_profile_entry(hass)
+        profile_entry = getattr(server, "entry", None) or _get_first_profile_entry(hass)
         if profile_entry is None:
             _LOGGER.debug("No profile entry available to restart shared MCP server")
             return

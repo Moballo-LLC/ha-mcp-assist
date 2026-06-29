@@ -7,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 import json
 import math
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, WSCloseCode
 import yarl
 from homeassistant.components.weather import WeatherEntityFeature
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -143,6 +143,14 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         )
     )
     server.broadcast_notification = AsyncMock()
+    removed_ws = Mock()
+    removed_ws.close = AsyncMock()
+    kept_ws = Mock()
+    kept_ws.close = AsyncMock()
+    server._websocket_clients = {
+        removed_ws: "10.0.0.10",
+        kept_ws: "192.168.1.25",
+    }
 
     assert "10.0.0.0/24" in server.allowed_ips
 
@@ -156,6 +164,11 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
     assert "192.168.1.25" in server.allowed_ips
     assert "10.0.0.0/24" not in server.allowed_ips
     assert result["allowed_ips"] == server.allowed_ips
+    removed_ws.close.assert_awaited_once_with(
+        code=WSCloseCode.POLICY_VIOLATION,
+        message=b"IP no longer authorized",
+    )
+    kept_ws.close.assert_not_awaited()
     server.custom_tools.reload_tool_packages.assert_awaited_once()
     server.broadcast_notification.assert_awaited_once_with(
         "notifications/tools/list_changed"

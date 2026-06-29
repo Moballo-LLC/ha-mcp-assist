@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlparse
 from datetime import timedelta
 
 import aiohttp
-from aiohttp import web, WSMsgType
+from aiohttp import web, WSCloseCode, WSMsgType
 from aiohttp.web_ws import WebSocketResponse
 import voluptuous as vol
 from voluptuous_openapi import convert
@@ -195,6 +195,7 @@ class MCPServer(
         self.discovery = EntityDiscovery(hass)
         self.sse_clients = []  # Track SSE connections for notifications
         self.progress_queues = set()  # Track progress SSE clients
+        self._websocket_clients: dict[WebSocketResponse, str | None] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.memory_manager = MemoryManager(hass)
@@ -897,11 +898,26 @@ class MCPServer(
     async def async_apply_shared_settings(self) -> dict[str, Any]:
         """Apply changed shared MCP settings without reloading every profile."""
         self._refresh_allowed_ips_from_settings()
+        await self._close_disallowed_websocket_clients()
         diagnostics = await self.reload_external_custom_tools()
         return {
             "allowed_ips": list(self.allowed_ips),
             "tool_diagnostics": diagnostics,
         }
+
+    async def _close_disallowed_websocket_clients(self) -> None:
+        """Close live WebSocket clients that no longer pass the IP allowlist."""
+        for ws, client_ip in list(self._websocket_clients.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP WebSocket client removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            await ws.close(
+                code=WSCloseCode.POLICY_VIOLATION,
+                message=b"IP no longer authorized",
+            )
 
     async def handle_progress_stream(self, request: web.Request) -> web.StreamResponse:
         """SSE endpoint for progress updates during tool execution."""
@@ -1224,6 +1240,7 @@ class MCPServer(
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
+        self._websocket_clients[ws] = client_ip
 
         _LOGGER.info(
             "✅ MCP WebSocket connection established with %s",
@@ -1272,6 +1289,12 @@ class MCPServer(
             pass
         except Exception:
             _LOGGER.exception("WebSocket handler error")
+        finally:
+            self._websocket_clients.pop(ws, None)
+            _LOGGER.info(
+                "MCP WebSocket clients remaining: %d",
+                len(self._websocket_clients),
+            )
 
         return ws
 

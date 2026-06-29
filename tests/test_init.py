@@ -239,6 +239,34 @@ async def test_apply_shared_mcp_settings_restarts_server_for_port_change(
 
 
 @pytest.mark.asyncio
+async def test_apply_shared_mcp_settings_restarts_with_active_profile_entry(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared port restarts should preserve the profile used by the running server."""
+    system_entry_factory(data={CONF_MCP_PORT: 8124})
+    profile_entry_factory(
+        title="Ollama - First",
+        unique_id=f"{DOMAIN}_first",
+        data={CONF_PROFILE_NAME: "First"},
+    )
+    active_profile = profile_entry_factory(
+        title="Ollama - Active",
+        unique_id=f"{DOMAIN}_active",
+        data={CONF_PROFILE_NAME: "Active"},
+    )
+    old_server = SimpleNamespace(port=8090, entry=active_profile, stop=AsyncMock())
+    new_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = old_server
+    hass.data[DOMAIN]["mcp_port"] = 8090
+
+    with patch("custom_components.mcp_assist.MCPServer", return_value=new_server) as server_cls:
+        await _async_apply_shared_mcp_settings(hass)
+
+    server_cls.assert_called_once_with(hass, 8124, active_profile)
+    assert hass.data[DOMAIN]["shared_mcp_server"] is new_server
+
+
+@pytest.mark.asyncio
 async def test_apply_shared_mcp_settings_keeps_old_server_when_new_port_fails(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
