@@ -27,6 +27,8 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_MAX_HISTORY,
     CONF_PROFILE_NAME,
+    CONF_SYSTEM_PROMPT,
+    CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT,
     CONF_TECHNICAL_PROMPT_MODE,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
@@ -632,6 +634,87 @@ async def test_custom_prompt_with_index_placeholder_fetches_index(
     prompt = await agent._build_system_prompt_with_context(SimpleNamespace(device_id=None))
 
     assert 'Index:{"areas":["Kitchen"],"domains":{"light":3}}' in prompt
+
+
+@pytest.mark.asyncio
+async def test_jinja_prompt_templates_render_with_context(
+    hass,
+    profile_entry_factory,
+    monkeypatch,
+) -> None:
+    """Custom prompts should support Jinja while preserving context variables."""
+
+    class StubIndexManager:
+        async def get_index(self) -> dict[str, object]:
+            return {"areas": ["Kitchen"]}
+
+    hass.data.setdefault(DOMAIN, {})["index_manager"] = StubIndexManager()
+    entry = profile_entry_factory(
+        options={
+            CONF_SYSTEM_PROMPT_MODE: PROMPT_MODE_CUSTOM,
+            CONF_SYSTEM_PROMPT: "User={{ current_user }}",
+            CONF_TECHNICAL_PROMPT_MODE: PROMPT_MODE_CUSTOM,
+            CONF_TECHNICAL_PROMPT: (
+                "Area={{ current_area }} Index={{ index }} Legacy={date}"
+            ),
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_current_user_name",
+        AsyncMock(return_value="Jason"),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_get_current_area",
+        AsyncMock(return_value="Kitchen"),
+    )
+
+    prompt = await agent._build_system_prompt_with_context(
+        SimpleNamespace(device_id=None)
+    )
+
+    assert "User=Jason" in prompt
+    assert "Area=Kitchen" in prompt
+    assert 'Index={"areas":["Kitchen"]}' in prompt
+    assert "Legacy={date}" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_jinja_prompt_templates_detect_variables_in_statements(
+    hass,
+    profile_entry_factory,
+    monkeypatch,
+) -> None:
+    """Variables referenced only in Jinja statements should still be populated."""
+    entry = profile_entry_factory(
+        options={
+            CONF_SYSTEM_PROMPT_MODE: PROMPT_MODE_CUSTOM,
+            CONF_SYSTEM_PROMPT: (
+                "{% if current_user == 'Jason' %}Known user{% else %}Unknown user{% endif %}"
+            ),
+            CONF_TECHNICAL_PROMPT_MODE: PROMPT_MODE_CUSTOM,
+            CONF_TECHNICAL_PROMPT: (
+                "{% set selected_area = current_area %}Area={{ selected_area }}"
+            ),
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    get_user = AsyncMock(return_value="Jason")
+    get_area = AsyncMock(return_value="Kitchen")
+    monkeypatch.setattr(agent, "_get_current_user_name", get_user)
+    monkeypatch.setattr(agent, "_get_current_area", get_area)
+
+    prompt = await agent._build_system_prompt_with_context(
+        SimpleNamespace(device_id=None)
+    )
+
+    assert "Known user" in prompt
+    assert "Unknown user" not in prompt
+    assert "Area=Kitchen" in prompt
+    get_user.assert_awaited_once()
+    get_area.assert_awaited_once()
 
 
 @pytest.mark.asyncio

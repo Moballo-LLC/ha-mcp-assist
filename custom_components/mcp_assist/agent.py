@@ -27,6 +27,7 @@ from homeassistant.helpers import (
     device_registry as dr,
     llm,
 )
+from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
 from .custom_tools.builtin_catalog import (
@@ -607,8 +608,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         if self.music_assistant_support_enabled:
             sections.append(
-                MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS.replace(
-                    "{current_area}", current_area
+                self._render_prompt_template(
+                    MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS,
+                    {"current_area": current_area},
                 ).strip()
             )
 
@@ -1860,94 +1862,156 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return str(stored_prompt)
 
+    @staticmethod
+    def _prompt_references_variable(template_text: str, variable_name: str) -> bool:
+        """Return whether a prompt references a supported template variable."""
+        legacy_placeholder = f"{{{variable_name}}}"
+        if legacy_placeholder in template_text:
+            return True
+        for block in re.findall(r"{[{%#]-?.*?-?[}%]}", template_text, re.DOTALL):
+            if re.search(r"\b" + re.escape(variable_name) + r"\b", block):
+                return True
+        return False
+
+    def _replace_legacy_prompt_placeholders(
+        self,
+        prompt: str,
+        variables: dict[str, Any],
+    ) -> str:
+        """Replace legacy {name} placeholders after Jinja rendering."""
+        rendered = prompt
+        for key, value in variables.items():
+            rendered = rendered.replace(f"{{{key}}}", str(value))
+        return rendered
+
+    def _render_prompt_template(
+        self,
+        template_text: str,
+        variables: dict[str, Any],
+    ) -> str:
+        """Render a Jinja prompt template with legacy placeholder fallback."""
+        if not template_text:
+            return ""
+
+        try:
+            rendered = Template(template_text, self.hass).async_render(
+                variables=variables,
+                parse_result=False,
+            )
+        except Exception as err:
+            _LOGGER.warning(
+                "Failed to render Jinja prompt template, using raw text: %s",
+                err,
+            )
+            rendered = template_text
+
+        return self._replace_legacy_prompt_placeholders(str(rendered), variables)
+
+    async def _build_prompt_template_variables(
+        self,
+        user_input: ConversationInput | None,
+        *templates: str,
+    ) -> tuple[dict[str, Any], str]:
+        """Collect prompt template variables, fetching costly values lazily."""
+        now = dt_util.now()
+        combined_template = "\n".join(template for template in templates if template)
+
+        variables: dict[str, Any] = {
+            "time": now.strftime("%H:%M:%S"),
+            "date": now.strftime("%Y-%m-%d"),
+        }
+
+        current_area = "Unknown"
+        if (
+            self._prompt_references_variable(combined_template, "current_area")
+            or self.music_assistant_support_enabled
+        ) and user_input is not None:
+            current_area = await self._get_current_area(user_input)
+        variables["current_area"] = current_area
+
+        if (
+            self._prompt_references_variable(combined_template, "current_user")
+            or self._prompt_references_variable(
+                combined_template,
+                "current_user_context",
+            )
+        ) and user_input is not None:
+            current_user = await self._get_current_user_name(user_input)
+        else:
+            current_user = ""
+        variables["current_user"] = current_user
+        variables["current_user_context"] = (
+            f"Current user: {current_user}" if current_user else ""
+        )
+
+        if self._prompt_references_variable(
+            combined_template,
+            "home_location",
+        ) or self._prompt_references_variable(
+            combined_template,
+            "home_location_context",
+        ):
+            home_location = self._get_home_location()
+        else:
+            home_location = ""
+        variables["home_location"] = home_location
+        variables["home_location_context"] = (
+            f"Home location: {home_location}" if home_location else ""
+        )
+
+        if self._prompt_references_variable(combined_template, "response_mode"):
+            variables["response_mode"] = RESPONSE_MODE_INSTRUCTIONS.get(
+                self.follow_up_mode,
+                RESPONSE_MODE_INSTRUCTIONS["default"],
+            )
+        else:
+            variables["response_mode"] = ""
+
+        if self._prompt_references_variable(combined_template, "index"):
+            index_manager = self.hass.data.get(DOMAIN, {}).get("index_manager")
+            if index_manager:
+                index = await index_manager.get_index()
+                variables["index"] = json.dumps(index, separators=(",", ":"))
+            else:
+                variables["index"] = "{}"
+                _LOGGER.warning("IndexManager not available, using empty index")
+        else:
+            variables["index"] = "{}"
+
+        return variables, current_area
+
     async def _build_system_prompt_with_context(
         self, user_input: ConversationInput
     ) -> str:
         """Build the compact system prompt used for model calls."""
         try:
-            now = dt_util.now()
             if self.entry.data.get(CONF_SERVER_TYPE) == SERVER_TYPE_OPENCLAW:
-                system_prompt = ""
+                system_prompt_template = ""
             else:
-                system_prompt = self._resolve_prompt_setting(
+                system_prompt_template = self._resolve_prompt_setting(
                     prompt_key=CONF_SYSTEM_PROMPT,
                     mode_key=CONF_SYSTEM_PROMPT_MODE,
                     default_prompt=self._get_default_system_prompt(),
                 )
-            technical_prompt = self._resolve_prompt_setting(
+            technical_prompt_template = self._resolve_prompt_setting(
                 prompt_key=CONF_TECHNICAL_PROMPT,
                     mode_key=CONF_TECHNICAL_PROMPT_MODE,
                     default_prompt=DEFAULT_TECHNICAL_PROMPT,
             )
 
-            current_area = "Unknown"
-            needs_current_area = "{current_area}" in technical_prompt or (
-                self.music_assistant_support_enabled
+            variables, current_area = await self._build_prompt_template_variables(
+                user_input,
+                system_prompt_template,
+                technical_prompt_template,
             )
-            if needs_current_area:
-                current_area = await self._get_current_area(user_input)
-            if "{current_area}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{current_area}", current_area
-                )
-
-            if "{time}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{time}", now.strftime("%H:%M:%S")
-                )
-
-            if "{date}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{date}", now.strftime("%Y-%m-%d")
-                )
-
-            if (
-                "{current_user}" in technical_prompt
-                or "{current_user_context}" in technical_prompt
-            ):
-                current_user = await self._get_current_user_name(user_input)
-                if "{current_user}" in technical_prompt:
-                    technical_prompt = technical_prompt.replace(
-                        "{current_user}", current_user
-                    )
-                if "{current_user_context}" in technical_prompt:
-                    technical_prompt = technical_prompt.replace(
-                        "{current_user_context}",
-                        f"Current user: {current_user}" if current_user else "",
-                    )
-
-            if (
-                "{home_location}" in technical_prompt
-                or "{home_location_context}" in technical_prompt
-            ):
-                home_location = self._get_home_location()
-                if "{home_location}" in technical_prompt:
-                    technical_prompt = technical_prompt.replace(
-                        "{home_location}", home_location
-                    )
-                if "{home_location_context}" in technical_prompt:
-                    technical_prompt = technical_prompt.replace(
-                        "{home_location_context}",
-                        f"Home location: {home_location}" if home_location else "",
-                    )
-
-            if "{response_mode}" in technical_prompt:
-                mode_instructions = RESPONSE_MODE_INSTRUCTIONS.get(
-                    self.follow_up_mode, RESPONSE_MODE_INSTRUCTIONS["default"]
-                )
-                technical_prompt = technical_prompt.replace(
-                    "{response_mode}", mode_instructions
-                )
-
-            if "{index}" in technical_prompt:
-                index_manager = self.hass.data.get(DOMAIN, {}).get("index_manager")
-                if index_manager:
-                    index = await index_manager.get_index()
-                    index_json = json.dumps(index, separators=(",", ":"))
-                else:
-                    index_json = "{}"
-                    _LOGGER.warning("IndexManager not available, using empty index")
-                technical_prompt = technical_prompt.replace("{index}", index_json)
+            system_prompt = self._render_prompt_template(
+                system_prompt_template,
+                variables,
+            )
+            technical_prompt = self._render_prompt_template(
+                technical_prompt_template,
+                variables,
+            )
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
@@ -2001,54 +2065,44 @@ class MCPAssistConversationEntity(ConversationEntity):
         try:
             now = dt_util.now()
             if self.entry.data.get(CONF_SERVER_TYPE) == SERVER_TYPE_OPENCLAW:
-                system_prompt = ""
+                system_prompt_template = ""
             else:
-                system_prompt = self._resolve_prompt_setting(
+                system_prompt_template = self._resolve_prompt_setting(
                     prompt_key=CONF_SYSTEM_PROMPT,
                     mode_key=CONF_SYSTEM_PROMPT_MODE,
                     default_prompt=self._get_default_system_prompt(),
                 )
-            technical_prompt = self._resolve_prompt_setting(
+            technical_prompt_template = self._resolve_prompt_setting(
                 prompt_key=CONF_TECHNICAL_PROMPT,
                 mode_key=CONF_TECHNICAL_PROMPT_MODE,
                 default_prompt=DEFAULT_TECHNICAL_PROMPT,
             )
 
-            if "{time}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{time}", now.strftime("%H:%M:%S")
-                )
-            if "{date}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{date}", now.strftime("%Y-%m-%d")
-                )
-            if "{current_area}" in technical_prompt:
-                technical_prompt = technical_prompt.replace("{current_area}", "Unknown")
-            if "{current_user}" in technical_prompt:
-                technical_prompt = technical_prompt.replace("{current_user}", "")
-            if "{current_user_context}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{current_user_context}", ""
-                )
-            if "{home_location}" in technical_prompt:
-                technical_prompt = technical_prompt.replace(
-                    "{home_location}", self._get_home_location()
-                )
-            if "{home_location_context}" in technical_prompt:
-                home_location = self._get_home_location()
-                technical_prompt = technical_prompt.replace(
-                    "{home_location_context}",
-                    f"Home location: {home_location}" if home_location else "",
-                )
-            if "{index}" in technical_prompt:
-                technical_prompt = technical_prompt.replace("{index}", "{}")
-            if "{response_mode}" in technical_prompt:
-                mode_instructions = RESPONSE_MODE_INSTRUCTIONS.get(
+            home_location = self._get_home_location()
+            variables: dict[str, Any] = {
+                "time": now.strftime("%H:%M:%S"),
+                "date": now.strftime("%Y-%m-%d"),
+                "current_area": "Unknown",
+                "current_user": "",
+                "current_user_context": "",
+                "home_location": home_location,
+                "home_location_context": (
+                    f"Home location: {home_location}" if home_location else ""
+                ),
+                "index": "{}",
+                "response_mode": RESPONSE_MODE_INSTRUCTIONS.get(
                     self.follow_up_mode, RESPONSE_MODE_INSTRUCTIONS["default"]
-                )
-                technical_prompt = technical_prompt.replace(
-                    "{response_mode}", mode_instructions
-                )
+                ),
+            }
+
+            system_prompt = self._render_prompt_template(
+                system_prompt_template,
+                variables,
+            )
+            technical_prompt = self._render_prompt_template(
+                technical_prompt_template,
+                variables,
+            )
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
