@@ -219,6 +219,7 @@ OPTIONAL_TOOL_FAMILY_TOOL_NAMES = {
     ),
     TOOL_FAMILY_MEMORY: frozenset(
         {
+            "list_memory_categories",
             "remember_memory",
             "recall_memories",
             "forget_memory",
@@ -426,6 +427,8 @@ Device tools are enabled.
 MEMORY_TECHNICAL_INSTRUCTIONS = """
 Memory tools are enabled.
 - Use remember_memory only when the user explicitly asks you to remember something.
+- Use list_memory_categories when choosing or explaining memory categories.
+- Prefer stable categories such as preference, routine, device_alias, automation_note, baseline, correction, maintenance, and household.
 - Use recall_memories for stored facts or preferences.
 - Use forget_memory when the user asks to remove or update stored memory.
 """

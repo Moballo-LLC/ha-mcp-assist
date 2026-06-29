@@ -16,6 +16,42 @@ from .const import DOMAIN
 _STORAGE_VERSION = 1
 _STORAGE_KEY = f"{DOMAIN}_memory_store"
 
+MEMORY_CATEGORY_PRESETS: dict[str, str] = {
+    "preference": "User or household preferences and preferred settings.",
+    "routine": "Recurring household routines, schedules, or repeated patterns.",
+    "device_alias": "User-specific names for devices, entities, rooms, or areas.",
+    "automation_note": "Notes about automations, scenes, scripts, or expected behavior.",
+    "baseline": "Normal home, sensor, device, or environment readings.",
+    "correction": "Corrections to previous assumptions, names, or facts.",
+    "maintenance": "Durable maintenance status, reminders, or service notes.",
+    "household": "General household facts that do not fit another category.",
+}
+
+_MEMORY_CATEGORY_ALIASES: dict[str, str] = {
+    "alias": "device_alias",
+    "aliases": "device_alias",
+    "automation": "automation_note",
+    "automation_notes": "automation_note",
+    "automations": "automation_note",
+    "corrections": "correction",
+    "device": "device_alias",
+    "device_aliases": "device_alias",
+    "devices": "device_alias",
+    "house": "household",
+    "home": "household",
+    "maint": "maintenance",
+    "normal": "baseline",
+    "pattern": "routine",
+    "patterns": "routine",
+    "pref": "preference",
+    "prefs": "preference",
+    "preferences": "preference",
+    "routine": "routine",
+    "routines": "routine",
+    "schedule": "routine",
+    "schedules": "routine",
+}
+
 
 class MemoryManager:
     """Manage shared persisted memories for MCP Assist."""
@@ -59,7 +95,7 @@ class MemoryManager:
         if not normalized_text:
             raise ValueError("memory text is required")
 
-        normalized_category = self._normalize_text(category)
+        normalized_category = self._normalize_category(category)
         effective_max_ttl = max(1, int(max_ttl_days))
         effective_default_ttl = max(1, min(int(default_ttl_days), effective_max_ttl))
         effective_ttl = effective_default_ttl if ttl_days is None else int(ttl_days)
@@ -98,7 +134,7 @@ class MemoryManager:
     ) -> dict[str, Any]:
         """Recall active memories by query or category."""
         normalized_query = self._normalize_text(query)
-        normalized_category = self._normalize_text(category)
+        normalized_category = self._normalize_category(category)
         effective_limit = max(1, int(limit))
 
         async with self._lock:
@@ -132,7 +168,7 @@ class MemoryManager:
         """Forget one or more memories by id or search criteria."""
         normalized_id = self._normalize_text(memory_id)
         normalized_query = self._normalize_text(query)
-        normalized_category = self._normalize_text(category)
+        normalized_category = self._normalize_category(category)
         if not normalized_id and not normalized_query and not normalized_category:
             raise ValueError("memory_id or query/category is required")
 
@@ -190,6 +226,49 @@ class MemoryManager:
                 await self._save_locked()
             return items
 
+    async def list_categories(self) -> dict[str, Any]:
+        """Return suggested categories and active memory counts."""
+        async with self._lock:
+            await self._ensure_loaded_locked()
+            changed = self._purge_expired_locked()
+            memories = list(self._memories)
+            if changed:
+                await self._save_locked()
+
+        preset_counts = {category: 0 for category in MEMORY_CATEGORY_PRESETS}
+        custom_counts: dict[str, int] = {}
+        uncategorized_count = 0
+
+        for memory in memories:
+            category = self._normalize_category(memory.get("category"))
+            if not category:
+                uncategorized_count += 1
+            elif category in preset_counts:
+                preset_counts[category] += 1
+            else:
+                custom_counts[category] = custom_counts.get(category, 0) + 1
+
+        return {
+            "categories": [
+                {
+                    "category": category,
+                    "description": description,
+                    "count": preset_counts[category],
+                }
+                for category, description in MEMORY_CATEGORY_PRESETS.items()
+            ],
+            "custom_categories": [
+                {
+                    "category": category,
+                    "description": "Custom category already used by stored memories.",
+                    "count": count,
+                }
+                for category, count in sorted(custom_counts.items())
+            ],
+            "uncategorized_count": uncategorized_count,
+            "total_count": len(memories),
+        }
+
     async def _ensure_loaded_locked(self) -> None:
         """Load persisted storage on first use."""
         if self._loaded:
@@ -223,7 +302,7 @@ class MemoryManager:
         return {
             "id": memory_id,
             "text": text,
-            "category": self._normalize_text(item.get("category")),
+            "category": self._normalize_category(item.get("category")),
             "created_at": created_at,
             "expires_at": expires_at,
             "ttl_days": int(item.get("ttl_days") or 0),
@@ -274,7 +353,7 @@ class MemoryManager:
             filtered = [
                 item
                 for item in filtered
-                if self._normalize_text(item.get("category")) == category
+                if self._normalize_category(item.get("category")) == category
             ]
 
         if not query:
@@ -315,3 +394,14 @@ class MemoryManager:
             return None
         normalized = " ".join(str(value).split()).strip()
         return normalized or None
+
+    @classmethod
+    def _normalize_category(cls, value: Any) -> str | None:
+        """Normalize a memory category while preserving custom category support."""
+        normalized = cls._normalize_text(value)
+        if normalized is None:
+            return None
+        normalized = re.sub(r"[^a-z0-9_]+", "_", normalized.casefold()).strip("_")
+        if not normalized:
+            return None
+        return _MEMORY_CATEGORY_ALIASES.get(normalized, normalized)

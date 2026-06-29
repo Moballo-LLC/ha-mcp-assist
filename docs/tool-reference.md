@@ -107,12 +107,16 @@ Memory tools persist user-approved facts and preferences.
 
 | Tool | Purpose |
 | --- | --- |
+| `list_memory_categories` | List suggested categories and active memory counts |
 | `remember_memory` | Store a memory with optional TTL |
 | `recall_memories` | Search stored memories |
 | `forget_memory` | Delete matching stored memories |
 
 The assistant should use memory only when the user asks it to remember, recall,
-or forget something. Memories are shared across MCP Assist profiles.
+or forget something. Suggested categories include `preference`, `routine`,
+`device_alias`, `automation_note`, `baseline`, `correction`, `maintenance`, and
+`household`; custom categories still work. Memories are shared across MCP Assist
+profiles.
 
 ## Web Search and URL Reading
 

@@ -574,7 +574,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         if not self.memory_tools_enabled:
             lines.append(
-                "- Memory tools are disabled. Do not call remember_memory, recall_memories, or forget_memory."
+                "- Memory tools are disabled. Do not call list_memory_categories, remember_memory, recall_memories, or forget_memory."
             )
 
         if not self.external_custom_tools_enabled:
