@@ -85,7 +85,7 @@ MCP Assist supports **21 languages** with localized configuration interfaces, la
 
 ### Option A: HACS (Recommended)
 1. Click the badge above to add this repository to HACS, or manually add it as a custom repository
-2. Install "MCP Assist" from HACS
+2. Install "HA MCP Assist" from HACS
 3. Restart Home Assistant
 
 ### Option B: Manual Installation

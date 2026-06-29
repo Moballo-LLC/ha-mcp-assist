@@ -10,6 +10,7 @@ from packaging.requirements import Requirement
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "custom_components" / "mcp_assist" / "manifest.json"
+HACS = ROOT / "hacs.json"
 RUNTIME_REQUIREMENTS = ROOT / "requirements_runtime.txt"
 
 
@@ -31,3 +32,14 @@ def test_runtime_requirements_track_manifest_packages() -> None:
     assert _requirement_names(_runtime_requirements()) == _requirement_names(
         manifest["requirements"]
     )
+
+
+def test_hacs_display_name_keeps_drop_in_integration_domain() -> None:
+    """HACS branding can differ while the installable integration stays drop-in."""
+
+    hacs = json.loads(HACS.read_text(encoding="utf-8"))
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+    assert hacs["name"] == "HA MCP Assist"
+    assert manifest["domain"] == "mcp_assist"
+    assert MANIFEST.parent.name == manifest["domain"]
