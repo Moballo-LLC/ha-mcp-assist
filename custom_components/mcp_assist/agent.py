@@ -161,6 +161,8 @@ def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -
         r"\1\2[redacted]",
         text,
     )
+    text = re.sub(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{8,}\b", "[redacted]", text)
+    text = re.sub(r"\bAIza[A-Za-z0-9_-]{20,}\b", "[redacted]", text)
     text = text.replace("\r", "\\r").replace("\n", "\\n")
     if len(text) <= max_chars:
         return text

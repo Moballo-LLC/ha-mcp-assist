@@ -72,6 +72,8 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     """Provider details written to logs should be compact and secret-safe."""
     snippet = agent_module._provider_log_snippet(
         'first line\n{"api_key":"secret-value","Authorization":"Bearer sk-leaked-value",'
+        '"error":"Incorrect API key: sk-live-secret1234567890",'
+        '"google":"AIzaSyExampleKeyValue1234567890",'
         '"message":"'
         + ("x" * 80)
         + '"}',
@@ -81,6 +83,8 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     assert "\n" not in snippet
     assert "secret-value" not in snippet
     assert "sk-leaked-value" not in snippet
+    assert "sk-live-secret1234567890" not in snippet
+    assert "AIzaSyExampleKeyValue1234567890" not in snippet
     assert 'api_key":"[redacted]' in snippet
     assert 'Authorization":"[redacted]' in snippet
     assert "truncated" in snippet
