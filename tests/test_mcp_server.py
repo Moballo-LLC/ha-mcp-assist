@@ -46,6 +46,13 @@ from custom_components.mcp_assist.mcp_server import MCPServer
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
 
 
+def test_sanitize_log_value_escapes_line_breaks() -> None:
+    """User-controlled log values should not be able to add log lines."""
+    assert mcp_server_module._sanitize_log_value("one\ntwo\rthree") == (
+        "one\\ntwo\\rthree"
+    )
+
+
 def _builtin_spec(tool_name: str):
     """Return the built-in packaged-tool spec for a tool name."""
     for spec in BUILTIN_SPECS:
@@ -1811,6 +1818,14 @@ def test_resolve_fetchable_http_image_url_keeps_supported_sources(
     assert (
         str(
             server._resolve_fetchable_http_image_url(
+                "http://ha.local:8123/api/image/serve/abc123/512x512"
+            )
+        )
+        == "http://ha.local:8123/api/image/serve/abc123/512x512"
+    )
+    assert (
+        str(
+            server._resolve_fetchable_http_image_url(
                 "https://images.example.com/weather/radar.png"
             )
         )
@@ -1830,6 +1845,14 @@ def test_resolve_fetchable_http_image_url_keeps_supported_sources(
     with pytest.raises(ValueError, match="allowlisted"):
         server._resolve_fetchable_http_image_url(
             "https://images.example.com/weather-evil/radar.png"
+        )
+
+    with pytest.raises(ValueError, match="image-serving path"):
+        server._resolve_fetchable_http_image_url("http://ha.local:8123/api/states")
+
+    with pytest.raises(ValueError, match="parent path"):
+        server._resolve_fetchable_http_image_url(
+            "http://ha.local:8123/api/image_proxy/../config"
         )
 
 
@@ -1869,10 +1892,10 @@ def test_resolve_fetchable_http_image_url_sanitizes_double_slash_paths(
     assert (
         str(
             server._resolve_fetchable_http_image_url(
-                "http://ha.local:8123//evil.test/latest/meta-data"
+                "http://ha.local:8123//api/image_proxy/front_door"
             )
         )
-        == "http://ha.local:8123/evil.test/latest/meta-data"
+        == "http://ha.local:8123/api/image_proxy/front_door"
     )
     assert (
         server._build_safe_http_request_path(
