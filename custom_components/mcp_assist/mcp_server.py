@@ -153,6 +153,11 @@ def _strip_non_json_serializable(value: Any) -> Any:
     return _SKIP_NON_SERIALIZABLE
 
 
+def _sanitize_log_value(value: Any) -> str:
+    """Return a log-safe representation of user-controlled values."""
+    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+
+
 class MCPServer(
     CalendarToolsMixin,
     RecorderToolsMixin,
@@ -196,10 +201,14 @@ class MCPServer(
                 self.allowed_ips.append(lmstudio_host)
                 _LOGGER.info(
                     "MCP server automatically whitelisted LM Studio IP: %s",
-                    lmstudio_host,
+                    _sanitize_log_value(lmstudio_host),
                 )
         except Exception as e:
-            _LOGGER.warning("Could not parse LM Studio URL '%s': %s", lmstudio_url, e)
+            _LOGGER.warning(
+                "Could not parse LM Studio URL '%s': %s",
+                _sanitize_log_value(lmstudio_url),
+                _sanitize_log_value(e),
+            )
 
         # Add user-configured allowed IPs/CIDR ranges (shared setting)
         allowed_ips_str = self._get_shared_setting(
@@ -216,10 +225,13 @@ class MCPServer(
             if additional_ips:
                 _LOGGER.info(
                     "MCP server added user-configured allowed IPs/ranges: %s",
-                    additional_ips,
+                    _sanitize_log_value(additional_ips),
                 )
 
-        _LOGGER.info("MCP server allowed IPs/ranges: %s", self.allowed_ips)
+        _LOGGER.info(
+            "MCP server allowed IPs/ranges: %s",
+            _sanitize_log_value(self.allowed_ips),
+        )
 
         # Custom tools will be initialized in start() after system entry exists
         self.custom_tools = None
@@ -442,8 +454,8 @@ class MCPServer(
         except Exception as err:
             _LOGGER.debug(
                 "Unable to read built-in packaged tool metadata for %s: %s",
-                tool_name,
-                err,
+                _sanitize_log_value(tool_name),
+                _sanitize_log_value(err),
             )
             return None
 
@@ -460,7 +472,10 @@ class MCPServer(
         try:
             return tuple(getter() or ())
         except Exception as err:
-            _LOGGER.debug("Unable to read built-in packaged tool specs: %s", err)
+            _LOGGER.debug(
+                "Unable to read built-in packaged tool specs: %s",
+                _sanitize_log_value(err),
+            )
             return ()
 
     def _is_builtin_package_enabled(
@@ -524,7 +539,8 @@ class MCPServer(
                         custom_tool_signature = (raw_signature,)
                 except Exception as err:
                     _LOGGER.debug(
-                        "Unable to build custom tool cache signature: %s", err
+                        "Unable to build custom tool cache signature: %s",
+                        _sanitize_log_value(err),
                     )
             else:
                 custom_tool_store = getattr(self.custom_tools, "tools", {})
@@ -595,11 +611,14 @@ class MCPServer(
                 await self.custom_tools.initialize()
                 _LOGGER.info(
                     "✅ Custom tools initialized (search provider: %s, external enabled: %s)",
-                    search_provider,
+                    _sanitize_log_value(search_provider),
                     self._external_custom_tools_enabled(),
                 )
             except Exception as e:
-                _LOGGER.error(f"Failed to initialize custom tools: {e}")
+                _LOGGER.error(
+                    "Failed to initialize custom tools: %s",
+                    _sanitize_log_value(e),
+                )
 
             if self._memory_tools_enabled():
                 try:
@@ -611,7 +630,10 @@ class MCPServer(
                         self._memory_max_items(),
                     )
                 except Exception as err:
-                    _LOGGER.error("Failed to initialize memory tools: %s", err)
+                    _LOGGER.error(
+                        "Failed to initialize memory tools: %s",
+                        _sanitize_log_value(err),
+                    )
 
             _LOGGER.info(
                 "✅ MCP server started successfully on http://0.0.0.0:%d", self.port
@@ -638,11 +660,13 @@ class MCPServer(
                 raise
             else:
                 _LOGGER.error(
-                    "❌ Failed to bind MCP server to port %d: %s", self.port, err
+                    "❌ Failed to bind MCP server to port %d: %s",
+                    self.port,
+                    _sanitize_log_value(err),
                 )
                 raise
         except Exception as err:
-            _LOGGER.error("❌ Failed to start MCP server: %s", err)
+            _LOGGER.error("❌ Failed to start MCP server: %s", _sanitize_log_value(err))
             raise
 
     async def stop(self) -> None:
@@ -693,7 +717,7 @@ class MCPServer(
         try:
             client_ip_obj = ipaddress.ip_address(ip_only)
         except ValueError:
-            _LOGGER.warning("Invalid client IP format: %s", ip_only)
+            _LOGGER.warning("Invalid client IP format: %s", _sanitize_log_value(ip_only))
             return False
 
         # Check if client IP matches any allowed IP or CIDR range
@@ -711,7 +735,8 @@ class MCPServer(
                 except ValueError:
                     # Invalid CIDR format, skip
                     _LOGGER.warning(
-                        "Invalid CIDR format in allowed IPs: %s", allowed_entry
+                        "Invalid CIDR format in allowed IPs: %s",
+                        _sanitize_log_value(allowed_entry),
                     )
                     continue
 
@@ -720,7 +745,7 @@ class MCPServer(
     async def handle_health(self, request: web.Request) -> web.Response:
         """Handle health check requests."""
         client_ip = request.remote
-        _LOGGER.info("🏥 Health check from %s", client_ip)
+        _LOGGER.info("🏥 Health check from %s", _sanitize_log_value(client_ip))
 
         health_info = {
             "status": "healthy",
@@ -776,12 +801,15 @@ class MCPServer(
     ) -> web.Response:
         """Return detailed diagnostics for manifest-based tool packages."""
         client_ip = request.remote
-        _LOGGER.info("🧰 External tool diagnostics request from %s", client_ip)
+        _LOGGER.info(
+            "🧰 External tool diagnostics request from %s",
+            _sanitize_log_value(client_ip),
+        )
 
         if not self._is_ip_allowed(client_ip):
             _LOGGER.warning(
                 "🚫 Blocked external tool diagnostics request from unauthorized IP: %s",
-                client_ip,
+                _sanitize_log_value(client_ip),
             )
             return web.Response(status=403, text="Forbidden: IP not authorized")
 
@@ -844,12 +872,13 @@ class MCPServer(
     async def handle_progress_stream(self, request: web.Request) -> web.StreamResponse:
         """SSE endpoint for progress updates during tool execution."""
         client_ip = request.remote
-        _LOGGER.info("📊 Progress stream request from %s", client_ip)
+        _LOGGER.info("📊 Progress stream request from %s", _sanitize_log_value(client_ip))
 
         # Check IP whitelist
         if not self._is_ip_allowed(client_ip):
             _LOGGER.warning(
-                "🚫 Blocked progress stream request from unauthorized IP: %s", client_ip
+                "🚫 Blocked progress stream request from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
             )
             return web.Response(status=403, text="Forbidden: IP not authorized")
 
@@ -880,8 +909,8 @@ class MCPServer(
                 data = f"data: {json.dumps(msg)}\n\n"
                 await response.write(data.encode())
 
-        except Exception as e:
-            _LOGGER.debug(f"Progress stream closed: {e}")
+        except Exception as err:
+            _LOGGER.debug("Progress stream closed: %s", _sanitize_log_value(err))
         finally:
             self.progress_queues.discard(queue)
 
@@ -908,12 +937,13 @@ class MCPServer(
     async def handle_sse(self, request: web.Request) -> web.StreamResponse:
         """Handle Server-Sent Events for MCP notifications."""
         client_ip = request.remote
-        _LOGGER.info("🌊 SSE connection request from %s", client_ip)
+        _LOGGER.info("🌊 SSE connection request from %s", _sanitize_log_value(client_ip))
 
         # Check IP whitelist
         if not self._is_ip_allowed(client_ip):
             _LOGGER.warning(
-                "🚫 Blocked SSE connection from unauthorized IP: %s", client_ip
+                "🚫 Blocked SSE connection from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
             )
             return web.Response(status=403, text="Forbidden: IP not authorized")
 
@@ -948,7 +978,10 @@ class MCPServer(
                 await response.write(b": keepalive\n\n")
 
         except Exception as err:
-            _LOGGER.info("📤 SSE client disconnected: %s", err)
+            _LOGGER.info(
+                "📤 SSE client disconnected: %s",
+                _sanitize_log_value(err),
+            )
         finally:
             if response in self.sse_clients:
                 self.sse_clients.remove(response)
@@ -1142,19 +1175,26 @@ class MCPServer(
     async def handle_websocket(self, request: web.Request) -> WebSocketResponse:
         """Handle WebSocket connections for MCP protocol."""
         client_ip = request.remote
-        _LOGGER.info("🔌 New MCP WebSocket connection from %s", client_ip)
+        _LOGGER.info(
+            "🔌 New MCP WebSocket connection from %s",
+            _sanitize_log_value(client_ip),
+        )
 
         # Check IP whitelist
         if not self._is_ip_allowed(client_ip):
             _LOGGER.warning(
-                "🚫 Blocked WebSocket connection from unauthorized IP: %s", client_ip
+                "🚫 Blocked WebSocket connection from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
             )
             return web.Response(status=403, text="Forbidden: IP not authorized")
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
-        _LOGGER.info("✅ MCP WebSocket connection established with %s", client_ip)
+        _LOGGER.info(
+            "✅ MCP WebSocket connection established with %s",
+            _sanitize_log_value(client_ip),
+        )
 
         try:
             async for msg in ws:
@@ -1188,7 +1228,10 @@ class MCPServer(
                             )
                         )
                 elif msg.type == WSMsgType.ERROR:
-                    _LOGGER.error("WebSocket error: %s", ws.exception())
+                    _LOGGER.error(
+                        "WebSocket error: %s",
+                        _sanitize_log_value(ws.exception()),
+                    )
                     break
 
         except asyncio.CancelledError:
@@ -1201,11 +1244,17 @@ class MCPServer(
     async def handle_mcp_request(self, request: web.Request) -> web.Response:
         """Handle HTTP MCP requests with proper JSON-RPC 2.0 protocol."""
         client_ip = request.remote
-        _LOGGER.info("📨 MCP HTTP JSON-RPC request from %s", client_ip)
+        _LOGGER.info(
+            "📨 MCP HTTP JSON-RPC request from %s",
+            _sanitize_log_value(client_ip),
+        )
 
         # Check IP whitelist
         if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning("🚫 Blocked MCP request from unauthorized IP: %s", client_ip)
+            _LOGGER.warning(
+                "🚫 Blocked MCP request from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
+            )
             return web.json_response(
                 {
                     "jsonrpc": "2.0",
@@ -1254,14 +1303,19 @@ class MCPServer(
             is_notification = "id" not in data
 
             if is_notification:
-                _LOGGER.debug("📮 MCP notification: %s", data.get("method"))
+                _LOGGER.debug(
+                    "📮 MCP notification: %s",
+                    _sanitize_log_value(data.get("method")),
+                )
                 # Process the notification but don't expect a response
                 await self.process_mcp_notification(data)
                 # Return 204 No Content for notifications
                 return web.Response(status=204)
             else:
                 _LOGGER.debug(
-                    "📋 MCP method: %s (id: %s)", data.get("method"), request_id
+                    "📋 MCP method: %s (id: %s)",
+                    _sanitize_log_value(data.get("method")),
+                    _sanitize_log_value(request_id),
                 )
                 response = await self.process_mcp_message(data)
                 return web.json_response(response)
@@ -1290,7 +1344,10 @@ class MCPServer(
         """Process MCP notification (no response expected)."""
         method = data.get("method")
 
-        _LOGGER.info("Processing MCP notification: %s", method)
+        _LOGGER.info(
+            "Processing MCP notification: %s",
+            _sanitize_log_value(method),
+        )
 
         try:
             # Handle both old and new MCP notification formats
@@ -1304,16 +1361,26 @@ class MCPServer(
                 # Client cancelled a pending request
                 _LOGGER.debug("MCP client cancelled a request")
             else:
-                _LOGGER.warning("Unknown notification method: %s", method)
+                _LOGGER.warning(
+                    "Unknown notification method: %s",
+                    _sanitize_log_value(method),
+                )
         except Exception as err:
-            _LOGGER.exception("Error processing notification %s: %s", method, err)
+            _LOGGER.exception(
+                "Error processing notification %s: %s",
+                _sanitize_log_value(method),
+                _sanitize_log_value(err),
+            )
 
     async def broadcast_notification(
         self, method: str, params: Dict[str, Any] | None = None
     ) -> None:
         """Send notification to all SSE clients."""
         if not self.sse_clients:
-            _LOGGER.debug("No SSE clients to notify for %s", method)
+            _LOGGER.debug(
+                "No SSE clients to notify for %s",
+                _sanitize_log_value(method),
+            )
             return
 
         notification = {"jsonrpc": "2.0", "method": method}
@@ -1328,7 +1395,7 @@ class MCPServer(
             try:
                 await client.write(data)
             except Exception as err:
-                _LOGGER.debug("Failed to send to client: %s", err)
+                _LOGGER.debug("Failed to send to client: %s", _sanitize_log_value(err))
                 dead_clients.append(client)
 
         # Remove dead clients
@@ -1344,7 +1411,11 @@ class MCPServer(
         params = data.get("params", {})
         msg_id = data.get("id")
 
-        _LOGGER.debug("Processing MCP method: %s (id: %s)", method, msg_id)
+        _LOGGER.debug(
+            "Processing MCP method: %s (id: %s)",
+            _sanitize_log_value(method),
+            _sanitize_log_value(msg_id),
+        )
 
         try:
             if method == "initialize":
@@ -1366,7 +1437,10 @@ class MCPServer(
             return response
 
         except Exception as err:
-            _LOGGER.exception("Error in MCP method %s", method)
+            _LOGGER.exception(
+                "Error in MCP method %s",
+                _sanitize_log_value(method),
+            )
             return {
                 "jsonrpc": "2.0",
                 "error": {
@@ -1885,7 +1959,10 @@ class MCPServer(
                 custom_tool_defs = self.custom_tools.get_tool_definitions()
                 tools.extend(custom_tool_defs)
             except Exception as e:
-                _LOGGER.error(f"Failed to get custom tool definitions: {e}")
+                _LOGGER.error(
+                    "Failed to get custom tool definitions: %s",
+                    _sanitize_log_value(e),
+                )
 
         tools = [tool for tool in tools if self._is_tool_enabled(tool["name"])]
         self._cached_tools_list = list(tools)
@@ -1900,7 +1977,11 @@ class MCPServer(
         arguments = params.get("arguments", {})
         context = params.get("context") or {}
 
-        _LOGGER.debug("Calling tool: %s with args: %s", tool_name, arguments)
+        _LOGGER.debug(
+            "Calling tool: %s with args: %s",
+            _sanitize_log_value(tool_name),
+            _sanitize_log_value(arguments),
+        )
 
         if not self._is_tool_enabled(tool_name):
             raise ValueError(
@@ -3558,7 +3639,12 @@ class MCPServer(
                 ]
             }
 
-        _LOGGER.info(f"🎯 Performing action: {domain}.{action} on {target}")
+        _LOGGER.info(
+            "🎯 Performing action: %s.%s on %s",
+            _sanitize_log_value(domain),
+            _sanitize_log_value(action),
+            _sanitize_log_value(target),
+        )
 
         # Notify start
         self.publish_progress(
@@ -3574,7 +3660,10 @@ class MCPServer(
             service = self.validate_service(domain, action)
         except ValueError as err:
             error_msg = str(err)
-            _LOGGER.error(f"Service validation error: {error_msg}")
+            _LOGGER.error(
+                "Service validation error: %s",
+                _sanitize_log_value(error_msg),
+            )
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
         # Resolve target (convert areas to entity_ids if needed)
@@ -3583,16 +3672,20 @@ class MCPServer(
             resolved_target = self._restrict_resolved_target_to_domain(
                 resolved_target, domain
             )
-            _LOGGER.debug(f"Resolved target: {resolved_target}")
+            _LOGGER.debug(
+                "Resolved target: %s",
+                _sanitize_log_value(resolved_target),
+            )
         except Exception as err:
             error_msg = f"Failed to resolve target: {err}"
-            _LOGGER.error(error_msg)
+            _LOGGER.error("%s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
         # Reject deprecated color_temp parameter
         if domain == "light" and "color_temp" in data:
             _LOGGER.warning(
-                f"❌ Rejecting deprecated color_temp parameter: {data.get('color_temp')}"
+                "❌ Rejecting deprecated color_temp parameter: %s",
+                _sanitize_log_value(data.get("color_temp")),
             )
             return {
                 "content": [
@@ -3678,7 +3771,7 @@ class MCPServer(
 
         except Exception as err:
             error_msg = f"Service call failed: {err}"
-            _LOGGER.exception(error_msg)
+            _LOGGER.exception("%s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     def _get_action_state_expectation(
@@ -3820,7 +3913,8 @@ class MCPServer(
 
         # Log the state for debugging
         _LOGGER.info(
-            f"🔄 Conversation state set: expecting_response={expecting_response}"
+            "🔄 Conversation state set: expecting_response=%s",
+            _sanitize_log_value(expecting_response),
         )
 
         # Return a marker that the agent can detect
@@ -3840,7 +3934,11 @@ class MCPServer(
         script_name = script_id.replace("script.", "")
         full_script_id = f"script.{script_name}"
 
-        _LOGGER.info(f"📜 Running script: {full_script_id} with variables: {variables}")
+        _LOGGER.info(
+            "📜 Running script: %s with variables: %s",
+            _sanitize_log_value(full_script_id),
+            _sanitize_log_value(variables),
+        )
 
         # Notify start
         self.publish_progress(
@@ -3891,11 +3989,15 @@ class MCPServer(
 
         except asyncio.TimeoutError:
             error_msg = f"Script execution timed out after {timeout} seconds"
-            _LOGGER.error(f"❌ {error_msg}: {full_script_id}")
+            _LOGGER.error(
+                "❌ %s: %s",
+                _sanitize_log_value(error_msg),
+                _sanitize_log_value(full_script_id),
+            )
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
         except Exception as err:
             error_msg = f"Script execution failed: {err}"
-            _LOGGER.exception(f"❌ {error_msg}")
+            _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     async def tool_run_automation(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -3909,7 +4011,10 @@ class MCPServer(
             automation_id = f"automation.{automation_id}"
 
         _LOGGER.info(
-            f"🤖 Triggering automation: {automation_id} with variables: {variables}, skip_conditions: {skip_conditions}"
+            "🤖 Triggering automation: %s with variables: %s, skip_conditions: %s",
+            _sanitize_log_value(automation_id),
+            _sanitize_log_value(variables),
+            _sanitize_log_value(skip_conditions),
         )
 
         # Notify start
@@ -3949,7 +4054,7 @@ class MCPServer(
 
         except Exception as err:
             error_msg = f"Automation trigger failed: {err}"
-            _LOGGER.exception(f"❌ {error_msg}")
+            _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     async def tool_remember_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -3989,7 +4094,7 @@ class MCPServer(
                 max_items=self._memory_max_items(),
             )
         except Exception as err:
-            _LOGGER.error("Failed to store memory: %s", err)
+            _LOGGER.error("Failed to store memory: %s", _sanitize_log_value(err))
             return {
                 "content": [{"type": "text", "text": f"Failed to store memory: {err}"}],
                 "isError": True,
@@ -4056,7 +4161,7 @@ class MCPServer(
                 limit=limit,
             )
         except Exception as err:
-            _LOGGER.error("Failed to recall memories: %s", err)
+            _LOGGER.error("Failed to recall memories: %s", _sanitize_log_value(err))
             return {
                 "content": [{"type": "text", "text": f"Failed to recall memories: {err}"}],
                 "isError": True,
@@ -4127,7 +4232,7 @@ class MCPServer(
                 delete_all_matches=forget_all_matches,
             )
         except Exception as err:
-            _LOGGER.error("Failed to forget memory: %s", err)
+            _LOGGER.error("Failed to forget memory: %s", _sanitize_log_value(err))
             return {
                 "content": [{"type": "text", "text": f"Failed to forget memory: {err}"}],
                 "isError": True,
@@ -4262,8 +4367,8 @@ class MCPServer(
         except Exception as err:
             _LOGGER.debug(
                 "Failed to convert native Assist tool schema for %s: %s",
-                tool.name,
-                err,
+                _sanitize_log_value(tool.name),
+                _sanitize_log_value(err),
             )
             return {"type": "object", "properties": {}}
 
@@ -4283,8 +4388,8 @@ class MCPServer(
         tool_input = llm.ToolInput(tool_name=tool_name, tool_args=arguments)
         _LOGGER.debug(
             "Calling native Assist tool: %s(%s)",
-            tool_input.tool_name,
-            tool_input.tool_args,
+            _sanitize_log_value(tool_input.tool_name),
+            _sanitize_log_value(tool_input.tool_args),
         )
 
         try:
@@ -4363,11 +4468,17 @@ class MCPServer(
         valid, result = validate_domain_action(domain, action)
         if valid:
             _LOGGER.debug(
-                f"Validated service: {domain}.{result} (from action: {action})"
+                "Validated service: %s.%s (from action: %s)",
+                _sanitize_log_value(domain),
+                _sanitize_log_value(result),
+                _sanitize_log_value(action),
             )
             return result  # Returns the correct service name
         else:
-            _LOGGER.warning(f"Service validation failed: {result}")
+            _LOGGER.warning(
+                "Service validation failed: %s",
+                _sanitize_log_value(result),
+            )
             raise ValueError(result)  # Returns error message
 
     async def resolve_target(self, target: Dict[str, Any]) -> Dict[str, Any]:
@@ -4427,7 +4538,11 @@ class MCPServer(
             )
 
         resolved_target = {"entity_id": sorted(resolved_entities)}
-        _LOGGER.debug("Resolved target %s to entity_ids: %s", target, resolved_target["entity_id"])
+        _LOGGER.debug(
+            "Resolved target %s to entity_ids: %s",
+            _sanitize_log_value(target),
+            _sanitize_log_value(resolved_target["entity_id"]),
+        )
         return resolved_target
 
     @staticmethod
