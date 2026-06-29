@@ -11,7 +11,7 @@ import pytest
 
 from custom_components.mcp_assist import agent as agent_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
-from custom_components.mcp_assist.custom_tools.builtin_catalog import (
+from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
@@ -363,7 +363,7 @@ def test_optional_technical_instructions_include_external_custom_tool_guidance(
     entry = profile_entry_factory()
     agent = MCPAssistConversationEntity(hass, entry)
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(
+        tools=SimpleNamespace(
             is_external_custom_tool=lambda name: name == "sample_tool_status",
             get_external_prompt_instructions=lambda: "## External Custom Tools\nUse sample_tool_status when asked for custom status."
         )
@@ -387,7 +387,7 @@ def test_optional_technical_instructions_include_built_in_package_guidance(
     entry = profile_entry_factory()
     agent = MCPAssistConversationEntity(hass, entry)
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(
+        tools=SimpleNamespace(
             get_builtin_prompt_instructions=lambda: (
                 "## Optional Built-In Tool Packages\n"
                 "Use calculator tools for arithmetic questions."
@@ -412,7 +412,7 @@ def test_profile_tool_filtering_hides_disabled_external_custom_tools(
     )
     agent = MCPAssistConversationEntity(hass, entry)
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(
+        tools=SimpleNamespace(
             is_external_custom_tool=lambda name: name == "sample_tool_status"
         )
     )
@@ -439,7 +439,7 @@ def test_optional_technical_instructions_omit_external_custom_tool_guidance_when
     )
     agent = MCPAssistConversationEntity(hass, entry)
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(
+        tools=SimpleNamespace(
             is_external_custom_tool=lambda name: name == "sample_tool_status",
             get_external_prompt_instructions=lambda: "## External Custom Tools\nUse sample_tool_status when asked for custom status.",
         )
@@ -469,7 +469,7 @@ def test_profile_tool_filtering_can_disable_search_without_hiding_read_url(
     )
     agent = MCPAssistConversationEntity(hass, entry)
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(
+        tools=SimpleNamespace(
             get_builtin_toggle_spec=lambda name: _builtin_spec(name),
             get_builtin_toggle_specs=lambda: BUILTIN_SPECS,
         )
@@ -1002,7 +1002,7 @@ async def test_get_mcp_tools_refetches_when_external_custom_tool_signature_chang
     agent = MCPAssistConversationEntity(hass, entry)
     state = {"signature": ("v1",)}
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
-        custom_tools=SimpleNamespace(get_cache_signature=lambda: state["signature"])
+        tools=SimpleNamespace(get_cache_signature=lambda: state["signature"])
     )
     fetch_mock = AsyncMock(
         side_effect=[

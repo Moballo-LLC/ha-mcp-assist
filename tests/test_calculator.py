@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.mcp_assist.custom_tools.calculator import CalculatorTool
+from custom_components.mcp_assist.tools.packages.calculator.calculator import CalculatorTool
 
 
 @pytest.fixture

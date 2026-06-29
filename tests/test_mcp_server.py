@@ -25,19 +25,19 @@ from pytest_socket import disable_socket, enable_socket
 import voluptuous as vol
 
 import custom_components.mcp_assist.mcp_server as mcp_server_module
-from custom_components.mcp_assist.custom_tools.builtin_catalog import (
+from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
-from custom_components.mcp_assist.custom_tools.llm_api_bridge import (
+from custom_components.mcp_assist.tools.packages.llm_api_bridge.llm_api_bridge import (
     LLM_API_BRIDGE_TOOL_DEFINITIONS,
     LLMApiBridgeTool,
 )
-from custom_components.mcp_assist.custom_tools.memory import MemoryTool
-from custom_components.mcp_assist.custom_tools.recorder import RECORDER_TOOL_DEFINITIONS
-from custom_components.mcp_assist.custom_tools.response_services import (
+from custom_components.mcp_assist.tools.packages.memory.memory import MemoryTool
+from custom_components.mcp_assist.tools.packages.recorder.recorder import RECORDER_TOOL_DEFINITIONS
+from custom_components.mcp_assist.tools.packages.response_service.response_services import (
     RESPONSE_SERVICE_TOOL_DEFINITIONS,
 )
-from custom_components.mcp_assist.custom_tools.weather import WEATHER_TOOL_DEFINITIONS
+from custom_components.mcp_assist.tools.packages.weather_forecast.weather import WEATHER_TOOL_DEFINITIONS
 from custom_components.mcp_assist.const import (
     CONF_ALLOWED_IPS,
     CONF_ENABLE_ASSIST_BRIDGE,
@@ -282,7 +282,7 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         data={CONF_ALLOWED_IPS: "10.0.0.0/24"}
     )
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         reload_tool_packages=AsyncMock(
             return_value={
                 "external_custom_tools_enabled": False,
@@ -342,7 +342,7 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
     assert removed_progress.get_nowait() is None
     assert kept_progress in server.progress_queues
     assert kept_progress.empty()
-    server.custom_tools.reload_tool_packages.assert_awaited_once()
+    server.tools.reload_tool_packages.assert_awaited_once()
     server.broadcast_notification.assert_awaited_once_with(
         "notifications/tools/list_changed"
     )
@@ -538,7 +538,7 @@ async def test_handle_tools_list_filters_disabled_tool_families(
         }
     )
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         get_tool_definitions=lambda: [
             {"name": "add", "description": "calc", "inputSchema": {}},
             {"name": "convert_unit", "description": "convert", "inputSchema": {}},
@@ -571,7 +571,7 @@ async def test_handle_tools_list_includes_music_assistant_package_tools(
     """Built-in packaged Music Assistant tools should surface through the custom tool loader."""
     system_entry_factory(data={CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT: True})
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         get_tool_definitions=lambda: [
             {
                 "name": "play_music_assistant",
@@ -618,7 +618,7 @@ async def test_handle_tool_call_routes_music_assistant_to_custom_tool_loader(
         calls.append((tool_name, arguments, context))
         return {"content": [{"type": "text", "text": "called package"}]}
 
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         is_custom_tool=lambda tool_name: tool_name == "play_music_assistant",
         handle_tool_call=handle_tool_call,
     )
@@ -654,7 +654,7 @@ async def test_handle_tool_call_routes_domain_packages_to_custom_tool_loader(
         calls.append((tool_name, arguments, context))
         return {"content": [{"type": "text", "text": f"called {tool_name}"}]}
 
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         is_custom_tool=lambda tool_name: tool_name
         in {"get_calendar_events", "get_entity_history"},
         handle_tool_call=handle_tool_call,
@@ -701,7 +701,7 @@ async def test_handle_tool_call_logs_metadata_without_arguments_or_results(
     async def handle_tool_call(tool_name, arguments, *, context=None):
         return {"content": [{"type": "text", "text": "tool-result-secret"}]}
 
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         is_custom_tool=lambda tool_name: tool_name == "private_tool_status",
         handle_tool_call=handle_tool_call,
     )
@@ -741,7 +741,7 @@ async def test_handle_tools_list_can_keep_unit_conversion_when_calculator_math_i
         }
     )
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         get_tool_definitions=lambda: [
             {"name": "add", "description": "calc", "inputSchema": {}},
             {"name": "convert_unit", "description": "convert", "inputSchema": {}},
@@ -767,7 +767,7 @@ async def test_handle_tools_list_hides_web_search_tools_when_shared_toggle_is_of
         }
     )
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         get_tool_definitions=lambda: [
             {"name": "search", "description": "search", "inputSchema": {}},
             {"name": "read_url", "description": "read", "inputSchema": {}},
@@ -795,7 +795,7 @@ def test_package_based_search_and_read_url_can_be_toggled_independently(
         }
     )
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         get_builtin_toggle_spec=lambda name: _builtin_spec(name),
         get_builtin_toggle_specs=lambda: BUILTIN_SPECS,
     )
@@ -811,7 +811,7 @@ async def test_default_tool_list_stays_streamlined(
     """Compatibility aliases and optional bridge tools should stay out of the default list."""
     system_entry_factory()
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = _domain_package_tool_stub()
+    server.tools = _domain_package_tool_stub()
 
     result = await server.handle_tools_list()
     tool_names = {tool["name"] for tool in result["tools"]}
@@ -848,7 +848,7 @@ async def test_llm_api_bridge_lists_allowlisted_registered_apis(
             }
         )
         server = MCPServer(hass, 8099, profile_entry_factory())
-        server.custom_tools = _llm_api_bridge_tool_stub()
+        server.tools = _llm_api_bridge_tool_stub()
         bridge_tool = LLMApiBridgeTool(hass)
 
         tools_result = await server.handle_tools_list()
@@ -955,7 +955,7 @@ async def test_handle_tools_list_uses_cache_for_stable_signature(
             {"name": "search", "description": "search", "inputSchema": {"type": "object", "properties": {}}},
         ],
     )
-    server.custom_tools = custom_tools
+    server.tools = custom_tools
 
     result_one = await server.handle_tools_list()
     custom_tools.get_tool_definitions = lambda: (_ for _ in ()).throw(
@@ -983,7 +983,7 @@ async def test_handle_tools_list_invalidates_cache_when_custom_tool_surface_chan
             }
         ],
     }
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         tools={},
         get_cache_signature=lambda: state["signature"],
         get_tool_definitions=lambda: state["definitions"],
@@ -1794,7 +1794,7 @@ def test_history_resolution_prefers_related_contact_sensor_for_open_requests(
     )
 
     with patch(
-        "custom_components.mcp_assist.server_tools.recorder.async_should_expose",
+        "custom_components.mcp_assist.tools.packages.recorder.history.async_should_expose",
         return_value=True,
     ):
         history_entity_id, resolution_note = server._resolve_history_entity_for_request(
@@ -1891,7 +1891,7 @@ async def test_analyze_history_falls_back_to_related_contact_sensor_when_primary
     server._fetch_entity_history_states = AsyncMock(side_effect=fake_fetch)
 
     with patch(
-        "custom_components.mcp_assist.server_tools.recorder.async_should_expose",
+        "custom_components.mcp_assist.tools.packages.recorder.history.async_should_expose",
         return_value=True,
     ):
         result = await server.tool_analyze_entity_history(
@@ -1927,11 +1927,11 @@ async def test_analyze_history_counts_calendar_yesterday_transitions(
     expected_start = datetime(2026, 4, 19, 0, 0, tzinfo=timezone.utc)
     expected_end = datetime(2026, 4, 20, 0, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(
-        "custom_components.mcp_assist.server_tools.recorder.dt_util.now",
+        "custom_components.mcp_assist.tools.packages.recorder.history.dt_util.now",
         lambda: fixed_now,
     )
     monkeypatch.setattr(
-        "custom_components.mcp_assist.server_tools.recorder.dt_util.utcnow",
+        "custom_components.mcp_assist.tools.packages.recorder.history.dt_util.utcnow",
         lambda: fixed_now,
     )
 
@@ -2086,7 +2086,7 @@ async def test_handle_tools_list_includes_media_tools(
     """The core MCP tool list should include the generic image/media helpers."""
     system_entry_factory()
     server = MCPServer(hass, 8099, profile_entry_factory())
-    server.custom_tools = _domain_package_tool_stub()
+    server.tools = _domain_package_tool_stub()
 
     result = await server.handle_tools_list()
     tool_names = {tool["name"] for tool in result["tools"]}
@@ -2113,7 +2113,7 @@ async def test_reload_external_custom_tools_clears_cache_and_notifies_clients(
     server = MCPServer(hass, 8099, profile_entry_factory())
     server._cached_tools_list = [{"name": "stale"}]
     server._cached_tools_signature = ("stale",)
-    server.custom_tools = SimpleNamespace(
+    server.tools = SimpleNamespace(
         reload_tool_packages=AsyncMock(
             return_value={
                 "external_custom_tools_enabled": True,

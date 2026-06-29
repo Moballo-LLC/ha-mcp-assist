@@ -8,7 +8,9 @@ from custom_components.mcp_assist.const import (
     CONF_GOOGLE_MAPS_API_KEY,
     CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
 )
-from custom_components.mcp_assist.custom_tools import google_maps as google_maps_module
+from custom_components.mcp_assist.tools.packages.google_maps import (
+    google_maps as google_maps_module,
+)
 
 
 class _FakeGoogleResponse:

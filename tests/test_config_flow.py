@@ -49,7 +49,7 @@ from custom_components.mcp_assist.config_flow import (
     _redacted_log_snippet,
     validate_allowed_ips,
 )
-from custom_components.mcp_assist.custom_tools.builtin_catalog import (
+from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
