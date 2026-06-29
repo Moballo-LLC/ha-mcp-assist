@@ -3071,7 +3071,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 iteration=iteration,
                 payload=payload,
                 messages=conversation_messages,
-                tools=tools,
+                tools=payload.get("tools", []),
             )
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)

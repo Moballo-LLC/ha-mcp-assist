@@ -1175,7 +1175,23 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
                         "description": "Find entities.",
                         "parameters": {"type": "object", "properties": {}},
                     },
-                }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "analyze_image",
+                        "description": "Analyze an image.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "generate_image",
+                        "description": "Generate an image.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                },
             ]
         ),
     )
@@ -1221,6 +1237,12 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
         return _FakeAnthropicSession(responses, posts)
 
     monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    metrics_calls: list[dict] = []
+    monkeypatch.setattr(
+        agent,
+        "_log_initial_llm_payload_metrics",
+        lambda **kwargs: metrics_calls.append(kwargs),
+    )
 
     result = await agent._call_llm([{"role": "user", "content": "Check kitchen"}])
 
@@ -1233,6 +1255,9 @@ async def test_anthropic_messages_tool_loop_uses_native_endpoint(
     assert posts[0]["headers"]["anthropic-version"] == "2023-06-01"
     assert "tool_choice" not in posts[0]["json"]
     assert posts[0]["json"]["tools"][0]["input_schema"]["type"] == "object"
+    assert [tool["name"] for tool in metrics_calls[0]["tools"]] == [
+        "discover_entities"
+    ]
     execute_mock.assert_awaited_once()
     assert execute_mock.await_args.args[0][0]["function"]["arguments"] == (
         '{"area": "Kitchen"}'
