@@ -60,6 +60,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_GOOGLE_MAPS_API_KEY,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -130,6 +131,7 @@ PROFILE_TOOL_ORDER = [
     _builtin_profile_key("calculator"),
     DISABLE_CUSTOM_TOOLS_FIELD,
     DISABLE_DEVICE_FIELD,
+    _builtin_profile_key("google_maps"),
     DISABLE_LLM_API_BRIDGE_FIELD,
     DISABLE_MEMORY_FIELD,
     DISABLE_MUSIC_ASSISTANT_FIELD,
@@ -147,6 +149,7 @@ SHARED_TOOL_ORDER = [
     _builtin_shared_key("calculator"),
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_ENABLE_DEVICE_TOOLS,
+    _builtin_shared_key("google_maps"),
     CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_MEMORY_TOOLS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
@@ -585,6 +588,7 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
         *SHARED_TOOL_ORDER,
         CONF_SEARCH_PROVIDER,
         CONF_BRAVE_API_KEY,
+        CONF_GOOGLE_MAPS_API_KEY,
         CONF_SEARXNG_URL,
         CONF_LLM_API_ALLOWLIST,
     ]
@@ -628,6 +632,24 @@ async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:
     assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
 
 
+async def test_shared_mcp_step_requires_google_maps_api_key_when_enabled(hass) -> None:
+    """Google Maps tools should not save without an API key."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("google_maps"): True,
+            CONF_GOOGLE_MAPS_API_KEY: " ",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
+
+
 async def test_options_mcp_step_requires_searxng_url_when_selected(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -650,6 +672,53 @@ async def test_options_mcp_step_requires_searxng_url_when_selected(
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_options_mcp_step_requires_google_maps_api_key_when_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should reject Google Maps tools without an API key."""
+    system_entry_factory()
+
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("google_maps"): True,
+            CONF_GOOGLE_MAPS_API_KEY: "",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
+
+
+async def test_options_mcp_step_preserves_google_maps_api_key_default(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should keep the saved Google Maps key in form defaults."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "saved-maps-key"})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server()
+
+    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    tool_markers = {
+        getattr(marker, "schema", marker): marker
+        for marker in tools_section.schema.schema.keys()
+    }
+    maps_default = tool_markers[CONF_GOOGLE_MAPS_API_KEY].default
+    resolved_default = maps_default() if callable(maps_default) else maps_default
+    assert resolved_default == "saved-maps-key"
 
 
 async def test_options_mcp_step_applies_shared_settings_to_running_server(

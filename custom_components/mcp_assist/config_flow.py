@@ -62,6 +62,7 @@ from .const import (
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_BRAVE_API_KEY,
+    CONF_GOOGLE_MAPS_API_KEY,
     CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_INCLUDE_CURRENT_USER,
@@ -134,6 +135,7 @@ from .const import (
     DEFAULT_DEBUG_MODE,
     DEFAULT_CHAT_LOG_MODE,
     DEFAULT_BRAVE_API_KEY,
+    DEFAULT_GOOGLE_MAPS_API_KEY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_INCLUDE_CURRENT_USER,
@@ -548,6 +550,30 @@ def _validate_shared_search_settings(
         errors[CONF_SEARXNG_URL] = "searxng_url_required"
 
 
+def _shared_google_maps_enabled(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+) -> bool:
+    """Return whether Google Maps built-in tools are enabled in shared settings."""
+    return any(
+        spec.package_id == "google_maps"
+        and bool(user_input.get(spec.shared_setting_key, spec.shared_default))
+        for spec in built_in_specs
+    )
+
+
+def _validate_shared_google_maps_settings(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+    errors: dict[str, str],
+) -> None:
+    """Validate Google Maps settings for the optional tool package."""
+    if _shared_google_maps_enabled(user_input, built_in_specs) and not str(
+        user_input.get(CONF_GOOGLE_MAPS_API_KEY, "")
+    ).strip():
+        errors[CONF_GOOGLE_MAPS_API_KEY] = "google_maps_api_key_required"
+
+
 def _normalize_shared_tool_inputs(
     user_input: dict[str, Any],
     built_in_specs: tuple[BuiltInToolToggleSpec, ...] = (),
@@ -742,6 +768,14 @@ def _build_shared_tools_section(
                     CONF_BRAVE_API_KEY,
                     default=_get_form_value(
                         defaults, CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
+                    ),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                vol.Optional(
+                    CONF_GOOGLE_MAPS_API_KEY,
+                    default=_get_form_value(
+                        defaults,
+                        CONF_GOOGLE_MAPS_API_KEY,
+                        DEFAULT_GOOGLE_MAPS_API_KEY,
                     ),
                 ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 vol.Optional(
@@ -1869,6 +1903,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
             _validate_shared_search_settings(user_input, built_in_specs, errors)
+            _validate_shared_google_maps_settings(user_input, built_in_specs, errors)
 
             if not errors:
                 # Create/update system entry with shared settings
@@ -1947,6 +1982,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
                 CONF_BRAVE_API_KEY,
                 DEFAULT_BRAVE_API_KEY,
+            ),
+            CONF_GOOGLE_MAPS_API_KEY: _get_form_value(
+                current_values,
+                CONF_GOOGLE_MAPS_API_KEY,
+                DEFAULT_GOOGLE_MAPS_API_KEY,
             ),
             CONF_SEARXNG_URL: _get_form_value(
                 current_values,
@@ -2835,6 +2875,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 _LOGGER.warning("Invalid allowed IPs in options: %s", error_msg)
 
             _validate_shared_search_settings(user_input, built_in_specs, errors)
+            _validate_shared_google_maps_settings(user_input, built_in_specs, errors)
 
             if not errors:
                 # Import get_system_entry
@@ -2940,6 +2981,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 sys_options.get(
                     CONF_BRAVE_API_KEY,
                     sys_data.get(CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY),
+                ),
+            ),
+            CONF_GOOGLE_MAPS_API_KEY: _get_form_value(
+                current_values,
+                CONF_GOOGLE_MAPS_API_KEY,
+                sys_options.get(
+                    CONF_GOOGLE_MAPS_API_KEY,
+                    sys_data.get(CONF_GOOGLE_MAPS_API_KEY, DEFAULT_GOOGLE_MAPS_API_KEY),
                 ),
             ),
             CONF_SEARXNG_URL: _get_form_value(

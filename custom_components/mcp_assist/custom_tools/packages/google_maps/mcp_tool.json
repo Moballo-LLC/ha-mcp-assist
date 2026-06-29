@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "google_maps",
+  "name": "Google Places and Routes",
+  "description": "Built-in Google Places lookup and Google Routes ETA tools.",
+  "version": "1.0.0",
+  "entrypoint": "tool:GoogleMapsPackageTool",
+  "prompt_append_file": "prompt.md",
+  "capabilities": [
+    "Searches Google Places for open status, phone, address, and ratings.",
+    "Calculates Google Routes travel time, distance, and traffic-aware ETAs."
+  ],
+  "built_in_toggle": {
+    "tool_names": [
+      "search_google_places",
+      "get_google_place_details",
+      "get_google_route"
+    ],
+    "shared_setting_key": "enable_google_maps_tools",
+    "profile_setting_key": "profile_enable_google_maps_tools",
+    "shared_default": false,
+    "profile_default": true,
+    "shared_label": "Google Places and Routes",
+    "profile_disable_label": "Disable Google Places and Routes",
+    "shared_description": "Expose Google Places lookup and Google Routes travel-time tools. Requires a Google Maps API key.",
+    "profile_disable_description": "Prevents this profile from using Google Places and Routes tools."
+  }
+}
