@@ -24,6 +24,29 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          version = tag.removeprefix("v")
+          manifest = json.loads(
+              Path("custom_components/mcp_assist/manifest.json").read_text(encoding="utf-8")
+          )
+
+          if tag == version:
+              raise SystemExit(f"Release tag {tag!r} must start with 'v'")
+          if manifest["version"] != version:
+              raise SystemExit(
+                  f"Release tag {tag!r} does not match manifest version {manifest['version']!r}"
+              )
+          PY
+
       - name: Build HACS package
         run: |
           mkdir -p dist
@@ -45,44 +68,9 @@ jobs:
           PY
           unzip -t dist/mcp_assist.zip
 
-      - name: Build release notes
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-
-          tag = os.environ["RELEASE_TAG"]
-          version = tag.removeprefix("v")
-          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
-
-          start = None
-          for index, line in enumerate(lines):
-              if line.startswith(f"## {version}"):
-                  start = index + 1
-                  break
-
-          if start is None:
-              raise SystemExit(f"Missing CHANGELOG.md section for {version}")
-
-          end = len(lines)
-          for index in range(start, len(lines)):
-              if lines[index].startswith("## "):
-                  end = index
-                  break
-
-          body = "\n".join(lines[start:end]).strip()
-          if not body:
-              raise SystemExit(f"Empty CHANGELOG.md section for {version}")
-
-          Path("dist/release_notes.md").write_text(f"{body}\n", encoding="utf-8")
-          PY
-
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          body_path: dist/release_notes.md
           generate_release_notes: true
           files: dist/mcp_assist.zip
