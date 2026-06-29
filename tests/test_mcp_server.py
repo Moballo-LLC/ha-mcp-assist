@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
@@ -134,7 +135,9 @@ async def test_detail_tools_skip_non_json_serializable_values(
                     "state": "on",
                     "raw_object": unserializable,
                     "nested": {"keep": 1, "drop": unserializable},
-                    "items": ["ok", unserializable],
+                    "bad_float": float("nan"),
+                    "items": ["ok", unserializable, float("inf")],
+                    math.inf: "drop non-finite float key",
                     invalid_key: "drop invalid key",
                 }
             }
@@ -163,6 +166,9 @@ async def test_detail_tools_skip_non_json_serializable_values(
     assert entity_details["state"] == "on"
     assert entity_details["nested"] == {"keep": 1}
     assert entity_details["items"] == ["ok"]
+    assert "bad_float" not in entity_details
+    assert "Infinity" not in entity_result["content"][0]["text"]
+    assert "NaN" not in entity_result["content"][0]["text"]
     assert "raw_object" not in entity_details
     assert device_payload["device-id"]["identifiers"] == ["ok"]
 

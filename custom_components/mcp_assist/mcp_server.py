@@ -6,6 +6,7 @@ from collections import defaultdict
 import ipaddress
 import json
 import logging
+import math
 import mimetypes
 from pathlib import Path, PurePosixPath
 import re
@@ -119,13 +120,20 @@ _SKIP_NON_SERIALIZABLE = object()
 
 def _strip_non_json_serializable(value: Any) -> Any:
     """Drop values that cannot be encoded in MCP JSON responses."""
-    if value is None or isinstance(value, (bool, int, float, str)):
+    if isinstance(value, float):
+        if math.isfinite(value):
+            return value
+        return _SKIP_NON_SERIALIZABLE
+
+    if value is None or isinstance(value, (bool, int, str)):
         return value
 
     if isinstance(value, dict):
         result: dict[Any, Any] = {}
         for key, item in value.items():
             if not isinstance(key, (str, int, float, bool)) and key is not None:
+                continue
+            if isinstance(key, float) and not math.isfinite(key):
                 continue
             filtered = _strip_non_json_serializable(item)
             if filtered is _SKIP_NON_SERIALIZABLE:
