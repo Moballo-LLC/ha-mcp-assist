@@ -33,6 +33,10 @@ from custom_components.mcp_assist.const import (
     DOMAIN,
 )
 from custom_components.mcp_assist.tools import CustomToolsLoader
+from custom_components.mcp_assist.tools.builtin_catalog import (
+    load_builtin_tool_toggle_specs,
+)
+from custom_components.mcp_assist.tools.external_loader import ExternalCustomToolLoader
 
 TOOLS_ROOT = Path("custom_components/mcp_assist/tools")
 LEGACY_CUSTOM_TOOLS_ROOT = Path("custom_components/mcp_assist/custom_tools")
@@ -112,6 +116,54 @@ def test_builtin_tool_implementations_live_in_manifest_package_dirs() -> None:
     for path in TOOLS_ROOT.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         assert not any(legacy_import in text for legacy_import in legacy_imports), path
+
+
+@pytest.mark.asyncio
+async def test_all_builtin_tool_packages_load_and_match_manifest_tool_names(
+    hass,
+    system_entry_factory,
+) -> None:
+    """Every built-in package should load through the public custom-tool format."""
+    system_entry_factory(
+        data={
+            CONF_BRAVE_API_KEY: "test-key",
+            CONF_SEARCH_PROVIDER: "brave",
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+        }
+    )
+    specs_by_package_id = {
+        spec.package_id: spec for spec in load_builtin_tool_toggle_specs()
+    }
+    loader = ExternalCustomToolLoader(
+        hass,
+        tools_root=TOOLS_ROOT / "packages",
+        module_namespace="mcp_assist_builtin_tool_contract_tests",
+        require_tool_name_prefix=False,
+        package_log_label="built-in test tool package",
+        prompt_package_label="Built-in test tool package",
+    )
+    loaded_packages = []
+
+    try:
+        loaded_packages = await loader.load(
+            allowed_tool_ids=set(specs_by_package_id)
+        )
+
+        assert loader.last_load_errors == []
+        assert {package.manifest.tool_id for package in loaded_packages} == set(
+            specs_by_package_id
+        )
+        for package in loaded_packages:
+            expected_tool_names = specs_by_package_id[package.manifest.tool_id].tool_names
+            assert package.tool_names == expected_tool_names
+            assert [tool["name"] for tool in package.tool_definitions] == list(
+                expected_tool_names
+            )
+            for tool_name in expected_tool_names:
+                assert package.instance.handles_tool(tool_name)
+    finally:
+        for package in loaded_packages:
+            await package.instance.async_shutdown()
 
 
 def _write_external_tool_package(
