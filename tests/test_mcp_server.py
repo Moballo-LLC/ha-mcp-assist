@@ -46,6 +46,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_LMSTUDIO_URL,
     CONF_LLM_API_ALLOWLIST,
+    DOMAIN,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
 
@@ -87,6 +88,41 @@ class _FakeLLMAPI(llm.API):
             llm_context=llm_context,
             tools=[_EchoLLMTool()],
         )
+
+
+def test_create_assist_llm_context_supports_legacy_user_prompt(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Older HA LLMContext constructors should receive a blank user prompt."""
+
+    class _LegacyLLMContext:
+        def __init__(
+            self,
+            *,
+            platform: str,
+            context: Any,
+            language: str,
+            assistant: str,
+            device_id: str | None,
+            user_prompt: str,
+        ) -> None:
+            self.platform = platform
+            self.context = context
+            self.language = language
+            self.assistant = assistant
+            self.device_id = device_id
+            self.user_prompt = user_prompt
+
+    monkeypatch.setattr(mcp_server_module.llm, "LLMContext", _LegacyLLMContext)
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    context = server._create_assist_llm_context()
+
+    assert context.platform == DOMAIN
+    assert context.language == "*"
+    assert context.assistant == "conversation"
+    assert context.device_id is None
+    assert context.user_prompt == ""
 
 
 def _json_payload_from_text_result(result: dict[str, Any]) -> dict[str, Any]:

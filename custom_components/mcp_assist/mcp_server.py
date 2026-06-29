@@ -5,6 +5,7 @@ import base64
 from collections import defaultdict
 from dataclasses import dataclass
 import ipaddress
+import inspect
 import json
 import logging
 import math
@@ -4654,13 +4655,16 @@ class MCPServer(
 
     def _create_assist_llm_context(self) -> llm.LLMContext:
         """Create an LLM context for the native Home Assistant Assist API."""
-        return llm.LLMContext(
-            platform=DOMAIN,
-            context=Context(),
-            language="*",
-            assistant=conversation.DOMAIN,
-            device_id=None,
-        )
+        kwargs: dict[str, Any] = {
+            "platform": DOMAIN,
+            "context": Context(),
+            "language": "*",
+            "assistant": conversation.DOMAIN,
+            "device_id": None,
+        }
+        if "user_prompt" in inspect.signature(llm.LLMContext).parameters:
+            kwargs["user_prompt"] = ""
+        return llm.LLMContext(**kwargs)
 
     async def _get_assist_api_instance(self) -> llm.APIInstance:
         """Get the built-in Home Assistant Assist API instance."""
