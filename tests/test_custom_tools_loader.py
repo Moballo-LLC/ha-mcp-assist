@@ -370,6 +370,16 @@ async def test_initialize_loads_google_maps_when_enabled(
     google_maps_spec = loader.get_builtin_toggle_spec("get_google_route")
     assert google_maps_spec is not None
     assert google_maps_spec.package_id == "google_maps"
+    google_maps_package = next(
+        package
+        for package in loader.builtin_packages
+        if package.manifest.tool_id == "google_maps"
+    )
+    assert len(google_maps_package.prompt_instructions) <= 420
+    assert "home-location tool sharing is enabled" in google_maps_package.prompt_instructions
+    assert "routes starting from Home Assistant home" in google_maps_package.prompt_instructions
+    assert "ask/pass origin" in google_maps_package.prompt_instructions
+    assert "arrival_time is transit-only" in google_maps_package.prompt_instructions
 
 
 @pytest.mark.asyncio
