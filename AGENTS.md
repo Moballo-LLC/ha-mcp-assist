@@ -130,6 +130,9 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - Follow the existing style. This repo uses Ruff with `E` and `F` rules and a
   line length of 100.
 - Keep comments sparse and useful. Prefer clear code over explanatory comments.
+- Follow DRY where it reduces real duplication or clarifies shared behavior, but
+  do not introduce broad abstractions just to avoid a small amount of local
+  repetition.
 - Use async Home Assistant APIs and avoid blocking I/O in runtime code. Existing
   loaders use executor helpers for disk reads where needed.
 - Preserve user-facing behavior when refactoring. Many toggles have backward
@@ -154,7 +157,11 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 
 ## PR and Maintenance Guidance
 
-- Keep PRs small and scoped. Prefer one maintenance concern per PR.
+- Keep PRs as small, atomic, and easy to review as possible. Prefer one
+  behavior change, fix, or maintenance concern per PR.
+- Cover behavior changes with automated tests. For low-risk docs or metadata
+  changes, run the relevant parser/format checks and explain why broader tests
+  are unnecessary.
 - For Dependabot PRs, keep the PRs open and use Dependabot's own rebase flow
   when possible. Do not close or supersede them unless asked.
 - For dependency bumps, validate compatibility before merging. Runtime manifest
