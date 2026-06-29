@@ -54,6 +54,7 @@ from .const import (
     CONF_MAX_HISTORY,
     CONF_MAX_ITERATIONS,
     CONF_DEBUG_MODE,
+    CONF_CHAT_LOG_MODE,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_BRAVE_API_KEY,
@@ -122,6 +123,7 @@ from .const import (
     DEFAULT_MAX_HISTORY,
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_DEBUG_MODE,
+    DEFAULT_CHAT_LOG_MODE,
     DEFAULT_BRAVE_API_KEY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
@@ -1631,6 +1633,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         vol.Required(
                             CONF_DEBUG_MODE, default=DEFAULT_DEBUG_MODE
                         ): bool,
+                        vol.Required(
+                            CONF_CHAT_LOG_MODE, default=DEFAULT_CHAT_LOG_MODE
+                        ): bool,
                     }
                 ),
                 PROVIDER_SECTION_KEY: _build_provider_section(
@@ -1660,6 +1665,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Coerce(int), vol.Range(min=5, max=300)
                 ),
                 vol.Required(CONF_DEBUG_MODE, default=DEFAULT_DEBUG_MODE): bool,
+                vol.Required(CONF_CHAT_LOG_MODE, default=DEFAULT_CHAT_LOG_MODE): bool,
             }
             conversation_schema_items: dict[Any, Any] = {
                 vol.Required(CONF_CONTROL_HA, default=DEFAULT_CONTROL_HA): bool,
@@ -2446,6 +2452,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         ),
                     ),
                 ): bool,
+                vol.Required(
+                    CONF_CHAT_LOG_MODE,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_CHAT_LOG_MODE,
+                        options.get(
+                            CONF_CHAT_LOG_MODE,
+                            data.get(CONF_CHAT_LOG_MODE, DEFAULT_CHAT_LOG_MODE),
+                        ),
+                    ),
+                ): bool,
             }
         else:
             schema_dict[CONVERSATION_SECTION_KEY] = _build_conversation_section(
@@ -2586,6 +2603,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         options.get(
                             CONF_DEBUG_MODE,
                             data.get(CONF_DEBUG_MODE, DEFAULT_DEBUG_MODE),
+                        ),
+                    ),
+                ): bool,
+                vol.Required(
+                    CONF_CHAT_LOG_MODE,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_CHAT_LOG_MODE,
+                        options.get(
+                            CONF_CHAT_LOG_MODE,
+                            data.get(CONF_CHAT_LOG_MODE, DEFAULT_CHAT_LOG_MODE),
                         ),
                     ),
                 ): bool,

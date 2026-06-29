@@ -48,6 +48,7 @@ from custom_components.mcp_assist.custom_tools.builtin_catalog import (
 )
 from custom_components.mcp_assist.const import (
     CONF_BRAVE_API_KEY,
+    CONF_CHAT_LOG_MODE,
     CONF_ENABLE_GAP_FILLING,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_DEVICE_TOOLS,
@@ -443,7 +444,9 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
 
     assert CONVERSATION_SECTION_KEY in result["data_schema"].schema
     assert PERFORMANCE_SECTION_KEY in result["data_schema"].schema
+    performance_section = result["data_schema"].schema[PERFORMANCE_SECTION_KEY]
     tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    assert CONF_CHAT_LOG_MODE in _section_field_names(performance_section)
     assert isinstance(tools_section, section)
 
     section_keys = [
@@ -691,6 +694,8 @@ async def test_options_step_groups_profile_settings_into_sections(
     assert CONVERSATION_SECTION_KEY in top_level_keys
     assert ADVANCED_SECTION_KEY in top_level_keys
     assert TOOLS_SECTION_KEY in top_level_keys
+    advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    assert CONF_CHAT_LOG_MODE in _section_field_names(advanced_section)
 
 
 async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section(
