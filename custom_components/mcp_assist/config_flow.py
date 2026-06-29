@@ -2732,10 +2732,18 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 # Update system entry with shared MCP settings
                 system_entry = get_system_entry(self.hass)
                 if system_entry:
+                    previous_system_data = dict(system_entry.data)
+                    new_system_data = {**previous_system_data, **user_input}
                     self.hass.config_entries.async_update_entry(
-                        system_entry, data={**system_entry.data, **user_input}
+                        system_entry, data=new_system_data
                     )
-                    await _async_apply_shared_mcp_settings(self.hass)
+                    try:
+                        await _async_apply_shared_mcp_settings(self.hass)
+                    except Exception:
+                        self.hass.config_entries.async_update_entry(
+                            system_entry, data=previous_system_data
+                        )
+                        raise
                     _LOGGER.info("Updated system entry with shared MCP settings")
                 else:
                     _LOGGER.error("System entry not found when saving shared settings")

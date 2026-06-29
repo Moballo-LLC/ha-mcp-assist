@@ -609,6 +609,40 @@ async def test_options_mcp_step_applies_shared_settings_to_running_server(
     apply_mock.assert_awaited_once_with(hass)
 
 
+async def test_options_mcp_step_rolls_back_shared_settings_when_apply_fails(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A failed live apply should not persist an unusable shared MCP port."""
+    system_entry = system_entry_factory(
+        data={CONF_MCP_PORT: 8090, CONF_ALLOWED_IPS: "10.0.0.0/24"}
+    )
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+    apply_mock = AsyncMock(side_effect=OSError("address in use"))
+
+    with patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock):
+        try:
+            await flow.async_step_mcp_server(
+                {
+                    CONF_MCP_PORT: 8124,
+                    CONF_ALLOWED_IPS: "192.168.1.25",
+                    _builtin_shared_key("search"): False,
+                    CONF_SEARCH_PROVIDER: "none",
+                }
+            )
+        except OSError:
+            pass
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError("Expected live shared MCP settings apply to fail")
+
+    assert system_entry.data[CONF_MCP_PORT] == 8090
+    assert system_entry.data[CONF_ALLOWED_IPS] == "10.0.0.0/24"
+    apply_mock.assert_awaited_once_with(hass)
+
+
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
     """Built-in packaged tool checkboxes should not override translated subtitles inline."""
     shared_section = _build_shared_tools_section({}, BUILTIN_SPECS)

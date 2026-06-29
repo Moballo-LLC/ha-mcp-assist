@@ -3,6 +3,7 @@
 import asyncio
 import base64
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 import ipaddress
 import json
@@ -195,6 +196,8 @@ class MCPServer(
         self.discovery = EntityDiscovery(hass)
         self.sse_clients = []  # Track SSE connections for notifications
         self.progress_queues = set()  # Track progress SSE clients
+        self._sse_client_ips: dict[web.StreamResponse, str | None] = {}
+        self._progress_queue_ips: dict[asyncio.Queue[Any], str | None] = {}
         self._websocket_clients: dict[WebSocketResponse, str | None] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
@@ -899,6 +902,7 @@ class MCPServer(
         """Apply changed shared MCP settings without reloading every profile."""
         self._refresh_allowed_ips_from_settings()
         await self._close_disallowed_websocket_clients()
+        await self._close_disallowed_stream_clients()
         diagnostics = await self.reload_external_custom_tools()
         return {
             "allowed_ips": list(self.allowed_ips),
@@ -918,6 +922,38 @@ class MCPServer(
                 code=WSCloseCode.POLICY_VIOLATION,
                 message=b"IP no longer authorized",
             )
+
+    async def _close_disallowed_stream_clients(self) -> None:
+        """Stop SSE/progress streams that no longer pass the IP allowlist."""
+        for response, client_ip in list(self._sse_client_ips.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP SSE client removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            if response in self.sse_clients:
+                self.sse_clients.remove(response)
+            self._sse_client_ips.pop(response, None)
+            try:
+                await response.write_eof()
+            except Exception as err:
+                _LOGGER.debug(
+                    "SSE client close failed after allowlist update: %s",
+                    _sanitize_log_value(err),
+                )
+
+        for queue, client_ip in list(self._progress_queue_ips.items()):
+            if self._is_ip_allowed(client_ip):
+                continue
+            _LOGGER.info(
+                "Closing MCP progress stream removed from allowed IPs: %s",
+                _sanitize_log_value(client_ip),
+            )
+            self.progress_queues.discard(queue)
+            self._progress_queue_ips.pop(queue, None)
+            with suppress(asyncio.QueueFull):
+                queue.put_nowait(None)
 
     async def handle_progress_stream(self, request: web.Request) -> web.StreamResponse:
         """SSE endpoint for progress updates during tool execution."""
@@ -947,6 +983,7 @@ class MCPServer(
         # Create a queue for this client
         queue = asyncio.Queue()
         self.progress_queues.add(queue)
+        self._progress_queue_ips[queue] = client_ip
 
         try:
             # Send initial connection message
@@ -956,6 +993,8 @@ class MCPServer(
             # Stream progress updates
             while True:
                 msg = await queue.get()
+                if msg is None:
+                    break
                 data = f"data: {json.dumps(msg)}\n\n"
                 await response.write(data.encode())
 
@@ -963,6 +1002,7 @@ class MCPServer(
             _LOGGER.debug("Progress stream closed: %s", _sanitize_log_value(err))
         finally:
             self.progress_queues.discard(queue)
+            self._progress_queue_ips.pop(queue, None)
 
         return response
 
@@ -1008,6 +1048,7 @@ class MCPServer(
 
         # Store this client for notifications
         self.sse_clients.append(response)
+        self._sse_client_ips[response] = client_ip
         _LOGGER.info("✅ SSE client connected. Total clients: %d", len(self.sse_clients))
 
         try:
@@ -1035,6 +1076,7 @@ class MCPServer(
         finally:
             if response in self.sse_clients:
                 self.sse_clients.remove(response)
+            self._sse_client_ips.pop(response, None)
             _LOGGER.info("SSE clients remaining: %d", len(self.sse_clients))
 
         return response

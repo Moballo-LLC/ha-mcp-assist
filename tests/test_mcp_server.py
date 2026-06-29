@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
 import json
@@ -151,6 +152,22 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         removed_ws: "10.0.0.10",
         kept_ws: "192.168.1.25",
     }
+    removed_sse = Mock()
+    removed_sse.write_eof = AsyncMock()
+    kept_sse = Mock()
+    kept_sse.write_eof = AsyncMock()
+    server.sse_clients = [removed_sse, kept_sse]
+    server._sse_client_ips = {
+        removed_sse: "10.0.0.10",
+        kept_sse: "192.168.1.25",
+    }
+    removed_progress = asyncio.Queue()
+    kept_progress = asyncio.Queue()
+    server.progress_queues = {removed_progress, kept_progress}
+    server._progress_queue_ips = {
+        removed_progress: "10.0.0.10",
+        kept_progress: "192.168.1.25",
+    }
 
     assert "10.0.0.0/24" in server.allowed_ips
 
@@ -169,6 +186,14 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         message=b"IP no longer authorized",
     )
     kept_ws.close.assert_not_awaited()
+    removed_sse.write_eof.assert_awaited_once()
+    kept_sse.write_eof.assert_not_awaited()
+    assert removed_sse not in server.sse_clients
+    assert kept_sse in server.sse_clients
+    assert removed_progress not in server.progress_queues
+    assert removed_progress.get_nowait() is None
+    assert kept_progress in server.progress_queues
+    assert kept_progress.empty()
     server.custom_tools.reload_tool_packages.assert_awaited_once()
     server.broadcast_notification.assert_awaited_once_with(
         "notifications/tools/list_changed"
