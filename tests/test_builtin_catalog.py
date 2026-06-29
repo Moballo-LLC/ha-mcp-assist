@@ -28,16 +28,20 @@ def test_builtin_catalog_loads_expected_manifest_packages() -> None:
     """The manifest catalog should discover the built-in package toggle metadata."""
     package_ids = {spec.package_id for spec in BUILTIN_SPECS}
 
-    assert {
+    assert package_ids == {
         "calculator",
         "google_maps",
         "llm_api_bridge",
         "memory",
-        "unit_conversion",
-        "search",
+        "music_assistant",
         "read_url",
+        "recorder",
+        "response_service",
+        "search",
+        "unit_conversion",
+        "weather_forecast",
         "wikipedia_search",
-    } <= package_ids
+    }
 
 
 def test_builtin_catalog_looks_up_specs_by_package_id_and_tool_name() -> None:
