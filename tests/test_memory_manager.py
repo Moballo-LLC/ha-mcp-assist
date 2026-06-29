@@ -119,6 +119,29 @@ async def test_memory_manager_normalizes_category_aliases_and_counts(hass) -> No
 
 
 @pytest.mark.asyncio
+async def test_memory_manager_invalid_category_filter_matches_nothing(hass) -> None:
+    """Non-empty filters that normalize away should not behave like no filter."""
+    manager = MemoryManager(hass)
+    await manager.async_initialize()
+    stored = await manager.remember(
+        "Water the patio planters at sunset",
+        default_ttl_days=30,
+        max_ttl_days=365,
+        category="routine",
+        max_items=100,
+    )
+
+    recalled = await manager.recall(category="家庭", limit=5)
+    deleted = await manager.forget(category="💡", delete_all_matches=True)
+    all_memories = await manager.list_all()
+
+    assert stored["category"] == "routine"
+    assert recalled["total_found"] == 0
+    assert deleted["deleted_count"] == 0
+    assert [memory["id"] for memory in all_memories] == [stored["id"]]
+
+
+@pytest.mark.asyncio
 async def test_memory_manager_prunes_to_max_items(hass) -> None:
     """Only the newest configured number of memories should be retained."""
     manager = MemoryManager(hass)

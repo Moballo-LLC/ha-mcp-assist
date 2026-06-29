@@ -15,6 +15,7 @@ from .const import DOMAIN
 
 _STORAGE_VERSION = 1
 _STORAGE_KEY = f"{DOMAIN}_memory_store"
+_INVALID_CATEGORY_FILTER = "\0invalid_category_filter"
 
 MEMORY_CATEGORY_PRESETS: dict[str, str] = {
     "preference": "User or household preferences and preferred settings.",
@@ -134,7 +135,7 @@ class MemoryManager:
     ) -> dict[str, Any]:
         """Recall active memories by query or category."""
         normalized_query = self._normalize_text(query)
-        normalized_category = self._normalize_category(category)
+        normalized_category = self._normalize_category_filter(category)
         effective_limit = max(1, int(limit))
 
         async with self._lock:
@@ -168,7 +169,7 @@ class MemoryManager:
         """Forget one or more memories by id or search criteria."""
         normalized_id = self._normalize_text(memory_id)
         normalized_query = self._normalize_text(query)
-        normalized_category = self._normalize_category(category)
+        normalized_category = self._normalize_category_filter(category)
         if not normalized_id and not normalized_query and not normalized_category:
             raise ValueError("memory_id or query/category is required")
 
@@ -405,3 +406,13 @@ class MemoryManager:
         if not normalized:
             return None
         return _MEMORY_CATEGORY_ALIASES.get(normalized, normalized)
+
+    @classmethod
+    def _normalize_category_filter(cls, value: Any) -> str | None:
+        """Normalize a category filter without turning invalid input into no filter."""
+        normalized = cls._normalize_category(value)
+        if normalized is not None:
+            return normalized
+        if cls._normalize_text(value) is None:
+            return None
+        return _INVALID_CATEGORY_FILTER
