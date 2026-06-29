@@ -30,7 +30,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
-from .custom_tools.builtin_catalog import (
+from .tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     is_builtin_package_enabled_for_profile,
 )
@@ -325,11 +325,11 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _get_builtin_toggle_specs(self) -> tuple[BuiltInToolToggleSpec, ...]:
         """Return built-in packaged-tool metadata from the shared custom tool loader."""
-        custom_tools = self._get_shared_custom_tools_loader()
-        if custom_tools is None:
+        tools = self._get_shared_tools_loader()
+        if tools is None:
             return ()
 
-        getter = getattr(custom_tools, "get_builtin_toggle_specs", None)
+        getter = getattr(tools, "get_builtin_toggle_specs", None)
         if not callable(getter):
             return ()
 
@@ -344,9 +344,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         tool_name: str,
     ) -> BuiltInToolToggleSpec | None:
         """Return built-in packaged-tool metadata for a tool name, if any."""
-        custom_tools = self._get_shared_custom_tools_loader()
-        if custom_tools is not None:
-            getter = getattr(custom_tools, "get_builtin_toggle_spec", None)
+        tools = self._get_shared_tools_loader()
+        if tools is not None:
+            getter = getattr(tools, "get_builtin_toggle_spec", None)
             if callable(getter):
                 try:
                     return getter(tool_name)
@@ -552,18 +552,18 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
         return self._is_optional_tool_family_enabled("web_search")
 
-    def _get_shared_custom_tools_loader(self) -> Any | None:
+    def _get_shared_tools_loader(self) -> Any | None:
         """Return the shared custom tool loader, if available."""
         server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
-        return getattr(server, "custom_tools", None) if server else None
+        return getattr(server, "tools", None) if server else None
 
     def _is_external_custom_tool(self, tool_name: str) -> bool:
         """Return whether a tool name comes from an external custom tool package."""
-        custom_tools = self._get_shared_custom_tools_loader()
-        if custom_tools is None:
+        tools = self._get_shared_tools_loader()
+        if tools is None:
             return False
 
-        checker = getattr(custom_tools, "is_external_custom_tool", None)
+        checker = getattr(tools, "is_external_custom_tool", None)
         if not callable(checker):
             return False
 
@@ -577,11 +577,11 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _get_builtin_tool_instructions(self) -> str:
         """Return prompt additions from loaded built-in packaged tools."""
-        custom_tools = self._get_shared_custom_tools_loader()
-        if custom_tools is None:
+        tools = self._get_shared_tools_loader()
+        if tools is None:
             return ""
 
-        getter = getattr(custom_tools, "get_builtin_prompt_instructions", None)
+        getter = getattr(tools, "get_builtin_prompt_instructions", None)
         if not callable(getter):
             return ""
 
@@ -677,12 +677,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not self.external_custom_tools_enabled:
             return ""
 
-        custom_tools = self._get_shared_custom_tools_loader()
-        if custom_tools is None:
+        tools = self._get_shared_tools_loader()
+        if tools is None:
             return ""
 
         try:
-            return str(custom_tools.get_external_prompt_instructions() or "").strip()
+            return str(tools.get_external_prompt_instructions() or "").strip()
         except Exception as err:
             _LOGGER.debug(
                 "Unable to read external custom tool prompt instructions: %s", err
@@ -928,11 +928,11 @@ class MCPAssistConversationEntity(ConversationEntity):
     def _get_external_custom_tool_cache_signature(self) -> tuple[Any, ...]:
         """Return a cache signature for loaded built-in/external packaged tools."""
         server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
-        custom_tools = getattr(server, "custom_tools", None) if server else None
-        if custom_tools is None:
+        tools = getattr(server, "tools", None) if server else None
+        if tools is None:
             return ()
 
-        get_cache_signature = getattr(custom_tools, "get_cache_signature", None)
+        get_cache_signature = getattr(tools, "get_cache_signature", None)
         if callable(get_cache_signature):
             try:
                 raw_signature = get_cache_signature()
@@ -945,7 +945,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 )
 
         get_builtin_prompt_instructions = getattr(
-            custom_tools, "get_builtin_prompt_instructions", None
+            tools, "get_builtin_prompt_instructions", None
         )
         if callable(get_builtin_prompt_instructions):
             try:
@@ -957,7 +957,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 )
 
         get_external_prompt_instructions = getattr(
-            custom_tools, "get_external_prompt_instructions", None
+            tools, "get_external_prompt_instructions", None
         )
         if callable(get_external_prompt_instructions):
             try:

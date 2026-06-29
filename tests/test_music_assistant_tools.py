@@ -9,7 +9,7 @@ import pytest
 from homeassistant.core import SupportsResponse
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mcp_assist.custom_tools.music_assistant import MusicAssistantTool
+from custom_components.mcp_assist.tools.packages.music_assistant.music_assistant import MusicAssistantTool
 
 
 def _add_music_assistant_entry(

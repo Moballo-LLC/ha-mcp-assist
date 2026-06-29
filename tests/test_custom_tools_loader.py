@@ -32,7 +32,37 @@ from custom_components.mcp_assist.const import (
     CUSTOM_TOOLS_DIRECTORY,
     DOMAIN,
 )
-from custom_components.mcp_assist.custom_tools import CustomToolsLoader
+from custom_components.mcp_assist.tools import CustomToolsLoader
+from custom_components.mcp_assist.tools.builtin_catalog import (
+    load_builtin_tool_toggle_specs,
+)
+from custom_components.mcp_assist.tools.external_loader import ExternalCustomToolLoader
+
+TOOLS_ROOT = Path("custom_components/mcp_assist/tools")
+LEGACY_CUSTOM_TOOLS_ROOT = Path("custom_components/mcp_assist/custom_tools")
+LEGACY_SERVER_TOOLS_ROOT = Path("custom_components/mcp_assist/server_tools")
+CUSTOM_TOOL_FRAMEWORK_FILES = {
+    "__init__.py",
+    "builtin_catalog.py",
+    "external_loader.py",
+    "schema_utils.py",
+    "tool_runtime.py",
+}
+LEGACY_ROOT_TOOL_MODULES = {
+    "brave_search",
+    "calculator",
+    "duckduckgo_search",
+    "google_maps",
+    "llm_api_bridge",
+    "memory",
+    "music_assistant",
+    "read_url",
+    "recorder",
+    "response_services",
+    "searxng_search",
+    "weather",
+    "wikipedia_search",
+}
 
 
 class _StubTool:
@@ -59,6 +89,81 @@ class _StubTool:
 
     async def handle_call(self, tool_name, arguments):
         return {"content": [{"type": "text", "text": tool_name}]}
+
+
+def test_builtin_tool_implementations_live_in_manifest_package_dirs() -> None:
+    """Built-in tools should mirror the external custom-tool package layout."""
+    assert not LEGACY_CUSTOM_TOOLS_ROOT.exists()
+    assert not LEGACY_SERVER_TOOLS_ROOT.exists()
+    assert {
+        path.name for path in TOOLS_ROOT.glob("*.py")
+    } == CUSTOM_TOOL_FRAMEWORK_FILES
+
+    package_dirs = [
+        path
+        for path in sorted((TOOLS_ROOT / "packages").iterdir())
+        if path.is_dir() and not path.name.startswith((".", "__"))
+    ]
+    assert package_dirs
+    for package_dir in package_dirs:
+        assert (package_dir / CUSTOM_TOOL_MANIFEST_FILENAME).is_file()
+        assert (package_dir / "tool.py").is_file()
+
+    legacy_imports = {
+        f"custom_components.mcp_assist.tools.{module}"
+        for module in LEGACY_ROOT_TOOL_MODULES
+    }
+    for path in TOOLS_ROOT.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        assert not any(legacy_import in text for legacy_import in legacy_imports), path
+
+
+@pytest.mark.asyncio
+async def test_all_builtin_tool_packages_load_and_match_manifest_tool_names(
+    hass,
+    system_entry_factory,
+) -> None:
+    """Every built-in package should load through the public custom-tool format."""
+    system_entry_factory(
+        data={
+            CONF_BRAVE_API_KEY: "test-key",
+            CONF_SEARCH_PROVIDER: "brave",
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+        }
+    )
+    specs_by_package_id = {
+        spec.package_id: spec for spec in load_builtin_tool_toggle_specs()
+    }
+    loader = ExternalCustomToolLoader(
+        hass,
+        tools_root=TOOLS_ROOT / "packages",
+        module_namespace="mcp_assist_builtin_tool_contract_tests",
+        require_tool_name_prefix=False,
+        package_log_label="built-in test tool package",
+        prompt_package_label="Built-in test tool package",
+    )
+    loaded_packages = []
+
+    try:
+        loaded_packages = await loader.load(
+            allowed_tool_ids=set(specs_by_package_id)
+        )
+
+        assert loader.last_load_errors == []
+        assert {package.manifest.tool_id for package in loaded_packages} == set(
+            specs_by_package_id
+        )
+        for package in loaded_packages:
+            expected_tool_names = specs_by_package_id[package.manifest.tool_id].tool_names
+            assert package.tool_names == expected_tool_names
+            assert [tool["name"] for tool in package.tool_definitions] == list(
+                expected_tool_names
+            )
+            for tool_name in expected_tool_names:
+                assert package.instance.handles_tool(tool_name)
+    finally:
+        for package in loaded_packages:
+            await package.instance.async_shutdown()
 
 
 def _write_external_tool_package(
@@ -501,12 +606,12 @@ async def test_initialize_loads_search_and_read_url_for_brave(
     read_url_module = types.SimpleNamespace(ReadUrlTool=type("ReadUrlTool", (_StubTool,), {}))
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.brave_search",
+        "custom_components.mcp_assist.tools.packages.search.brave_search",
         brave_module,
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.read_url",
+        "custom_components.mcp_assist.tools.packages.read_url.read_url",
         read_url_module,
     )
 
@@ -539,12 +644,12 @@ async def test_initialize_loads_search_and_read_url_for_duckduckgo(
     read_url_module = types.SimpleNamespace(ReadUrlTool=type("ReadUrlTool", (_StubTool,), {}))
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.duckduckgo_search",
+        "custom_components.mcp_assist.tools.packages.search.duckduckgo_search",
         duckduckgo_module,
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.read_url",
+        "custom_components.mcp_assist.tools.packages.read_url.read_url",
         read_url_module,
     )
 
@@ -578,12 +683,12 @@ async def test_initialize_loads_search_and_read_url_for_searxng(
     read_url_module = types.SimpleNamespace(ReadUrlTool=type("ReadUrlTool", (_StubTool,), {}))
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.searxng_search",
+        "custom_components.mcp_assist.tools.packages.search.searxng_search",
         searxng_module,
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.read_url",
+        "custom_components.mcp_assist.tools.packages.read_url.read_url",
         read_url_module,
     )
 
@@ -617,7 +722,7 @@ async def test_initialize_can_enable_search_without_read_url(
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.brave_search",
+        "custom_components.mcp_assist.tools.packages.search.brave_search",
         brave_module,
     )
 
@@ -816,7 +921,7 @@ async def test_cache_signature_is_precomputed_after_registry_refresh(
         raise AssertionError("cache signature should be precomputed")
 
     monkeypatch.setattr(
-        "custom_components.mcp_assist.custom_tools.json.dumps",
+        "custom_components.mcp_assist.tools.json.dumps",
         fail_json_dumps,
     )
 
@@ -857,12 +962,12 @@ async def test_external_tool_package_id_cannot_conflict_with_builtin_package(
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.brave_search",
+        "custom_components.mcp_assist.tools.packages.search.brave_search",
         brave_module,
     )
     monkeypatch.setitem(
         sys.modules,
-        "custom_components.mcp_assist.custom_tools.read_url",
+        "custom_components.mcp_assist.tools.packages.read_url.read_url",
         read_url_module,
     )
 
