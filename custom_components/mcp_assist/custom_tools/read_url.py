@@ -245,7 +245,8 @@ class ReadUrlTool:
             }
 
         content_type = response.headers.get('Content-Type', '')
-        if 'text/html' not in content_type and 'text/plain' not in content_type:
+        lower_content_type = content_type.lower()
+        if 'text/html' not in lower_content_type and 'text/plain' not in lower_content_type:
             return {
                 "content": [{
                     "type": "text",
@@ -277,9 +278,10 @@ class ReadUrlTool:
             }
 
         text = await self._extract_text(html_text, content_type)
-        if self._is_wikipedia_url(parsed):
-            text = self._trim_wikipedia_html_fallback(text)
-        text = self._postprocess_text(text)
+        if 'text/html' in lower_content_type:
+            if self._is_wikipedia_url(parsed):
+                text = self._trim_wikipedia_html_fallback(text)
+            text = self._postprocess_text(text)
 
         title = parsed.netloc
         lower_html = html_text.lower()
@@ -725,8 +727,13 @@ class _MainContentParser(HTMLParser):
         if attr_map.get("role", "").lower() == "main":
             return True
 
-        combined = " ".join((attr_map.get("id", ""), attr_map.get("class", ""))).lower()
-        return any(keyword in combined for keyword in self._PREFERRED_KEYWORDS)
+        attribute_values = {
+            value.casefold()
+            for key in ("id", "class")
+            for value in attr_map.get(key, "").split()
+            if value
+        }
+        return bool(attribute_values & self._PREFERRED_KEYWORDS)
 
     @staticmethod
     def _normalize_text(parts: List[str]) -> str:

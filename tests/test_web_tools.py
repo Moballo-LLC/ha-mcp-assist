@@ -587,6 +587,46 @@ async def test_read_url_excludes_content_named_boilerplate(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_url_matches_preferred_attributes_by_token(hass) -> None:
+    """Content-like class substrings should not hide the rest of the page body."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <div class="content-navigation">Menu link</div>
+            <section>
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Menu link Useful article Important body text."
+
+    preferred_text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <div class="content">
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </div>
+            <section>Related link</section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert preferred_text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
 async def test_read_url_unwinds_malformed_preferred_markup(hass) -> None:
     """Malformed optional tags should not leak page chrome into main content."""
     tool = read_url_module.ReadUrlTool(hass)
@@ -637,6 +677,25 @@ async def test_read_url_summary_keeps_longer_excerpt(hass, monkeypatch) -> None:
 
     assert "Length: 1200 chars" in result["content"][0]["text"]
     assert long_text in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_plain_text_markdown_escapes(hass) -> None:
+    """Plain text responses should not have source escape sequences rewritten."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+        text=r"regex: \\_literal \\[value\\] and \\*stars\\*",
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/source.txt"),
+        "https://example.com/source.txt",
+        summary_only=False,
+    )
+
+    assert r"regex: \\_literal \\[value\\] and \\*stars\\*" in result["content"][0]["text"]
 
 
 @pytest.mark.asyncio
