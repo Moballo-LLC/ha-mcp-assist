@@ -624,20 +624,17 @@ async def test_options_mcp_step_rolls_back_shared_settings_when_apply_fails(
     apply_mock = AsyncMock(side_effect=OSError("address in use"))
 
     with patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock):
-        try:
-            await flow.async_step_mcp_server(
-                {
-                    CONF_MCP_PORT: 8124,
-                    CONF_ALLOWED_IPS: "192.168.1.25",
-                    _builtin_shared_key("search"): False,
-                    CONF_SEARCH_PROVIDER: "none",
-                }
-            )
-        except OSError:
-            pass
-        else:  # pragma: no cover - defensive assertion
-            raise AssertionError("Expected live shared MCP settings apply to fail")
+        result = await flow.async_step_mcp_server(
+            {
+                CONF_MCP_PORT: 8124,
+                CONF_ALLOWED_IPS: "192.168.1.25",
+                _builtin_shared_key("search"): False,
+                CONF_SEARCH_PROVIDER: "none",
+            }
+        )
 
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "mcp_apply_failed"
     assert system_entry.data[CONF_MCP_PORT] == 8090
     assert system_entry.data[CONF_ALLOWED_IPS] == "10.0.0.0/24"
     apply_mock.assert_awaited_once_with(hass)
