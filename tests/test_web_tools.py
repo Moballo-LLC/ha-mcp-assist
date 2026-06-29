@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import ipaddress
+import socket
 import sys
 import types
 
@@ -119,6 +120,7 @@ class _FakeSession:
         self._responses = list(responses or [])
         self._error = error
         self.calls: list[tuple[str, dict]] = []
+        self.client_session_kwargs: list[dict] = []
 
     async def __aenter__(self):
         return self
@@ -134,6 +136,16 @@ class _FakeSession:
             return self._responses.pop(0)
         assert self._response is not None
         return self._response
+
+
+def _read_url_client_session(fake_session: _FakeSession):
+    """Build a ClientSession factory that records constructor kwargs."""
+
+    def _client_session(**kwargs):
+        fake_session.client_session_kwargs.append(kwargs)
+        return fake_session
+
+    return _client_session
 
 
 @pytest.mark.asyncio
@@ -442,10 +454,11 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
         )
     )
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
     _allow_public_example_resolution(tool)
 
@@ -456,9 +469,43 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
 
     assert "📖 **Example Page**" in result["content"][0]["text"]
     assert "Hello world" in result["content"][0]["text"]
-    assert fake_session.calls[0][0] == "https://93.184.216.34/page"
-    assert fake_session.calls[0][1]["headers"]["Host"] == "example.com"
-    assert fake_session.calls[0][1]["server_hostname"] == "example.com"
+    assert fake_session.calls[0][0] == "https://example.com/page"
+    assert "Host" not in fake_session.calls[0][1]["headers"]
+    assert "server_hostname" not in fake_session.calls[0][1]
+    assert isinstance(
+        fake_session.client_session_kwargs[0]["connector"],
+        read_url_module.aiohttp.TCPConnector,
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_url_pins_all_validated_dns_addresses(hass) -> None:
+    """Validated hostnames should keep every safe address for connector fallback."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _resolve_host_addresses(host: str, port: int):
+        assert host == "example.com"
+        assert port == 443
+        return {
+            ipaddress.ip_address("93.184.216.34"),
+            ipaddress.ip_address("2606:2800:220:1:248:1893:25c8:1946"),
+        }
+
+    tool._resolve_host_addresses = _resolve_host_addresses
+
+    target = await tool._validate_fetchable_url("https://example.com/page")
+    resolver = read_url_module._PinnedHostResolver(
+        "example.com",
+        target.resolved_addresses,
+    )
+
+    resolved = await resolver.resolve("example.com", 443, socket.AF_UNSPEC)
+
+    assert target.request_url == "https://example.com/page"
+    assert {item["host"] for item in resolved} == {
+        "93.184.216.34",
+        "2606:2800:220:1:248:1893:25c8:1946",
+    }
 
 
 @pytest.mark.asyncio
@@ -474,10 +521,11 @@ async def test_read_url_rejects_invalid_urls_and_timeouts(hass, monkeypatch) -> 
 
     fake_session = _FakeSession(error=asyncio.TimeoutError())
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     _allow_public_example_resolution(tool)
     timed_out = await tool.handle_call("read_url", {"url": "https://example.com"})
 
@@ -492,7 +540,8 @@ async def test_read_url_blocks_local_and_private_urls_before_fetch(
     """Read URL should not fetch local/private network targets by default."""
     tool = read_url_module.ReadUrlTool(hass)
 
-    def _client_session():
+    def _client_session(**kwargs):
+        del kwargs
         raise AssertionError("unsafe URLs should be rejected before opening a session")
 
     monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
@@ -535,10 +584,11 @@ async def test_read_url_allows_explicitly_allowlisted_private_url(
         )
     )
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     monkeypatch.setattr(
         hass.config,
         "is_allowed_external_url",
@@ -570,10 +620,11 @@ async def test_read_url_revalidates_redirect_targets(
         ]
     )
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
     _allow_public_example_resolution(tool)
 
@@ -601,10 +652,11 @@ async def test_read_url_rejects_oversized_responses(
         )
     )
 
-    def _client_session():
-        return fake_session
-
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
     _allow_public_example_resolution(tool)
 
@@ -623,7 +675,7 @@ async def test_read_url_rejects_oversized_responses(
     monkeypatch.setattr(
         read_url_module.aiohttp,
         "ClientSession",
-        lambda: streamed_session,
+        _read_url_client_session(streamed_session),
     )
 
     streamed_result = await tool.handle_call(
@@ -643,7 +695,11 @@ async def test_read_url_reads_chunked_body_until_eof(hass, monkeypatch) -> None:
         )
     )
 
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", lambda: fake_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
     _allow_public_example_resolution(tool)
 
@@ -665,7 +721,11 @@ async def test_read_url_rejects_oversized_chunked_body_after_multiple_reads(
         )
     )
 
-    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", lambda: fake_session)
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
     tool = read_url_module.ReadUrlTool(hass)
     tool.max_response_bytes = 5
     _allow_public_example_resolution(tool)

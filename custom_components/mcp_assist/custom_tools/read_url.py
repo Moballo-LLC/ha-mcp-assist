@@ -21,8 +21,58 @@ class _FetchTarget:
 
     display_url: str
     request_url: str
-    host_header: str | None = None
-    server_hostname: str | None = None
+    resolved_addresses: tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...] = ()
+
+
+class _PinnedHostResolver(aiohttp.abc.AbstractResolver):
+    """aiohttp resolver that only returns already-validated addresses."""
+
+    def __init__(
+        self,
+        hostname: str,
+        addresses: tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...],
+    ) -> None:
+        """Initialize the resolver."""
+        self._hostname = hostname.rstrip(".").casefold()
+        self._addresses = addresses
+
+    async def resolve(
+        self,
+        host: str,
+        port: int = 0,
+        family: int = socket.AF_UNSPEC,
+    ) -> list[dict[str, Any]]:
+        """Resolve only the expected host to its validated addresses."""
+        if host.rstrip(".").casefold() != self._hostname:
+            raise OSError(f"Unexpected host for pinned resolver: {host}")
+
+        results: list[dict[str, Any]] = []
+        for address in self._addresses:
+            address_family = (
+                socket.AF_INET6
+                if isinstance(address, ipaddress.IPv6Address)
+                else socket.AF_INET
+            )
+            if family not in (socket.AF_UNSPEC, 0, address_family):
+                continue
+            results.append(
+                {
+                    "hostname": host,
+                    "host": str(address),
+                    "port": port,
+                    "family": address_family,
+                    "proto": 0,
+                    "flags": socket.AI_NUMERICHOST,
+                }
+            )
+
+        if not results:
+            raise OSError(f"No validated addresses available for {host}")
+        return results
+
+    async def close(self) -> None:
+        """Close resolver resources."""
+        return None
 
 
 class ReadUrlTool:
@@ -93,19 +143,18 @@ class ReadUrlTool:
                 "User-Agent": "Mozilla/5.0 (compatible; mcp-assist/1.0)"
             }
 
-            async with aiohttp.ClientSession() as session:
-                for _redirect_count in range(self.max_redirects + 1):
-                    request_headers = dict(headers)
-                    if current_target.host_header:
-                        request_headers["Host"] = current_target.host_header
-                    request_kwargs = {
-                        "headers": request_headers,
-                        "timeout": aiohttp.ClientTimeout(total=15),
-                        "allow_redirects": False,
-                    }
-                    if current_target.server_hostname:
-                        request_kwargs["server_hostname"] = current_target.server_hostname
+            for _redirect_count in range(self.max_redirects + 1):
+                request_kwargs = {
+                    "headers": headers,
+                    "timeout": aiohttp.ClientTimeout(total=15),
+                    "allow_redirects": False,
+                }
+                session_kwargs: dict[str, Any] = {}
+                connector = self._build_pinned_connector(current_target)
+                if connector is not None:
+                    session_kwargs["connector"] = connector
 
+                async with aiohttp.ClientSession(**session_kwargs) as session:
                     async with session.get(
                         current_target.request_url,
                         **request_kwargs,
@@ -141,12 +190,12 @@ class ReadUrlTool:
                             summary_only,
                         )
 
-                return {
-                    "content": [{
-                        "type": "text",
-                        "text": "❌ Too many redirects while reading URL"
-                    }]
-                }
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": "❌ Too many redirects while reading URL"
+                }]
+            }
 
         except asyncio.TimeoutError:
             return {
@@ -279,7 +328,6 @@ class ReadUrlTool:
             raise ValueError("URLs must not include embedded credentials")
 
         sanitized_url = parsed._replace(fragment="").geturl()
-        sanitized_parsed = urlparse(sanitized_url)
         if self._is_allowlisted_url(sanitized_url):
             return _FetchTarget(display_url=sanitized_url, request_url=sanitized_url)
 
@@ -294,22 +342,34 @@ class ReadUrlTool:
         try:
             ip_address = ipaddress.ip_address(normalized_host)
         except ValueError:
-            ip_address = await self._validated_resolved_host_address(
+            addresses = await self._validated_resolved_host_addresses(
                 normalized_host,
                 parsed.port or (443 if parsed.scheme == "https" else 80),
             )
-            request_url = self._build_address_pinned_url(sanitized_parsed, ip_address)
             return _FetchTarget(
                 display_url=sanitized_url,
-                request_url=request_url,
-                host_header=self._build_host_header(sanitized_parsed),
-                server_hostname=normalized_host if sanitized_parsed.scheme == "https" else None,
+                request_url=sanitized_url,
+                resolved_addresses=addresses,
             )
         else:
             if self._is_private_or_local_address(ip_address):
                 raise ValueError("Private or local URLs must be allowlisted in Home Assistant")
 
         return _FetchTarget(display_url=sanitized_url, request_url=sanitized_url)
+
+    def _build_pinned_connector(self, target: _FetchTarget) -> aiohttp.TCPConnector | None:
+        """Build a connector that pins DNS names to validated addresses."""
+        if not target.resolved_addresses:
+            return None
+
+        host = urlparse(target.display_url).hostname
+        if not host:
+            return None
+
+        return aiohttp.TCPConnector(
+            resolver=_PinnedHostResolver(host, target.resolved_addresses),
+            use_dns_cache=False,
+        )
 
     def _is_allowlisted_url(self, url: str) -> bool:
         """Return whether Home Assistant explicitly allows this external URL."""
@@ -322,12 +382,12 @@ class ReadUrlTool:
             _LOGGER.debug("Unable to evaluate external URL allowlist for %s: %s", url, err)
             return False
 
-    async def _validated_resolved_host_address(
+    async def _validated_resolved_host_addresses(
         self,
         host: str,
         port: int,
-    ) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
-        """Resolve a hostname and return a checked public address."""
+    ) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]:
+        """Resolve a hostname and return checked public addresses."""
         addresses = await asyncio.wait_for(
             self._resolve_host_addresses(host, port),
             timeout=5,
@@ -336,38 +396,7 @@ class ReadUrlTool:
             raise ValueError(f"Unable to resolve URL host: {host}")
         if any(self._is_private_or_local_address(address) for address in addresses):
             raise ValueError("Private or local URLs must be allowlisted in Home Assistant")
-        return sorted(addresses, key=str)[0]
-
-    @staticmethod
-    def _build_host_header(parsed) -> str:
-        """Build the original Host header for an address-pinned request."""
-        host = parsed.hostname or ""
-        try:
-            ipaddress.ip_address(host)
-        except ValueError:
-            if ":" in host:
-                host = f"[{host}]"
-        else:
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-
-        default_port = 443 if parsed.scheme == "https" else 80
-        if parsed.port and parsed.port != default_port:
-            return f"{host}:{parsed.port}"
-        return host
-
-    @staticmethod
-    def _build_address_pinned_url(
-        parsed,
-        address: ipaddress.IPv4Address | ipaddress.IPv6Address,
-    ) -> str:
-        """Return the request URL rewritten to the validated address."""
-        host = str(address)
-        if isinstance(address, ipaddress.IPv6Address):
-            host = f"[{host}]"
-        if parsed.port:
-            host = f"{host}:{parsed.port}"
-        return parsed._replace(netloc=host).geturl()
+        return tuple(sorted(addresses, key=str))
 
     async def _resolve_host_addresses(
         self,
