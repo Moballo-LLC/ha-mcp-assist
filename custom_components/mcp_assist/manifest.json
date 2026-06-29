@@ -1,6 +1,6 @@
 {
   "domain": "mcp_assist",
-  "name": "MCP Assist",
+  "name": "HA MCP Assist",
   "codeowners": ["@Jason-Morcos"],
   "config_flow": true,
   "dependencies": ["conversation", "recorder"],

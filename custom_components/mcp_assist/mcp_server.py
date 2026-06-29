@@ -3,6 +3,7 @@
 import asyncio
 import base64
 from collections import defaultdict
+from dataclasses import dataclass
 import ipaddress
 import json
 import logging
@@ -122,6 +123,15 @@ _HASS_IMAGE_URL_PATH_PREFIXES = (
     "/local/",
     "/media/local/",
 )
+
+
+@dataclass(frozen=True)
+class _ImageFetchTarget:
+    """Validated image URL target safe to pass to the HTTP client."""
+
+    display_url: yarl.URL
+    request_url: str
+
 
 _SKIP_NON_SERIALIZABLE = object()
 
@@ -2331,22 +2341,15 @@ class MCPServer(
 
     async def _fetch_http_image_url(self, reference: str) -> tuple[bytes, str]:
         """Fetch an image from an allowed HTTP(S) URL, validating redirects."""
-        current_base_url, current_target_url = self._resolve_fetchable_http_request_target(
-            reference
-        )
+        current_target = self._resolve_fetchable_http_request_target(reference)
         timeout = aiohttp.ClientTimeout(total=20)
         for _redirect_count in range(_MAX_IMAGE_FETCH_REDIRECTS + 1):
-            current_url = self._build_safe_http_request_url(
-                current_base_url, current_target_url
-            )
-            request_path = self._build_safe_http_request_path(current_target_url)
-            async with aiohttp.ClientSession(
-                timeout=timeout,
-                base_url=str(current_base_url),
-            ) as session:
-                # request_path is constrained by _resolve_fetchable_http_request_target.
-                # codeql[py/partial-ssrf]
-                async with session.get(request_path, allow_redirects=False) as response:
+            current_url = current_target.display_url
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    current_target.request_url,
+                    allow_redirects=False,
+                ) as response:
                     if response.status in _HTTP_REDIRECT_STATUSES:
                         location = str(response.headers.get("Location") or "").strip()
                         if not location:
@@ -2354,10 +2357,9 @@ class MCPServer(
                                 f"Image URL {current_url!s} redirected without a Location header."
                             )
                         redirect_url = current_url.join(yarl.URL(location))
-                        (
-                            current_base_url,
-                            current_target_url,
-                        ) = self._resolve_fetchable_http_request_target(str(redirect_url))
+                        current_target = self._resolve_fetchable_http_request_target(
+                            str(redirect_url)
+                        )
                         continue
 
                     if response.status != 200:
@@ -2377,14 +2379,11 @@ class MCPServer(
 
     def _resolve_fetchable_http_image_url(self, reference: str) -> yarl.URL:
         """Resolve a supported HTTP(S) image URL into a safe absolute URL."""
-        trusted_base_url, target_url = self._resolve_fetchable_http_request_target(
-            reference
-        )
-        return self._build_safe_http_request_url(trusted_base_url, target_url)
+        return self._resolve_fetchable_http_request_target(reference).display_url
 
     def _resolve_fetchable_http_request_target(
         self, reference: str
-    ) -> tuple[yarl.URL, yarl.URL]:
+    ) -> _ImageFetchTarget:
         """Resolve a supported HTTP(S) image URL into a trusted base URL and request target."""
         raw_reference = str(reference or "").strip()
         if not raw_reference:
@@ -2397,7 +2396,10 @@ class MCPServer(
             target_url = yarl.URL(self._sanitize_http_request_path(raw_path))
             if raw_query:
                 target_url = target_url.with_query(raw_query.split("#", 1)[0])
-            return yarl.URL(self._get_hass_base_url()).origin(), target_url
+            return self._build_image_fetch_target(
+                yarl.URL(self._get_hass_base_url()).origin(),
+                target_url,
+            )
 
         parsed_url = yarl.URL(raw_reference)
         if parsed_url.scheme not in {"http", "https"} or not parsed_url.host:
@@ -2414,15 +2416,27 @@ class MCPServer(
             self._validate_hass_image_request_path(
                 urlparse(raw_reference).path or "/"
             )
-            return yarl.URL(self._get_hass_base_url()).origin(), parsed_url
+            return self._build_image_fetch_target(
+                yarl.URL(self._get_hass_base_url()).origin(),
+                parsed_url,
+            )
 
         allowlisted_base = self._get_allowlisted_external_base_url(parsed_url)
         if allowlisted_base is not None:
-            return allowlisted_base.origin(), parsed_url
+            return self._build_image_fetch_target(allowlisted_base.origin(), parsed_url)
 
         raise ValueError(
             "Remote image URLs must either point to this Home Assistant instance or be allowlisted in Home Assistant."
         )
+
+    def _build_image_fetch_target(
+        self,
+        trusted_base_url: yarl.URL,
+        target_url: yarl.URL,
+    ) -> _ImageFetchTarget:
+        """Build a validated absolute image fetch target."""
+        request_url = self._build_safe_http_request_url(trusted_base_url, target_url)
+        return _ImageFetchTarget(display_url=request_url, request_url=str(request_url))
 
     def _build_safe_http_request_url(
         self,

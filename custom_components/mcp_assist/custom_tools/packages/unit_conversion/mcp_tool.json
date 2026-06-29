@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "unit_conversion",
   "name": "Unit Conversion",
-  "description": "Built-in exact unit-conversion tools.",
-  "version": "1.0.0",
+  "description": "Built-in exact unit-conversion and kitchen quantity tools.",
+  "version": "1.1.0",
   "entrypoint": "tool:UnitConversionPackageTool",
   "prompt_append_file": "prompt.md",
   "capabilities": [
-    "Converts between common temperature, length, weight, energy, storage, and data-rate units."
+    "Converts between common temperature, length, weight, kitchen volume, energy, storage, and data-rate units."
   ],
   "built_in_toggle": {
     "tool_names": [
@@ -19,8 +19,8 @@
     "profile_default": true,
     "shared_label": "Unit Conversion",
     "profile_disable_label": "Disable Unit Conversion",
-    "shared_description": "Expose exact unit-conversion helpers.",
-    "profile_disable_description": "Prevents this profile from using exact unit-conversion helpers.",
+    "shared_description": "Expose exact unit-conversion helpers, including kitchen volume conversions.",
+    "profile_disable_description": "Prevents this profile from using exact unit-conversion and kitchen quantity helpers.",
     "legacy_shared_setting_keys": [
       "enable_calculator_tools"
     ],

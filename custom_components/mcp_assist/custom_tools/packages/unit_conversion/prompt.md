@@ -1,1 +1,1 @@
-Use `convert_unit` for exact conversions between units like temperature, distance, weight, storage, energy, or data rate.
+Use `convert_unit` for exact conversions between units like temperature, distance, weight, storage, energy, data rate, or kitchen quantities. For cooking measurements, it supports cup, tablespoon, teaspoon, ml, and pint, including fractional values like `1/8` or `1 1/2`.

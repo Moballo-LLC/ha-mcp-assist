@@ -44,12 +44,13 @@ def test_duckduckgo_runtime_uses_renamed_ddgs_package() -> None:
     assert "duckduckgo-search" not in requirement_names
 
 
-def test_hacs_display_name_keeps_drop_in_integration_domain() -> None:
-    """HACS branding can differ while the installable integration stays drop-in."""
+def test_display_names_keep_drop_in_integration_domain() -> None:
+    """Repository and HA branding can change while the integration stays drop-in."""
 
     hacs = json.loads(HACS.read_text(encoding="utf-8"))
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
     assert hacs["name"] == "HA MCP Assist"
+    assert manifest["name"] == "HA MCP Assist"
     assert manifest["domain"] == "mcp_assist"
     assert MANIFEST.parent.name == manifest["domain"]
