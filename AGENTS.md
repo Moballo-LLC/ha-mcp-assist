@@ -123,7 +123,17 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - `custom_components/mcp_assist/strings.json` and
   `custom_components/mcp_assist/translations/`: Home Assistant UI strings.
 - `custom_components/mcp_assist/brand/`: HACS/Home Assistant brand assets.
+- `docs/README.md`: documentation hub and placement guide.
+- `docs/getting-started.md`: installation and first-profile setup.
+- `docs/architecture.md`: MCP server, entity discovery, and index concepts.
+- `docs/configuration.md`: settings and profile/shared configuration reference.
+- `docs/tool-reference.md`: built-in MCP tool and tool-family reference.
+- `docs/examples.md`: scenario-based usage examples.
+- `docs/model-compatibility.md`: model selection and tool-calling validation.
+- `docs/troubleshooting.md`: common issue diagnosis.
+- `docs/security-and-privacy.md`: exposure, network, memory, and custom-tool safety.
 - `docs/custom-tools.md`: external custom tool package documentation.
+- `docs/releases.md`: release process and generated release-note workflow.
 
 ## Coding Conventions
 
@@ -166,8 +176,8 @@ pytest -ra --junitxml=test-results/pytest.xml tests
   when possible. Do not close or supersede them unless asked.
 - For dependency bumps, validate compatibility before merging. Runtime manifest
   lower bounds should remain lenient unless there is a real runtime need.
-- For release-related changes, update the release workflow and README together
-  when the human process changes.
+- For release-related changes, update the release workflow, `docs/releases.md`,
+  and the README together when the human process changes.
 - For GitHub Actions changes, remember CodeQL analyzes both `actions` and
   `python`.
 - For docs-only changes, still run `git diff --check` and any cheap parser

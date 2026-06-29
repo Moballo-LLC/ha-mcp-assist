@@ -1,477 +1,93 @@
 # MCP Assist for Home Assistant
 
-This is the Moballo-maintained fork of [mike-nott/mcp-assist](https://github.com/mike-nott/mcp-assist). Full credit to the upstream project for the original MCP Assist integration; this fork keeps that lineage while maintaining releases, support, and HACS installation from [Moballo-LLC/ha-mcp-assist](https://github.com/Moballo-LLC/ha-mcp-assist).
+This is the Moballo-maintained fork of
+[mike-nott/mcp-assist](https://github.com/mike-nott/mcp-assist). Full credit to
+the upstream project for the original MCP Assist integration; this fork keeps
+that lineage while maintaining releases, support, and HACS installation from
+[Moballo-LLC/ha-mcp-assist](https://github.com/Moballo-LLC/ha-mcp-assist).
 
-A Home Assistant conversation agent that uses MCP (Model Context Protocol) for efficient entity discovery, achieving **95% token reduction** compared to traditional methods. Works with LM Studio, llama.cpp, Ollama, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
+MCP Assist is a Home Assistant conversation agent that uses MCP tools for
+targeted entity discovery and action execution. Instead of sending the full Home
+Assistant entity list to a model on every request, it exposes tools that let the
+model inspect only the entities, devices, history, weather, media, or optional
+web data needed for the current request.
 
-## Key Features
+[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Moballo-LLC&repository=ha-mcp-assist&category=integration)
 
-- ✅ **95% Token Reduction**: Uses MCP tools for dynamic entity discovery instead of sending all entities
-- ✅ **No Entity Dumps**: Never sends 12,000+ token entity lists to the LLM
-- ✅ **Smart Entity Index**: Pre-generated system structure index (~400-800 tokens) for context-aware queries
-- ✅ **Multi-Platform Support**: Works with LM Studio, llama.cpp, Ollama, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter
-- ✅ **Multilingual Support**: 21 languages with localized UI, system prompts, and speech detection
-- ✅ **Multi-turn Conversations**: Maintains conversation context and history
-- ✅ **Dynamic Discovery**: Finds entities by area, type, device_class, state, or name on-demand
-- ✅ **Calculator Tools**: Built-in arithmetic tools for exact math through tool calling
-- ✅ **Memory Tools**: Optional persisted memory with TTL-based expiry for explicit “remember this” workflows
-- ✅ **Web Search Tools**: Optional DuckDuckGo or Brave Search integration for current information
-- ✅ **External Custom Tools**: Optional user-defined tool packages loaded from your Home Assistant config folder
-- ✅ **Works with 1000+ Entities**: Efficient even with large Home Assistant installations
-- ✅ **Multi-Profile Support**: Run multiple conversation agents with different models
+## What It Provides
 
-## The Problem MCP Assist Solves
+- A drop-in `mcp_assist` Home Assistant conversation integration.
+- Efficient entity discovery through `get_index`, `discover_entities`, and
+  detail tools instead of full entity dumps.
+- Read and write actions for exposed Home Assistant entities, scripts,
+  automations, devices, calendars, recorder history, and response services.
+- Optional tool families for calculator, unit conversion, weather forecasts,
+  memory, web search, URL reading, Music Assistant, images, and external custom
+  tools.
+- Multiple conversation profiles with shared MCP server settings.
+- Local and cloud provider support, including LM Studio, llama.cpp, Ollama,
+  Moltbot, vLLM, OpenAI, Google Gemini, Anthropic Claude, and OpenRouter.
+- HACS packaging, automated validation, and GitHub-generated release notes.
 
-Traditional voice assistants send your **entire entity list** (lights, switches, sensors, etc.) to the LLM with every request. For a typical home with 200+ devices, this means:
-- **12,000+ tokens** sent every time
-- Expensive API costs (cloud LLMs)
-- Slow response times
-- Context window limitations
-- Poor performance with large homes
+## Quick Start
 
-## How MCP Assist Works
+1. Add this repository to HACS with the button above, or add
+   `Moballo-LLC/ha-mcp-assist` manually as an integration repository.
+2. Install **HA MCP Assist** from HACS and restart Home Assistant.
+3. In Home Assistant, go to **Settings** -> **Devices & Services** ->
+   **Add Integration**, then search for **MCP Assist**.
+4. Create a profile for your local or cloud model provider.
+5. Set the new profile as a voice assistant under **Settings** ->
+   **Voice Assistants**.
 
-Instead of dumping all entities, MCP Assist:
+For the complete setup walkthrough, see
+[Getting Started](docs/getting-started.md).
 
-1. **Starts an MCP Server** on Home Assistant that exposes entity discovery tools
-2. **Your LLM connects** to the MCP server and gets access to core tools such as:
-   - `get_index` - Get a lightweight system structure index
-   - `discover_entities` - Find entities by type, area, state, or name
-   - `discover_devices` - Find Home Assistant devices when physical-device context matters
-   - `get_entity_details` - Get current entity state and attributes
-   - `get_device_details` - Get device metadata and related entities
-   - `perform_action` - Control Home Assistant entities and perform supported write actions
-   - `call_service_with_response` - Read from response-capable Home Assistant services when structured data is available
-   - `get_entity_history` / `analyze_entity_history` / `get_entity_state_at_time` - Answer recorder-backed history questions
-   - Calculator tools - Do exact math through tool calling
-   - `run_script` - Execute scripts and return response data
-   - `run_automation` - Trigger automations manually
-   - `list_areas` - List all areas in your home
-   - `list_domains` - List all entity types
-   - `set_conversation_state` - Smart follow-up handling
-3. **LLM uses the index for smart queries** - Understands what exists without full context dump
-4. **LLM discovers on-demand** - Only fetches the entities it needs for each request
-5. **Token usage drops** from 12,000+ to ~400 tokens per request
+## Documentation
 
-## Token Usage Comparison
+The README is intentionally short. The deeper guides live under `docs/`:
 
-| Method | Token Usage | Description |
-|--------|-------------|-------------|
-| **Traditional** | 12,000+ tokens | Sends all entity states |
-| **MCP Assist** | ~400 tokens | Uses MCP tools for discovery |
-| **Reduction** | **95%** | Massive efficiency gain |
-
-## Smart Entity Index (v0.5.0+)
-
-The Smart Entity Index provides a lightweight (~400-800 tokens) snapshot of your Home Assistant system structure, enabling context-aware queries without full entity dumps. The index includes areas, floors, labels, domains, device classes, devices, people, calendars, zones, automations, scripts, and alias metadata for alias-capable Home Assistant objects. For entities without standardized device_class attributes (like custom integrations), LLM-powered gap-filling automatically infers semantic categories from naming patterns. This results in faster, more accurate queries that use ~95% fewer tokens compared to traditional entity dumps.
-
-## Multilingual Support (v0.12.0+)
-
-MCP Assist supports **21 languages** with localized configuration interfaces, language-aware system prompts, and region-specific speech detection patterns. The integration automatically detects your Home Assistant system language and provides appropriate defaults for system prompts, follow-up phrases, and end conversation words. Supported languages include: Arabic, Chinese (Simplified), Czech, Danish, Dutch, Finnish, Filipino, French, German, Greek, Hindi, Italian, Japanese, Korean, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish, and Turkish.
+| Guide | Use it for |
+| --- | --- |
+| [Docs Home](docs/README.md) | Full documentation map and where new docs belong |
+| [Getting Started](docs/getting-started.md) | Requirements, installation, first profile, and first commands |
+| [Architecture](docs/architecture.md) | How MCP Assist reduces context size and discovers entities |
+| [Configuration](docs/configuration.md) | Provider settings, prompts, shared settings, profiles, and tool toggles |
+| [Tool Reference](docs/tool-reference.md) | Core MCP tools and optional built-in tool families |
+| [Usage Examples](docs/examples.md) | Voice commands, follow-ups, history, weather, memory, and web examples |
+| [Model Compatibility](docs/model-compatibility.md) | Choosing and testing models that support tool calling |
+| [Troubleshooting](docs/troubleshooting.md) | Common setup, connection, and tool-calling issues |
+| [Security and Privacy](docs/security-and-privacy.md) | Entity exposure, API keys, network access, memory, and custom tools |
+| [External Custom Tools](docs/custom-tools.md) | Package format for site-specific MCP tool extensions |
+| [Releases](docs/releases.md) | Version bumps, tags, HACS packages, and generated release notes |
 
 ## Requirements
 
 - Home Assistant 2024.1+
-- One of:
-  - **Local LLMs**: LM Studio v0.3.17+, llama.cpp, Ollama, Moltbot, or vLLM
-  - **Cloud LLMs**: OpenAI, Google Gemini, Anthropic Claude, or OpenRouter (API key required)
 - Python 3.11+
-
-## Installation
-
-### Add to HACS
-
-[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Moballo-LLC&repository=ha-mcp-assist&category=integration)
-
-### Option A: HACS (Recommended)
-1. Click the badge above to add this repository to HACS, or manually add it as a custom repository
-2. Install "HA MCP Assist" from HACS
-3. Restart Home Assistant
-
-### Option B: Manual Installation
-1. Copy the `custom_components/mcp_assist` folder to your Home Assistant `custom_components` directory
-2. Restart Home Assistant
-
-## Configuration
-
-### 1. Add the Integration
-
-1. Go to **Settings** → **Devices & Services** → **Add Integration**
-2. Search for "MCP Assist" and select it
-
-### 2. Setup Flow
-
-**Step 1 - Profile & Server Type:**
-- Profile Name: Give your assistant a name (e.g., "Living Room Assistant")
-- Server Type: Choose your LLM provider
-  - **LM Studio** - Local, free, runs on your machine
-  - **llama.cpp** - Local, free, official llama.cpp server
-  - **Ollama** - Local, free, command-line based
-  - **OpenAI** - Cloud, paid
-  - **Google Gemini** - Cloud, paid/free tier
-  - **Anthropic Claude** - Cloud, paid
-  - **OpenRouter** - Cloud, multi-model gateway
-  - **Moltbot** - Local or self-hosted server
-  - **vLLM** - Local or self-hosted OpenAI-compatible server
-
-**Step 2 - Server Configuration:**
-
-*For Local/OpenAI-Compatible Servers (LM Studio / llama.cpp / Ollama / Moltbot / vLLM):*
-- Server URL: Where your LLM server is running
-  - LM Studio: `http://localhost:1234` (default)
-  - llama.cpp: `http://localhost:8080` (default)
-  - Ollama: `http://localhost:11434` (default)
-  - Moltbot: `http://localhost:18789` (default)
-  - vLLM: `http://localhost:8000` (default)
-
-*For Cloud Providers (OpenAI / Gemini / Anthropic / OpenRouter):*
-- API Key: Your provider API key (see below for setup)
-
-**Step 3 - Model & Prompts:**
-- Model Name: Select from auto-loaded models or enter manually
-- System Prompt: Prefilled with the current effective prompt so you can review, copy, or customize it
-- Technical Instructions: Prefilled with the current effective instructions so you can review, copy, or customize them
-
-If you leave the prompt text effectively unchanged, MCP Assist continues using the built-in prompt from the integration code.
-
-**Step 4 - Conversation & Advanced Settings:**
-- Temperature: Response randomness (0.0-1.0)
-- Max Response Tokens: Maximum length of responses
-- Max History Messages: Conversation memory depth
-- Response Mode: None / Smart / Always (conversation continuation behavior)
-- Follow-up Phrases: Configurable phrases for pattern detection
-- End Conversation Words: Words/phrases that end conversations
-- Control Home Assistant: Enable/disable device control
-- Clean Responses: Optional voice-friendly response cleanup
-- Max Tool Iterations: How many tool calls allowed per request
-- Timeout: Maximum wait time for provider responses
-- Debug Mode: Extra logging for troubleshooting
-- Tool Family Overrides: Optional per-profile narrowing of shared optional MCP tool families
-- **Ollama Keep Alive** (Ollama only): Control how long models stay loaded in memory
-  - `-1` = Keep loaded indefinitely
-  - `0` = Unload immediately after response
-  - `"5m"` = Keep for 5 minutes (default)
-  - Duration strings like `"24h"`, `"168h"` also supported
-- **Ollama Context Window** (Ollama only): Custom context window size (0 = use model default)
-
-**Step 5 - Shared MCP Server Settings:**
-- MCP Server Port: Port for the shared MCP server (default: 8090)
-- Additional Allowed IPs/Ranges: Optional allowlist for external MCP clients
-- Discovery: Smart Entity Index and Max Entities Per Discovery
-- Tools: Shared optional tool families, including web search, weather forecast, and optional external custom tools
-
-### 3. Set as Voice Assistant
-
-1. In Home Assistant, go to **Settings** → **Voice Assistants**
-2. Set your preferred assistant to your MCP Assist profile name
-3. Test with commands!
-
-## Usage Examples
-
-### Basic Commands
-- "Turn on the kitchen lights"
-- "Turn off all the lights in the bedroom"
-- "What's the temperature in the living room?"
-- "Are any lights on upstairs?"
-
-### Multi-Turn Conversations
-- **User**: "What lights are on?"
-- **Assistant**: "The kitchen and living room lights are on."
-- **User**: "Turn off the kitchen one"
-- **Assistant**: "I've turned off the kitchen light."
-
-### Complex Query Example
-
-**User**: "Do we have a leak?"
-
-**Behind the scenes:**
-```
-1. LLM calls get_index → Sees moisture sensors and water flow monitors exist in system
-2. LLM calls discover_entities(device_class="moisture")
-   → Returns: binary_sensor.bathroom_leak, binary_sensor.kitchen_sink_leak, binary_sensor.laundry_leak
-3. LLM calls discover_entities(name_contains="water flow")
-   → Returns: sensor.water_flow_rate
-4. LLM calls get_entity_details for each sensor
-   → bathroom leak: "off", kitchen leak: "off", laundry leak: "on", water flow: "2.5 gpm"
-5. LLM synthesizes response
-```
-
-**Assistant**: "Yes, the laundry room leak sensor is detecting water and water is flowing at 2.5 gallons per minute. The bathroom and kitchen sensors are dry."
-
-**Follow-up User**: "Turn off the water main"
-
-**Behind the scenes:**
-```
-1. LLM calls discover_entities(name_contains="water main")
-   → Returns: switch.water_main_shutoff
-2. LLM calls perform_action(entity_id="switch.water_main_shutoff", action="turn_off")
-   → Success
-```
-
-**Assistant**: "I've shut off the main water valve."
-
-### History & Native Read Examples
-- "When was the front door last opened?"
-- "How many times was the garage door opened in the last hour?"
-- "How long has the basement door deadbolt been locked?"
-- "What will the weather be here tomorrow?"
-
-### Memory Examples
-- "Remember that I prefer the bedroom thermostat at 68 degrees."
-- "Remember for 14 days that the dog gets medicine with dinner."
-- "What do you remember about my coffee preferences?"
-- "Forget that reminder about the spare key."
-
-Persisted memory is stored by Home Assistant through MCP Assist's own shared storage with TTL-based expiry and pruning controls.
-
-### Web Search (if enabled)
-- "Search for the latest Home Assistant updates"
-- "What time does the store close?"
-
-For weather, calendar, and to-do queries, the assistant can use Home Assistant's native response-capable services before falling back to web search.
-
-### Weather Forecast Setup
-
-To answer questions like "What is the weather forecast for tomorrow?" from Home Assistant instead of the web:
-
-- Make sure Home Assistant has at least one exposed `weather.` entity.
-- The weather integration must support one or more forecast types such as `daily`, `twice_daily`, or `hourly`.
-- If you use entity exposure controls, expose the weather entity to the conversation assistant.
-- If you have multiple weather entities, use room/floor/label context or a specific entity to disambiguate.
-- In shared MCP server settings, keep the **Weather Forecast** tool enabled if you want the assistant to answer weather questions through Home Assistant.
-
-MCP Assist does not assume every Home Assistant setup supports daily forecasts. It automatically falls back to a supported forecast type and summarizes that result.
-
-### External Custom Tools
-
-You can optionally load additional MCP tools from your Home Assistant config directory:
-
-- Folder: `<home-assistant-config>/mcp-assist-tools`
-- Shared setting: enable **Custom Tools** in the MCP server **Tools** section
-- Default: disabled
-
-These packages can add MCP tools plus short technical-instruction appendices so the model knows when to use them. They are intended for advanced local extensions such as custom component behavior, integration-specific queries, or site-specific helper tools.
-
-See [docs/custom-tools.md](docs/custom-tools.md) for the full package spec, safety model, manifest format, and a working example.
-
-## Configuration Options
-
-### Profile Settings
-- **Profile Name**: Unique name for this assistant
-- **Server Type**: LM Studio, llama.cpp, Ollama, OpenAI, Gemini, Anthropic Claude, OpenRouter, Moltbot, or vLLM
-- **Server URL / API Key**: How the selected provider is reached
-- **Model Name**: Which model to use
-
-### Prompts
-- **System Prompt**: Prefilled with the current effective prompt so you can review, copy, or customize it
-- **Technical Instructions**: Prefilled with the current effective instructions so you can review, copy, or customize them
-
-### Advanced Settings
-- **Max Response Tokens**: Limit response length (default: 500)
-- **Max History Messages**: How many conversation turns to remember (default: 10)
-- **Max Tool Iterations**: Prevent infinite loops (default: 10)
-- **Response Mode**:
-  - **None**: Never ask follow-ups, end immediately
-  - **Smart** (default): Contextual follow-ups when relevant, user can end with "bye"/"thanks"
-  - **Always**: Natural conversational follow-ups, user can end with "bye"/"thanks"
-- **Follow-up Phrases**: Comma-separated phrases for detecting when assistant wants to continue
-- **End Conversation Words**: Comma-separated words/phrases for user-initiated ending
-- **Control Home Assistant**: Enable/disable device control
-- **Clean Responses**: Trim unnecessary formatting or filler for voice output
-- **Tool Family Overrides**: Optional per-profile narrowing of the shared MCP server tool families (leave blank to inherit the shared MCP server defaults)
-- **Temperature**: Response randomness (default depends on provider)
-- **Timeout**: Provider response timeout
-- **Debug Mode**: Extra logging for troubleshooting
-- **Ollama Keep Alive** / **Ollama Context Window**: Ollama-specific tuning
-
-### MCP Server Settings
-- **MCP Server Port**: Default 8090 (change if port conflict)
-- **Additional Allowed IPs/Ranges**: Whitelist Docker containers (e.g., `172.30.0.0/16`) or specific IPs for external MCP clients like Claude Code add-on
-- **Enable Smart Entity Index**: Context-aware entity discovery with automatic gap-filling for uncommon devices (default: enabled)
-- **Max Entities Per Discovery**: Cap how many entities a single discovery call may return
-- **Memory**: Shared defaults for persisted memory retention
-  - **Default Memory TTL**: How long new memories are kept if the tool call does not provide a TTL
-  - **Max Memory TTL**: Upper bound on how long any memory may be retained
-  - **Max Stored Memories**: Oldest memories are pruned first when the limit is exceeded
-- **Tools**: Shared optional capabilities exposed by the MCP server, including weather forecast, web search, and opt-in external custom tools
-
-### Web Search
-- Configured in the shared **Tools** section of the MCP server settings
-- **Web Search Provider**: Choose between:
-  - **None**: Search disabled
-  - **DuckDuckGo**: Free web search (no API key required)
-  - **Brave Search**: Requires API key from https://brave.com/search/api/
-  - **SearXNG**: Uses your self-hosted SearXNG instance
-- **Brave Search API Key**: Required only if using Brave Search
-- **SearXNG URL**: Required only if using SearXNG; set this to the base URL of your instance
-
-### Shared vs Per-Profile Settings
-
-MCP Assist has two types of settings:
-
-**Per-Profile Settings** (independent per conversation agent):
-- Model name, system prompt, technical instructions
-- Temperature, max tokens, response mode, and timeout
-- Debug mode and max iterations
-- Server URL or API key
-- Optional per-profile tool family overrides
-
-**Shared Settings** (affect ALL profiles):
-- MCP server port
-- Web search provider and Brave API key
-- Allowed IPs/CIDR ranges
-- Smart entity index settings
-- Max entities per discovery
-- Shared optional tool families exposed by the MCP server
-- Shared memory retention defaults for the optional Memory tool
-
-When you change shared settings in one profile's options, they apply to all profiles. This is intentional since all profiles share the same MCP server.
-
-## Model Compatibility Guide
-
-Not all LLM models support tool calling (function calling) equally well. **This integration works best with frontier models** (GPT-5.2, Claude Opus 4.5, Gemini 3 Flash) **or higher-spec local models**. Smaller models may struggle with complex multi-entity queries that require synthesizing large tool result sets.  
-
-### Understanding Tool Calling Requirements
-
-Tool calling (function calling) requires the model to:
-1. Understand the user's request
-2. Decide which tool to call
-3. Format the tool arguments correctly as JSON
-4. Interpret the tool results
-5. Generate a natural response
-
-**Factors affecting tool calling success**:
-- **Model size**: Larger models (8B+) generally handle tool calling better
-- **Model architecture**: Vision-Language (VL) models behave differently than standard models
-- **Inference engine**: LM Studio and Ollama optimize models differently
-- **Quantization level**: Q4 vs Q8 can affect instruction following
-
-### Instruct vs Thinking/Reasoning Models
-
-**Instruct Models** (e.g., `qwen3-8b-instruct`):
-- Fast response times
-- Best for simple, single-action requests ("turn on the kitchen lights")
-- May struggle with complex queries requiring multiple tool calls
-- Good for basic voice commands
-
-**Thinking/Reasoning Models** (e.g., `qwen3-8b-thinking`):
-- Slower response times (more deliberate reasoning)
-- **Much better at complex requests** requiring multiple tool calls and context
-- Handles multi-step queries reliably ("check all rooms for open windows, then turn off lights in those rooms")
-- **Recommended for Home Assistant** where queries often involve discovery + action combinations
-
-Choose the model type that best fits your use case. Thinking/reasoning models offer better reliability with complex multi-tool queries, while instruct models provide faster responses for simple commands.
-
-### Recommended Models
-
-**Consistently Reliable**:
-- ✅ **Qwen3 VL 32B Instruct** - Excellent tool calling
-- ✅ **Qwen3 30B A3B Instruct** - Very good tool calling
-- ✅ **Qwen3 8B Instruct** - Good balance, works reliably
-- ✅ **Anthropic Opus 4.5** - The very best at tool calling (cloud)
-- ✅ **OpenAI GPT-5.2** - Excellent tool calling, very fast (cloud)
-- ✅ **Google Gemini 3 Flash** - Excellent tool calling, fast, cost-effective (cloud)
-
-### Testing Your Model
-
-When tool calling **doesn't work**, you'll see:
-- Model claims "I turned on the lights" but nothing happens
-- No `perform_action` tool calls in the logs
-- Actions don't execute, only narration
-
-When tool calling **works correctly**, you'll see in logs:
-- `discover_entities` called to find devices
-- `perform_action` called to control them
-- "✅ Successfully executed" messages
-- Devices actually change state
-- Tool calls visible in Settings → Voice Assistants → (profile) → Debug
-
-### General Guidelines
-
-**Start with larger models** (30B) if your hardware supports it - they work consistently across platforms.
-
-**If using smaller models** (4B-8B), test thoroughly:
-- Try a simple command like "turn on the kitchen lights"
-- Check logs to verify tools are being called
-- Confirm the device actually changes state
-- If it doesn't work, try the same model on a different platform (LM Studio vs Ollama)
-
-**Vision-Language (VL) models** are optimized for multimodal tasks and may have different tool calling behavior than standard models.
-
-### Dynamic Model Switching
-
-One of MCP Assist's features is **dynamic model switching** - you can change models in the configuration UI and it takes effect immediately without restarting Home Assistant. This makes it easy to:
-- Test different models
-- Switch between fast (Q4) and quality (Q8) quantizations
-- Try new models as they're released
-
-## Troubleshooting
-
-### Integration Won't Start
-- Check that the MCP port isn't already in use
-- Verify Home Assistant has permission to bind to the port
-- Check the Home Assistant logs for specific error messages
-
-### LM Studio Can't Connect to MCP
-- Ensure the MCP server is running (check integration status)
-- Verify the MCP configuration in LM Studio is correct
-- Check that the URL in LM Studio matches your MCP port (default: 8090)
-- Restart LM Studio after changing MCP configuration
-
-### Ollama Connection Issues
-- Verify Ollama is running: `ollama list`
-- Check the URL matches where Ollama is running (default: `http://localhost:11434`)
-- Ensure the model is loaded in Ollama
-
-### Cloud Provider Connection Issues
-- Verify your API key is valid with your provider
-- Check you have sufficient credits/quota remaining
-- Check for rate limit errors in Home Assistant logs
-- Try regenerating your API key if authentication fails
-- Verify your internet connection is working
-- Check Home Assistant logs for specific error codes
-
-### No Response from Assistant
-- Verify your LLM has a model loaded
-- Check that the model name in the integration matches exactly
-- Ensure your entities are exposed to the conversation assistant
-- Check Home Assistant logs for API errors
-- Enable Debug Mode for more detailed logging
-
-### Poor Response Quality
-- Try a different/larger model
-- Adjust the temperature setting (lower = more focused)
-- Ensure the model supports tool calling/function calling
-- Check that Technical Instructions are not modified
-
-### Tools Not Working
-- Verify "Control Home Assistant" is enabled
-- Check that entities are exposed (Settings → Voice Assistants → Expose)
-- Look for MCP server errors in logs
-- Ensure Max Tool Iterations isn't set too low
-- For local forecasts, confirm a `weather.` entity exists, is exposed, and the shared **Weather Forecast** tool is enabled
-- For persisted memory, confirm the shared **Memory** tool is enabled and remember that stored memories are shared across MCP Assist profiles
-- For external custom tools, confirm the shared **Custom Tools** toggle is enabled and your package lives under `<home-assistant-config>/mcp-assist-tools/<tool_id>/`
-
-## Entity Exposure
-
-The integration only discovers entities that are exposed to the "conversation" assistant. To expose entities:
-
-1. Go to **Settings** → **Voice Assistants** → **Expose**
-2. Select entities you want the assistant to control
-3. The integration will automatically discover these when needed
+- One supported local or cloud model provider
+- A model that can reliably use tool/function calling for the workflows you
+  want to automate
+
+See [Model Compatibility](docs/model-compatibility.md) before spending much time
+tuning a small local model.
 
 ## Releases
 
-Release notes are generated by GitHub from merged PRs using `.github/release.yml`; this repo does not maintain a separate `CHANGELOG.md`. To publish a release, update `custom_components/mcp_assist/manifest.json`, push a matching `vX.Y.Z` tag, and let the release workflow build the HACS package and GitHub release.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. The fork preserves the original upstream copyright notice and adds copyright coverage for Moballo-maintained changes.
+Release notes are generated by GitHub from merged PRs using
+`.github/release.yml`; this repo does not maintain a separate `CHANGELOG.md`.
+The release workflow validates the tag, builds `mcp_assist.zip`, and publishes
+the GitHub release for HACS. See [Releases](docs/releases.md).
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/Moballo-LLC/ha-mcp-assist/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Moballo-LLC/ha-mcp-assist/discussions)
-- **Sponsor**: [Jason-Morcos on GitHub Sponsors](https://github.com/sponsors/Jason-Morcos)
-- **Home Assistant Community**: [Community Forum](https://community.home-assistant.io/)
+- [GitHub Issues](https://github.com/Moballo-LLC/ha-mcp-assist/issues)
+- [GitHub Discussions](https://github.com/Moballo-LLC/ha-mcp-assist/discussions)
+- [GitHub Sponsors: Jason-Morcos](https://github.com/sponsors/Jason-Morcos)
+- [Home Assistant Community Forum](https://community.home-assistant.io/)
+
+## License
+
+This project is licensed under the MIT License. The fork preserves the original
+upstream copyright notice and adds copyright coverage for Moballo-maintained
+changes.
