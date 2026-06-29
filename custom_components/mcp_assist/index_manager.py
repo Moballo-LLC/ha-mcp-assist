@@ -16,7 +16,9 @@ The index includes:
 """
 
 import asyncio
+from contextlib import suppress
 import logging
+from collections.abc import Callable
 from typing import Any, Dict, List, Optional, Set
 from collections import defaultdict
 from datetime import datetime
@@ -52,12 +54,17 @@ class IndexManager:
         self._index: Optional[Dict[str, Any]] = None
         self._last_updated: Optional[datetime] = None
         self._refresh_task: Optional[asyncio.Task] = None
+        self._unsub_listeners: list[Callable[[], None]] = []
         self._refresh_debounce_seconds = 60
         self._gap_filling_in_progress = False  # Re-entrancy guard for gap-filling
         self._first_index_generated = False  # Skip gap-filling on first index (startup)
 
     async def start(self) -> None:
         """Start index manager and set up event listeners."""
+        if self._unsub_listeners:
+            _LOGGER.debug("Smart Index Manager already started")
+            return
+
         _LOGGER.info("Starting Smart Index Manager")
 
         @callback
@@ -77,10 +84,27 @@ class IndexManager:
             registry_events.append(lr.EVENT_LABEL_REGISTRY_UPDATED)
 
         for event_type in registry_events:
-            self.hass.bus.async_listen(event_type, registry_changed)
+            self._unsub_listeners.append(
+                self.hass.bus.async_listen(event_type, registry_changed)
+            )
 
         _LOGGER.info("✅ Smart Index Manager started successfully")
         _LOGGER.debug("Index will be generated lazily on first request")
+
+    async def async_stop(self) -> None:
+        """Stop index manager listeners and pending refresh work."""
+        _LOGGER.info("Stopping Smart Index Manager")
+
+        for unsubscribe in self._unsub_listeners:
+            with suppress(Exception):
+                unsubscribe()
+        self._unsub_listeners.clear()
+
+        if self._refresh_task and not self._refresh_task.done():
+            self._refresh_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._refresh_task
+        self._refresh_task = None
 
     def _schedule_refresh(self) -> None:
         """Schedule index refresh with debouncing."""

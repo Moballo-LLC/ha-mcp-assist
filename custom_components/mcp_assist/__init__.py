@@ -641,7 +641,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             mcp_server = hass.data[DOMAIN].pop("shared_mcp_server", None)
             if mcp_server:
                 await mcp_server.stop()
-            hass.data[DOMAIN].pop("index_manager", None)
+            index_manager = hass.data[DOMAIN].pop("index_manager", None)
+            async_stop_index_manager = getattr(index_manager, "async_stop", None)
+            if callable(async_stop_index_manager):
+                await async_stop_index_manager()
             hass.data[DOMAIN].pop("mcp_port", None)
             hass.data[DOMAIN].pop("mcp_refcount", None)
             hass.data[DOMAIN].pop("chat_log_manager", None)
