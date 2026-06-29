@@ -22,6 +22,7 @@ Profile settings are independent per conversation agent.
 | Temperature | Response randomness |
 | Max Response Tokens | Response length cap |
 | Max History Messages | Multi-turn conversation depth |
+| Context Mode | Standard or smaller light context sent to the model |
 | Response Mode | Whether the assistant should continue conversations |
 | Timeout | Provider response timeout |
 | Debug Mode | Extra logging for investigation |
@@ -78,9 +79,18 @@ instructions concise and avoid hardcoding entity IDs unless that is intentional.
 | Temperature | Lower values are usually better for predictable device control |
 | Max Response Tokens | Keep high enough for explanations, lower for voice-only profiles |
 | Max History Messages | Increase for longer multi-turn context, decrease for smaller prompts |
+| Context Mode | Use **Light** for small local models that reject the full request context |
 | Max Tool Iterations | Raise only if legitimate requests need more tool calls |
 | Clean Responses | Useful for voice output when models include extra formatting |
 | Control Home Assistant | Disable for read-only profiles |
+
+Light context mode keeps the profile's prompts but skips MCP Assist's optional
+tool-family prompt instructions, keeps at most two prior conversation turns, and
+advertises only core Home Assistant discovery/control tools to the model. It is
+useful for small Ollama or other local models with tight context windows. Use
+Standard when you want the profile's full tool surface, including optional tools
+such as recorder history, weather, web search, memory, Music Assistant, and
+external custom tools.
 
 ### Response Mode
 
@@ -154,7 +164,7 @@ legacy web-search settings may still enable it for older profiles.
 ## Memory Configuration
 
 The Memory tool family is optional. When enabled, the assistant can store,
-recall, and forget user-approved memories.
+recall, categorize, and forget user-approved memories.
 
 Shared settings:
 
@@ -162,6 +172,11 @@ Shared settings:
   not specify `ttl_days`.
 - **Max Memory TTL**: The longest allowed retention period.
 - **Max Stored Memories**: The maximum number of active stored memories.
+
+Memory categories are labels for retrieval and cleanup. MCP Assist suggests
+stable categories such as `preference`, `routine`, `device_alias`,
+`automation_note`, `baseline`, `correction`, `maintenance`, and `household`, but
+custom categories are still accepted for existing workflows.
 
 Memories are shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).

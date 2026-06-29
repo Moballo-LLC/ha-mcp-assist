@@ -32,6 +32,7 @@ CONF_FOLLOW_UP_MODE = "follow_up_mode"  # Keep for backward compatibility
 CONF_TEMPERATURE = "temperature"
 CONF_MAX_TOKENS = "max_tokens"
 CONF_MAX_HISTORY = "max_history"
+CONF_CONTEXT_MODE = "context_mode"
 CONF_MAX_ITERATIONS = "max_iterations"
 CONF_DEBUG_MODE = "debug_mode"
 CONF_CHAT_LOG_MODE = "chat_log_mode"
@@ -110,8 +111,11 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 PROMPT_MODE_DEFAULT = "default"
 PROMPT_MODE_CUSTOM = "custom"
+CONTEXT_MODE_STANDARD = "standard"
+CONTEXT_MODE_LIGHT = "light"
 DEFAULT_SYSTEM_PROMPT_MODE = PROMPT_MODE_DEFAULT
 DEFAULT_TECHNICAL_PROMPT_MODE = PROMPT_MODE_DEFAULT
+DEFAULT_CONTEXT_MODE = CONTEXT_MODE_STANDARD
 DEFAULT_CONTROL_HA = True
 DEFAULT_RESPONSE_MODE = "default"
 DEFAULT_FOLLOW_UP_MODE = "default"  # Keep for backward compatibility
@@ -159,6 +163,7 @@ DEFAULT_PROFILE_ENABLE_DEVICE_TOOLS = True
 DEFAULT_PROFILE_ENABLE_MUSIC_ASSISTANT_SUPPORT = True
 DEFAULT_OLLAMA_KEEP_ALIVE = "5m"  # 5 minutes
 DEFAULT_OLLAMA_NUM_CTX = 0  # 0 = use model default
+LIGHT_CONTEXT_MAX_HISTORY = 2
 DEFAULT_FOLLOW_UP_PHRASES = (
     "anything else, what else, would you, do you, should i, can i, which, "
     "how can, what about, is there"
@@ -219,6 +224,7 @@ OPTIONAL_TOOL_FAMILY_TOOL_NAMES = {
     ),
     TOOL_FAMILY_MEMORY: frozenset(
         {
+            "list_memory_categories",
             "remember_memory",
             "recall_memories",
             "forget_memory",
@@ -260,6 +266,22 @@ OPTIONAL_TOOL_NAME_TO_FAMILY = {
     for family, tool_names in OPTIONAL_TOOL_FAMILY_TOOL_NAMES.items()
     for tool_name in tool_names
 }
+
+LIGHT_CONTEXT_TOOL_NAMES = frozenset(
+    {
+        "discover_entities",
+        "get_entity_details",
+        "list_areas",
+        "list_domains",
+        "get_index",
+        "perform_action",
+        "set_conversation_state",
+        "run_script",
+        "run_automation",
+        "discover_devices",
+        "get_device_details",
+    }
+)
 
 TOOL_FAMILY_SHARED_SETTINGS = {
     TOOL_FAMILY_DEVICE: (
@@ -426,6 +448,8 @@ Device tools are enabled.
 MEMORY_TECHNICAL_INSTRUCTIONS = """
 Memory tools are enabled.
 - Use remember_memory only when the user explicitly asks you to remember something.
+- Use list_memory_categories when choosing or explaining memory categories.
+- Prefer stable categories such as preference, routine, device_alias, automation_note, baseline, correction, maintenance, and household.
 - Use recall_memories for stored facts or preferences.
 - Use forget_memory when the user asks to remove or update stored memory.
 """
