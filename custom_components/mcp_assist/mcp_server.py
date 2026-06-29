@@ -135,8 +135,15 @@ class _ImageFetchTarget:
 
 
 _SKIP_NON_SERIALIZABLE = object()
+_SENSITIVE_LOG_FIELD_PATTERN = (
+    r"api[_-]?key|api\s+key|authorization|bearer|password|secret|token|\bkey\b"
+)
 _SENSITIVE_LOG_FIELD_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer|password|secret|token)"
+    rf"(?i)({_SENSITIVE_LOG_FIELD_PATTERN})"
+)
+_SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
+    rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
+    r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
 )
 _MAX_LOG_VALUE_CHARS = 500
 
@@ -185,11 +192,7 @@ def _sanitize_log_value(value: Any) -> str:
         r"\1[redacted]",
         text,
     )
-    text = re.sub(
-        r"(?i)(api[_-]?key|password|secret|token)(\s*[:=]\s*)[^\s,;}]+",
-        r"\1\2[redacted]",
-        text,
-    )
+    text = _SENSITIVE_LOG_FIELD_VALUE_RE.sub(r"\1[redacted]\2", text)
     text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
     text = text.replace("\r", "\\r").replace("\n", "\\n")
     if len(text) <= _MAX_LOG_VALUE_CHARS:

@@ -58,7 +58,9 @@ def test_sanitize_log_value_escapes_line_breaks() -> None:
 def test_sanitize_log_value_redacts_common_secret_markers() -> None:
     """User-controlled log values should not expose common secret markers."""
     sanitized = mcp_server_module._sanitize_log_value(
-        "Authorization: Bearer abc123 api_key=secret-token password=hunter2"
+        "Authorization: Bearer abc123 api_key=secret-token password=hunter2 "
+        '{"api_key":"quoted-secret","token":"quoted-token"} '
+        "{'secret': 'dict-secret'}"
     )
 
     assert "Authorization" not in sanitized
@@ -68,6 +70,9 @@ def test_sanitize_log_value_redacts_common_secret_markers() -> None:
     assert "abc123" not in sanitized
     assert "secret-token" not in sanitized
     assert "hunter2" not in sanitized
+    assert "quoted-secret" not in sanitized
+    assert "quoted-token" not in sanitized
+    assert "dict-secret" not in sanitized
     assert "[redacted]" in sanitized
 
 
