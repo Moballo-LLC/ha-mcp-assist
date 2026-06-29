@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 def test_release_candidate_ancestry_fetch_preserves_main_history() -> None:
     script = Path("scripts/verify_release_candidate.sh").read_text(encoding="utf-8")
@@ -17,3 +19,13 @@ def test_release_candidate_ancestry_fetch_preserves_main_history() -> None:
     assert "+refs/heads/main:refs/remotes/origin/main" in fetch_function
     assert "fetch_main_for_ancestry_check" in require_main_block
     assert "git merge-base --is-ancestor HEAD origin/main" in require_main_block
+
+
+def test_release_workflow_keeps_validation_jobs_read_only() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+
+    assert workflow["permissions"] == {"contents": "read"}
+    assert jobs["hacs"]["permissions"] == {"contents": "read"}
+    assert jobs["hassfest"]["permissions"] == {"contents": "read"}
+    assert jobs["package"]["permissions"] == {"contents": "write"}
