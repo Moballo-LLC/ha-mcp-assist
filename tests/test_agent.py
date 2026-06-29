@@ -14,6 +14,7 @@ from custom_components.mcp_assist.custom_tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
@@ -26,7 +27,11 @@ from custom_components.mcp_assist.const import (
     CONF_CLEAN_RESPONSES,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_MAX_HISTORY,
+    CONF_MAX_ITERATIONS,
+    CONF_MAX_TOKENS,
+    CONF_MODEL_NAME,
     CONF_PROFILE_NAME,
+    CONF_SERVER_TYPE,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT,
@@ -40,6 +45,7 @@ from custom_components.mcp_assist.const import (
     CONF_CHAT_LOG_MODE,
     DOMAIN,
     PROMPT_MODE_CUSTOM,
+    SERVER_TYPE_ANTHROPIC,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -78,6 +84,44 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     assert 'api_key":"[redacted]' in snippet
     assert 'Authorization":"[redacted]' in snippet
     assert "truncated" in snippet
+
+
+class _FakeAnthropicResponse:
+    """Minimal async response for Anthropic API tests."""
+
+    def __init__(self, payload: dict[str, object], status: int = 200) -> None:
+        self._payload = payload
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def json(self) -> dict[str, object]:
+        return self._payload
+
+    async def text(self) -> str:
+        return str(self._payload)
+
+
+class _FakeAnthropicSession:
+    """Minimal aiohttp session that records Anthropic requests."""
+
+    def __init__(self, responses: list[_FakeAnthropicResponse], posts: list[dict]) -> None:
+        self._responses = responses
+        self._posts = posts
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def post(self, url: str, **kwargs):
+        self._posts.append({"url": url, **kwargs})
+        return self._responses.pop(0)
 
 
 def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
@@ -958,6 +1002,211 @@ def test_convert_mcp_tools_to_llm_tools_keeps_compact_routing_with_llm_descripti
     assert description.startswith("Get sample status")
     assert "Use for: Use when the user asks for custom package health" in description
     assert "Very long UI-facing description" not in description
+
+
+def test_build_anthropic_payload_uses_native_messages_shape(
+    hass, profile_entry_factory
+) -> None:
+    """Claude should receive native Messages payloads, not OpenAI chat payloads."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC,
+            CONF_MODEL_NAME: "claude-sonnet-4-5",
+        },
+        options={CONF_MAX_TOKENS: 321},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "discover_entities",
+                "description": "Find entities.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"area": {"type": "string"}},
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_image",
+                "description": "Analyze an image.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_image",
+                "description": "Generate an image.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    ]
+    messages = [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": "Find kitchen lights."},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "toolu_1",
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "arguments": '{"area":"Kitchen"}',
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "toolu_1", "content": "Kitchen light"},
+    ]
+
+    payload = agent._build_anthropic_payload(messages, tools)
+
+    assert payload["model"] == "claude-sonnet-4-5"
+    assert payload["max_tokens"] == 321
+    assert payload["system"] == "You are helpful."
+    assert "stream" not in payload
+    assert payload["tools"] == [
+        {
+            "name": "discover_entities",
+            "description": "Find entities.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"area": {"type": "string"}},
+            },
+        }
+    ]
+    assert payload["messages"] == [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "Find kitchen lights."}],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "discover_entities",
+                    "input": {"area": "Kitchen"},
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_1",
+                    "content": "Kitchen light",
+                }
+            ],
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_messages_tool_loop_uses_native_endpoint(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Anthropic calls should use /v1/messages and round-trip tool_result blocks."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC,
+            CONF_API_KEY: "anthropic-key",
+            CONF_MODEL_NAME: "claude-sonnet-4-5",
+        },
+        options={CONF_MAX_ITERATIONS: 3, CONF_MAX_TOKENS: 100},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_call_id": "toolu_1",
+                "content": "Kitchen light is on",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "content": [
+                    {"type": "text", "text": "Checking."},
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_1",
+                        "name": "discover_entities",
+                        "input": {"area": "Kitchen"},
+                    },
+                ],
+                "stop_reason": "tool_use",
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "content": [
+                    {"type": "text", "text": "The kitchen light is on."}
+                ],
+                "stop_reason": "end_turn",
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    result = await agent._call_llm([{"role": "user", "content": "Check kitchen"}])
+
+    assert result == "The kitchen light is on."
+    assert [post["url"] for post in posts] == [
+        "https://api.anthropic.com/v1/messages",
+        "https://api.anthropic.com/v1/messages",
+    ]
+    assert posts[0]["headers"]["x-api-key"] == "anthropic-key"
+    assert posts[0]["headers"]["anthropic-version"] == "2023-06-01"
+    assert "tool_choice" not in posts[0]["json"]
+    assert posts[0]["json"]["tools"][0]["input_schema"]["type"] == "object"
+    execute_mock.assert_awaited_once()
+    assert execute_mock.await_args.args[0][0]["function"]["arguments"] == (
+        '{"area": "Kitchen"}'
+    )
+    assert posts[1]["json"]["messages"][-1] == {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_1",
+                "content": "Kitchen light is on",
+            }
+        ],
+    }
 
 
 def test_format_tool_result_for_llm_preserves_structured_results_without_binary(

@@ -16,7 +16,7 @@ Check:
 
 If the port is in use, change **MCP Server Port** in the shared settings.
 
-## HACS Install Does Not Show MCP Assist
+## HACS Install Does Not Show HA MCP Assist
 
 Check:
 
@@ -25,8 +25,8 @@ Check:
 - HACS has refreshed its repository data.
 - Home Assistant has restarted after installation.
 
-HACS displays the repository as **HA MCP Assist**. Home Assistant displays the
-integration as **MCP Assist**.
+HACS and Home Assistant display the integration as **HA MCP Assist**. The
+installed integration domain remains `mcp_assist`.
 
 ## Provider Connection Fails
 
