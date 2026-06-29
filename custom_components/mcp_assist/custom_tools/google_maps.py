@@ -192,8 +192,9 @@ class GoogleMapsTool:
                         "origin": {
                             "type": "string",
                             "description": (
-                                "Optional origin address, place ID, or 'lat,lng'. Defaults "
-                                "to Home Assistant home coordinates."
+                                "Optional origin address, place ID, or 'lat,lng'. May be "
+                                "omitted for Home Assistant home only when home-location "
+                                "tool sharing is enabled."
                             ),
                         },
                         "travel_mode": {
@@ -212,8 +213,8 @@ class GoogleMapsTool:
                         "arrival_time": {
                             "type": "string",
                             "description": (
-                                "Optional ISO timestamp for arrival-by routing. Do not send "
-                                "with departure_time."
+                                "Optional ISO timestamp for transit arrival-by routing. Do "
+                                "not send with departure_time or non-transit travel modes."
                             ),
                         },
                         "routing_preference": {
@@ -386,6 +387,12 @@ class GoogleMapsTool:
                 "Error: send either departure_time or arrival_time, not both.",
                 is_error=True,
             )
+        if arrival_time and travel_mode != "TRANSIT":
+            return self._text_result(
+                "Error: arrival_time is only supported for transit routes. "
+                "Use departure_time for drive, walk, or bicycle routes.",
+                is_error=True,
+            )
 
         desired_arrival_time: datetime | None = None
         if arrival_time:
@@ -420,8 +427,6 @@ class GoogleMapsTool:
         try:
             if desired_arrival_time is not None and travel_mode == "TRANSIT":
                 body["arrivalTime"] = self._format_route_time(desired_arrival_time)
-            elif desired_arrival_time is not None:
-                body["departureTime"] = self._format_route_time(desired_arrival_time)
             if departure_time and departure_time.casefold() != "now":
                 body["departureTime"] = self._normalize_route_time(departure_time)
         except ValueError as err:

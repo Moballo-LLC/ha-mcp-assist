@@ -317,12 +317,12 @@ async def test_get_google_route_requires_origin_when_location_context_disabled(
 
 
 @pytest.mark.asyncio
-async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_time(
+async def test_get_google_route_rejects_drive_arrival_time(
     hass,
     system_entry_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Drive arrival-time requests should sample future traffic and calculate leave-by."""
+    """Non-transit arrival-time requests would otherwise misrepresent leave-by."""
     _set_home_coordinates(hass)
     system_entry_factory(
         data={
@@ -330,29 +330,11 @@ async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_ti
             CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: True,
         }
     )
-    captured = {}
-    monkeypatch.setattr(
-        google_maps_module.aiohttp,
-        "ClientSession",
-        _google_client_session(
-            _FakeGoogleResponse(
-                json_data={
-                    "routes": [
-                        {
-                            "duration": "1800s",
-                            "staticDuration": "1800s",
-                            "distanceMeters": 12000,
-                            "localizedValues": {
-                                "duration": {"text": "30 min"},
-                                "distance": {"text": "12 km"},
-                            },
-                        }
-                    ]
-                }
-            ),
-            captured,
-        ),
-    )
+
+    def _client_session(**_kwargs):
+        raise AssertionError("HTTP should not be called for unsupported arrival_time")
+
+    monkeypatch.setattr(google_maps_module.aiohttp, "ClientSession", _client_session)
 
     result = await google_maps_module.GoogleMapsTool(hass).handle_call(
         "get_google_route",
@@ -362,14 +344,8 @@ async def test_get_google_route_calculates_drive_leave_by_with_future_traffic_ti
         },
     )
 
-    assert result["isError"] is False
-    body = captured["calls"][0][2]["json"]
-    assert "arrivalTime" not in body
-    assert body["departureTime"] == "2026-06-30T01:30:00Z"
-    route = result["structuredContent"]["route"]
-    assert route["desired_arrival_time"] == "2026-06-30T01:30:00Z"
-    assert route["leave_by"] == "2026-06-30T01:00:00Z"
-    assert "Leave by" in result["content"][0]["text"]
+    assert result["isError"] is True
+    assert "arrival_time is only supported for transit" in result["content"][0]["text"]
 
 
 def test_google_route_waypoint_accepts_bare_place_ids(hass) -> None:
