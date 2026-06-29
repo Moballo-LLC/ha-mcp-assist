@@ -34,6 +34,16 @@ def test_runtime_requirements_track_manifest_packages() -> None:
     )
 
 
+def test_duckduckgo_runtime_uses_renamed_ddgs_package() -> None:
+    """The DuckDuckGo provider should install the maintained ddgs package."""
+
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    requirement_names = _requirement_names(manifest["requirements"])
+
+    assert "ddgs" in requirement_names
+    assert "duckduckgo-search" not in requirement_names
+
+
 def test_hacs_display_name_keeps_drop_in_integration_domain() -> None:
     """HACS branding can differ while the installable integration stays drop-in."""
 
