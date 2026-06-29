@@ -129,8 +129,10 @@ misconfiguration and package collisions.
 
 ## Logs and Debug Mode
 
-Debug Mode is useful while diagnosing tool calls, but logs can include provider
-errors, tool arguments, entity names, URLs, and other details about your home.
+Debug Mode is useful while diagnosing tool calls, but it is intended to log
+operational metadata such as selected tools, status codes, latency, argument key
+names, and payload sizes. It should not log full prompts, user messages,
+provider payloads, raw tool arguments, or tool results.
 
 Chat Log Mode stores recent conversation records in Home Assistant storage. It
 can include user text, assistant replies, tool names, tool arguments, tool

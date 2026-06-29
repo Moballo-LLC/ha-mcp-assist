@@ -123,8 +123,6 @@ class ReadUrlTool:
         url = arguments.get("url")
         summary_only = arguments.get("summary", False)
 
-        _LOGGER.debug(f"Reading URL: {url}")
-
         try:
             current_target = await self._validate_fetchable_url(url)
         except ValueError as err:
@@ -137,6 +135,13 @@ class ReadUrlTool:
 
         current_url = current_target.display_url
         parsed = urlparse(current_url)
+        _LOGGER.debug(
+            "Reading URL: scheme=%s host=%s path_chars=%d query_present=%s",
+            parsed.scheme,
+            parsed.hostname or "",
+            len(parsed.path or ""),
+            bool(parsed.query),
+        )
 
         try:
             headers = {
@@ -379,7 +384,14 @@ class ReadUrlTool:
         try:
             return bool(is_allowed_external_url(url))
         except Exception as err:
-            _LOGGER.debug("Unable to evaluate external URL allowlist for %s: %s", url, err)
+            parsed_url = urlparse(url)
+            _LOGGER.debug(
+                "Unable to evaluate external URL allowlist for scheme=%s host=%s path_chars=%d: %s",
+                parsed_url.scheme,
+                parsed_url.hostname or "",
+                len(parsed_url.path or ""),
+                err,
+            )
             return False
 
     async def _validated_resolved_host_addresses(

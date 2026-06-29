@@ -98,7 +98,12 @@ class DuckDuckGoSearchTool:
         count = min(arguments.get("count", 5), 20)  # Enforce max limit
         mode = self._normalize_mode(arguments.get("mode"), query)
 
-        _LOGGER.debug("DuckDuckGo Search: '%s' (count: %s, mode: %s)", query, count, mode)
+        _LOGGER.debug(
+            "DuckDuckGo Search request: query_chars=%d count=%s mode=%s",
+            len(str(query or "")),
+            count,
+            mode,
+        )
 
         try:
             # Run synchronous DDGS search in thread pool
@@ -136,11 +141,11 @@ class DuckDuckGoSearchTool:
             }
 
         except Exception as e:
-            _LOGGER.error(f"DuckDuckGo Search exception: {e}")
+            _LOGGER.error("DuckDuckGo Search exception: %s", type(e).__name__)
             return {
                 "content": [{
                     "type": "text",
-                    "text": f"❌ Search error: {str(e)}"
+                    "text": f"❌ Search error: {type(e).__name__}"
                 }]
             }
 
@@ -157,9 +162,8 @@ class DuckDuckGoSearchTool:
                     )
                 except Exception as err:
                     _LOGGER.warning(
-                        "DDGS news search failed for %r, falling back to web search: %s",
-                        query,
-                        err,
+                        "DDGS news search failed, falling back to web search: %s",
+                        type(err).__name__,
                     )
                     raw_results = client.text(
                         query,
@@ -173,7 +177,7 @@ class DuckDuckGoSearchTool:
 
             return [self._normalize_result(r) for r in raw_results]
         except Exception as e:
-            _LOGGER.error(f"DDG sync search failed: {e}")
+            _LOGGER.error("DDG sync search failed: %s", type(e).__name__)
             raise
 
     @staticmethod

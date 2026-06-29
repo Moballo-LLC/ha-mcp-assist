@@ -134,6 +134,10 @@ class _ImageFetchTarget:
 
 
 _SKIP_NON_SERIALIZABLE = object()
+_SENSITIVE_LOG_FIELD_RE = re.compile(
+    r"(?i)(api[_-]?key|authorization|bearer|password|secret|token)"
+)
+_MAX_LOG_VALUE_CHARS = 500
 
 
 def _strip_non_json_serializable(value: Any) -> Any:
@@ -173,7 +177,42 @@ def _strip_non_json_serializable(value: Any) -> Any:
 
 def _sanitize_log_value(value: Any) -> str:
     """Return a log-safe representation of user-controlled values."""
-    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+    text = str(value)
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(api[_-]?key|password|secret|token)(\s*[:=]\s*)[^\s,;}]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
+    if len(text) <= _MAX_LOG_VALUE_CHARS:
+        return text
+    return f"{text[:_MAX_LOG_VALUE_CHARS].rstrip()}... [truncated {len(text) - _MAX_LOG_VALUE_CHARS} chars]"
+
+
+def _json_size_bytes(value: Any) -> int:
+    """Return UTF-8 JSON size for logs without logging the JSON itself."""
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        serialized = str(value)
+    return len(serialized.encode("utf-8"))
+
+
+def _mapping_key_summary(value: Any, *, max_keys: int = 10) -> str:
+    """Return a compact key-only summary for dictionaries."""
+    if not isinstance(value, dict) or not value:
+        return "none"
+    keys = sorted(str(key) for key in value)
+    visible = keys[:max_keys]
+    suffix = f", +{len(keys) - max_keys} more" if len(keys) > max_keys else ""
+    return ", ".join(visible) + suffix
 
 
 class MCPServer(
@@ -2003,9 +2042,11 @@ class MCPServer(
         context = params.get("context") or {}
 
         _LOGGER.debug(
-            "Calling tool: %s with args: %s",
+            "Calling tool: %s (argument_keys=%s, context_keys=%s, argument_bytes=%d)",
             _sanitize_log_value(tool_name),
-            _sanitize_log_value(arguments),
+            _mapping_key_summary(arguments),
+            _mapping_key_summary(context),
+            _json_size_bytes(arguments),
         )
 
         if not self._is_tool_enabled(tool_name):
@@ -2737,8 +2778,15 @@ class MCPServer(
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
+                        error_text = await response.text()
+                        _LOGGER.warning(
+                            "Image analysis provider error: provider=%s status=%s body=%s",
+                            _sanitize_log_value(server_type),
+                            response.status,
+                            _sanitize_log_value(error_text),
+                        )
                         raise ValueError(
-                            f"Image analysis failed for {server_type}: HTTP {response.status} {await response.text()}"
+                            f"Image analysis failed for {server_type}: HTTP {response.status}"
                         )
                     data = await response.json()
             return str(data.get("message", {}).get("content") or "").strip()
@@ -2766,8 +2814,15 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
+                    error_text = await response.text()
+                    _LOGGER.warning(
+                        "Image analysis provider error: provider=%s status=%s body=%s",
+                        _sanitize_log_value(server_type),
+                        response.status,
+                        _sanitize_log_value(error_text),
+                    )
                     raise ValueError(
-                        f"Image analysis failed for {server_type}: HTTP {response.status} {await response.text()}"
+                        f"Image analysis failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
 
@@ -2817,8 +2872,15 @@ class MCPServer(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
+                    error_text = await response.text()
+                    _LOGGER.warning(
+                        "Image generation provider error: provider=%s status=%s body=%s",
+                        _sanitize_log_value(server_type),
+                        response.status,
+                        _sanitize_log_value(error_text),
+                    )
                     raise ValueError(
-                        f"Image generation failed for {server_type}: HTTP {response.status} {await response.text()}"
+                        f"Image generation failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
 
@@ -3693,10 +3755,13 @@ class MCPServer(
             }
 
         _LOGGER.info(
-            "🎯 Performing action: %s.%s on %s",
+            "🎯 Performing action: %s.%s (target_keys=%s, data_keys=%s, target_bytes=%d, data_bytes=%d)",
             _sanitize_log_value(domain),
             _sanitize_log_value(action),
-            _sanitize_log_value(target),
+            _mapping_key_summary(target),
+            _mapping_key_summary(data),
+            _json_size_bytes(target),
+            _json_size_bytes(data),
         )
 
         # Notify start
@@ -3726,8 +3791,8 @@ class MCPServer(
                 resolved_target, domain
             )
             _LOGGER.debug(
-                "Resolved target: %s",
-                _sanitize_log_value(resolved_target),
+                "Resolved target: entity_count=%d",
+                len(resolved_target.get("entity_id", [])),
             )
         except Exception as err:
             error_msg = f"Failed to resolve target: {err}"
@@ -3988,9 +4053,10 @@ class MCPServer(
         full_script_id = f"script.{script_name}"
 
         _LOGGER.info(
-            "📜 Running script: %s with variables: %s",
+            "📜 Running script: %s (variable_keys=%s, variable_bytes=%d)",
             _sanitize_log_value(full_script_id),
-            _sanitize_log_value(variables),
+            _mapping_key_summary(variables),
+            _json_size_bytes(variables),
         )
 
         # Notify start
@@ -4064,9 +4130,10 @@ class MCPServer(
             automation_id = f"automation.{automation_id}"
 
         _LOGGER.info(
-            "🤖 Triggering automation: %s with variables: %s, skip_conditions: %s",
+            "🤖 Triggering automation: %s (variable_keys=%s, variable_bytes=%d, skip_conditions=%s)",
             _sanitize_log_value(automation_id),
-            _sanitize_log_value(variables),
+            _mapping_key_summary(variables),
+            _json_size_bytes(variables),
             _sanitize_log_value(skip_conditions),
         )
 
@@ -4440,9 +4507,10 @@ class MCPServer(
         """Call a native Home Assistant Assist tool safely."""
         tool_input = llm.ToolInput(tool_name=tool_name, tool_args=arguments)
         _LOGGER.debug(
-            "Calling native Assist tool: %s(%s)",
+            "Calling native Assist tool: %s (argument_keys=%s, argument_bytes=%d)",
             _sanitize_log_value(tool_input.tool_name),
-            _sanitize_log_value(tool_input.tool_args),
+            _mapping_key_summary(tool_input.tool_args),
+            _json_size_bytes(tool_input.tool_args),
         )
 
         try:
@@ -4592,9 +4660,9 @@ class MCPServer(
 
         resolved_target = {"entity_id": sorted(resolved_entities)}
         _LOGGER.debug(
-            "Resolved target %s to entity_ids: %s",
-            _sanitize_log_value(target),
-            _sanitize_log_value(resolved_target["entity_id"]),
+            "Resolved target selector_keys=%s to entity_count=%d",
+            _mapping_key_summary(target),
+            len(resolved_target["entity_id"]),
         )
         return resolved_target
 

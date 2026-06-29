@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -166,6 +167,35 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_SENSITIVE_LOG_FIELD_RE = re.compile(
+    r"(?i)(api[_-]?key|authorization|bearer|password|secret|token|\bkey\b)"
+)
+
+
+def _redacted_log_snippet(value: Any, *, max_chars: int = 200) -> str:
+    """Return a short config-flow log snippet with common secrets redacted."""
+    text = str(value or "")
+    text = re.sub(r"(?i)bearer\s+[^\s,;}]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization\s*[:=]\s*)[^\s,;}]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(api[_-]?key|password|secret|token|key)(\s*[:=]\s*)[^\s,;}]+",
+        r"\1\2[redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)([?&]key=)[^&\\s]+",
+        r"\1[redacted]",
+        text,
+    )
+    text = _SENSITIVE_LOG_FIELD_RE.sub("[redacted]", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
 
 
 def _prompt_mode_selector() -> SelectSelector:
@@ -858,7 +888,11 @@ async def fetch_models_from_lmstudio(hass: HomeAssistant, url: str) -> list[str]
                 )
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: Exception during fetch: %s", err, exc_info=True)
+        _LOGGER.error(
+            "💥 FETCH: Exception during fetch: %s",
+            _redacted_log_snippet(err),
+            exc_info=True,
+        )
         return []
 
 
@@ -891,7 +925,7 @@ async def fetch_models_from_openai(
                     _LOGGER.warning(
                         "⚠️ FETCH: OpenAI API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -911,7 +945,7 @@ async def fetch_models_from_openai(
                 _LOGGER.info("✨ FETCH: Found %d OpenAI chat models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: OpenAI fetch failed: %s", err)
+        _LOGGER.error("💥 FETCH: OpenAI fetch failed: %s", _redacted_log_snippet(err))
         return []
 
 
@@ -934,7 +968,7 @@ async def fetch_models_from_gemini(hass: HomeAssistant, api_key: str) -> list[st
                     _LOGGER.warning(
                         "⚠️ FETCH: Gemini API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -956,7 +990,7 @@ async def fetch_models_from_gemini(hass: HomeAssistant, api_key: str) -> list[st
                 _LOGGER.info("✨ FETCH: Found %d Gemini models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: Gemini fetch failed: %s", err)
+        _LOGGER.error("💥 FETCH: Gemini fetch failed: %s", _redacted_log_snippet(err))
         return []
 
 
@@ -982,7 +1016,7 @@ async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> lis
                     _LOGGER.warning(
                         "⚠️ FETCH: OpenRouter API error %d: %s",
                         resp.status,
-                        error_text[:200],
+                        _redacted_log_snippet(error_text),
                     )
                     return []
 
@@ -995,7 +1029,10 @@ async def fetch_models_from_openrouter(hass: HomeAssistant, api_key: str) -> lis
                 _LOGGER.info("✨ FETCH: Found %d OpenRouter models", len(sorted_models))
                 return sorted_models
     except Exception as err:
-        _LOGGER.error("💥 FETCH: OpenRouter fetch failed: %s", err)
+        _LOGGER.error(
+            "💥 FETCH: OpenRouter fetch failed: %s",
+            _redacted_log_snippet(err),
+        )
         return []
 
 

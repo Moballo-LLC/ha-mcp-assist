@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 import math
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -51,6 +52,22 @@ def test_sanitize_log_value_escapes_line_breaks() -> None:
     assert mcp_server_module._sanitize_log_value("one\ntwo\rthree") == (
         "one\\ntwo\\rthree"
     )
+
+
+def test_sanitize_log_value_redacts_common_secret_markers() -> None:
+    """User-controlled log values should not expose common secret markers."""
+    sanitized = mcp_server_module._sanitize_log_value(
+        "Authorization: Bearer abc123 api_key=secret-token password=hunter2"
+    )
+
+    assert "Authorization" not in sanitized
+    assert "Bearer" not in sanitized
+    assert "api_key" not in sanitized
+    assert "password" not in sanitized
+    assert "abc123" not in sanitized
+    assert "secret-token" not in sanitized
+    assert "hunter2" not in sanitized
+    assert "[redacted]" in sanitized
 
 
 def _builtin_spec(tool_name: str):
@@ -458,6 +475,42 @@ async def test_handle_tool_call_routes_domain_packages_to_custom_tool_loader(
             {},
         ),
     ]
+
+
+@pytest.mark.asyncio
+async def test_handle_tool_call_logs_metadata_without_arguments_or_results(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Tool dispatch logs should describe argument shape without raw values."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    async def handle_tool_call(tool_name, arguments, *, context=None):
+        return {"content": [{"type": "text", "text": "tool-result-secret"}]}
+
+    server.custom_tools = SimpleNamespace(
+        is_custom_tool=lambda tool_name: tool_name == "private_tool_status",
+        handle_tool_call=handle_tool_call,
+    )
+
+    with caplog.at_level(logging.DEBUG, logger=mcp_server_module._LOGGER.name):
+        result = await server.handle_tool_call(
+            {
+                "name": "private_tool_status",
+                "arguments": {"entity_id": "light.private", "password": "super-secret"},
+                "context": {"profile_entry_id": "profile-private"},
+            }
+        )
+
+    assert result["content"][0]["text"] == "tool-result-secret"
+    assert "private_tool_status" in caplog.text
+    assert "argument_keys=entity_id, password" in caplog.text
+    assert "context_keys=profile_entry_id" in caplog.text
+    assert "argument_bytes=" in caplog.text
+    assert "light.private" not in caplog.text
+    assert "super-secret" not in caplog.text
+    assert "profile-private" not in caplog.text
+    assert "tool-result-secret" not in caplog.text
 
 
 @pytest.mark.asyncio

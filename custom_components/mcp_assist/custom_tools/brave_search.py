@@ -91,7 +91,12 @@ class BraveSearchTool:
         mode = self._normalize_mode(arguments.get("mode"), query)
         query_to_send = self._query_for_mode(query, mode)
 
-        _LOGGER.debug("Brave Search: '%s' (count: %s, mode: %s)", query_to_send, count, mode)
+        _LOGGER.debug(
+            "Brave Search request: query_chars=%d count=%s mode=%s",
+            len(str(query_to_send or "")),
+            count,
+            mode,
+        )
 
         headers = {
             "Accept": "application/json",
@@ -117,12 +122,11 @@ class BraveSearchTool:
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
                     if response.status != 200:
-                        error = await response.text()
-                        _LOGGER.error(f"Brave Search error {response.status}: {error}")
+                        _LOGGER.error("Brave Search error: status=%s", response.status)
                         return {
                             "content": [{
                                 "type": "text",
-                                "text": f"❌ Search failed (HTTP {response.status}): {error[:200]}"
+                                "text": f"❌ Search failed (HTTP {response.status})"
                             }]
                         }
 
@@ -168,11 +172,11 @@ class BraveSearchTool:
                 }]
             }
         except Exception as e:
-            _LOGGER.error(f"Brave Search exception: {e}")
+            _LOGGER.error("Brave Search exception: %s", type(e).__name__)
             return {
                 "content": [{
                     "type": "text",
-                    "text": f"❌ Search error: {str(e)}"
+                    "text": f"❌ Search error: {type(e).__name__}"
                 }]
             }
 

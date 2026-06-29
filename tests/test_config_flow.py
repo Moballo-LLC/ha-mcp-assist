@@ -42,6 +42,7 @@ from custom_components.mcp_assist.config_flow import (
     _needs_prompt_followup,
     _normalize_shared_tool_inputs,
     _normalize_prompt_inputs,
+    _redacted_log_snippet,
     validate_allowed_ips,
 )
 from custom_components.mcp_assist.custom_tools.builtin_catalog import (
@@ -253,6 +254,22 @@ def test_validate_allowed_ips_rejects_invalid_values() -> None:
 
     assert is_valid is False
     assert "not-an-ip" in message
+
+
+def test_redacted_log_snippet_removes_provider_secret_markers() -> None:
+    """Provider error snippets should not echo common credential fields."""
+    snippet = _redacted_log_snippet(
+        "request failed: https://api.example/models?key=gemini-secret "
+        "Authorization: Bearer openai-secret api_key=custom-secret"
+    )
+
+    assert "gemini-secret" not in snippet
+    assert "openai-secret" not in snippet
+    assert "custom-secret" not in snippet
+    assert "Authorization" not in snippet
+    assert "Bearer" not in snippet
+    assert "api_key" not in snippet
+    assert "[redacted]" in snippet
 
 
 async def test_system_flow_creates_shared_config_entry(hass) -> None:
