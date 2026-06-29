@@ -50,13 +50,24 @@ def test_search_tool_definitions_include_current_events_routing_metadata(hass) -
 class _FakeContent:
     """Minimal stream reader stub."""
 
-    def __init__(self, body: bytes) -> None:
-        self._body = body
+    def __init__(
+        self,
+        body: bytes | None = None,
+        chunks: list[bytes] | None = None,
+    ) -> None:
+        self._body = body or b""
+        self._chunks = list(chunks or [])
 
     async def read(self, n: int = -1) -> bytes:
+        if self._chunks:
+            return self._chunks.pop(0)
         if n < 0:
-            return self._body
-        return self._body[:n]
+            chunk = self._body
+            self._body = b""
+            return chunk
+        chunk = self._body[:n]
+        self._body = self._body[n:]
+        return chunk
 
 
 class _FakeResponse:
@@ -69,6 +80,7 @@ class _FakeResponse:
         headers: dict[str, str] | None = None,
         text: str = "",
         content_bytes: bytes | None = None,
+        content_chunks: list[bytes] | None = None,
         charset: str | None = None,
         json_data: dict | None = None,
     ) -> None:
@@ -77,8 +89,8 @@ class _FakeResponse:
         self._text = text
         self._json_data = json_data or {}
         self.charset = charset
-        if content_bytes is not None:
-            self.content = _FakeContent(content_bytes)
+        if content_bytes is not None or content_chunks is not None:
+            self.content = _FakeContent(content_bytes, content_chunks)
 
     async def __aenter__(self):
         return self
@@ -444,6 +456,9 @@ async def test_read_url_handles_valid_html_pages(hass, monkeypatch) -> None:
 
     assert "📖 **Example Page**" in result["content"][0]["text"]
     assert "Hello world" in result["content"][0]["text"]
+    assert fake_session.calls[0][0] == "https://93.184.216.34/page"
+    assert fake_session.calls[0][1]["headers"]["Host"] == "example.com"
+    assert fake_session.calls[0][1]["server_hostname"] == "example.com"
 
 
 @pytest.mark.asyncio
@@ -616,3 +631,45 @@ async def test_read_url_rejects_oversized_responses(
         {"url": "https://example.com/chunked"},
     )
     assert streamed_result["content"][0]["text"] == "❌ URL response is too large to read safely"
+
+
+@pytest.mark.asyncio
+async def test_read_url_reads_chunked_body_until_eof(hass, monkeypatch) -> None:
+    """Chunked responses should be read until EOF within the size limit."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            content_chunks=[b"hello ", b"world", b""],
+        )
+    )
+
+    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", lambda: fake_session)
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call("read_url", {"url": "https://example.com/chunked"})
+
+    assert "hello world" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_rejects_oversized_chunked_body_after_multiple_reads(
+    hass,
+    monkeypatch,
+) -> None:
+    """Chunked responses should not bypass the size limit with a small first chunk."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            content_chunks=[b"abc", b"def", b""],
+        )
+    )
+
+    monkeypatch.setattr(read_url_module.aiohttp, "ClientSession", lambda: fake_session)
+    tool = read_url_module.ReadUrlTool(hass)
+    tool.max_response_bytes = 5
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call("read_url", {"url": "https://example.com/chunked"})
+
+    assert result["content"][0]["text"] == "❌ URL response is too large to read safely"

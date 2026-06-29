@@ -1,6 +1,7 @@
 """Read URL custom tool for MCP Assist."""
 import asyncio
 import aiohttp
+from dataclasses import dataclass
 import html as html_lib
 import ipaddress
 import logging
@@ -12,6 +13,16 @@ _LOGGER = logging.getLogger(__name__)
 
 _HTTP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _LOCAL_HOSTNAMES = {"localhost", "localhost.localdomain"}
+
+
+@dataclass(frozen=True)
+class _FetchTarget:
+    """Validated URL plus request details pinned to a checked address."""
+
+    display_url: str
+    request_url: str
+    host_header: str | None = None
+    server_hostname: str | None = None
 
 
 class ReadUrlTool:
@@ -65,7 +76,7 @@ class ReadUrlTool:
         _LOGGER.debug(f"Reading URL: {url}")
 
         try:
-            current_url = await self._validate_fetchable_url(url)
+            current_target = await self._validate_fetchable_url(url)
         except ValueError as err:
             return {
                 "content": [{
@@ -74,6 +85,7 @@ class ReadUrlTool:
                 }]
             }
 
+        current_url = current_target.display_url
         parsed = urlparse(current_url)
 
         try:
@@ -83,11 +95,20 @@ class ReadUrlTool:
 
             async with aiohttp.ClientSession() as session:
                 for _redirect_count in range(self.max_redirects + 1):
+                    request_headers = dict(headers)
+                    if current_target.host_header:
+                        request_headers["Host"] = current_target.host_header
+                    request_kwargs = {
+                        "headers": request_headers,
+                        "timeout": aiohttp.ClientTimeout(total=15),
+                        "allow_redirects": False,
+                    }
+                    if current_target.server_hostname:
+                        request_kwargs["server_hostname"] = current_target.server_hostname
+
                     async with session.get(
-                        current_url,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=15),
-                        allow_redirects=False
+                        current_target.request_url,
+                        **request_kwargs,
                     ) as response:
                         if response.status in _HTTP_REDIRECT_STATUSES:
                             location = str(response.headers.get("Location") or "").strip()
@@ -99,7 +120,7 @@ class ReadUrlTool:
                                     }]
                                 }
                             try:
-                                current_url = await self._validate_fetchable_url(
+                                current_target = await self._validate_fetchable_url(
                                     urljoin(current_url, location)
                                 )
                             except ValueError as err:
@@ -109,6 +130,7 @@ class ReadUrlTool:
                                         "text": f"❌ Unsafe redirect blocked: {err}"
                                     }]
                                 }
+                            current_url = current_target.display_url
                             parsed = urlparse(current_url)
                             continue
 
@@ -227,14 +249,25 @@ class ReadUrlTool:
         if content is None:
             return await response.text()
 
-        raw_body = await content.read(self.max_response_bytes + 1)
+        chunks: list[bytes] = []
+        total_size = 0
+        while True:
+            chunk = await content.read(self.max_response_bytes + 1 - total_size)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total_size += len(chunk)
+            if total_size > self.max_response_bytes:
+                raise ValueError("URL response is too large to read safely")
+
+        raw_body = b"".join(chunks)
         if len(raw_body) > self.max_response_bytes:
             raise ValueError("URL response is too large to read safely")
 
         charset = getattr(response, "charset", None) or "utf-8"
         return raw_body.decode(charset, errors="replace")
 
-    async def _validate_fetchable_url(self, url: Any) -> str:
+    async def _validate_fetchable_url(self, url: Any) -> _FetchTarget:
         """Validate that a URL is safe for the URL reader to fetch."""
         raw_url = str(url or "").strip()
         parsed = urlparse(raw_url)
@@ -246,8 +279,9 @@ class ReadUrlTool:
             raise ValueError("URLs must not include embedded credentials")
 
         sanitized_url = parsed._replace(fragment="").geturl()
+        sanitized_parsed = urlparse(sanitized_url)
         if self._is_allowlisted_url(sanitized_url):
-            return sanitized_url
+            return _FetchTarget(display_url=sanitized_url, request_url=sanitized_url)
 
         host = parsed.hostname
         if not host:
@@ -260,15 +294,22 @@ class ReadUrlTool:
         try:
             ip_address = ipaddress.ip_address(normalized_host)
         except ValueError:
-            await self._validate_resolved_host_addresses(
+            ip_address = await self._validated_resolved_host_address(
                 normalized_host,
                 parsed.port or (443 if parsed.scheme == "https" else 80),
+            )
+            request_url = self._build_address_pinned_url(sanitized_parsed, ip_address)
+            return _FetchTarget(
+                display_url=sanitized_url,
+                request_url=request_url,
+                host_header=self._build_host_header(sanitized_parsed),
+                server_hostname=normalized_host if sanitized_parsed.scheme == "https" else None,
             )
         else:
             if self._is_private_or_local_address(ip_address):
                 raise ValueError("Private or local URLs must be allowlisted in Home Assistant")
 
-        return sanitized_url
+        return _FetchTarget(display_url=sanitized_url, request_url=sanitized_url)
 
     def _is_allowlisted_url(self, url: str) -> bool:
         """Return whether Home Assistant explicitly allows this external URL."""
@@ -281,8 +322,12 @@ class ReadUrlTool:
             _LOGGER.debug("Unable to evaluate external URL allowlist for %s: %s", url, err)
             return False
 
-    async def _validate_resolved_host_addresses(self, host: str, port: int) -> None:
-        """Resolve a hostname and reject private or local network addresses."""
+    async def _validated_resolved_host_address(
+        self,
+        host: str,
+        port: int,
+    ) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+        """Resolve a hostname and return a checked public address."""
         addresses = await asyncio.wait_for(
             self._resolve_host_addresses(host, port),
             timeout=5,
@@ -291,6 +336,38 @@ class ReadUrlTool:
             raise ValueError(f"Unable to resolve URL host: {host}")
         if any(self._is_private_or_local_address(address) for address in addresses):
             raise ValueError("Private or local URLs must be allowlisted in Home Assistant")
+        return sorted(addresses, key=str)[0]
+
+    @staticmethod
+    def _build_host_header(parsed) -> str:
+        """Build the original Host header for an address-pinned request."""
+        host = parsed.hostname or ""
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            if ":" in host:
+                host = f"[{host}]"
+        else:
+            if ":" in host and not host.startswith("["):
+                host = f"[{host}]"
+
+        default_port = 443 if parsed.scheme == "https" else 80
+        if parsed.port and parsed.port != default_port:
+            return f"{host}:{parsed.port}"
+        return host
+
+    @staticmethod
+    def _build_address_pinned_url(
+        parsed,
+        address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    ) -> str:
+        """Return the request URL rewritten to the validated address."""
+        host = str(address)
+        if isinstance(address, ipaddress.IPv6Address):
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        return parsed._replace(netloc=host).geturl()
 
     async def _resolve_host_addresses(
         self,
