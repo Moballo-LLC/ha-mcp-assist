@@ -31,6 +31,14 @@ If you are contributing directly to the MCP Assist project, core changes should 
 - tools that operate on standard Home Assistant entities or services without assuming one specific layout
 - features that should be trusted and available as part of MCP Assist itself
 
+Built-in MCP Assist custom tools use the same package shape as external custom
+tools. Their manifests, prompt hints, entrypoint class, and package-local Python
+helpers live under
+`custom_components/mcp_assist/tools/packages/<tool_id>/`. The
+`custom_components/mcp_assist/tools/` root is reserved for loader,
+catalog, schema, and runtime infrastructure shared by built-in and external
+packages.
+
 ## Safety Model
 
 External custom tools are intentionally **safe by default**:

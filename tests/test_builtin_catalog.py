@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from custom_components.mcp_assist.custom_tools.builtin_catalog import (
+from custom_components.mcp_assist.tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     get_builtin_profile_setting_value,
     get_builtin_shared_setting_value,

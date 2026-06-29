@@ -13,14 +13,18 @@ from urllib.parse import urlparse
 
 import pytest
 
-from custom_components.mcp_assist.custom_tools import brave_search as brave_module
-from custom_components.mcp_assist.custom_tools import read_url as read_url_module
-from custom_components.mcp_assist.custom_tools import searxng_search as searxng_module
+from custom_components.mcp_assist.tools.packages.read_url import (
+    read_url as read_url_module,
+)
+from custom_components.mcp_assist.tools.packages.search import (
+    brave_search as brave_module,
+    searxng_search as searxng_module,
+)
 
 sys.modules.setdefault("ddgs", types.SimpleNamespace(DDGS=object))
 sys.modules.setdefault("duckduckgo_search", types.SimpleNamespace(DDGS=object))
 ddg_module = importlib.import_module(
-    "custom_components.mcp_assist.custom_tools.duckduckgo_search"
+    "custom_components.mcp_assist.tools.packages.search.duckduckgo_search"
 )
 
 

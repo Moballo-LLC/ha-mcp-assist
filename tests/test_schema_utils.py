@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.mcp_assist.custom_tools.schema_utils import (
+from custom_components.mcp_assist.tools.schema_utils import (
     SchemaValidationError,
     validate_and_normalize_json_value,
 )

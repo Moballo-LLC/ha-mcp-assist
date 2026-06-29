@@ -28,7 +28,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .custom_tools.builtin_catalog import (
+from .tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     get_builtin_profile_setting_value,
     get_builtin_shared_setting_value,
