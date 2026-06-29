@@ -139,6 +139,7 @@ PROFILE_TOOL_ORDER = [
     _builtin_profile_key("search"),
     _builtin_profile_key("unit_conversion"),
     DISABLE_WEATHER_FORECAST_FIELD,
+    _builtin_profile_key("wikipedia_search"),
 ]
 
 SHARED_TOOL_ORDER = [
@@ -155,6 +156,7 @@ SHARED_TOOL_ORDER = [
     _builtin_shared_key("search"),
     _builtin_shared_key("unit_conversion"),
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    _builtin_shared_key("wikipedia_search"),
 ]
 
 
@@ -719,12 +721,14 @@ def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
         _builtin_shared_key("read_url"),
         _builtin_shared_key("search"),
         _builtin_shared_key("unit_conversion"),
+        _builtin_shared_key("wikipedia_search"),
     }
     profile_names = {
         _builtin_profile_key("calculator"),
         _builtin_profile_key("read_url"),
         _builtin_profile_key("search"),
         _builtin_profile_key("unit_conversion"),
+        _builtin_profile_key("wikipedia_search"),
     }
 
     shared_checkbox_fields = {

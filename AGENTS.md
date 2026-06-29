@@ -152,6 +152,27 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - Do not commit generated caches, `__pycache__`, `.pyc`, `.pyo`, local venvs, or
   `test-results/`.
 
+## Prompt Latency and Context Budget
+
+- Keep first-prompt latency low. Avoid adding startup work that performs broad
+  discovery, network calls, large registry scans, or whole-home context dumps
+  before the model asks for them.
+- Keep the default prompt and default advertised tool surface compact. Prefer
+  lazy tools, paging, cache signatures, concise tool descriptions, and
+  on-demand calls over putting large schemas or data snapshots into the initial
+  model request.
+- New built-in tool packages should be optional when they add specialized or
+  external capability. Their `prompt.md` additions should be short routing
+  hints, not mini manuals.
+- Do not make agents call `get_index`, Assist context snapshots, third-party
+  LLM API inspection, web reads, or other broad context tools at the start of
+  every conversation. These should stay demand-driven.
+- When reviewing or opening PRs that affect prompts, tools, discovery,
+  provider payloads, or custom-tool loading, consider the impact on initial
+  prompt size, tool schema bytes, and first-response latency.
+- Prefer debug-level observability for prompt/payload size and context build
+  latency over logging prompt contents or provider payload bodies.
+
 ## Public Repository Data Safety
 
 - Treat this repository, commit history, PR text, tests, fixtures, docs, and

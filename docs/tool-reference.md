@@ -150,6 +150,18 @@ Web tools are optional and controlled by shared provider settings.
 Use Home Assistant-native tools first for local Home Assistant data such as
 weather, calendars, history, and entity state.
 
+## Wikipedia Search
+
+Wikipedia Search is an optional lightweight reference tool.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_wikipedia` | Search Wikipedia article titles and descriptions |
+
+Use this for stable background or encyclopedia-style questions where Wikipedia
+results are enough. Use regular web search for latest information, current
+events, or broader internet research.
+
 ## Music Assistant
 
 Music Assistant tools are available when the Home Assistant Music Assistant
