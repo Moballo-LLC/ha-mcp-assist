@@ -14,6 +14,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
     BooleanSelector,
     SelectSelector,
@@ -72,6 +73,8 @@ from .const import (
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_GAP_FILLING,
     CONF_ENABLE_ASSIST_BRIDGE,
+    CONF_ENABLE_LLM_API_BRIDGE,
+    CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_ENABLE_RECORDER_TOOLS,
@@ -143,6 +146,8 @@ from .const import (
     DEFAULT_ENABLE_WEB_SEARCH,
     DEFAULT_ENABLE_GAP_FILLING,
     DEFAULT_ENABLE_ASSIST_BRIDGE,
+    DEFAULT_ENABLE_LLM_API_BRIDGE,
+    DEFAULT_LLM_API_ALLOWLIST,
     DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS,
     DEFAULT_ENABLE_WEATHER_FORECAST_TOOL,
     DEFAULT_ENABLE_RECORDER_TOOLS,
@@ -164,11 +169,13 @@ from .const import (
     TOOL_FAMILY_ASSIST_BRIDGE,
     TOOL_FAMILY_DEVICE,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
+    TOOL_FAMILY_LLM_API_BRIDGE,
     TOOL_FAMILY_MEMORY,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
     OPENAI_BASE_URL,
     OPENROUTER_BASE_URL,
+    parse_llm_api_allowlist,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -212,6 +219,41 @@ def _infer_prompt_mode(
     if stored_prompt in (None, "", default_prompt):
         return PROMPT_MODE_DEFAULT
     return PROMPT_MODE_CUSTOM
+
+
+def _format_installed_llm_api_options(hass: HomeAssistant) -> str:
+    """Return a short display string for registered third-party LLM APIs."""
+    get_apis = getattr(llm, "async_get_apis", None)
+    if not callable(get_apis):
+        return "not available on this Home Assistant version"
+
+    try:
+        registered_apis = sorted(
+            (
+                api
+                for api in get_apis(hass)
+                if getattr(api, "id", None) != llm.LLM_API_ASSIST
+            ),
+            key=lambda api: (
+                str(getattr(api, "name", "")).casefold(),
+                str(getattr(api, "id", "")),
+            ),
+        )
+    except Exception as err:
+        _LOGGER.debug("Unable to list registered third-party LLM APIs: %s", err)
+        return "unable to read installed APIs right now"
+
+    if not registered_apis:
+        return "none currently registered"
+
+    formatted_options = []
+    for api in registered_apis:
+        api_id = str(getattr(api, "id", "")).strip()
+        if not api_id:
+            continue
+        api_name = str(getattr(api, "name", "") or api_id).strip()
+        formatted_options.append(f"{api_name} ({api_id})")
+    return ", ".join(formatted_options) or "none currently registered"
 
 
 def _get_current_prompt_mode(
@@ -317,6 +359,7 @@ ADVANCED_SECTION_KEY = "advanced_settings"
 DISABLE_ASSIST_BRIDGE_FIELD = "disable_assist_bridge"
 DISABLE_CUSTOM_TOOLS_FIELD = "disable_custom_tools"
 DISABLE_DEVICE_FIELD = "disable_device"
+DISABLE_LLM_API_BRIDGE_FIELD = "disable_llm_api_bridge"
 DISABLE_MEMORY_FIELD = "disable_memory"
 DISABLE_MUSIC_ASSISTANT_FIELD = "disable_music_assistant"
 DISABLE_RECORDER_FIELD = "disable_recorder"
@@ -327,6 +370,7 @@ STATIC_TOOL_FAMILY_ALPHABETICAL = [
     TOOL_FAMILY_ASSIST_BRIDGE,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
     TOOL_FAMILY_DEVICE,
+    TOOL_FAMILY_LLM_API_BRIDGE,
     TOOL_FAMILY_MEMORY,
 ]
 
@@ -334,6 +378,7 @@ PROFILE_DISABLE_FIELD_BY_FAMILY = {
     TOOL_FAMILY_ASSIST_BRIDGE: DISABLE_ASSIST_BRIDGE_FIELD,
     TOOL_FAMILY_EXTERNAL_CUSTOM: DISABLE_CUSTOM_TOOLS_FIELD,
     TOOL_FAMILY_DEVICE: DISABLE_DEVICE_FIELD,
+    TOOL_FAMILY_LLM_API_BRIDGE: DISABLE_LLM_API_BRIDGE_FIELD,
     TOOL_FAMILY_MEMORY: DISABLE_MEMORY_FIELD,
 }
 
@@ -341,6 +386,7 @@ STATIC_TOOL_FAMILY_SHARED_LABELS = {
     TOOL_FAMILY_ASSIST_BRIDGE: "Assist Bridge",
     TOOL_FAMILY_EXTERNAL_CUSTOM: "Custom Tools",
     TOOL_FAMILY_DEVICE: "Device Tools",
+    TOOL_FAMILY_LLM_API_BRIDGE: "LLM API Bridge",
     TOOL_FAMILY_MEMORY: "Memory",
 }
 
@@ -348,6 +394,7 @@ STATIC_TOOL_FAMILY_PROFILE_DISABLE_LABELS = {
     TOOL_FAMILY_ASSIST_BRIDGE: "Disable Assist Bridge",
     TOOL_FAMILY_EXTERNAL_CUSTOM: "Disable Custom Tools",
     TOOL_FAMILY_DEVICE: "Disable Device Tools",
+    TOOL_FAMILY_LLM_API_BRIDGE: "Disable LLM API Bridge",
     TOOL_FAMILY_MEMORY: "Disable Memory",
 }
 
@@ -564,6 +611,12 @@ def _normalize_shared_tool_inputs(
     else:
         normalized[CONF_SEARCH_PROVIDER] = search_provider
 
+    normalized[CONF_LLM_API_ALLOWLIST] = ", ".join(
+        parse_llm_api_allowlist(
+            normalized.get(CONF_LLM_API_ALLOWLIST, DEFAULT_LLM_API_ALLOWLIST)
+        )
+    )
+
     memory_max_ttl = normalized.get(
         CONF_MEMORY_MAX_TTL_DAYS,
         DEFAULT_MEMORY_MAX_TTL_DAYS,
@@ -731,6 +784,14 @@ def _build_shared_tools_section(
                         defaults, CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
                     ),
                 ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+                vol.Optional(
+                    CONF_LLM_API_ALLOWLIST,
+                    default=_get_form_value(
+                        defaults,
+                        CONF_LLM_API_ALLOWLIST,
+                        DEFAULT_LLM_API_ALLOWLIST,
+                    ),
+                ): TextSelector(TextSelectorConfig(multiline=True)),
             }
         ),
         {"collapsed": False},
@@ -1562,6 +1623,14 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_ENABLE_ASSIST_BRIDGE,
                                 DEFAULT_ENABLE_ASSIST_BRIDGE,
                             ),
+                            CONF_ENABLE_LLM_API_BRIDGE: existing_entry.data.get(
+                                CONF_ENABLE_LLM_API_BRIDGE,
+                                DEFAULT_ENABLE_LLM_API_BRIDGE,
+                            ),
+                            CONF_LLM_API_ALLOWLIST: existing_entry.data.get(
+                                CONF_LLM_API_ALLOWLIST,
+                                DEFAULT_LLM_API_ALLOWLIST,
+                            ),
                             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: existing_entry.data.get(
                                 CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
                                 DEFAULT_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -1959,6 +2028,16 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_ENABLE_ASSIST_BRIDGE,
                 DEFAULT_ENABLE_ASSIST_BRIDGE,
             ),
+            CONF_ENABLE_LLM_API_BRIDGE: _get_form_value(
+                current_values,
+                CONF_ENABLE_LLM_API_BRIDGE,
+                DEFAULT_ENABLE_LLM_API_BRIDGE,
+            ),
+            CONF_LLM_API_ALLOWLIST: _get_form_value(
+                current_values,
+                CONF_LLM_API_ALLOWLIST,
+                DEFAULT_LLM_API_ALLOWLIST,
+            ),
             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: _get_form_value(
                 current_values,
                 CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -2054,7 +2133,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "⚠️ These settings define the shared MCP server capabilities "
                     "available to all profiles and external MCP clients. Individual "
                     "profiles can still disable specific tool families later."
-                )
+                ),
+                "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
 
@@ -2981,6 +3061,24 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ),
             ),
+            CONF_ENABLE_LLM_API_BRIDGE: _get_form_value(
+                current_values,
+                CONF_ENABLE_LLM_API_BRIDGE,
+                sys_options.get(
+                    CONF_ENABLE_LLM_API_BRIDGE,
+                    sys_data.get(
+                        CONF_ENABLE_LLM_API_BRIDGE, DEFAULT_ENABLE_LLM_API_BRIDGE
+                    ),
+                ),
+            ),
+            CONF_LLM_API_ALLOWLIST: _get_form_value(
+                current_values,
+                CONF_LLM_API_ALLOWLIST,
+                sys_options.get(
+                    CONF_LLM_API_ALLOWLIST,
+                    sys_data.get(CONF_LLM_API_ALLOWLIST, DEFAULT_LLM_API_ALLOWLIST),
+                ),
+            ),
             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: _get_form_value(
                 current_values,
                 CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -3158,7 +3256,8 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     "⚠️ These settings are shared across ALL MCP Assist profiles and "
                     "external MCP clients. Individual profiles can still opt into a "
                     "smaller subset in their own settings."
-                )
+                ),
+                "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
 

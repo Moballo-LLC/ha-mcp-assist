@@ -23,6 +23,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_ENABLE_GAP_FILLING,
+    CONF_ENABLE_LLM_API_BRIDGE,
     CONF_ENABLE_MEMORY_TOOLS,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
@@ -34,6 +35,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    CONF_LLM_API_ALLOWLIST,
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
@@ -43,6 +45,8 @@ from custom_components.mcp_assist.const import (
     CONF_SEARXNG_URL,
     CONF_TECHNICAL_PROMPT,
     DEFAULT_ENABLE_DEVICE_TOOLS,
+    DEFAULT_ENABLE_LLM_API_BRIDGE,
+    DEFAULT_LLM_API_ALLOWLIST,
     DEFAULT_MCP_PORT,
     DOMAIN,
     SERVICE_CLEAR_CHAT_LOGS,
@@ -105,6 +109,8 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
             CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS: True,
             CONF_ENABLE_GAP_FILLING: False,
             CONF_ENABLE_ASSIST_BRIDGE: False,
+            CONF_ENABLE_LLM_API_BRIDGE: True,
+            CONF_LLM_API_ALLOWLIST: "llm_intents",
             CONF_ENABLE_RESPONSE_SERVICE_TOOLS: False,
             CONF_ENABLE_WEATHER_FORECAST_TOOL: False,
             CONF_ENABLE_RECORDER_TOOLS: False,
@@ -138,6 +144,8 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
     assert system_entry.data[CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS] is True
     assert system_entry.data[CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS] is True
     assert system_entry.data[CONF_ENABLE_GAP_FILLING] is False
+    assert system_entry.data[CONF_ENABLE_LLM_API_BRIDGE] is True
+    assert system_entry.data[CONF_LLM_API_ALLOWLIST] == "llm_intents"
     assert system_entry.data[CONF_ENABLE_DEVICE_TOOLS] is False
     assert system_entry.data[CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT] is True
     assert system_entry.data[CONF_ENABLE_WEATHER_FORECAST_TOOL] is False
@@ -166,6 +174,8 @@ async def test_ensure_system_entry_uses_defaults_without_profiles(hass) -> None:
     assert CONF_INCLUDE_HOME_LOCATION in system_entry.data
     assert CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS in system_entry.data
     assert CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS in system_entry.data
+    assert system_entry.data[CONF_ENABLE_LLM_API_BRIDGE] == DEFAULT_ENABLE_LLM_API_BRIDGE
+    assert system_entry.data[CONF_LLM_API_ALLOWLIST] == DEFAULT_LLM_API_ALLOWLIST
     assert system_entry.data[CONF_ENABLE_DEVICE_TOOLS] == DEFAULT_ENABLE_DEVICE_TOOLS
     assert CONF_ENABLE_WEATHER_FORECAST_TOOL in system_entry.data
     assert CONF_ENABLE_MEMORY_TOOLS in system_entry.data
