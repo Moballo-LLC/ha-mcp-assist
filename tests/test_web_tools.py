@@ -9,6 +9,7 @@ import logging
 import socket
 import sys
 import types
+from urllib.parse import urlparse
 
 import pytest
 
@@ -534,6 +535,334 @@ async def test_read_url_extracts_html_text_and_decodes_entities(hass) -> None:
     )
 
     assert text == "Hello & welcome Line two"
+
+
+@pytest.mark.asyncio
+async def test_read_url_prefers_main_content_over_page_chrome(hass) -> None:
+    """HTML extraction should prefer article/main content over navigation chrome."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <header>Site header</header>
+            <nav>Menu link</nav>
+            <main id="main-content">
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </main>
+            <aside>Related links</aside>
+            <footer>Footer text</footer>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_article_header_inside_main_content(hass) -> None:
+    """Article headers inside preferred content should not be treated as site chrome."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <header>Site header</header>
+            <main>
+              <article>
+                <header>
+                  <h1>Useful article</h1>
+                  <p>By Example Author</p>
+                </header>
+                <p>Important body text.</p>
+              </article>
+            </main>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article By Example Author Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_top_level_article_header_without_main(hass) -> None:
+    """Top-level article headers should be kept when no preferred container exists."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <header>
+              <h1>Useful article</h1>
+              <p>By Example Author</p>
+            </header>
+            <p>Important body text.</p>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article By Example Author Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_excludes_content_named_boilerplate(hass) -> None:
+    """Navigation ids/classes should not make boilerplate preferred content."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <nav class="content-navigation">Menu link</nav>
+            <section>
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_matches_preferred_attributes_by_token(hass) -> None:
+    """Content-like class substrings should not hide the rest of the page body."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <div class="content-navigation">Menu link</div>
+            <section>
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Menu link Useful article Important body text."
+
+    preferred_text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <div class="content">
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </div>
+            <section>Related link</section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert preferred_text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_unwinds_malformed_preferred_markup(hass) -> None:
+    """Malformed optional tags should not leak page chrome into main content."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <main>
+              <ul>
+                <li>Useful item one
+                <li>Useful item two
+              </main>
+            <footer>Footer text</footer>
+            <section>Related link</section>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful item one Useful item two"
+
+
+@pytest.mark.asyncio
+async def test_read_url_summary_keeps_longer_excerpt(hass, monkeypatch) -> None:
+    """Summary mode should keep a useful excerpt instead of stopping at 1000 chars."""
+    long_text = "x" * 1200
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            text=long_text,
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call(
+        "read_url",
+        {"url": "https://example.com/long", "summary": True},
+    )
+
+    assert "Length: 1200 chars" in result["content"][0]["text"]
+    assert long_text in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_plain_text_markdown_escapes(hass) -> None:
+    """Plain text responses should not have source escape sequences rewritten."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+        text=r"regex: \\_literal \\[value\\] and \\*stars\\*",
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/source.txt"),
+        "https://example.com/source.txt",
+        summary_only=False,
+    )
+
+    assert r"regex: \\_literal \\[value\\] and \\*stars\\*" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_html_code_markdown_escapes(hass) -> None:
+    """HTML code snippets should keep literal source escape sequences."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text=r"""
+        <html>
+          <body>
+            <main>
+              <p>Intro \_text\_</p>
+              <pre><code>regex = r"\[0-9\]"</code></pre>
+            </main>
+          </body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/regex-docs"),
+        "https://example.com/regex-docs",
+        summary_only=False,
+    )
+
+    result_text = result["content"][0]["text"]
+    assert "Intro _text_" in result_text
+    assert r'regex = r"\[0-9\]"' in result_text
+
+
+@pytest.mark.asyncio
+async def test_read_url_normalizes_plain_text_content_type(hass) -> None:
+    """Plain text media types should be handled case-insensitively."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "Text/Plain; charset=utf-8"},
+        text="<example>keep angle-bracket text</example>",
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/source.txt"),
+        "https://example.com/source.txt",
+        summary_only=False,
+    )
+
+    assert "<example>keep angle-bracket text</example>" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_preserves_escaped_angle_brackets_in_title(hass) -> None:
+    """Escaped angle-bracket title text should not be mistaken for markup."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text="""
+        <html>
+          <head><title>C++ vector&lt;int&gt; reference</title></head>
+          <body><main><p>Useful article text.</p></main></body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/vector"),
+        "https://example.com/vector",
+        summary_only=False,
+    )
+
+    assert "📖 **C++ vector<int> reference**" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_cleans_wikipedia_page_chrome(hass) -> None:
+    """Wikipedia HTML fallback should remove common article chrome."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text="""
+        <html>
+          <head><title>Example - Wikipedia</title></head>
+          <body>
+            <main id="mw-content-text">
+              <p>From Wikipedia, the free encyclopedia</p>
+              <p>Contents hide</p>
+              <p>Useful encyclopedia article text. [edit]</p>
+            </main>
+          </body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://en.wikipedia.org/wiki/Example"),
+        "https://en.wikipedia.org/wiki/Example",
+        summary_only=False,
+    )
+
+    result_text = result["content"][0]["text"]
+    assert "Useful encyclopedia article text." in result_text
+    assert "From Wikipedia" not in result_text
+    assert "Contents hide" not in result_text
+    assert "[edit]" not in result_text
+
+
+def test_read_url_wikipedia_detection_requires_real_wikipedia_host(hass) -> None:
+    """Wikipedia cleanup should not trigger for lookalike hostnames."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    assert tool._is_wikipedia_url(urlparse("https://en.wikipedia.org/wiki/Example"))
+    assert not tool._is_wikipedia_url(urlparse("https://evilwikipedia.org/wiki/Example"))
+    assert not tool._is_wikipedia_url(urlparse("https://wikipedia.org.example/wiki/Example"))
 
 
 @pytest.mark.asyncio

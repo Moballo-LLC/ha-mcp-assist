@@ -149,6 +149,8 @@ Web tools are optional and controlled by shared provider settings.
 
 Use Home Assistant-native tools first for local Home Assistant data such as
 weather, calendars, history, and entity state.
+`read_url` favors main page content over navigation chrome where possible and
+keeps longer summary excerpts for page-inspection workflows.
 
 ## Google Places and Routes
 

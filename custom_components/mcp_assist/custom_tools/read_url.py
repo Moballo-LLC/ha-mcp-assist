@@ -3,16 +3,33 @@ import asyncio
 import aiohttp
 from dataclasses import dataclass
 import html as html_lib
+from html.parser import HTMLParser
 import ipaddress
 import logging
+import re
 import socket
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
 _LOGGER = logging.getLogger(__name__)
 
 _HTTP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _LOCAL_HOSTNAMES = {"localhost", "localhost.localdomain"}
+_MARKDOWN_ESCAPE_REPLACEMENTS = {
+    r"\_": "_",
+    r"\*": "*",
+    r"\[": "[",
+    r"\]": "]",
+    r"\(": "(",
+    r"\)": ")",
+}
+
+
+def _clean_markdown_escapes(text: str) -> str:
+    """Clean common escaped markdown characters from prose text."""
+    for source, replacement in _MARKDOWN_ESCAPE_REPLACEMENTS.items():
+        text = text.replace(source, replacement)
+    return text
 
 
 @dataclass(frozen=True)
@@ -78,10 +95,18 @@ class _PinnedHostResolver(aiohttp.abc.AbstractResolver):
 class ReadUrlTool:
     """Tool to read and extract content from URLs."""
 
+    SUMMARY_MAX_CHARS = 6000
+    MAX_CONTENT_CHARS = 50000
+    WIKIPEDIA_LEAD_MARKERS = (
+        "from wikipedia, the free encyclopedia",
+        "aus wikipedia, der freien enzyklopädie",
+    )
+
     def __init__(self, hass):
         """Initialize Read URL tool."""
         self.hass = hass
-        self.max_content_length = 50000  # Max characters to return
+        self.max_content_length = self.MAX_CONTENT_CHARS
+        self.summary_max_length = self.SUMMARY_MAX_CHARS
         self.max_response_bytes = 512000  # Max response bytes to read before decoding
         self.max_redirects = 5
 
@@ -235,7 +260,8 @@ class ReadUrlTool:
             }
 
         content_type = response.headers.get('Content-Type', '')
-        if 'text/html' not in content_type and 'text/plain' not in content_type:
+        lower_content_type = content_type.lower()
+        if 'text/html' not in lower_content_type and 'text/plain' not in lower_content_type:
             return {
                 "content": [{
                     "type": "text",
@@ -266,22 +292,26 @@ class ReadUrlTool:
                 }]
             }
 
-        text = await self._extract_text(html_text, content_type)
+        text = await self._extract_text(html_text, lower_content_type)
+        if 'text/html' in lower_content_type:
+            if self._is_wikipedia_url(parsed):
+                text = self._trim_wikipedia_html_fallback(text)
 
         title = parsed.netloc
         lower_html = html_text.lower()
         if '<title>' in lower_html and '</title>' in lower_html:
             title_start = lower_html.index('<title>') + 7
             title_end = lower_html.index('</title>', title_start)
-            title = html_lib.unescape(html_text[title_start:title_end]).strip()
+            title = html_text[title_start:title_end]
+        title = self._clean_title(title)
 
         truncated = False
         if len(text) > self.max_content_length:
             text = text[:self.max_content_length] + "..."
             truncated = True
 
-        if summary_only and len(text) > 1000:
-            text = text[:1000] + "..."
+        if summary_only and len(text) > self.summary_max_length:
+            text = text[:self.summary_max_length].rstrip() + "..."
 
         result_text = f"📖 **{title}**\n"
         result_text += f"URL: {url}\n"
@@ -452,13 +482,64 @@ class ReadUrlTool:
             )
         )
 
+    @staticmethod
+    def _is_wikipedia_url(parsed: Any) -> bool:
+        """Return whether a parsed URL points to a Wikipedia article page."""
+        host = (parsed.hostname or "").lower()
+        is_wikipedia_host = host == "wikipedia.org" or host.endswith(".wikipedia.org")
+        return is_wikipedia_host and parsed.path.startswith("/wiki/")
+
+    @staticmethod
+    def _clean_title(title: str) -> str:
+        """Strip lightweight markup from a page title."""
+        if not title:
+            return title
+        return html_lib.unescape(re.sub(r"<[^>]+>", "", title)).strip()
+
+    def _trim_wikipedia_html_fallback(self, text: str) -> str:
+        """Remove common Wikipedia chrome when reading article HTML."""
+        if not text:
+            return text
+
+        lower_text = text.lower()
+        for marker in self.WIKIPEDIA_LEAD_MARKERS:
+            marker_index = lower_text.find(marker)
+            if marker_index != -1:
+                text = text[marker_index + len(marker):].lstrip()
+                break
+
+        text = re.sub(r"\[\s*edit\s*\]", "", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\[\s*Bearbeiten\s*\|\s*Quelltext bearbeiten\s*\]",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"\bContents\s+hide\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bInhaltsverzeichnis\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s{2,}", " ", text)
+        return text.strip()
+
     async def _extract_text(self, html: str, content_type: str) -> str:
         """Extract text from HTML without BeautifulSoup."""
         if 'text/plain' in content_type:
             return html
 
-        import re
+        try:
+            parser = _MainContentParser()
+            parser.feed(html)
+            parser.close()
+            text = parser.get_text()
+            if text:
+                return text
+        except Exception as err:
+            _LOGGER.debug("HTML main-content parsing failed: %s", err)
 
+        return self._strip_tags_fallback(html)
+
+    @staticmethod
+    def _strip_tags_fallback(html: str) -> str:
+        """Fallback HTML tag stripping when parser extraction fails."""
         html = re.sub(
             r"<script\b[^>]*>.*?</script\b[^>]*>",
             "",
@@ -471,18 +552,202 @@ class ReadUrlTool:
             html,
             flags=re.DOTALL | re.IGNORECASE,
         )
-
-        html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
-
-        html = re.sub(r'<[^>]+>', ' ', html)
-
+        html = re.sub(r"<!--.*?-->", "", html, flags=re.DOTALL)
+        html = re.sub(r"<[^>]+>", " ", html)
         html = html_lib.unescape(html)
+        return re.sub(r"\s+", " ", html).strip()
 
-        lines = html.split('\n')
-        lines = [line.strip() for line in lines]
-        lines = [line for line in lines if line]
-        text = '\n'.join(lines)
 
-        text = re.sub(r'\s+', ' ', text)
+class _MainContentParser(HTMLParser):
+    """Lightweight HTML parser that favors article and main content."""
 
-        return text.strip()
+    _SKIP_TAGS = {"head", "noscript", "script", "style", "title"}
+    _BOILERPLATE_TAGS = {"nav", "footer", "aside"}
+    _LITERAL_TAGS = {"code", "kbd", "pre", "samp"}
+    _VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+    _BLOCK_TAGS = {
+        "article",
+        "div",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "li",
+        "main",
+        "p",
+        "pre",
+        "section",
+    }
+    _PREFERRED_TAGS = {"article", "main"}
+    _PREFERRED_KEYWORDS = {
+        "article",
+        "bodycontent",
+        "content",
+        "entry-content",
+        "main-content",
+        "mw-content-text",
+        "post",
+    }
+
+    def __init__(self) -> None:
+        """Initialize parser state."""
+        super().__init__(convert_charrefs=True)
+        self._skip_depth = 0
+        self._boilerplate_depth = 0
+        self._preferred_depth = 0
+        self._literal_depth = 0
+        self._tag_stack: List[Tuple[str, bool, bool, bool, bool]] = []
+        self._preferred_parts: List[Tuple[str, bool]] = []
+        self._body_parts: List[Tuple[str, bool]] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: List[Tuple[str, Optional[str]]],
+    ) -> None:
+        """Track whether a tag starts skippable, boilerplate, or preferred content."""
+        tag = tag.lower()
+        if tag in self._VOID_TAGS:
+            if tag == "br":
+                self._append_separator()
+            return
+
+        is_skip = tag in self._SKIP_TAGS
+        is_boilerplate = tag in self._BOILERPLATE_TAGS
+        is_literal = tag in self._LITERAL_TAGS
+        is_preferred = (
+            not is_skip
+            and not is_boilerplate
+            and self._is_preferred_container(tag, attrs)
+        )
+
+        self._tag_stack.append((tag, is_skip, is_boilerplate, is_preferred, is_literal))
+
+        if is_skip:
+            self._skip_depth += 1
+        if is_boilerplate:
+            self._boilerplate_depth += 1
+        if is_preferred:
+            self._preferred_depth += 1
+        if is_literal:
+            self._literal_depth += 1
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: List[Tuple[str, Optional[str]]],
+    ) -> None:
+        """Handle self-closing tags."""
+        tag = tag.lower()
+        if tag in self._VOID_TAGS:
+            if tag == "br":
+                self._append_separator()
+            return
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        """Leave tracked tag scopes."""
+        tag = tag.lower()
+        matching_index = -1
+        for index in range(len(self._tag_stack) - 1, -1, -1):
+            if self._tag_stack[index][0] == tag:
+                matching_index = index
+                break
+
+        if matching_index >= 0:
+            while len(self._tag_stack) > matching_index:
+                self._pop_tag_scope()
+
+        if tag in self._BLOCK_TAGS:
+            self._append_separator()
+
+    def handle_data(self, data: str) -> None:
+        """Collect visible page text."""
+        if self._skip_depth > 0 or self._boilerplate_depth > 0:
+            return
+        text = data.strip()
+        if not text:
+            return
+        is_literal = self._literal_depth > 0
+        if self._preferred_depth > 0:
+            self._preferred_parts.append((text, is_literal))
+        elif self._boilerplate_depth == 0:
+            self._body_parts.append((text, is_literal))
+
+    def get_text(self) -> str:
+        """Return preferred main content, falling back to visible body text."""
+        preferred = self._normalize_text(self._preferred_parts)
+        if preferred:
+            return preferred
+        return self._normalize_text(self._body_parts)
+
+    def _append_separator(self) -> None:
+        """Add a loose text separator."""
+        if self._skip_depth > 0 or self._boilerplate_depth > 0:
+            return
+        if self._preferred_depth > 0:
+            self._preferred_parts.append((" ", False))
+        elif self._boilerplate_depth == 0:
+            self._body_parts.append((" ", False))
+
+    def _pop_tag_scope(self) -> None:
+        """Pop one tracked tag scope and update active depths."""
+        _, is_skip, is_boilerplate, is_preferred, is_literal = self._tag_stack.pop()
+        if is_skip and self._skip_depth > 0:
+            self._skip_depth -= 1
+        if is_boilerplate and self._boilerplate_depth > 0:
+            self._boilerplate_depth -= 1
+        if is_preferred and self._preferred_depth > 0:
+            self._preferred_depth -= 1
+        if is_literal and self._literal_depth > 0:
+            self._literal_depth -= 1
+
+    def _is_preferred_container(
+        self,
+        tag: str,
+        attrs: List[Tuple[str, Optional[str]]],
+    ) -> bool:
+        """Return whether a container likely holds main article content."""
+        if tag in self._PREFERRED_TAGS:
+            return True
+
+        attr_map = {key.lower(): (value or "") for key, value in attrs}
+        if attr_map.get("role", "").lower() == "main":
+            return True
+
+        attribute_values = {
+            value.casefold()
+            for key in ("id", "class")
+            for value in attr_map.get(key, "").split()
+            if value
+        }
+        return bool(attribute_values & self._PREFERRED_KEYWORDS)
+
+    @staticmethod
+    def _normalize_text(parts: List[Tuple[str, bool]]) -> str:
+        """Collapse collected text fragments into a single readable string."""
+        if not parts:
+            return ""
+        processed_parts = [
+            text if is_literal else _clean_markdown_escapes(text)
+            for text, is_literal in parts
+        ]
+        return re.sub(r"\s+", " ", " ".join(processed_parts)).strip()
