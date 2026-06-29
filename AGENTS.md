@@ -151,6 +151,17 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - Do not commit generated caches, `__pycache__`, `.pyc`, `.pyo`, local venvs, or
   `test-results/`.
 
+## Documentation Tone
+
+- Keep docs and UI copy plainspoken, concrete, and human. Explain what MCP
+  Assist does and where model support can vary without making the project sound
+  magical, autonomous, or universally best.
+- Prefer targeted wording fixes over broad terminology sweeps. Do not rename
+  established terms such as "Smart Entity Index" or existing config labels just
+  to make copy feel less hyped.
+- When recommending models or features, describe observed fit and tradeoffs
+  instead of using phrases like "frontier", "very best", or "super AI".
+
 ## Home Assistant and HACS Notes
 
 - HACS metadata is in `hacs.json`. It controls repository display behavior, not
