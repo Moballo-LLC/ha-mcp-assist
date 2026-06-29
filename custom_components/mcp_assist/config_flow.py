@@ -57,6 +57,7 @@ from .const import (
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_BRAVE_API_KEY,
+    CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
@@ -122,6 +123,7 @@ from .const import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_DEBUG_MODE,
     DEFAULT_BRAVE_API_KEY,
+    DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_INCLUDE_CURRENT_USER,
     DEFAULT_INCLUDE_HOME_LOCATION,
@@ -446,6 +448,38 @@ def _infer_web_search_enabled(
     return bool(legacy_enable_custom_tools)
 
 
+def _shared_search_provider_requires_url(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+) -> bool:
+    """Return whether the selected shared search provider needs a URL."""
+    if _normalize_search_provider(user_input.get(CONF_SEARCH_PROVIDER)) != "searxng":
+        return False
+
+    built_in_search_enabled = any(
+        bool(user_input.get(spec.shared_setting_key, spec.shared_default))
+        for spec in built_in_specs
+        if spec.requires_search_provider
+    )
+    legacy_web_search_enabled = bool(
+        user_input.get(CONF_ENABLE_WEB_SEARCH, DEFAULT_ENABLE_WEB_SEARCH)
+    )
+
+    return built_in_search_enabled or legacy_web_search_enabled
+
+
+def _validate_shared_search_settings(
+    user_input: dict[str, Any],
+    built_in_specs: tuple[BuiltInToolToggleSpec, ...],
+    errors: dict[str, str],
+) -> None:
+    """Validate provider-specific shared search settings."""
+    if _shared_search_provider_requires_url(user_input, built_in_specs) and not str(
+        user_input.get(CONF_SEARXNG_URL, "")
+    ).strip():
+        errors[CONF_SEARXNG_URL] = "searxng_url_required"
+
+
 def _normalize_shared_tool_inputs(
     user_input: dict[str, Any],
     built_in_specs: tuple[BuiltInToolToggleSpec, ...] = (),
@@ -622,6 +656,10 @@ def _build_shared_tools_section(
                                 "value": "brave",
                                 "label": "Brave Search (requires API key)",
                             },
+                            {
+                                "value": "searxng",
+                                "label": "SearXNG (self-hosted)",
+                            },
                         ],
                         mode=SelectSelectorMode.DROPDOWN,
                     )
@@ -632,6 +670,12 @@ def _build_shared_tools_section(
                         defaults, CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
                     ),
                 ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                vol.Optional(
+                    CONF_SEARXNG_URL,
+                    default=_get_form_value(
+                        defaults, CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
+                    ),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
             }
         ),
         {"collapsed": False},
@@ -1434,6 +1478,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_BRAVE_API_KEY: existing_entry.data.get(
                                 CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
                             ),
+                            CONF_SEARXNG_URL: existing_entry.data.get(
+                                CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
+                            ),
                             CONF_ALLOWED_IPS: existing_entry.data.get(
                                 CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
                             ),
@@ -1724,6 +1771,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
+            _validate_shared_search_settings(user_input, built_in_specs, errors)
+
             if not errors:
                 # Create/update system entry with shared settings
                 from . import get_system_entry
@@ -1801,6 +1850,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
                 CONF_BRAVE_API_KEY,
                 DEFAULT_BRAVE_API_KEY,
+            ),
+            CONF_SEARXNG_URL: _get_form_value(
+                current_values,
+                CONF_SEARXNG_URL,
+                DEFAULT_SEARXNG_URL,
             ),
             CONF_INCLUDE_CURRENT_USER: _get_form_value(
                 current_values,
@@ -2639,6 +2693,8 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs in options: %s", error_msg)
 
+            _validate_shared_search_settings(user_input, built_in_specs, errors)
+
             if not errors:
                 # Import get_system_entry
                 from . import get_system_entry
@@ -2724,6 +2780,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 sys_options.get(
                     CONF_BRAVE_API_KEY,
                     sys_data.get(CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY),
+                ),
+            ),
+            CONF_SEARXNG_URL: _get_form_value(
+                current_values,
+                CONF_SEARXNG_URL,
+                sys_options.get(
+                    CONF_SEARXNG_URL,
+                    sys_data.get(CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL),
                 ),
             ),
             CONF_INCLUDE_CURRENT_USER: _get_form_value(

@@ -259,7 +259,8 @@
               "enable_weather_forecast_tool": "Weather Forecast",
               "enable_web_search": "Web Search",
               "search_provider": "Web Search Provider",
-              "brave_api_key": "Brave Search API Key"
+              "brave_api_key": "Brave Search API Key",
+              "searxng_url": "SearXNG URL"
             },
             "data_description": {
               "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
@@ -276,7 +277,8 @@
               "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
-              "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected."
+              "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
+              "searxng_url": "Required only when Web Search is enabled and SearXNG is selected. Use the base URL for your self-hosted SearXNG instance."
             }
           }
         }
@@ -290,6 +292,7 @@
       "invalid_ip": "Invalid IP address or CIDR range format. Use comma-separated values like: 172.30.0.0/16, 192.168.1.100",
       "profile_name_required": "Profile name is required.",
       "invalid_json": "Invalid JSON format. Please check your MCP servers configuration.",
+      "searxng_url_required": "SearXNG URL is required when SearXNG search is enabled.",
       "invalid_api_key": "Invalid API key. Please check and try again.",
       "auth_failed": "Authentication failed. Please verify your API key.",
       "unknown": "An unknown error occurred.",
@@ -552,7 +555,8 @@
               "enable_weather_forecast_tool": "Weather Forecast",
               "enable_web_search": "Web Search",
               "search_provider": "Web Search Provider",
-              "brave_api_key": "Brave Search API Key"
+              "brave_api_key": "Brave Search API Key",
+              "searxng_url": "SearXNG URL"
             },
             "data_description": {
               "enable_assist_bridge": "Expose Home Assistant's native Assist tools, prompt, and context snapshot.",
@@ -569,7 +573,8 @@
               "enable_weather_forecast_tool": "Expose the dedicated Home Assistant weather forecast helper.",
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
-              "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected."
+              "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
+              "searxng_url": "Required only when Web Search is enabled and SearXNG is selected. Use the base URL for your self-hosted SearXNG instance."
             }
           }
         }

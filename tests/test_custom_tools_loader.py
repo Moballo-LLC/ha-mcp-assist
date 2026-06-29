@@ -22,6 +22,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     CONF_SEARCH_PROVIDER,
+    CONF_SEARXNG_URL,
     CUSTOM_TOOL_MANIFEST_FILENAME,
     CUSTOM_TOOL_SETTINGS_DIRECTORY,
     CUSTOM_TOOLS_DIRECTORY,
@@ -404,6 +405,46 @@ async def test_initialize_loads_search_and_read_url_for_duckduckgo(
     await loader.initialize()
 
     assert {"search", "read_url"}.issubset(loader.tools)
+    assert "calculator" not in loader.tools
+
+
+@pytest.mark.asyncio
+async def test_initialize_loads_search_and_read_url_for_searxng(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """SearXNG should load through the same built-in package pathway."""
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            "enable_search_tool": True,
+            "enable_read_url_tool": True,
+            CONF_SEARCH_PROVIDER: "searxng",
+            CONF_SEARXNG_URL: "http://search.local",
+            CONF_ENABLE_CALCULATOR_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+
+    searxng_module = types.SimpleNamespace(
+        SearXNGSearchTool=type("SearXNGSearchTool", (_StubTool,), {})
+    )
+    read_url_module = types.SimpleNamespace(ReadUrlTool=type("ReadUrlTool", (_StubTool,), {}))
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.mcp_assist.custom_tools.searxng_search",
+        searxng_module,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.mcp_assist.custom_tools.read_url",
+        read_url_module,
+    )
+
+    loader = CustomToolsLoader(hass, profile_entry)
+    await loader.initialize()
+
+    assert {"search", "read_url"}.issubset(loader.tools)
+    assert loader.tools["search"]._delegate.args == ("http://search.local",)
     assert "calculator" not in loader.tools
 
 

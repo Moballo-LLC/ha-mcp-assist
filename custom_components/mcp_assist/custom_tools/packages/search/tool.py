@@ -9,7 +9,9 @@ from custom_components.mcp_assist.const import (
     CONF_BRAVE_API_KEY,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_SEARCH_PROVIDER,
+    CONF_SEARXNG_URL,
     DEFAULT_BRAVE_API_KEY,
+    DEFAULT_SEARXNG_URL,
 )
 from custom_components.mcp_assist.custom_tool_api import MCPAssistExternalTool
 
@@ -40,6 +42,15 @@ class SearchPackageTool(MCPAssistExternalTool):
             )
 
             self._delegate = DuckDuckGoSearchTool(self.hass)
+        elif provider == "searxng":
+            from custom_components.mcp_assist.custom_tools.searxng_search import (
+                SearXNGSearchTool,
+            )
+
+            self._delegate = SearXNGSearchTool(
+                self.hass,
+                self._get_shared_setting(CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL),
+            )
         else:
             raise ValueError(
                 "Built-in search package loaded without a supported search provider."

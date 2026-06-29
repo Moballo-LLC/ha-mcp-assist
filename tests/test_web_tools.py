@@ -11,6 +11,7 @@ import pytest
 
 from custom_components.mcp_assist.custom_tools import brave_search as brave_module
 from custom_components.mcp_assist.custom_tools import read_url as read_url_module
+from custom_components.mcp_assist.custom_tools import searxng_search as searxng_module
 
 sys.modules.setdefault("ddgs", types.SimpleNamespace(DDGS=object))
 sys.modules.setdefault("duckduckgo_search", types.SimpleNamespace(DDGS=object))
@@ -23,8 +24,12 @@ def test_search_tool_definitions_include_current_events_routing_metadata(hass) -
     """Built-in search helpers should advertise live-news routing hints."""
     brave_definition = brave_module.BraveSearchTool(hass, api_key="secret").get_tool_definitions()[0]
     ddg_definition = ddg_module.DuckDuckGoSearchTool(hass).get_tool_definitions()[0]
+    searxng_definition = searxng_module.SearXNGSearchTool(
+        hass,
+        base_url="http://search.local",
+    ).get_tool_definitions()[0]
 
-    for definition in (brave_definition, ddg_definition):
+    for definition in (brave_definition, ddg_definition, searxng_definition):
         assert "news" in definition["keywords"]
         assert definition["preferred_when"]
         assert definition["returns"]
@@ -126,6 +131,113 @@ async def test_brave_search_returns_timeout_error(hass, monkeypatch) -> None:
 
     monkeypatch.setattr(brave_module.aiohttp, "ClientSession", _client_session)
     tool = brave_module.BraveSearchTool(hass, api_key="secret")
+
+    result = await tool.handle_call("search", {"query": "weather"})
+
+    assert result["content"][0]["text"] == "❌ Search timeout - please try again"
+
+
+@pytest.mark.asyncio
+async def test_searxng_search_requires_url(hass) -> None:
+    """SearXNG should fail clearly when selected without a configured URL."""
+    tool = searxng_module.SearXNGSearchTool(hass)
+
+    with pytest.raises(ValueError, match="no SearXNG URL"):
+        await tool.initialize()
+
+
+@pytest.mark.asyncio
+async def test_searxng_search_formats_successful_results(hass, monkeypatch) -> None:
+    """SearXNG search should normalize URL, query, and returned results."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            json_data={
+                "results": [
+                    {
+                        "title": "Weather Result",
+                        "url": "https://example.com/weather",
+                        "content": "Forecast details",
+                        "engines": ["duckduckgo", "brave"],
+                        "publishedDate": "2026-06-01",
+                    },
+                    {
+                        "title": "Second Result",
+                        "url": "https://example.com/second",
+                        "content": "More details",
+                    },
+                ]
+            }
+        )
+    )
+
+    def _client_session():
+        return fake_session
+
+    monkeypatch.setattr(searxng_module.aiohttp, "ClientSession", _client_session)
+    tool = searxng_module.SearXNGSearchTool(hass, base_url="http://search.local/")
+
+    result = await tool.handle_call("search", {"query": "weather", "count": 1})
+
+    assert "Weather Result" in result["content"][0]["text"]
+    assert "duckduckgo, brave" in result["content"][0]["text"]
+    assert result["structuredContent"]["mode"] == "web"
+    assert result["structuredContent"]["count"] == 1
+    assert result["structuredContent"]["results"][0]["snippet"] == "Forecast details"
+    assert fake_session.calls[0][0] == "http://search.local/search"
+    assert fake_session.calls[0][1]["params"]["q"] == "weather"
+    assert fake_session.calls[0][1]["params"]["format"] == "json"
+
+
+@pytest.mark.asyncio
+async def test_searxng_search_biases_news_mode_queries(hass, monkeypatch) -> None:
+    """News mode should bias SearXNG queries toward fresh results."""
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            json_data={
+                "results": [
+                    {
+                        "title": "Mariners update",
+                        "url": "https://example.com/mariners",
+                        "content": "Trade deadline news",
+                        "engine": "brave",
+                    }
+                ]
+            }
+        )
+    )
+
+    def _client_session():
+        return fake_session
+
+    monkeypatch.setattr(searxng_module.aiohttp, "ClientSession", _client_session)
+    tool = searxng_module.SearXNGSearchTool(
+        hass,
+        base_url="http://search.local/search",
+    )
+
+    result = await tool.handle_call(
+        "search",
+        {"query": "mariners", "mode": "news"},
+    )
+
+    assert result["structuredContent"]["mode"] == "news"
+    assert result["structuredContent"]["provider_query"] == "mariners latest news"
+    assert fake_session.calls[0][1]["params"]["q"] == "mariners latest news"
+
+
+@pytest.mark.asyncio
+async def test_searxng_search_returns_timeout_error(hass, monkeypatch) -> None:
+    """SearXNG search should return a friendly timeout error payload."""
+    fake_session = _FakeSession(error=asyncio.TimeoutError())
+
+    def _client_session():
+        return fake_session
+
+    monkeypatch.setattr(searxng_module.aiohttp, "ClientSession", _client_session)
+    tool = searxng_module.SearXNGSearchTool(
+        hass,
+        base_url="http://search.local",
+    )
 
     result = await tool.handle_call("search", {"query": "weather"})
 

@@ -208,6 +208,7 @@ def is_builtin_package_enabled_for_shared_settings(
     if spec.requires_search_provider and search_provider not in {
         "brave",
         "duckduckgo",
+        "searxng",
     }:
         return False
 

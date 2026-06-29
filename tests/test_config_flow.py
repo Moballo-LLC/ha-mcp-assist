@@ -75,6 +75,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_SEARCH_PROVIDER,
+    CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
@@ -508,11 +509,16 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
         *SHARED_TOOL_ORDER,
         CONF_SEARCH_PROVIDER,
         CONF_BRAVE_API_KEY,
+        CONF_SEARXNG_URL,
     ]
     tool_markers = {
         getattr(marker, "schema", marker): marker
         for marker in tools_section.schema.schema.keys()
     }
+    search_selector = tools_section.schema.schema[tool_markers[CONF_SEARCH_PROVIDER]]
+    assert {
+        option["value"] for option in search_selector.config["options"]
+    } == {"duckduckgo", "brave", "searxng"}
     external_default = tool_markers[CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS].default
     assert external_default() is False if callable(external_default) else external_default is False
     recorder_default = tool_markers[_builtin_shared_key("recorder")].default
@@ -521,6 +527,49 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
     assert response_default() is True if callable(response_default) else response_default is True
     assert tool_markers[_builtin_shared_key("calculator")].description is None
     assert tool_markers[_builtin_shared_key("read_url")].description is None
+
+
+async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:
+    """SearXNG search should not save without a base URL."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("search"): True,
+            CONF_SEARCH_PROVIDER: "searxng",
+            CONF_SEARXNG_URL: " ",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
+
+
+async def test_options_mcp_step_requires_searxng_url_when_selected(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should reject SearXNG without a base URL."""
+    system_entry_factory()
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            _builtin_shared_key("search"): True,
+            CONF_SEARCH_PROVIDER: "searxng",
+            CONF_SEARXNG_URL: "",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SEARXNG_URL] == "searxng_url_required"
 
 
 def test_built_in_tool_checkboxes_rely_on_translation_subtitles() -> None:
