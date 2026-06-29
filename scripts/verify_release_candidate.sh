@@ -29,8 +29,19 @@ find_python() {
 PYTHON_BIN="$(find_python)"
 export PYTHON="$PYTHON_BIN"
 
+fetch_main_for_ancestry_check() {
+  local main_refspec="+refs/heads/main:refs/remotes/origin/main"
+
+  if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+    git fetch --no-tags --unshallow origin "$main_refspec"
+    return
+  fi
+
+  git fetch --no-tags origin "$main_refspec"
+}
+
 if [[ "${REQUIRE_MAIN_ANCESTOR:-0}" == "1" ]]; then
-  git fetch --no-tags --depth=1 origin main
+  fetch_main_for_ancestry_check
   git merge-base --is-ancestor HEAD origin/main || {
     echo "Release candidate commit must be reachable from origin/main." >&2
     exit 1
