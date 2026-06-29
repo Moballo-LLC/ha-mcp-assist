@@ -181,6 +181,27 @@ Typical flow:
 For Home Assistant-local information, such as entity state, weather, calendars,
 or history, prefer the native Home Assistant tools over web search.
 
+## Google Places and Routes
+
+User:
+
+```text
+Is the nearest hardware store open, and how long would it take to get there?
+```
+
+Typical flow:
+
+1. `search_google_places` finds matching places and open status.
+2. `get_google_route` calculates a traffic-aware ETA from Home Assistant home.
+3. The assistant summarizes the best matching place, address, phone, rating,
+   open status, and travel time.
+
+Other examples:
+
+- "What is the phone number for Pike Place Market?"
+- "How long will it take to drive to the airport right now?"
+- "When should I leave home to arrive at dinner by 6:30?"
+
 ## Music Assistant
 
 User:

@@ -126,6 +126,20 @@ Web tools are optional and controlled by shared provider settings.
 Use Home Assistant-native tools first for local Home Assistant data such as
 weather, calendars, history, and entity state.
 
+## Google Places and Routes
+
+Google Places and Routes tools are optional and require a Google Maps API key.
+
+| Tool | Purpose |
+| --- | --- |
+| `search_google_places` | Search for businesses and places, including open status, address, phone, and rating when available |
+| `get_google_place_details` | Fetch details for a Google Places result |
+| `get_google_route` | Calculate travel time, distance, and traffic-aware ETAs |
+
+If `get_google_route` is called without an origin, it uses the configured Home
+Assistant home latitude and longitude. Use regular web search for broad
+location research that is not a place lookup or route question.
+
 ## Music Assistant
 
 Music Assistant tools are available when the Home Assistant Music Assistant

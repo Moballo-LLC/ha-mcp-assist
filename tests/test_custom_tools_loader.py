@@ -15,6 +15,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    CONF_GOOGLE_MAPS_API_KEY,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
@@ -339,6 +340,36 @@ async def test_builtin_tool_registry_exposes_package_classification_and_toggle_m
     assert unit_conversion_spec.package_id == "unit_conversion"
     assert loader.get_builtin_toggle_specs()
     assert loader.get_builtin_toggle_spec("missing_tool") is None
+
+
+@pytest.mark.asyncio
+async def test_initialize_loads_google_maps_when_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Google Maps should load as its own optional built-in package."""
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            "enable_google_maps_tools": True,
+            CONF_GOOGLE_MAPS_API_KEY: "test-key",
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+
+    loader = CustomToolsLoader(hass, profile_entry)
+    await loader.initialize()
+
+    assert "google_maps" in loader.tools
+    tool_names = {definition["name"] for definition in loader.get_tool_definitions()}
+    assert {
+        "search_google_places",
+        "get_google_place_details",
+        "get_google_route",
+    } <= tool_names
+    google_maps_spec = loader.get_builtin_toggle_spec("get_google_route")
+    assert google_maps_spec is not None
+    assert google_maps_spec.package_id == "google_maps"
 
 
 @pytest.mark.asyncio

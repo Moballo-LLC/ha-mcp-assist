@@ -54,8 +54,8 @@ The MCP server exposes a stable set of core tools:
 - optional bridge tools for Assist context
 
 Optional tool families can add more capabilities, such as recorder history,
-weather forecasts, memory, web search, URL reading, Music Assistant, images, and
-external custom tools.
+weather forecasts, memory, web search, URL reading, Google Places and Routes,
+Music Assistant, images, and external custom tools.
 
 See [Tool Reference](tool-reference.md) for the tool list.
 

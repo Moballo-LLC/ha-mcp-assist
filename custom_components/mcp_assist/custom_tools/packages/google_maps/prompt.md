@@ -1,0 +1,1 @@
+Use `search_google_places` when the user asks whether a place is open, where it is, how to call it, or how it is rated. Use `get_google_place_details` when a specific Google Places result needs more detail. Use `get_google_route` for travel time, leave-by, commute, distance, and traffic-aware ETA questions; omit origin when the route should start from Home Assistant home.

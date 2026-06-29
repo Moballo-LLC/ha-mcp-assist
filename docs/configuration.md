@@ -180,6 +180,19 @@ For Home Assistant-native weather answers:
 MCP Assist falls back to a supported forecast type when a specific type is not
 available.
 
+## Google Places and Routes
+
+Google Places and Routes is disabled by default. Enable it when a profile should
+be able to look up place details or calculate travel time.
+
+Required shared setting:
+
+- **Google Maps API Key**: A Google Maps Platform API key with the Places API
+  and Routes API enabled.
+
+When `get_google_route` is called without an origin, MCP Assist uses the Home
+Assistant home latitude and longitude as the route origin.
+
 ## External Custom Tools
 
 External custom tools are disabled by default. When enabled, MCP Assist loads

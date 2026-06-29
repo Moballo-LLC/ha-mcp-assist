@@ -28,7 +28,13 @@ def test_builtin_catalog_loads_expected_manifest_packages() -> None:
     """The manifest catalog should discover the built-in package toggle metadata."""
     package_ids = {spec.package_id for spec in BUILTIN_SPECS}
 
-    assert {"calculator", "unit_conversion", "search", "read_url"} <= package_ids
+    assert {
+        "calculator",
+        "google_maps",
+        "unit_conversion",
+        "search",
+        "read_url",
+    } <= package_ids
 
 
 def test_builtin_catalog_looks_up_specs_by_package_id_and_tool_name() -> None:
@@ -42,6 +48,9 @@ def test_builtin_catalog_looks_up_specs_by_package_id_and_tool_name() -> None:
     assert get_builtin_toggle_spec_by_tool_name(
         "convert_unit", BUILTIN_SPECS
     ) == _spec("unit_conversion")
+    assert get_builtin_toggle_spec_by_tool_name(
+        "get_google_route", BUILTIN_SPECS
+    ) == _spec("google_maps")
     assert get_builtin_toggle_spec_by_tool_name("missing_tool", BUILTIN_SPECS) is None
 
 
