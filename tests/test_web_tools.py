@@ -9,6 +9,7 @@ import logging
 import socket
 import sys
 import types
+from urllib.parse import urlparse
 
 import pytest
 
@@ -534,6 +535,103 @@ async def test_read_url_extracts_html_text_and_decodes_entities(hass) -> None:
     )
 
     assert text == "Hello & welcome Line two"
+
+
+@pytest.mark.asyncio
+async def test_read_url_prefers_main_content_over_page_chrome(hass) -> None:
+    """HTML extraction should prefer article/main content over navigation chrome."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    text = await tool._extract_text(
+        """
+        <html>
+          <body>
+            <header>Site header</header>
+            <nav>Menu link</nav>
+            <main id="main-content">
+              <h1>Useful article</h1>
+              <p>Important body text.</p>
+            </main>
+            <aside>Related links</aside>
+            <footer>Footer text</footer>
+          </body>
+        </html>
+        """,
+        "text/html",
+    )
+
+    assert text == "Useful article Important body text."
+
+
+@pytest.mark.asyncio
+async def test_read_url_summary_keeps_longer_excerpt(hass, monkeypatch) -> None:
+    """Summary mode should keep a useful excerpt instead of stopping at 1000 chars."""
+    long_text = "x" * 1200
+    fake_session = _FakeSession(
+        response=_FakeResponse(
+            headers={"Content-Type": "text/plain"},
+            text=long_text,
+        )
+    )
+
+    monkeypatch.setattr(
+        read_url_module.aiohttp,
+        "ClientSession",
+        _read_url_client_session(fake_session),
+    )
+    tool = read_url_module.ReadUrlTool(hass)
+    _allow_public_example_resolution(tool)
+
+    result = await tool.handle_call(
+        "read_url",
+        {"url": "https://example.com/long", "summary": True},
+    )
+
+    assert "Length: 1200 chars" in result["content"][0]["text"]
+    assert long_text in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_url_cleans_wikipedia_page_chrome(hass) -> None:
+    """Wikipedia HTML fallback should remove common article chrome."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text="""
+        <html>
+          <head><title>Example - Wikipedia</title></head>
+          <body>
+            <main id="mw-content-text">
+              <p>From Wikipedia, the free encyclopedia</p>
+              <p>Contents hide</p>
+              <p>Useful encyclopedia article text. [edit]</p>
+            </main>
+          </body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://en.wikipedia.org/wiki/Example"),
+        "https://en.wikipedia.org/wiki/Example",
+        summary_only=False,
+    )
+
+    result_text = result["content"][0]["text"]
+    assert "Useful encyclopedia article text." in result_text
+    assert "From Wikipedia" not in result_text
+    assert "Contents hide" not in result_text
+    assert "[edit]" not in result_text
+
+
+def test_read_url_wikipedia_detection_requires_real_wikipedia_host(hass) -> None:
+    """Wikipedia cleanup should not trigger for lookalike hostnames."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    assert tool._is_wikipedia_url(urlparse("https://en.wikipedia.org/wiki/Example"))
+    assert not tool._is_wikipedia_url(urlparse("https://evilwikipedia.org/wiki/Example"))
+    assert not tool._is_wikipedia_url(urlparse("https://wikipedia.org.example/wiki/Example"))
 
 
 @pytest.mark.asyncio
