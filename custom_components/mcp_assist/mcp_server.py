@@ -5,6 +5,7 @@ import base64
 from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import timedelta
 import ipaddress
 import inspect
 import json
@@ -15,7 +16,6 @@ from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Dict, List, Tuple
 from urllib.parse import unquote, urlparse
-from datetime import timedelta
 
 import aiohttp
 from aiohttp import web, WSCloseCode, WSMsgType
@@ -73,9 +73,6 @@ from .const import (
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
-    CONF_MEMORY_DEFAULT_TTL_DAYS,
-    CONF_MEMORY_MAX_TTL_DAYS,
-    CONF_MEMORY_MAX_ITEMS,
     DEFAULT_LMSTUDIO_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_SEARCH_PROVIDER,
@@ -90,9 +87,6 @@ from .const import (
     DEFAULT_ENABLE_DEVICE_TOOLS,
     DEFAULT_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     DEFAULT_ENABLE_EXTERNAL_CUSTOM_TOOLS,
-    DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
-    DEFAULT_MEMORY_MAX_TTL_DAYS,
-    DEFAULT_MEMORY_MAX_ITEMS,
     SERVER_TYPE_OLLAMA,
     TOOL_FAMILY_SHARED_SETTINGS,
     get_optional_tool_family,
@@ -107,7 +101,6 @@ from .domain_registry import (
     TYPE_CONTROLLABLE,
     TYPE_READ_ONLY,
 )
-from .memory_manager import MemoryManager
 from .provider_runtime import (
     build_provider_auth_headers,
     resolve_provider_runtime_config,
@@ -244,8 +237,6 @@ class MCPServer(
         self._websocket_clients: dict[WebSocketResponse, str | None] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
-        self.memory_manager = MemoryManager(hass)
-
         self.allowed_ips: list[str] = []
         self._refresh_allowed_ips_from_settings()
 
@@ -457,43 +448,6 @@ class MCPServer(
                 CONF_ENABLE_MEMORY_TOOLS,
                 DEFAULT_ENABLE_MEMORY_TOOLS,
             )
-        )
-
-    def _memory_default_ttl_days(self) -> int:
-        """Return the default TTL for new memories."""
-        configured_max = self._memory_max_ttl_days()
-        return self._coerce_int_arg(
-            self._get_shared_setting(
-                CONF_MEMORY_DEFAULT_TTL_DAYS,
-                DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
-            ),
-            default=DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
-            minimum=1,
-            maximum=configured_max,
-        )
-
-    def _memory_max_ttl_days(self) -> int:
-        """Return the maximum TTL allowed for memories."""
-        return self._coerce_int_arg(
-            self._get_shared_setting(
-                CONF_MEMORY_MAX_TTL_DAYS,
-                DEFAULT_MEMORY_MAX_TTL_DAYS,
-            ),
-            default=DEFAULT_MEMORY_MAX_TTL_DAYS,
-            minimum=1,
-            maximum=3650,
-        )
-
-    def _memory_max_items(self) -> int:
-        """Return the maximum number of memories to keep."""
-        return self._coerce_int_arg(
-            self._get_shared_setting(
-                CONF_MEMORY_MAX_ITEMS,
-                DEFAULT_MEMORY_MAX_ITEMS,
-            ),
-            default=DEFAULT_MEMORY_MAX_ITEMS,
-            minimum=10,
-            maximum=5000,
         )
 
     def _unit_conversion_tools_enabled(self) -> bool:
@@ -709,21 +663,6 @@ class MCPServer(
                     _sanitize_log_value(e),
                 )
 
-            if self._memory_tools_enabled():
-                try:
-                    await self.memory_manager.async_initialize()
-                    _LOGGER.info(
-                        "✅ Memory tools initialized (default ttl: %s days, max ttl: %s days, max items: %s)",
-                        self._memory_default_ttl_days(),
-                        self._memory_max_ttl_days(),
-                        self._memory_max_items(),
-                    )
-                except Exception as err:
-                    _LOGGER.error(
-                        "Failed to initialize memory tools: %s",
-                        _sanitize_log_value(err),
-                    )
-
             _LOGGER.info(
                 "✅ MCP server started successfully on http://0.0.0.0:%d", self.port
             )
@@ -768,8 +707,6 @@ class MCPServer(
             await self.runner.cleanup()
         if self.custom_tools:
             await self.custom_tools.shutdown()
-        if self.memory_manager:
-            await self.memory_manager.async_shutdown()
 
     def _is_ip_allowed(self, client_ip: str) -> bool:
         """Check if client IP is in the allowed list.
@@ -1327,104 +1264,6 @@ class MCPServer(
                         "Use when the user explicitly wants a new image and the provider supports image generation."
                     ),
                     "returns": "An MCP image block or a clear unsupported-provider error.",
-                },
-            },
-        ]
-
-    def _get_llm_api_bridge_tool_definitions(self) -> list[dict[str, Any]]:
-        """Return tools for allowlisted third-party Home Assistant LLM APIs."""
-        api_id_description = (
-            "Third-party Home Assistant LLM API id shown by list_llm_apis, "
-            "for example 'llm_intents'."
-        )
-        return [
-            {
-                "name": "list_llm_apis",
-                "description": (
-                    "List registered third-party Home Assistant LLM APIs and whether "
-                    "each is allowlisted for MCP Assist. The built-in Assist API is "
-                    "handled by Assist Bridge tools and is not included here."
-                ),
-                "llmDescription": "List allowlisted third-party Home Assistant LLM APIs.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {},
-                    "required": [],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "list_llm_api_tools",
-                "description": (
-                    "List the tools exposed by an allowlisted third-party Home "
-                    "Assistant LLM API. Use this before calling call_llm_api_tool."
-                ),
-                "llmDescription": "List tools from an allowlisted third-party Home Assistant LLM API.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "api_id": {
-                            "type": "string",
-                            "description": api_id_description,
-                        },
-                    },
-                    "required": ["api_id"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "call_llm_api_tool",
-                "description": (
-                    "Call a tool exposed by an allowlisted third-party Home Assistant "
-                    "LLM API. Arguments must match the schema returned by "
-                    "list_llm_api_tools."
-                ),
-                "llmDescription": "Call a tool on an allowlisted third-party Home Assistant LLM API.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "api_id": {
-                            "type": "string",
-                            "description": api_id_description,
-                        },
-                        "tool_name": {
-                            "type": "string",
-                            "description": (
-                                "Exact tool name exposed by the selected API. Use "
-                                "list_llm_api_tools first if unsure."
-                            ),
-                        },
-                        "arguments": {
-                            "type": "object",
-                            "description": "Arguments to pass to the selected tool.",
-                            "additionalProperties": True,
-                        },
-                    },
-                    "required": ["api_id", "tool_name"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "get_llm_api_prompt",
-                "description": (
-                    "Get the prompt text exposed by an allowlisted third-party Home "
-                    "Assistant LLM API for compatibility checks and debugging."
-                ),
-                "llmDescription": "Get prompt text from an allowlisted third-party LLM API.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "api_id": {
-                            "type": "string",
-                            "description": api_id_description,
-                        },
-                    },
-                    "required": ["api_id"],
-                    "additionalProperties": False,
                 },
             },
         ]
@@ -2131,102 +1970,8 @@ class MCPServer(
                     "additionalProperties": False,
                 },
             },
-            {
-                "name": "list_memory_categories",
-                "description": "List suggested memory categories and active counts. Use this before storing or filtering memories when the right category is unclear.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {},
-                    "required": [],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "remember_memory",
-                "description": "Store a short fact, preference, or instruction for later recall. Use this only when the user explicitly asks you to remember something. Memories persist across conversations and automatically expire after a TTL.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "memory": {
-                            "type": "string",
-                            "description": "The fact, preference, or instruction to store.",
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Optional short category. Prefer list_memory_categories suggestions such as 'preference', 'routine', 'device_alias', 'automation_note', 'baseline', 'correction', 'maintenance', or 'household'.",
-                        },
-                        "ttl_days": {
-                            "type": "integer",
-                            "description": "Optional retention time in days. If omitted, the shared default TTL is used and capped by the shared maximum TTL.",
-                            "minimum": 1,
-                            "maximum": 3650,
-                        },
-                    },
-                    "required": ["memory"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "recall_memories",
-                "description": "Search active stored memories by query or category, or list recent memories when no query is given. Use this for requests like 'what do you remember about my coffee preference?'",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Optional search text to match against stored memory text.",
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Optional category filter. Use list_memory_categories to inspect suggested categories and active counts.",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of memories to return (default: 5).",
-                            "minimum": 1,
-                            "maximum": 50,
-                            "default": 5,
-                        },
-                    },
-                    "required": [],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "forget_memory",
-                "description": "Delete one stored memory by id or by query/category match. Use this when the user asks you to forget or update something previously remembered.",
-                "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "type": "object",
-                    "properties": {
-                        "memory_id": {
-                            "type": "string",
-                            "description": "Specific memory id to delete.",
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Search text to find a memory to delete when the id is not known.",
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Optional category filter when deleting by query. Use list_memory_categories if the category is unclear.",
-                        },
-                        "forget_all_matches": {
-                            "type": "boolean",
-                            "description": "Delete every matching memory instead of only the best match.",
-                            "default": False,
-                        },
-                    },
-                    "required": [],
-                    "additionalProperties": False,
-                },
-            },
             ]
         )
-        tools.extend(self._get_llm_api_bridge_tool_definitions())
         tools.extend(self._get_media_tool_definitions())
 
         # Add custom tool definitions if enabled
@@ -2288,14 +2033,6 @@ class MCPServer(
             return await self.tool_get_assist_prompt(arguments)
         elif tool_name == "get_assist_context_snapshot":
             return await self.tool_get_assist_context_snapshot(arguments)
-        elif tool_name == "list_llm_apis":
-            return await self.tool_list_llm_apis(arguments)
-        elif tool_name == "list_llm_api_tools":
-            return await self.tool_list_llm_api_tools(arguments)
-        elif tool_name == "call_llm_api_tool":
-            return await self.tool_call_llm_api_tool(arguments)
-        elif tool_name == "get_llm_api_prompt":
-            return await self.tool_get_llm_api_prompt(arguments)
         elif tool_name == "perform_action":
             return await self.tool_perform_action(arguments)
         elif tool_name == "set_conversation_state":
@@ -2304,14 +2041,6 @@ class MCPServer(
             return await self.tool_run_script(arguments)
         elif tool_name == "run_automation":
             return await self.tool_run_automation(arguments)
-        elif tool_name == "list_memory_categories":
-            return await self.tool_list_memory_categories(arguments)
-        elif tool_name == "remember_memory":
-            return await self.tool_remember_memory(arguments)
-        elif tool_name == "recall_memories":
-            return await self.tool_recall_memories(arguments)
-        elif tool_name == "forget_memory":
-            return await self.tool_forget_memory(arguments)
         elif tool_name == "analyze_image":
             return await self.tool_analyze_image(arguments, context=context)
         elif tool_name == "get_image":
@@ -3919,135 +3648,6 @@ class MCPServer(
             ]
         }
 
-    async def tool_list_llm_apis(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """List registered third-party Home Assistant LLM APIs."""
-        del args
-
-        allowed_api_ids = self._allowed_llm_api_ids()
-        allowed_api_id_set = set(allowed_api_ids)
-        registered_apis = sorted(
-            (
-                api
-                for api in llm.async_get_apis(self.hass)
-                if api.id != llm.LLM_API_ASSIST
-            ),
-            key=lambda api: (api.name.casefold(), api.id),
-        )
-        registered_api_ids = {api.id for api in registered_apis}
-        apis_payload = [
-            {
-                "id": api.id,
-                "name": api.name,
-                "allowed": api.id in allowed_api_id_set,
-            }
-            for api in registered_apis
-        ]
-        allowed_count = sum(1 for api in apis_payload if api["allowed"])
-        missing_allowed_api_ids = sorted(allowed_api_id_set - registered_api_ids)
-        payload = {
-            "enabled": self._llm_api_bridge_enabled(),
-            "allowed_api_ids": list(allowed_api_ids),
-            "missing_allowed_api_ids": missing_allowed_api_ids,
-            "api_count": len(apis_payload),
-            "allowed_api_count": allowed_count,
-            "apis": apis_payload,
-        }
-        header = (
-            f"Found {len(apis_payload)} third-party Home Assistant LLM APIs; "
-            f"{allowed_count} are allowlisted for MCP Assist."
-        )
-        if missing_allowed_api_ids:
-            header += (
-                " Some configured API ids are not currently registered: "
-                + ", ".join(missing_allowed_api_ids)
-                + "."
-            )
-
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": header
-                    + "\n\n"
-                    + json.dumps(payload, indent=2, ensure_ascii=False),
-                }
-            ]
-        }
-
-    async def tool_list_llm_api_tools(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """List tools exposed by an allowlisted third-party LLM API."""
-        llm_api = await self._get_llm_api_bridge_api_instance(args.get("api_id"))
-        tools_payload = [
-            {
-                "name": tool.name,
-                "description": tool.description or "",
-                "input_schema": self._format_llm_tool_input_schema(
-                    tool, llm_api.custom_serializer
-                ),
-            }
-            for tool in llm_api.tools
-        ]
-        payload = {
-            "api_id": llm_api.api.id,
-            "api_name": llm_api.api.name,
-            "tool_count": len(tools_payload),
-            "tools": tools_payload,
-        }
-        header = (
-            f"Found {len(tools_payload)} tools from third-party LLM API "
-            f"{llm_api.api.name} ({llm_api.api.id})."
-        )
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": header
-                    + "\n\n"
-                    + json.dumps(payload, indent=2, ensure_ascii=False),
-                }
-            ]
-        }
-
-    async def tool_call_llm_api_tool(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Call a tool exposed by an allowlisted third-party LLM API."""
-        tool_name = str(args.get("tool_name") or "").strip()
-        if not tool_name:
-            raise ValueError("tool_name is required")
-
-        tool_arguments = args.get("arguments") or {}
-        if not isinstance(tool_arguments, dict):
-            raise ValueError("arguments must be an object")
-
-        llm_api = await self._get_llm_api_bridge_api_instance(args.get("api_id"))
-        tool_response = await self._call_llm_api_tool(
-            llm_api, tool_name, tool_arguments
-        )
-        serialized_response = self._serialize_service_response_value(tool_response)
-
-        text_parts = [
-            f"✅ Called third-party LLM API `{llm_api.api.id}` tool `{tool_name}`."
-        ]
-        summary_lines = self._build_assist_tool_response_summary(serialized_response)
-        if summary_lines:
-            text_parts.append("")
-            text_parts.extend(summary_lines)
-        text_parts.append("")
-        text_parts.append("Response:")
-        text_parts.append(json.dumps(serialized_response, indent=2, ensure_ascii=False))
-
-        return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
-
-    async def tool_get_llm_api_prompt(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Get prompt text for an allowlisted third-party LLM API."""
-        llm_api = await self._get_llm_api_bridge_api_instance(args.get("api_id"))
-        prompt = llm_api.api_prompt or ""
-        description = (
-            f"Prompt for third-party Home Assistant LLM API "
-            f"{llm_api.api.name} ({llm_api.api.id})"
-        )
-        text = description + ("\n\n" + prompt if prompt else "\n\nNo prompt text provided.")
-        return {"content": [{"type": "text", "text": text}]}
-
     async def tool_perform_action(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Perform an action on Home Assistant entities with progress notifications."""
         domain = args.get("domain")
@@ -4519,266 +4119,25 @@ class MCPServer(
             _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
-    async def tool_list_memory_categories(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """List suggested memory categories and active counts."""
-        del args
+    def _coerce_int_arg(
+        self, value: Any, *, default: int, minimum: int, maximum: int
+    ) -> int:
+        """Coerce an integer-like tool argument safely."""
+        if value is None:
+            parsed = default
+        elif isinstance(value, bool):
+            parsed = default
+        elif isinstance(value, int):
+            parsed = value
+        elif isinstance(value, float):
+            parsed = int(value)
+        else:
+            try:
+                parsed = int(str(value).strip())
+            except (TypeError, ValueError):
+                parsed = default
 
-        self.publish_progress(
-            "tool_start",
-            "Listing memory categories",
-            tool="list_memory_categories",
-        )
-
-        try:
-            result = await self.memory_manager.list_categories()
-        except Exception as err:
-            _LOGGER.error("Failed to list memory categories: %s", _sanitize_log_value(err))
-            return {
-                "content": [
-                    {"type": "text", "text": f"Failed to list memory categories: {err}"}
-                ],
-                "isError": True,
-            }
-
-        self.publish_progress(
-            "tool_complete",
-            "Memory categories listed",
-            tool="list_memory_categories",
-            count=result["total_count"],
-        )
-
-        lines = ["Suggested memory categories:"]
-        for category in result["categories"]:
-            lines.append(
-                f"- {category['category']}: {category['description']} "
-                f"({category['count']} active)"
-            )
-
-        custom_categories = result["custom_categories"]
-        if custom_categories:
-            lines.append("Custom categories already in use:")
-            for category in custom_categories:
-                lines.append(f"- {category['category']}: {category['count']} active")
-
-        if result["uncategorized_count"]:
-            lines.append(f"Uncategorized active memories: {result['uncategorized_count']}")
-        lines.append(f"Total active memories: {result['total_count']}")
-
-        return {
-            "content": [{"type": "text", "text": "\n".join(lines)}],
-            **result,
-        }
-
-    async def tool_remember_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Store a persisted memory with TTL."""
-        memory_text = " ".join(str(args.get("memory") or "").split()).strip()
-        if not memory_text:
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Memory text is required.",
-                    }
-                ],
-                "isError": True,
-            }
-
-        ttl_days = args.get("ttl_days")
-        category = args.get("category")
-        self.publish_progress(
-            "tool_start",
-            "Storing memory",
-            tool="remember_memory",
-        )
-
-        try:
-            stored = await self.memory_manager.remember(
-                memory_text,
-                default_ttl_days=self._memory_default_ttl_days(),
-                max_ttl_days=self._memory_max_ttl_days(),
-                ttl_days=None if ttl_days is None else self._coerce_int_arg(
-                    ttl_days,
-                    default=self._memory_default_ttl_days(),
-                    minimum=1,
-                    maximum=self._memory_max_ttl_days(),
-                ),
-                category=category,
-                max_items=self._memory_max_items(),
-            )
-        except Exception as err:
-            _LOGGER.error("Failed to store memory: %s", _sanitize_log_value(err))
-            return {
-                "content": [{"type": "text", "text": f"Failed to store memory: {err}"}],
-                "isError": True,
-            }
-
-        self.publish_progress(
-            "tool_complete",
-            "Memory stored",
-            tool="remember_memory",
-            memory_id=stored["id"],
-        )
-
-        expires_at = dt_util.parse_datetime(stored["expires_at"])
-        expires_text = (
-            self._format_relative_absolute_time(expires_at)
-            if expires_at is not None
-            else "later"
-        )
-        category_text = (
-            f" Category: {stored['category']}."
-            if stored.get("category")
-            else ""
-        )
-        prune_text = (
-            f" {stored['pruned_count']} old memories were pruned to stay within the configured limit."
-            if stored.get("pruned_count")
-            else ""
-        )
-
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        f"Stored memory [{stored['id']}].{category_text} "
-                        f"It expires {expires_text}.{prune_text}"
-                    ),
-                }
-            ],
-            "memory": stored,
-        }
-
-    async def tool_recall_memories(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Recall stored memories by query or category."""
-        limit = self._coerce_int_arg(
-            args.get("limit"),
-            default=5,
-            minimum=1,
-            maximum=50,
-        )
-        query = args.get("query")
-        category = args.get("category")
-
-        self.publish_progress(
-            "tool_start",
-            "Searching stored memories",
-            tool="recall_memories",
-        )
-
-        try:
-            result = await self.memory_manager.recall(
-                query=None if query is None else str(query),
-                category=None if category is None else str(category),
-                limit=limit,
-            )
-        except Exception as err:
-            _LOGGER.error("Failed to recall memories: %s", _sanitize_log_value(err))
-            return {
-                "content": [{"type": "text", "text": f"Failed to recall memories: {err}"}],
-                "isError": True,
-            }
-
-        items = result["items"]
-        self.publish_progress(
-            "tool_complete",
-            "Memory recall complete",
-            tool="recall_memories",
-            count=result["returned_count"],
-            total=result["total_found"],
-        )
-
-        if not items:
-            return {
-                "content": [{"type": "text", "text": "No active memories matched."}],
-                "memories": [],
-                "result_count": 0,
-            }
-
-        header = (
-            f"Found {result['returned_count']} of {result['total_found']} active memories:"
-            if result["remaining_count"] > 0
-            else f"Found {result['returned_count']} active memories:"
-        )
-        lines = [header]
-        for memory in items:
-            expires_at = dt_util.parse_datetime(str(memory.get("expires_at") or ""))
-            expires_text = (
-                self._format_relative_absolute_time(expires_at)
-                if expires_at is not None
-                else "later"
-            )
-            category_text = (
-                f" [{memory['category']}]" if memory.get("category") else ""
-            )
-            lines.append(
-                f"- {memory['id']}{category_text}: {memory['text']} (expires {expires_text})"
-            )
-        if result["remaining_count"] > 0:
-            lines.append(f"{result['remaining_count']} more memories matched but were not shown.")
-
-        return {
-            "content": [{"type": "text", "text": "\n".join(lines)}],
-            "memories": items,
-            "result_count": result["total_found"],
-        }
-
-    async def tool_forget_memory(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Delete stored memories by id or query."""
-        memory_id = args.get("memory_id")
-        query = args.get("query")
-        category = args.get("category")
-        forget_all_matches = bool(args.get("forget_all_matches", False))
-
-        self.publish_progress(
-            "tool_start",
-            "Deleting stored memory",
-            tool="forget_memory",
-        )
-
-        try:
-            result = await self.memory_manager.forget(
-                memory_id=None if memory_id is None else str(memory_id),
-                query=None if query is None else str(query),
-                category=None if category is None else str(category),
-                delete_all_matches=forget_all_matches,
-            )
-        except Exception as err:
-            _LOGGER.error("Failed to forget memory: %s", _sanitize_log_value(err))
-            return {
-                "content": [{"type": "text", "text": f"Failed to forget memory: {err}"}],
-                "isError": True,
-            }
-
-        self.publish_progress(
-            "tool_complete",
-            "Memory deletion complete",
-            tool="forget_memory",
-            deleted=result["deleted_count"],
-        )
-
-        if result["deleted_count"] == 0:
-            return {
-                "content": [{"type": "text", "text": "No matching memories were deleted."}],
-                "deleted_count": 0,
-                "deleted": [],
-            }
-
-        deleted = result["deleted"]
-        lines = [f"Deleted {result['deleted_count']} memory item(s):"]
-        for memory in deleted[:10]:
-            category_text = (
-                f" [{memory['category']}]" if memory.get("category") else ""
-            )
-            lines.append(f"- {memory['id']}{category_text}: {memory['text']}")
-        if len(deleted) > 10:
-            lines.append(f"{len(deleted) - 10} additional deleted memories were omitted.")
-
-        return {
-            "content": [{"type": "text", "text": "\n".join(lines)}],
-            "deleted_count": result["deleted_count"],
-            "deleted": deleted,
-        }
+        return max(minimum, min(parsed, maximum))
 
     def _format_relative_time(self, when) -> str:
         """Format a timestamp relative to now."""
@@ -4826,26 +4185,6 @@ class MCPServer(
         absolute = self._format_absolute_time(when)
         return f"{relative} at {absolute}"
 
-    def _coerce_int_arg(
-        self, value: Any, *, default: int, minimum: int, maximum: int
-    ) -> int:
-        """Coerce an integer-like tool argument safely."""
-        if value is None:
-            parsed = default
-        elif isinstance(value, bool):
-            parsed = default
-        elif isinstance(value, int):
-            parsed = value
-        elif isinstance(value, float):
-            parsed = int(value)
-        else:
-            try:
-                parsed = int(str(value).strip())
-            except (TypeError, ValueError):
-                parsed = default
-
-        return max(minimum, min(parsed, maximum))
-
     def _create_assist_llm_context(self) -> llm.LLMContext:
         """Create an LLM context for the native Home Assistant Assist API."""
         kwargs: dict[str, Any] = {
@@ -4864,44 +4203,6 @@ class MCPServer(
         return await llm.async_get_api(
             self.hass, llm.LLM_API_ASSIST, self._create_assist_llm_context()
         )
-
-    def _validate_llm_api_bridge_api_id(self, api_id: object) -> str:
-        """Validate a requested third-party LLM API id against the allowlist."""
-        validated_api_id = str(api_id or "").strip()
-        if not validated_api_id:
-            raise ValueError("api_id is required")
-
-        if validated_api_id == llm.LLM_API_ASSIST:
-            raise HomeAssistantError(
-                "The built-in Assist API is available through Assist Bridge tools, "
-                "not the third-party LLM API bridge."
-            )
-
-        allowed_api_ids = self._allowed_llm_api_ids()
-        if validated_api_id not in allowed_api_ids:
-            raise HomeAssistantError(
-                f"LLM API '{validated_api_id}' is not allowlisted for MCP Assist. "
-                "Add its API id to the shared LLM API allowlist before calling it."
-            )
-
-        return validated_api_id
-
-    async def _get_llm_api_bridge_api_instance(
-        self,
-        api_id: object,
-    ) -> llm.APIInstance:
-        """Get an allowlisted third-party Home Assistant LLM API instance."""
-        validated_api_id = self._validate_llm_api_bridge_api_id(api_id)
-        try:
-            return await llm.async_get_api(
-                self.hass,
-                validated_api_id,
-                self._create_assist_llm_context(),
-            )
-        except HomeAssistantError as err:
-            raise HomeAssistantError(
-                f"LLM API '{validated_api_id}' is not currently available: {err}"
-            ) from err
 
     def _assist_api_has_live_context_tool(self, llm_api: llm.APIInstance) -> bool:
         """Return whether the Assist API exposes GetLiveContext."""
