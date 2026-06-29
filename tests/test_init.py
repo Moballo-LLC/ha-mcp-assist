@@ -44,6 +44,8 @@ from custom_components.mcp_assist.const import (
     DEFAULT_ENABLE_DEVICE_TOOLS,
     DEFAULT_MCP_PORT,
     DOMAIN,
+    SERVICE_CLEAR_CHAT_LOGS,
+    SERVICE_GET_CHAT_LOGS,
     SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS,
     SYSTEM_ENTRY_UNIQUE_ID,
 )
@@ -238,6 +240,8 @@ async def test_async_setup_registers_reload_service_and_last_unload_removes_it(
     ):
         assert await async_setup_entry(hass, entry) is True
         assert hass.services.has_service(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS)
+        assert hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS)
+        assert hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS)
 
         response = await hass.services.async_call(
             DOMAIN,
@@ -249,8 +253,42 @@ async def test_async_setup_registers_reload_service_and_last_unload_removes_it(
         assert response == {"enabled": True, "loaded_tools": [], "load_errors": []}
         mcp_server.reload_external_custom_tools.assert_awaited_once()
 
+        chat_log_manager = hass.data[DOMAIN]["chat_log_manager"]
+        await chat_log_manager.async_record(
+            {
+                "created_at": "2026-06-01T00:00:00+00:00",
+                "profile_entry_id": entry.entry_id,
+                "conversation_id": "conv-1",
+                "user_text": "status",
+                "assistant_text": "All good.",
+                "tools": [],
+            }
+        )
+        logs_response = await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_CHAT_LOGS,
+            {"profile_entry_id": entry.entry_id},
+            blocking=True,
+            return_response=True,
+        )
+
+        assert logs_response["count"] == 1
+        assert logs_response["logs"][0]["conversation_id"] == "conv-1"
+
+        clear_response = await hass.services.async_call(
+            DOMAIN,
+            SERVICE_CLEAR_CHAT_LOGS,
+            {"conversation_id": "conv-1"},
+            blocking=True,
+            return_response=True,
+        )
+
+        assert clear_response == {"deleted_count": 1, "remaining_count": 0}
+
         assert await async_unload_entry(hass, entry) is True
         assert not hass.services.has_service(
             DOMAIN,
             SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS,
         )
+        assert not hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS)
+        assert not hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS)

@@ -1,3 +1,41 @@
 reload_external_custom_tools:
   name: Reload external custom tools
   description: Reload external tool packages from the Home Assistant config directory and return diagnostics.
+
+get_chat_logs:
+  name: Get chat logs
+  description: Return recent opt-in conversation logs captured by Chat Log Mode.
+  fields:
+    limit:
+      name: Limit
+      description: Maximum number of newest logs to return.
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+    profile_entry_id:
+      name: Profile entry ID
+      description: Only return logs for this MCP Assist profile entry.
+      selector:
+        text:
+    conversation_id:
+      name: Conversation ID
+      description: Only return logs for this Home Assistant conversation ID.
+      selector:
+        text:
+
+clear_chat_logs:
+  name: Clear chat logs
+  description: Delete opt-in conversation logs captured by Chat Log Mode.
+  fields:
+    profile_entry_id:
+      name: Profile entry ID
+      description: Only clear logs for this MCP Assist profile entry.
+      selector:
+        text:
+    conversation_id:
+      name: Conversation ID
+      description: Only clear logs for this Home Assistant conversation ID.
+      selector:
+        text:
