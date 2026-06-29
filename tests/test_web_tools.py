@@ -533,6 +533,40 @@ async def test_read_url_rejects_invalid_urls_and_timeouts(hass, monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_read_url_reports_dns_resolution_failures(hass) -> None:
+    """DNS resolver errors should become tool error text."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _raise_dns_error(host: str, port: int):
+        assert host == "missing.example"
+        assert port == 443
+        raise socket.gaierror("name not known")
+
+    tool._resolve_host_addresses = _raise_dns_error
+
+    result = await tool.handle_call("read_url", {"url": "https://missing.example"})
+
+    assert result["content"][0]["text"] == "❌ Unable to resolve URL host: missing.example"
+
+
+@pytest.mark.asyncio
+async def test_read_url_reports_dns_resolution_timeouts(hass) -> None:
+    """DNS resolver timeouts should become tool error text."""
+    tool = read_url_module.ReadUrlTool(hass)
+
+    async def _raise_timeout(host: str, port: int):
+        assert host == "slow.example"
+        assert port == 443
+        raise asyncio.TimeoutError
+
+    tool._resolve_host_addresses = _raise_timeout
+
+    result = await tool.handle_call("read_url", {"url": "https://slow.example"})
+
+    assert result["content"][0]["text"] == "❌ Timed out resolving URL host: slow.example"
+
+
+@pytest.mark.asyncio
 async def test_read_url_blocks_local_and_private_urls_before_fetch(
     hass,
     monkeypatch,

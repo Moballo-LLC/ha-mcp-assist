@@ -388,10 +388,15 @@ class ReadUrlTool:
         port: int,
     ) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]:
         """Resolve a hostname and return checked public addresses."""
-        addresses = await asyncio.wait_for(
-            self._resolve_host_addresses(host, port),
-            timeout=5,
-        )
+        try:
+            addresses = await asyncio.wait_for(
+                self._resolve_host_addresses(host, port),
+                timeout=5,
+            )
+        except asyncio.TimeoutError as err:
+            raise ValueError(f"Timed out resolving URL host: {host}") from err
+        except OSError as err:
+            raise ValueError(f"Unable to resolve URL host: {host}") from err
         if not addresses:
             raise ValueError(f"Unable to resolve URL host: {host}")
         if any(self._is_private_or_local_address(address) for address in addresses):
