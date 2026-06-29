@@ -210,6 +210,11 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 
 - Keep PRs as small, atomic, and easy to review as possible. Prefer one
   behavior change, fix, or maintenance concern per PR.
+- For new work items or new PRs, fetch `origin/main` first and branch from the
+  latest `origin/main`. Do not base new work on an older feature branch unless
+  the task explicitly depends on that branch.
+- For follow-ups on an existing PR, update or rebase that PR branch against the
+  latest `origin/main` when practical before adding more commits.
 - Cover behavior changes with automated tests. For low-risk docs or metadata
   changes, run the relevant parser/format checks and explain why broader tests
   are unnecessary.

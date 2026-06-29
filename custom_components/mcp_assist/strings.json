@@ -287,7 +287,7 @@
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
               "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
-              "llm_api_allowlist": "Comma- or newline-separated third-party LLM API IDs MCP Assist may inspect or call, such as llm_intents. The built-in assist API remains on Assist Bridge.",
+              "llm_api_allowlist": "Comma- or newline-separated third-party LLM API IDs MCP Assist may inspect or call, such as llm_intents. Installed third-party LLM APIs: {installed_llm_apis}. The built-in assist API remains on Assist Bridge.",
               "searxng_url": "Required only when Web Search is enabled and SearXNG is selected. Use the base URL for your self-hosted SearXNG instance."
             }
           }
@@ -592,7 +592,7 @@
               "enable_web_search": "Expose web search and URL-reading tools.",
               "search_provider": "Choose which provider to use when Web Search is enabled.",
               "brave_api_key": "Required only when Web Search is enabled and Brave Search is selected.",
-              "llm_api_allowlist": "Comma- or newline-separated third-party LLM API IDs MCP Assist may inspect or call, such as llm_intents. The built-in assist API remains on Assist Bridge.",
+              "llm_api_allowlist": "Comma- or newline-separated third-party LLM API IDs MCP Assist may inspect or call, such as llm_intents. Installed third-party LLM APIs: {installed_llm_apis}. The built-in assist API remains on Assist Bridge.",
               "searxng_url": "Required only when Web Search is enabled and SearXNG is selected. Use the base URL for your self-hosted SearXNG instance."
             }
           }

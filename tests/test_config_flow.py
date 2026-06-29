@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import voluptuous as vol
@@ -11,6 +12,7 @@ import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType, section
 from homeassistant.helpers.selector import TemplateSelector
 
+from custom_components.mcp_assist import config_flow as config_flow_module
 from custom_components.mcp_assist.config_flow import (
     ADVANCED_SECTION_KEY,
     CONVERSATION_SECTION_KEY,
@@ -38,6 +40,7 @@ from custom_components.mcp_assist.config_flow import (
     TOOLS_SECTION_KEY,
     _build_profile_tools_section,
     _build_shared_tools_section,
+    _format_installed_llm_api_options,
     _apply_profile_tool_disables,
     _infer_prompt_mode,
     _needs_prompt_followup,
@@ -438,6 +441,28 @@ def test_normalize_shared_tool_inputs_normalizes_llm_api_allowlist() -> None:
     assert normalized[CONF_LLM_API_ALLOWLIST] == "llm_intents, music_api"
 
 
+def test_format_installed_llm_api_options_lists_registered_third_party_apis(
+    hass, monkeypatch
+) -> None:
+    """The shared settings helper should show copyable installed third-party API ids."""
+    monkeypatch.setattr(
+        config_flow_module.llm,
+        "async_get_apis",
+        lambda hass_arg: [
+            SimpleNamespace(
+                id=config_flow_module.llm.LLM_API_ASSIST,
+                name="Assist",
+            ),
+            SimpleNamespace(id="llm_intents", name="LLM Intents"),
+            SimpleNamespace(id="calendar_tools", name="Calendar Tools"),
+        ],
+    )
+
+    assert _format_installed_llm_api_options(hass) == (
+        "Calendar Tools (calendar_tools), LLM Intents (llm_intents)"
+    )
+
+
 def test_normalize_shared_tool_inputs_clamps_memory_ttls() -> None:
     """Shared memory TTL settings should be coerced into a safe valid range."""
     normalized = _normalize_shared_tool_inputs(
@@ -492,8 +517,21 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
     assert marker_by_key[_builtin_profile_key("search")].description is None
 
 
-async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
+async def test_shared_mcp_step_groups_context_discovery_and_tools(
+    hass, monkeypatch
+) -> None:
     """Shared MCP settings should group context, discovery, and tools fields into sections."""
+    monkeypatch.setattr(
+        config_flow_module.llm,
+        "async_get_apis",
+        lambda hass_arg: [
+            SimpleNamespace(
+                id=config_flow_module.llm.LLM_API_ASSIST,
+                name="Assist",
+            ),
+            SimpleNamespace(id="llm_intents", name="LLM Intents"),
+        ],
+    )
     flow = MCPAssistConfigFlow()
     flow.hass = hass
     flow.context = {"source": "user"}
@@ -561,6 +599,9 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
     assert response_default() is True if callable(response_default) else response_default is True
     assert tool_markers[_builtin_shared_key("calculator")].description is None
     assert tool_markers[_builtin_shared_key("read_url")].description is None
+    assert result["description_placeholders"]["installed_llm_apis"] == (
+        "LLM Intents (llm_intents)"
+    )
 
 
 async def test_shared_mcp_step_requires_searxng_url_when_selected(hass) -> None:

@@ -179,6 +179,10 @@ Shared settings:
 - **Allowed LLM API IDs**: Comma- or newline-separated API IDs MCP Assist may
   inspect or call, such as `llm_intents`.
 
+The shared settings form shows currently registered third-party LLM APIs beside
+the allowlist field. Copy the API ID from that list when enabling an installed
+integration.
+
 The built-in Home Assistant `assist` API remains on the separate Assist Bridge.
 Do not add third-party API IDs unless you trust the integration that registered
 them. See [Security and Privacy](security-and-privacy.md#third-party-llm-apis).

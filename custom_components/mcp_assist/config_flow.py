@@ -14,6 +14,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
     BooleanSelector,
     SelectSelector,
@@ -199,6 +200,41 @@ def _infer_prompt_mode(
     if stored_prompt in (None, "", default_prompt):
         return PROMPT_MODE_DEFAULT
     return PROMPT_MODE_CUSTOM
+
+
+def _format_installed_llm_api_options(hass: HomeAssistant) -> str:
+    """Return a short display string for registered third-party LLM APIs."""
+    get_apis = getattr(llm, "async_get_apis", None)
+    if not callable(get_apis):
+        return "not available on this Home Assistant version"
+
+    try:
+        registered_apis = sorted(
+            (
+                api
+                for api in get_apis(hass)
+                if getattr(api, "id", None) != llm.LLM_API_ASSIST
+            ),
+            key=lambda api: (
+                str(getattr(api, "name", "")).casefold(),
+                str(getattr(api, "id", "")),
+            ),
+        )
+    except Exception as err:
+        _LOGGER.debug("Unable to list registered third-party LLM APIs: %s", err)
+        return "unable to read installed APIs right now"
+
+    if not registered_apis:
+        return "none currently registered"
+
+    formatted_options = []
+    for api in registered_apis:
+        api_id = str(getattr(api, "id", "")).strip()
+        if not api_id:
+            continue
+        api_name = str(getattr(api, "name", "") or api_id).strip()
+        formatted_options.append(f"{api_name} ({api_id})")
+    return ", ".join(formatted_options) or "none currently registered"
 
 
 def _get_current_prompt_mode(
@@ -2037,7 +2073,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "⚠️ These settings define the shared MCP server capabilities "
                     "available to all profiles and external MCP clients. Individual "
                     "profiles can still disable specific tool families later."
-                )
+                ),
+                "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
 
@@ -3120,7 +3157,8 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     "⚠️ These settings are shared across ALL MCP Assist profiles and "
                     "external MCP clients. Individual profiles can still opt into a "
                     "smaller subset in their own settings."
-                )
+                ),
+                "installed_llm_apis": _format_installed_llm_api_options(self.hass),
             },
         )
 
