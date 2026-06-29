@@ -1,5 +1,7 @@
 # External Custom Tools for MCP Assist
 
+Part of the [MCP Assist documentation](README.md).
+
 MCP Assist can load additional MCP tool packages from your Home Assistant config directory.
 
 This is intended for advanced users who want to:
