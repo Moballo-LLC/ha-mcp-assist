@@ -629,6 +629,36 @@ def test_initial_payload_metrics_log_size_without_content(
     assert "please keep this private" not in caplog.text
 
 
+def test_initial_payload_metrics_log_at_info_when_debug_mode_enabled(
+    hass, profile_entry_factory, caplog
+) -> None:
+    """Profile Debug Mode should surface first-payload metrics without DEBUG logs."""
+    agent = MCPAssistConversationEntity(
+        hass, profile_entry_factory(data={CONF_DEBUG_MODE: True})
+    )
+    messages = [{"role": "user", "content": "private debug message"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "discover_entities", "parameters": {}},
+        }
+    ]
+    payload = {"model": "test-model", "messages": messages, "tools": tools}
+
+    with caplog.at_level(logging.INFO, logger=agent_module._LOGGER.name):
+        agent._log_initial_llm_payload_metrics(
+            transport="http",
+            iteration=0,
+            payload=payload,
+            messages=messages,
+            tools=tools,
+        )
+
+    assert "Initial LLM payload metrics" in caplog.text
+    assert "payload_bytes=" in caplog.text
+    assert "private debug message" not in caplog.text
+
+
 def test_build_messages_light_context_caps_history_to_two_turns(
     hass, profile_entry_factory
 ) -> None:

@@ -18,6 +18,21 @@ latency, status codes, selected tools, and argument counts. It should not log
 full prompts, user messages, provider payloads, tool arguments, or tool results.
 Turn it off after troubleshooting to keep logs quiet.
 
+When Debug Mode is enabled, the first model request in a conversation logs
+metadata-only payload sizing, including provider, transport, payload bytes,
+message character count, advertised tool count, and compact tool-schema bytes.
+
+You can also inspect the shared MCP tool-surface overhead directly:
+
+```text
+http://<home-assistant-host>:8090/debug/prompt-overhead
+```
+
+That endpoint is guarded by the MCP server IP allowlist and returns only size
+metadata, approximate token estimates, and top tool/package contributors. It
+does not return prompts, conversation history, raw tool descriptions, schemas,
+tool arguments, or tool results.
+
 ## What Chat Log Mode Records
 
 When enabled, MCP Assist stores recent conversation records in Home Assistant storage. Each record includes:

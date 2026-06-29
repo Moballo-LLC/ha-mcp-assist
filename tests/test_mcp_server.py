@@ -451,6 +451,86 @@ async def test_health_endpoint_rejects_unauthorized_ip(
     assert response.text == "Forbidden: IP not authorized"
 
 
+@pytest.mark.asyncio
+async def test_prompt_overhead_endpoint_rejects_unauthorized_ip(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Prompt overhead diagnostics should use the same IP whitelist."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    response = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(remote="192.168.1.50", query={})
+    )
+
+    assert response.status == 403
+    assert response.text == "Forbidden: IP not authorized"
+
+
+@pytest.mark.asyncio
+async def test_prompt_overhead_diagnostics_reports_metadata_only(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Prompt overhead diagnostics should summarize size without raw schemas."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    tools = [
+        {
+            "name": "sample_status",
+            "description": "private-schema-marker external status tool",
+            "llmDescription": "Get sample status.",
+            "inputSchema": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "string",
+                        "description": "private-schema-marker should not leak",
+                    }
+                },
+            },
+        },
+        {
+            "name": "run_script",
+            "description": "Run a script.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+    ]
+
+    async def fake_handle_tools_list() -> dict[str, Any]:
+        return {"tools": tools}
+
+    def get_tool_source_info(tool_name: str) -> dict[str, str] | None:
+        if tool_name != "sample_status":
+            return None
+        return {
+            "source": "external_custom",
+            "package_id": "sample_package",
+            "package_name": "Sample Package",
+        }
+
+    server.handle_tools_list = fake_handle_tools_list
+    server.tools = SimpleNamespace(get_tool_source_info=get_tool_source_info)
+
+    response = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", query={"top": "5"})
+    )
+    payload = json.loads(response.text)
+
+    assert response.status == 200
+    assert payload["status"] == "ok"
+    assert payload["standard_context"]["tool_count"] == 2
+    assert payload["standard_context"]["compact_llm_tool_schema_bytes"] > 0
+    assert payload["standard_context"]["approx_llm_tool_schema_tokens"] > 0
+    assert payload["light_context"]["tool_count"] == 1
+    assert payload["light_context"]["top_tools_by_schema_bytes"][0]["name"] == "run_script"
+    assert payload["standard_context"]["top_tool_groups_by_schema_bytes"][0][
+        "package_id"
+    ] in {"sample_package", "core"}
+    assert "private-schema-marker" not in response.text
+    assert "inputSchema" not in response.text
+
+
 def test_tool_enablement_follows_shared_settings(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
