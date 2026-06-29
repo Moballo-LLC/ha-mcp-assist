@@ -39,6 +39,7 @@ from custom_components.mcp_assist.const import (
     CONF_MCP_PORT,
     CONF_PROFILE_NAME,
     CONF_SEARCH_PROVIDER,
+    CONF_SEARXNG_URL,
     CONF_TECHNICAL_PROMPT,
     DEFAULT_ENABLE_DEVICE_TOOLS,
     DEFAULT_MCP_PORT,
@@ -93,6 +94,7 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
             CONF_ENABLE_WEB_SEARCH: True,
             CONF_SEARCH_PROVIDER: "duckduckgo",
             CONF_BRAVE_API_KEY: "abc123",
+            CONF_SEARXNG_URL: "http://search.local",
             CONF_ALLOWED_IPS: "10.0.0.0/24",
             CONF_INCLUDE_CURRENT_USER: False,
             CONF_INCLUDE_HOME_LOCATION: False,
@@ -126,6 +128,7 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
     assert system_entry.data[CONF_ENABLE_WEB_SEARCH] is True
     assert system_entry.data[CONF_SEARCH_PROVIDER] == "duckduckgo"
     assert system_entry.data[CONF_BRAVE_API_KEY] == "abc123"
+    assert system_entry.data[CONF_SEARXNG_URL] == "http://search.local"
     assert system_entry.data[CONF_ALLOWED_IPS] == "10.0.0.0/24"
     assert system_entry.data[CONF_INCLUDE_CURRENT_USER] is False
     assert system_entry.data[CONF_INCLUDE_HOME_LOCATION] is False
@@ -155,6 +158,7 @@ async def test_ensure_system_entry_uses_defaults_without_profiles(hass) -> None:
     assert system_entry.unique_id == SYSTEM_ENTRY_UNIQUE_ID
     assert system_entry.data[CONF_MCP_PORT] == DEFAULT_MCP_PORT
     assert CONF_ENABLE_WEB_SEARCH in system_entry.data
+    assert CONF_SEARXNG_URL in system_entry.data
     assert CONF_INCLUDE_CURRENT_USER in system_entry.data
     assert CONF_INCLUDE_HOME_LOCATION in system_entry.data
     assert CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS in system_entry.data

@@ -75,6 +75,7 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_DEVICE_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_SEARCH_PROVIDER,
+    CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
@@ -508,11 +509,16 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(hass) -> None:
         *SHARED_TOOL_ORDER,
         CONF_SEARCH_PROVIDER,
         CONF_BRAVE_API_KEY,
+        CONF_SEARXNG_URL,
     ]
     tool_markers = {
         getattr(marker, "schema", marker): marker
         for marker in tools_section.schema.schema.keys()
     }
+    search_selector = tools_section.schema.schema[tool_markers[CONF_SEARCH_PROVIDER]]
+    assert {
+        option["value"] for option in search_selector.config["options"]
+    } == {"duckduckgo", "brave", "searxng"}
     external_default = tool_markers[CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS].default
     assert external_default() is False if callable(external_default) else external_default is False
     recorder_default = tool_markers[_builtin_shared_key("recorder")].default

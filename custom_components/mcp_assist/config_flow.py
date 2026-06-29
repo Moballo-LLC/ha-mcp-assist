@@ -57,6 +57,7 @@ from .const import (
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_BRAVE_API_KEY,
+    CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
@@ -122,6 +123,7 @@ from .const import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_DEBUG_MODE,
     DEFAULT_BRAVE_API_KEY,
+    DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_INCLUDE_CURRENT_USER,
     DEFAULT_INCLUDE_HOME_LOCATION,
@@ -622,6 +624,10 @@ def _build_shared_tools_section(
                                 "value": "brave",
                                 "label": "Brave Search (requires API key)",
                             },
+                            {
+                                "value": "searxng",
+                                "label": "SearXNG (self-hosted)",
+                            },
                         ],
                         mode=SelectSelectorMode.DROPDOWN,
                     )
@@ -632,6 +638,12 @@ def _build_shared_tools_section(
                         defaults, CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
                     ),
                 ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                vol.Optional(
+                    CONF_SEARXNG_URL,
+                    default=_get_form_value(
+                        defaults, CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
+                    ),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
             }
         ),
         {"collapsed": False},
@@ -1434,6 +1446,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_BRAVE_API_KEY: existing_entry.data.get(
                                 CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY
                             ),
+                            CONF_SEARXNG_URL: existing_entry.data.get(
+                                CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL
+                            ),
                             CONF_ALLOWED_IPS: existing_entry.data.get(
                                 CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
                             ),
@@ -1801,6 +1816,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
                 CONF_BRAVE_API_KEY,
                 DEFAULT_BRAVE_API_KEY,
+            ),
+            CONF_SEARXNG_URL: _get_form_value(
+                current_values,
+                CONF_SEARXNG_URL,
+                DEFAULT_SEARXNG_URL,
             ),
             CONF_INCLUDE_CURRENT_USER: _get_form_value(
                 current_values,
@@ -2724,6 +2744,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 sys_options.get(
                     CONF_BRAVE_API_KEY,
                     sys_data.get(CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY),
+                ),
+            ),
+            CONF_SEARXNG_URL: _get_form_value(
+                current_values,
+                CONF_SEARXNG_URL,
+                sys_options.get(
+                    CONF_SEARXNG_URL,
+                    sys_data.get(CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL),
                 ),
             ),
             CONF_INCLUDE_CURRENT_USER: _get_form_value(

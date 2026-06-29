@@ -301,7 +301,9 @@ See [docs/custom-tools.md](docs/custom-tools.md) for the full package spec, safe
   - **None**: Search disabled
   - **DuckDuckGo**: Free web search (no API key required)
   - **Brave Search**: Requires API key from https://brave.com/search/api/
+  - **SearXNG**: Uses your self-hosted SearXNG instance
 - **Brave Search API Key**: Required only if using Brave Search
+- **SearXNG URL**: Required only if using SearXNG; set this to the base URL of your instance
 
 ### Shared vs Per-Profile Settings
 

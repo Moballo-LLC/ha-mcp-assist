@@ -109,6 +109,14 @@ def test_builtin_package_enabled_for_shared_settings_requires_supported_provider
         )
         is True
     )
+    assert (
+        is_builtin_package_enabled_for_shared_settings(
+            spec,
+            get_setting,
+            search_provider="searxng",
+        )
+        is True
+    )
 
 
 def test_builtin_package_enabled_for_profile_combines_shared_and_profile_state() -> None:

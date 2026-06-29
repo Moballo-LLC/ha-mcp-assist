@@ -22,6 +22,7 @@ from .const import (
     CONF_ENABLE_CUSTOM_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_BRAVE_API_KEY,
+    CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
@@ -68,6 +69,7 @@ from .const import (
     DEFAULT_MEMORY_MAX_TTL_DAYS,
     DEFAULT_MEMORY_MAX_ITEMS,
     DEFAULT_TIMEOUT,
+    DEFAULT_SEARXNG_URL,
     SERVER_TYPE_OPENCLAW,
     CONF_OPENCLAW_HOST,
     CONF_OPENCLAW_PORT,
@@ -209,6 +211,10 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                 CONF_BRAVE_API_KEY: first_profile.options.get(
                     CONF_BRAVE_API_KEY,
                     first_profile.data.get(CONF_BRAVE_API_KEY, DEFAULT_BRAVE_API_KEY)
+                ),
+                CONF_SEARXNG_URL: first_profile.options.get(
+                    CONF_SEARXNG_URL,
+                    first_profile.data.get(CONF_SEARXNG_URL, DEFAULT_SEARXNG_URL),
                 ),
                 CONF_ALLOWED_IPS: first_profile.options.get(
                     CONF_ALLOWED_IPS,
@@ -357,6 +363,7 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                 CONF_ENABLE_WEB_SEARCH: DEFAULT_ENABLE_WEB_SEARCH,
                 CONF_SEARCH_PROVIDER: DEFAULT_SEARCH_PROVIDER,
                 CONF_BRAVE_API_KEY: DEFAULT_BRAVE_API_KEY,
+                CONF_SEARXNG_URL: DEFAULT_SEARXNG_URL,
                 CONF_ALLOWED_IPS: DEFAULT_ALLOWED_IPS,
                 CONF_INCLUDE_CURRENT_USER: DEFAULT_INCLUDE_CURRENT_USER,
                 CONF_INCLUDE_HOME_LOCATION: DEFAULT_INCLUDE_HOME_LOCATION,
