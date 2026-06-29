@@ -699,6 +699,36 @@ async def test_read_url_preserves_plain_text_markdown_escapes(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_url_preserves_html_code_markdown_escapes(hass) -> None:
+    """HTML code snippets should keep literal source escape sequences."""
+    tool = read_url_module.ReadUrlTool(hass)
+    response = _FakeResponse(
+        headers={"Content-Type": "text/html; charset=utf-8"},
+        text=r"""
+        <html>
+          <body>
+            <main>
+              <p>Intro \_text\_</p>
+              <pre><code>regex = r"\[0-9\]"</code></pre>
+            </main>
+          </body>
+        </html>
+        """,
+    )
+
+    result = await tool._format_response(
+        response,
+        urlparse("https://example.com/regex-docs"),
+        "https://example.com/regex-docs",
+        summary_only=False,
+    )
+
+    result_text = result["content"][0]["text"]
+    assert "Intro _text_" in result_text
+    assert r'regex = r"\[0-9\]"' in result_text
+
+
+@pytest.mark.asyncio
 async def test_read_url_normalizes_plain_text_content_type(hass) -> None:
     """Plain text media types should be handled case-insensitively."""
     tool = read_url_module.ReadUrlTool(hass)

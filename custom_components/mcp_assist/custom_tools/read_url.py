@@ -15,6 +15,21 @@ _LOGGER = logging.getLogger(__name__)
 
 _HTTP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _LOCAL_HOSTNAMES = {"localhost", "localhost.localdomain"}
+_MARKDOWN_ESCAPE_REPLACEMENTS = {
+    r"\_": "_",
+    r"\*": "*",
+    r"\[": "[",
+    r"\]": "]",
+    r"\(": "(",
+    r"\)": ")",
+}
+
+
+def _clean_markdown_escapes(text: str) -> str:
+    """Clean common escaped markdown characters from prose text."""
+    for source, replacement in _MARKDOWN_ESCAPE_REPLACEMENTS.items():
+        text = text.replace(source, replacement)
+    return text
 
 
 @dataclass(frozen=True)
@@ -281,7 +296,6 @@ class ReadUrlTool:
         if 'text/html' in lower_content_type:
             if self._is_wikipedia_url(parsed):
                 text = self._trim_wikipedia_html_fallback(text)
-            text = self._postprocess_text(text)
 
         title = parsed.netloc
         lower_html = html_text.lower()
@@ -482,23 +496,6 @@ class ReadUrlTool:
             return title
         return html_lib.unescape(re.sub(r"<[^>]+>", "", title)).strip()
 
-    @staticmethod
-    def _postprocess_text(text: str) -> str:
-        """Clean common escaped markdown characters from extracted page text."""
-        if not text:
-            return text
-        replacements = {
-            r"\_": "_",
-            r"\*": "*",
-            r"\[": "[",
-            r"\]": "]",
-            r"\(": "(",
-            r"\)": ")",
-        }
-        for source, replacement in replacements.items():
-            text = text.replace(source, replacement)
-        return text
-
     def _trim_wikipedia_html_fallback(self, text: str) -> str:
         """Remove common Wikipedia chrome when reading article HTML."""
         if not text:
@@ -566,6 +563,7 @@ class _MainContentParser(HTMLParser):
 
     _SKIP_TAGS = {"head", "noscript", "script", "style", "title"}
     _BOILERPLATE_TAGS = {"nav", "header", "footer", "aside"}
+    _LITERAL_TAGS = {"code", "kbd", "pre", "samp"}
     _VOID_TAGS = {
         "area",
         "base",
@@ -594,6 +592,7 @@ class _MainContentParser(HTMLParser):
         "li",
         "main",
         "p",
+        "pre",
         "section",
     }
     _PREFERRED_TAGS = {"article", "main"}
@@ -613,9 +612,10 @@ class _MainContentParser(HTMLParser):
         self._skip_depth = 0
         self._boilerplate_depth = 0
         self._preferred_depth = 0
-        self._tag_stack: List[Tuple[str, bool, bool, bool]] = []
-        self._preferred_parts: List[str] = []
-        self._body_parts: List[str] = []
+        self._literal_depth = 0
+        self._tag_stack: List[Tuple[str, bool, bool, bool, bool]] = []
+        self._preferred_parts: List[Tuple[str, bool]] = []
+        self._body_parts: List[Tuple[str, bool]] = []
 
     def handle_starttag(
         self,
@@ -631,13 +631,14 @@ class _MainContentParser(HTMLParser):
 
         is_skip = tag in self._SKIP_TAGS
         is_boilerplate = tag in self._BOILERPLATE_TAGS
+        is_literal = tag in self._LITERAL_TAGS
         is_preferred = (
             not is_skip
             and not is_boilerplate
             and self._is_preferred_container(tag, attrs)
         )
 
-        self._tag_stack.append((tag, is_skip, is_boilerplate, is_preferred))
+        self._tag_stack.append((tag, is_skip, is_boilerplate, is_preferred, is_literal))
 
         if is_skip:
             self._skip_depth += 1
@@ -645,6 +646,8 @@ class _MainContentParser(HTMLParser):
             self._boilerplate_depth += 1
         if is_preferred:
             self._preferred_depth += 1
+        if is_literal:
+            self._literal_depth += 1
 
     def handle_startendtag(
         self,
@@ -683,10 +686,11 @@ class _MainContentParser(HTMLParser):
         text = data.strip()
         if not text:
             return
+        is_literal = self._literal_depth > 0
         if self._preferred_depth > 0:
-            self._preferred_parts.append(text)
+            self._preferred_parts.append((text, is_literal))
         elif self._boilerplate_depth == 0:
-            self._body_parts.append(text)
+            self._body_parts.append((text, is_literal))
 
     def get_text(self) -> str:
         """Return preferred main content, falling back to visible body text."""
@@ -700,19 +704,21 @@ class _MainContentParser(HTMLParser):
         if self._skip_depth > 0 or self._boilerplate_depth > 0:
             return
         if self._preferred_depth > 0:
-            self._preferred_parts.append(" ")
+            self._preferred_parts.append((" ", False))
         elif self._boilerplate_depth == 0:
-            self._body_parts.append(" ")
+            self._body_parts.append((" ", False))
 
     def _pop_tag_scope(self) -> None:
         """Pop one tracked tag scope and update active depths."""
-        _, is_skip, is_boilerplate, is_preferred = self._tag_stack.pop()
+        _, is_skip, is_boilerplate, is_preferred, is_literal = self._tag_stack.pop()
         if is_skip and self._skip_depth > 0:
             self._skip_depth -= 1
         if is_boilerplate and self._boilerplate_depth > 0:
             self._boilerplate_depth -= 1
         if is_preferred and self._preferred_depth > 0:
             self._preferred_depth -= 1
+        if is_literal and self._literal_depth > 0:
+            self._literal_depth -= 1
 
     def _is_preferred_container(
         self,
@@ -736,8 +742,12 @@ class _MainContentParser(HTMLParser):
         return bool(attribute_values & self._PREFERRED_KEYWORDS)
 
     @staticmethod
-    def _normalize_text(parts: List[str]) -> str:
+    def _normalize_text(parts: List[Tuple[str, bool]]) -> str:
         """Collapse collected text fragments into a single readable string."""
         if not parts:
             return ""
-        return re.sub(r"\s+", " ", " ".join(parts)).strip()
+        processed_parts = [
+            text if is_literal else _clean_markdown_escapes(text)
+            for text, is_literal in parts
+        ]
+        return re.sub(r"\s+", " ", " ".join(processed_parts)).strip()
