@@ -1,6 +1,7 @@
 """The MCP Assist integration."""
 
 import asyncio
+from contextlib import suppress
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -244,9 +245,14 @@ async def _async_apply_shared_mcp_settings(hass: HomeAssistant) -> None:
             current_port,
             target_port,
         )
-        await server.stop()
         new_server = MCPServer(hass, target_port, profile_entry)
         await new_server.start()
+        try:
+            await server.stop()
+        except Exception:
+            with suppress(Exception):
+                await new_server.stop()
+            raise
         domain_data["shared_mcp_server"] = new_server
         domain_data["mcp_port"] = target_port
         return

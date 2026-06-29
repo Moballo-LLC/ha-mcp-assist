@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -219,18 +219,49 @@ async def test_apply_shared_mcp_settings_restarts_server_for_port_change(
     system_entry_factory(data={CONF_MCP_PORT: 8124})
     profile_entry = profile_entry_factory()
     old_server = SimpleNamespace(port=8090, stop=AsyncMock())
-    new_server = SimpleNamespace(start=AsyncMock())
+    new_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = old_server
     hass.data[DOMAIN]["mcp_port"] = 8090
+    order = Mock()
+    order.attach_mock(new_server.start, "new_start")
+    order.attach_mock(old_server.stop, "old_stop")
 
     with patch("custom_components.mcp_assist.MCPServer", return_value=new_server) as server_cls:
         await _async_apply_shared_mcp_settings(hass)
 
     old_server.stop.assert_awaited_once()
     new_server.start.assert_awaited_once()
+    new_server.stop.assert_not_awaited()
+    assert order.mock_calls == [call.new_start(), call.old_stop()]
     server_cls.assert_called_once_with(hass, 8124, profile_entry)
     assert hass.data[DOMAIN]["shared_mcp_server"] is new_server
     assert hass.data[DOMAIN]["mcp_port"] == 8124
+
+
+@pytest.mark.asyncio
+async def test_apply_shared_mcp_settings_keeps_old_server_when_new_port_fails(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A failed port restart should leave the working shared server in place."""
+    system_entry_factory(data={CONF_MCP_PORT: 8124})
+    profile_entry = profile_entry_factory()
+    old_server = SimpleNamespace(port=8090, stop=AsyncMock())
+    new_server = SimpleNamespace(start=AsyncMock(side_effect=OSError("address in use")), stop=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = old_server
+    hass.data[DOMAIN]["mcp_port"] = 8090
+
+    with (
+        patch("custom_components.mcp_assist.MCPServer", return_value=new_server) as server_cls,
+        pytest.raises(OSError, match="address in use"),
+    ):
+        await _async_apply_shared_mcp_settings(hass)
+
+    new_server.start.assert_awaited_once()
+    new_server.stop.assert_not_awaited()
+    old_server.stop.assert_not_awaited()
+    server_cls.assert_called_once_with(hass, 8124, profile_entry)
+    assert hass.data[DOMAIN]["shared_mcp_server"] is old_server
+    assert hass.data[DOMAIN]["mcp_port"] == 8090
 
 
 @pytest.mark.asyncio
