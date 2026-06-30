@@ -16,6 +16,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 import hashlib
+import importlib
 import importlib.util
 import json
 from pathlib import Path
@@ -594,8 +595,7 @@ async def async_run_recorder_job(
     job: Callable[[Any], _T],
 ) -> _T:
     """Run a read-only recorder job in Home Assistant's recorder executor."""
-    from homeassistant.helpers.recorder import get_instance, session_scope
-
+    get_instance, session_scope = _recorder_helpers()
     recorder_instance = get_instance(hass)
 
     def _execute_job() -> _T:
@@ -622,13 +622,26 @@ async def async_recorder_query(
     def _query(session: Any) -> list[dict[str, Any]]:
         from sqlalchemy import text
 
-        rows = session.execute(text(normalized_sql), dict(parameters or {})).mappings().all()
+        mapped_rows = session.execute(
+            text(normalized_sql),
+            dict(parameters or {}),
+        ).mappings()
+        rows = mapped_rows.fetchmany(limit) if limit is not None else mapped_rows.all()
         normalized_rows = [dict(row) for row in rows]
-        if limit is not None:
-            return normalized_rows[:limit]
         return normalized_rows
 
     return await async_run_recorder_job(hass, _query)
+
+
+def _recorder_helpers() -> tuple[Callable[[HomeAssistant], Any], Callable[..., Any]]:
+    """Return recorder helpers across supported Home Assistant releases."""
+    try:
+        recorder_helpers = importlib.import_module("homeassistant.helpers.recorder")
+        return recorder_helpers.get_instance, recorder_helpers.session_scope
+    except (AttributeError, ImportError):
+        recorder_component = importlib.import_module("homeassistant.components.recorder")
+        recorder_util = importlib.import_module("homeassistant.components.recorder.util")
+        return recorder_component.get_instance, recorder_util.session_scope
 
 
 def _find_external_tools_root(caller_path: Path) -> Path:

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
+from custom_components.mcp_assist import custom_tool_api as custom_tool_api_module
 from custom_components.mcp_assist.const import DOMAIN
 from custom_components.mcp_assist.custom_tool_api import (
     analyze_image,
@@ -112,8 +114,12 @@ async def test_recorder_query_helper_uses_recorder_executor(monkeypatch, hass) -
         def mappings(self):
             return self
 
+        def fetchmany(self, count):
+            assert count == 1
+            return [{"state": "on"}]
+
         def all(self):
-            return [{"state": "on"}, {"state": "off"}]
+            pytest.fail("limit should be applied before fetching all rows")
 
     class _Session:
         def execute(self, statement, parameters):
@@ -150,6 +156,49 @@ async def test_recorder_query_helper_uses_recorder_executor(monkeypatch, hass) -
     )
 
     assert rows == [{"state": "on"}]
+    assert executor_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_recorder_job_helper_supports_component_recorder_imports(
+    monkeypatch,
+    hass,
+) -> None:
+    """Recorder helpers should also work on HA releases before helpers.recorder."""
+    executor_calls = 0
+
+    class _RecorderInstance:
+        async def async_add_executor_job(self, job):
+            nonlocal executor_calls
+            executor_calls += 1
+            return job()
+
+    class _Session:
+        pass
+
+    @contextmanager
+    def _session_scope(**kwargs):
+        assert kwargs["hass"] is hass
+        assert kwargs["read_only"] is True
+        yield _Session()
+
+    def _import_module(name):
+        if name == "homeassistant.helpers.recorder":
+            raise ImportError("helpers recorder is not available")
+        if name == "homeassistant.components.recorder":
+            return SimpleNamespace(get_instance=lambda target_hass: _RecorderInstance())
+        if name == "homeassistant.components.recorder.util":
+            return SimpleNamespace(session_scope=_session_scope)
+        raise AssertionError(f"Unexpected import: {name}")
+
+    monkeypatch.setattr(custom_tool_api_module.importlib, "import_module", _import_module)
+
+    result = await custom_tool_api_module.async_run_recorder_job(
+        hass,
+        lambda session: session.__class__.__name__,
+    )
+
+    assert result == "_Session"
     assert executor_calls == 1
 
 
