@@ -21,6 +21,9 @@ Turn it off after troubleshooting to keep logs quiet.
 When Debug Mode is enabled, the first model request in a conversation logs
 metadata-only payload sizing, including provider, transport, payload bytes,
 message character count, advertised tool count, and compact tool-schema bytes.
+Providers that return prompt-cache usage, such as OpenAI, may also log
+metadata-only cache counts such as input tokens, cached prompt tokens, and an
+approximate cache hit percentage.
 
 You can also inspect the shared MCP tool-surface overhead directly:
 
