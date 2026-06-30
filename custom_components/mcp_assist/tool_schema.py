@@ -124,34 +124,65 @@ ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS = frozenset(
     }
 )
 ADAPTIVE_PRESENT_HISTORY_TERMS = ("access", "history", "recorder")
-ADAPTIVE_BARE_DOMAIN_TLDS = frozenset(
+ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
     {
-        "ai",
-        "app",
-        "ca",
-        "co",
-        "com",
-        "dev",
-        "edu",
-        "fr",
-        "gov",
-        "io",
-        "me",
-        "net",
-        "org",
-        "uk",
-        "us",
+        "alarm_control_panel",
+        "automation",
+        "binary_sensor",
+        "button",
+        "calendar",
+        "camera",
+        "climate",
+        "conversation",
+        "cover",
+        "device_tracker",
+        "event",
+        "fan",
+        "humidifier",
+        "input_boolean",
+        "input_button",
+        "input_datetime",
+        "input_number",
+        "input_select",
+        "input_text",
+        "lawn_mower",
+        "light",
+        "lock",
+        "media_player",
+        "notify",
+        "number",
+        "person",
+        "remote",
+        "scene",
+        "script",
+        "select",
+        "sensor",
+        "siren",
+        "stt",
+        "sun",
+        "switch",
+        "text",
+        "timer",
+        "todo",
+        "tts",
+        "update",
+        "vacuum",
+        "valve",
+        "water_heater",
+        "weather",
+        "zone",
     }
 )
-ADAPTIVE_BARE_DOMAIN_TLD_PATTERN = "|".join(
-    sorted(ADAPTIVE_BARE_DOMAIN_TLDS, key=lambda tld: (-len(tld), tld))
-)
-ADAPTIVE_URL_INTENT_RE = re.compile(
+ADAPTIVE_EXPLICIT_URL_INTENT_RE = re.compile(
     r"https?://\S+"
     r"|(?<!@)\bwww\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
-    r"(?::\d{2,5})?(?:/[^\s]*)?"
-    r"|(?<![@.])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-    r"(?:" + ADAPTIVE_BARE_DOMAIN_TLD_PATTERN + r")"
+    r"(?=$|[^a-z0-9_-])"
+    r"(?::\d{2,5})?(?:/[^\s]*)?",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_BARE_DOMAIN_INTENT_RE = re.compile(
+    r"(?<![@.])\b(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z]{2,63})"
     r"(?=$|[^a-z0-9_-])"
     r"(?::\d{2,5})?(?:/[^\s]*)?",
     flags=re.IGNORECASE,
@@ -456,13 +487,41 @@ def tool_definition_name(tool: dict[str, Any]) -> str:
     return str(tool.get("name") or "")
 
 
+def _is_adaptive_entity_id_like_host(host: str) -> bool:
+    """Return true for dotted Home Assistant entity IDs that resemble bare domains."""
+    first_label = str(host or "").split(".", 1)[0].casefold()
+    return first_label in ADAPTIVE_ENTITY_ID_DOMAINS
+
+
+def _has_adaptive_url_intent(text: str) -> bool:
+    """Return true when text includes an explicit URL or a non-entity bare domain."""
+    if ADAPTIVE_EXPLICIT_URL_INTENT_RE.search(text):
+        return True
+    return any(
+        not _is_adaptive_entity_id_like_host(match.group("host"))
+        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
+    )
+
+
+def _strip_adaptive_url_intents(text: str) -> str:
+    """Remove URL-like spans already represented by url/web terms."""
+    stripped = ADAPTIVE_EXPLICIT_URL_INTENT_RE.sub(" ", text)
+
+    def replace_bare_domain(match: re.Match[str]) -> str:
+        if _is_adaptive_entity_id_like_host(match.group("host")):
+            return match.group(0)
+        return " "
+
+    return ADAPTIVE_BARE_DOMAIN_INTENT_RE.sub(replace_bare_domain, stripped)
+
+
 def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
     terms = []
-    if ADAPTIVE_URL_INTENT_RE.search(normalized_query):
+    if _has_adaptive_url_intent(normalized_query):
         terms.extend(["url", "webpage", "web"])
-        normalized_query = ADAPTIVE_URL_INTENT_RE.sub(" ", normalized_query)
+        normalized_query = _strip_adaptive_url_intents(normalized_query)
     for term in re.findall(r"\w+", normalized_query, flags=re.UNICODE):
         if len(term) < 2 or term in ADAPTIVE_QUERY_STOPWORDS:
             continue

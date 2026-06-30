@@ -1552,9 +1552,9 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "url" in normalize_adaptive_query_terms(
         "Summarize https://example.com"
     )
-    assert "url" in normalize_adaptive_query_terms(
-        "Summarize example.com"
-    )
+    assert "url" in normalize_adaptive_query_terms("Summarize example.com")
+    assert "url" in normalize_adaptive_query_terms("read example.de")
+    assert "url" in normalize_adaptive_query_terms("summarize example.info")
     assert "url" in normalize_adaptive_query_terms(
         "read www.example.com/docs"
     )
@@ -1570,6 +1570,7 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "url" not in normalize_adaptive_query_terms(
         "Check sensor.organic_voc"
     )
+    assert "url" not in normalize_adaptive_query_terms("Turn on light.kitchen")
 
 
 def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
@@ -1712,13 +1713,18 @@ def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
         "inputSchema": {"type": "object", "properties": {}},
     }
 
-    matches = match_adaptive_tool_definitions(
-        [convert_tool, read_tool],
-        query="Summarize example.com",
-        limit=2,
-    )
+    for query in (
+        "Summarize example.com",
+        "read example.de",
+        "summarize example.info",
+    ):
+        matches = match_adaptive_tool_definitions(
+            [convert_tool, read_tool],
+            query=query,
+            limit=2,
+        )
 
-    assert [tool["name"] for tool in matches] == ["read_url"]
+        assert [tool["name"] for tool in matches] == ["read_url"]
 
 
 def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() -> None:
@@ -1733,6 +1739,7 @@ def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() ->
         "What is sensor.compressor_power?",
         "Show switch.network_status",
         "Check sensor.organic_voc",
+        "Turn on light.kitchen",
     ):
         assert score_adaptive_tool_match(read_tool, query) == 0
         assert match_adaptive_tool_definitions([read_tool], query=query, limit=1) == []
