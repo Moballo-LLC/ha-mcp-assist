@@ -3,6 +3,7 @@
 import asyncio
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+import hashlib
 import json
 import logging
 import re
@@ -150,6 +151,7 @@ MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 MAX_PROVIDER_LOG_CHARS = 500
+PROVIDER_HTTP_TIMEOUT_ATTEMPTS = 2
 TOOL_HISTORY_ARGUMENT_KEYS = (
     "entity_id",
     "entity_ids",
@@ -344,6 +346,38 @@ class ToolCallBudgetPlan:
     skipped_results_by_index: dict[int, dict[str, Any]]
     original_count: int
     exhausted: bool
+
+
+@dataclass(frozen=True)
+class ProviderHttpResponse:
+    """Provider HTTP response data after network transport succeeds."""
+
+    status: int
+    data: dict[str, Any] | None = None
+    error_text: str = ""
+
+
+class ProviderResponseTimeoutError(Exception):
+    """Expected provider timeout surfaced without a noisy traceback."""
+
+    def __init__(
+        self,
+        *,
+        provider_name: str,
+        timeout_seconds: int,
+        transport: str,
+        attempts: int,
+        iteration: int,
+    ) -> None:
+        self.provider_name = provider_name
+        self.timeout_seconds = timeout_seconds
+        self.transport = transport
+        self.attempts = attempts
+        self.iteration = iteration
+        super().__init__(
+            f"{provider_name} {transport} request timed out after "
+            f"{timeout_seconds} seconds"
+        )
 
 
 def _json_size_bytes(value: Any) -> int:
@@ -718,6 +752,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.entry,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
+            prompt_cache_key=self._build_prompt_cache_key(),
         )
 
     def _get_llm_provider(self) -> LLMProvider:
@@ -1007,6 +1042,81 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._message_content_char_count(messages),
             tool_count,
             self._json_size_bytes(tools or []),
+        )
+
+    def _build_prompt_cache_key(self) -> str:
+        """Build a stable, non-identifying prompt-cache key for this profile."""
+        source = {
+            "entry_id": self.entry.entry_id,
+            "unique_id": self.entry.unique_id,
+            "server_type": self.server_type,
+            "model_name": self.model_name,
+            "context_mode": self.context_mode,
+        }
+        digest = hashlib.sha256(
+            json.dumps(source, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:24]
+        return f"ha-mcp-assist-{digest}"
+
+    def _prepare_provider_payload(
+        self,
+        provider: LLMProvider,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Prepare a provider payload without exposing provider-specific details."""
+        return provider.prepare_payload(payload)
+
+    def _log_prompt_cache_usage(
+        self,
+        provider: LLMProvider,
+        data: dict[str, Any],
+        *,
+        transport: str,
+        iteration: int,
+    ) -> None:
+        """Log provider prompt-cache usage without logging prompt contents."""
+        usage = provider.extract_prompt_cache_usage(data)
+        if usage is None:
+            return
+
+        cached_tokens = usage.cached_tokens
+        cache_read_tokens = usage.cache_read_tokens
+        cache_creation_tokens = usage.cache_creation_tokens
+        has_cache_activity = any(
+            value
+            for value in (
+                cached_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+            )
+        )
+        if not (
+            has_cache_activity
+            or self.debug_mode
+            or _LOGGER.isEnabledFor(logging.DEBUG)
+        ):
+            return
+
+        input_tokens = usage.input_tokens
+        cache_hit_pct = None
+        if input_tokens and cached_tokens is not None:
+            cache_hit_pct = round((cached_tokens / input_tokens) * 100, 1)
+
+        log = _LOGGER.info if self.debug_mode or has_cache_activity else _LOGGER.debug
+        log(
+            (
+                "Prompt cache usage: provider=%s transport=%s iteration=%d "
+                "input_tokens=%s cached_tokens=%s cache_read_tokens=%s "
+                "cache_creation_tokens=%s cache_hit_pct=%s"
+            ),
+            provider.server_type,
+            transport,
+            iteration,
+            input_tokens,
+            cached_tokens,
+            cache_read_tokens,
+            cache_creation_tokens,
+            cache_hit_pct,
         )
 
     def _build_mcp_tool_cache_key(self) -> tuple[Any, ...]:
@@ -1828,6 +1938,32 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             return await self._build_response_result(
                 response_text, user_input, conversation_id
+            )
+
+        except ProviderResponseTimeoutError as err:
+            _LOGGER.warning(
+                (
+                    "Provider request timed out: provider=%s transport=%s "
+                    "timeout=%ss attempts=%d iteration=%d"
+                ),
+                err.provider_name,
+                err.transport,
+                err.timeout_seconds,
+                err.attempts,
+                err.iteration,
+            )
+            await self._finish_persistent_chat_log_record(error=str(err))
+
+            intent_response = intent.IntentResponse(language=user_input.language)
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                self._get_friendly_error_message(err),
+            )
+
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+                continue_conversation=False,
             )
 
         except Exception as err:
@@ -3499,7 +3635,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             {"role": "system", "content": TOOL_BUDGET_FINAL_INSTRUCTION},
         ]
         payload = provider.build_payload(final_messages, [], stream=False)
-        clean_payload = provider.clean_payload(payload)
+        clean_payload = self._prepare_provider_payload(provider, payload)
         self._log_initial_llm_payload_metrics(
             transport=transport,
             iteration=-1,
@@ -3527,6 +3663,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                         return TOOL_BUDGET_FALLBACK_RESPONSE
 
                     data = await response.json()
+                    self._log_prompt_cache_usage(
+                        provider,
+                        data,
+                        transport=transport,
+                        iteration=-1,
+                    )
                     message = provider.parse_http_message(data)
                     final_content = str(message.get("content") or "").strip()
                     return final_content or TOOL_BUDGET_FALLBACK_RESPONSE
@@ -3545,6 +3687,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             [{"role": "user", "content": "Say hello"}],
             stream=True,
         )
+        clean_payload = self._prepare_provider_payload(provider, payload)
 
         _LOGGER.info("🧪 Testing basic streaming to: %s", provider.chat_url())
         _LOGGER.info(f"🧪 Model: {self.model_name}")
@@ -3555,7 +3698,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 async with session.post(
                     provider.chat_url(),
                     headers=provider.headers(),
-                    json=provider.clean_payload(payload),
+                    json=clean_payload,
                 ) as response:
                     _LOGGER.info(
                         f"✅ Basic streaming connected! Status: {response.status}"
@@ -3670,7 +3813,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     content_len = len(str(content)) if content else 0
                     _LOGGER.info("  [%d] %s: %d chars", i, role, content_len)
 
-            clean_payload = provider.clean_payload(payload)
+            clean_payload = self._prepare_provider_payload(provider, payload)
 
             self._log_initial_llm_payload_metrics(
                 transport="streaming",
@@ -3772,6 +3915,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 parsed_stream = provider.parse_stream_line(line_str)
                                 if parsed_stream is None:
                                     continue
+                                if parsed_stream.usage:
+                                    self._log_prompt_cache_usage(
+                                        provider,
+                                        {"usage": parsed_stream.usage},
+                                        transport="streaming",
+                                        iteration=iteration,
+                                    )
                                 if parsed_stream.done:
                                     break
 
@@ -4147,6 +4297,62 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.warning(f"Streaming failed ({e}), using provider HTTP transport")
             return await self._call_llm_http(messages, provider=provider)
 
+    async def _request_provider_http_response(
+        self,
+        provider: LLMProvider,
+        clean_payload: dict[str, Any],
+        *,
+        iteration: int,
+    ) -> ProviderHttpResponse:
+        """POST a provider HTTP request with bounded retry for transport timeouts."""
+        for attempt in range(1, PROVIDER_HTTP_TIMEOUT_ATTEMPTS + 1):
+            try:
+                timeout = aiohttp.ClientTimeout(total=self.timeout)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        provider.chat_url(),
+                        headers=provider.headers(),
+                        json=clean_payload,
+                    ) as response:
+                        if response.status != 200:
+                            return ProviderHttpResponse(
+                                status=response.status,
+                                error_text=await response.text(),
+                            )
+
+                        return ProviderHttpResponse(
+                            status=response.status,
+                            data=await response.json(),
+                        )
+            except asyncio.TimeoutError as err:
+                if attempt < PROVIDER_HTTP_TIMEOUT_ATTEMPTS:
+                    _LOGGER.warning(
+                        (
+                            "%s HTTP transport timed out after %ss on "
+                            "iteration %d; retrying once"
+                        ),
+                        self.server_type,
+                        self.timeout,
+                        iteration + 1,
+                    )
+                    continue
+
+                raise ProviderResponseTimeoutError(
+                    provider_name=self._get_server_display_name(),
+                    timeout_seconds=self.timeout,
+                    transport="HTTP",
+                    attempts=attempt,
+                    iteration=iteration + 1,
+                ) from err
+
+        raise ProviderResponseTimeoutError(
+            provider_name=self._get_server_display_name(),
+            timeout_seconds=self.timeout,
+            transport="HTTP",
+            attempts=PROVIDER_HTTP_TIMEOUT_ATTEMPTS,
+            iteration=iteration + 1,
+        )
+
     async def _call_llm_http(
         self,
         messages: List[Dict[str, Any]],
@@ -4177,7 +4383,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 _LOGGER.warning("No MCP tools available - proceeding without tools")
 
             payload = provider.build_payload(conversation_messages, tools, stream=False)
-            clean_payload = provider.clean_payload(payload)
+            clean_payload = self._prepare_provider_payload(provider, payload)
             self._log_initial_llm_payload_metrics(
                 transport="http",
                 iteration=iteration,
@@ -4186,204 +4392,187 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tools=clean_payload.get("tools"),
             )
 
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    provider.chat_url(),
-                    headers=provider.headers(),
-                    json=clean_payload,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        error_snippet = _provider_log_snippet(error_text)
-                        if provider.is_invalid_tool_arguments_error(
-                            status=response.status,
-                            error_text=error_text,
-                        ):
-                            _LOGGER.info(
-                                "%s HTTP transport reported malformed tool-call arguments on iteration %d",
-                                self.server_type,
-                                iteration + 1,
-                            )
-                            if self._has_tool_results(conversation_messages):
-                                return await self._call_llm_final_response_without_tools(
-                                    conversation_messages,
-                                    provider,
-                                    transport="http_invalid_tool_final",
-                                )
-                            if invalid_tool_retry_used:
-                                return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
-                            self._append_invalid_tool_call_retry_messages(
-                                conversation_messages,
-                                "",
-                                [],
-                            )
-                            invalid_tool_retry_used = True
-                            continue
-
-                        _LOGGER.warning(
-                            "%s API error: status=%s body=%s",
-                            self.server_type,
-                            response.status,
-                            error_snippet,
+            http_response = await self._request_provider_http_response(
+                provider,
+                clean_payload,
+                iteration=iteration,
+            )
+            if http_response.status != 200:
+                error_text = http_response.error_text
+                error_snippet = _provider_log_snippet(error_text)
+                if provider.is_invalid_tool_arguments_error(
+                    status=http_response.status,
+                    error_text=error_text,
+                ):
+                    _LOGGER.info(
+                        "%s HTTP transport reported malformed tool-call arguments on iteration %d",
+                        self.server_type,
+                        iteration + 1,
+                    )
+                    if self._has_tool_results(conversation_messages):
+                        return await self._call_llm_final_response_without_tools(
+                            conversation_messages,
+                            provider,
+                            transport="http_invalid_tool_final",
                         )
-                        raise Exception(
-                            f"{self.server_type} API error {response.status}: {error_snippet}"
-                        )
+                    if invalid_tool_retry_used:
+                        return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        "",
+                        [],
+                    )
+                    invalid_tool_retry_used = True
+                    continue
 
-                    data = await response.json()
-                    message = provider.parse_http_message(data)
+                _LOGGER.warning(
+                    "%s API error: status=%s body=%s",
+                    self.server_type,
+                    http_response.status,
+                    error_snippet,
+                )
+                raise Exception(
+                    f"{self.server_type} API error {http_response.status}: {error_snippet}"
+                )
 
-                    # Check if there are tool calls to execute
-                    if "tool_calls" in message and message["tool_calls"]:
-                        (
-                            valid_raw_tool_calls,
-                            invalid_tool_calls,
-                        ) = self._partition_valid_tool_calls(
-                            message["tool_calls"]
-                        )
-                        if invalid_tool_calls:
-                            _LOGGER.info(
-                                "Skipping %d tool call(s) with invalid JSON "
-                                "arguments: %s",
-                                len(invalid_tool_calls),
-                                self._invalid_tool_call_names(invalid_tool_calls),
-                            )
+            data = http_response.data or {}
+            self._log_prompt_cache_usage(
+                provider,
+                data,
+                transport="http",
+                iteration=iteration,
+            )
+            message = provider.parse_http_message(data)
 
-                        if not valid_raw_tool_calls:
-                            if invalid_tool_retry_used:
-                                return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
-                            self._append_invalid_tool_call_retry_messages(
-                                conversation_messages,
-                                str(message.get("content") or ""),
-                                invalid_tool_calls,
-                            )
-                            invalid_tool_retry_used = True
-                            continue
+            # Check if there are tool calls to execute
+            if "tool_calls" in message and message["tool_calls"]:
+                valid_raw_tool_calls, invalid_tool_calls = (
+                    self._partition_valid_tool_calls(message["tool_calls"])
+                )
+                if invalid_tool_calls:
+                    _LOGGER.info(
+                        "Skipping %d tool call(s) with invalid JSON arguments: %s",
+                        len(invalid_tool_calls),
+                        self._invalid_tool_call_names(invalid_tool_calls),
+                    )
 
-                        tool_calls = provider.normalize_tool_calls(valid_raw_tool_calls)
-                        _LOGGER.info(
-                            f"🛠️ {self.server_type} requested {len(tool_calls)} tool calls"
-                        )
+                if not valid_raw_tool_calls:
+                    if invalid_tool_retry_used:
+                        return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        str(message.get("content") or ""),
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
+                    continue
 
-                        # Ensure each tool_call has the required type field
-                        for tc in tool_calls:
-                            if "type" not in tc:
-                                tc["type"] = "function"
-                            if "function" in tc:
-                                _LOGGER.debug(
-                                    "  - %s: %s",
-                                    tc["function"].get("name"),
-                                    _provider_log_snippet(
-                                        tc["function"].get("arguments")
-                                    ),
-                                )
+                tool_calls = provider.normalize_tool_calls(valid_raw_tool_calls)
+                _LOGGER.info(
+                    f"🛠️ {self.server_type} requested {len(tool_calls)} tool calls"
+                )
 
-                        assistant_msg = provider.build_tool_call_assistant_message(
-                            tool_calls,
-                            response_text=str(message.get("content") or ""),
-                        )
-                        conversation_messages.append(assistant_msg)
-
-                        # Record tool calls to ChatLog for debug view
-                        self._record_tool_calls_to_chatlog(tool_calls)
-
-                        budget_plan = self._prepare_tool_calls_for_budget(
-                            tool_calls,
-                            tool_calls_used=tool_calls_used,
-                            provider=provider,
+                # Ensure each tool_call has the required type field
+                for tc in tool_calls:
+                    if "type" not in tc:
+                        tc["type"] = "function"
+                    if "function" in tc:
+                        _LOGGER.debug(
+                            "  - %s: %s",
+                            tc["function"].get("name"),
+                            _provider_log_snippet(tc["function"].get("arguments")),
                         )
 
-                        # Execute the tool calls
-                        _LOGGER.info("⚡ Executing tool calls against MCP server...")
-                        executable_tool_results = await self._execute_tool_calls(
-                            budget_plan.executable_calls
-                        )
-                        tool_calls_used += self._count_budgeted_tool_calls(
-                            budget_plan.executable_calls
-                        )
-                        tool_results = self._merge_tool_results_in_call_order(
-                            budget_plan,
-                            executable_tool_results,
-                        )
+                assistant_msg = provider.build_tool_call_assistant_message(
+                    tool_calls,
+                    response_text=str(message.get("content") or ""),
+                )
+                conversation_messages.append(assistant_msg)
 
-                        # Record tool results to ChatLog for debug view
-                        for idx, result in enumerate(tool_results):
-                            if idx < len(tool_calls):
-                                tc = tool_calls[idx]
-                                tool_call_id = result.get(
-                                    "tool_call_id", tc.get("id", "unknown")
-                                )
-                                tool_name = tc.get("function", {}).get(
-                                    "name", "unknown"
-                                )
-                                # Parse content as JSON if possible, otherwise use as-is
-                                try:
-                                    tool_result_data = json.loads(
-                                        result.get("content", "{}")
-                                    )
-                                except Exception:
-                                    tool_result_data = {
-                                        "result": result.get("content", "")
-                                    }
-                                self._record_tool_result_to_chatlog(
-                                    tool_call_id, tool_name, tool_result_data
-                                )
+                # Record tool calls to ChatLog for debug view
+                self._record_tool_calls_to_chatlog(tool_calls)
 
-                        # Add tool results to conversation
-                        conversation_messages.extend(tool_results)
-                        if invalid_tool_calls and not invalid_tool_retry_used:
-                            self._append_invalid_tool_call_retry_messages(
-                                conversation_messages,
-                                "",
-                                invalid_tool_calls,
-                            )
-                            invalid_tool_retry_used = True
+                budget_plan = self._prepare_tool_calls_for_budget(
+                    tool_calls,
+                    tool_calls_used=tool_calls_used,
+                    provider=provider,
+                )
 
-                        _LOGGER.info(
-                            f"📊 Added {len(tool_results)} tool results to conversation"
+                # Execute the tool calls
+                _LOGGER.info("⚡ Executing tool calls against MCP server...")
+                executable_tool_results = await self._execute_tool_calls(
+                    budget_plan.executable_calls
+                )
+                tool_calls_used += self._count_budgeted_tool_calls(
+                    budget_plan.executable_calls
+                )
+                tool_results = self._merge_tool_results_in_call_order(
+                    budget_plan,
+                    executable_tool_results,
+                )
+
+                # Record tool results to ChatLog for debug view
+                for idx, result in enumerate(tool_results):
+                    if idx < len(tool_calls):
+                        tc = tool_calls[idx]
+                        tool_call_id = result.get(
+                            "tool_call_id", tc.get("id", "unknown")
+                        )
+                        tool_name = tc.get("function", {}).get("name", "unknown")
+                        try:
+                            tool_result_data = json.loads(result.get("content", "{}"))
+                        except Exception:
+                            tool_result_data = {"result": result.get("content", "")}
+                        self._record_tool_result_to_chatlog(
+                            tool_call_id, tool_name, tool_result_data
                         )
 
-                        if (
-                            budget_plan.exhausted
-                            or tool_calls_used >= self.tool_call_budget
-                        ):
-                            _LOGGER.warning(
-                                "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
-                                tool_calls_used,
-                                self.tool_call_budget,
-                            )
-                            return await self._call_llm_final_response_without_tools(
-                                conversation_messages,
-                                provider,
-                                transport="http_budget_final",
-                            )
+                # Add tool results to conversation
+                conversation_messages.extend(tool_results)
+                if invalid_tool_calls and not invalid_tool_retry_used:
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        "",
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
 
-                        # Continue the loop to get next response
-                        continue
+                _LOGGER.info(f"📊 Added {len(tool_results)} tool results to conversation")
 
-                    else:
-                        # No more tool calls, we have the final response
-                        final_content = str(message.get("content") or "").strip()
-                        _LOGGER.info(
-                            f"💬 Final response received (length: {len(final_content)})"
-                        )
-                        if self._should_retry_toolless_response(
-                            final_content,
-                            tools=tools,
-                            retry_used=toolless_retry_used,
-                            tool_calls_used=tool_calls_used,
-                        ):
-                            _LOGGER.info(
-                                "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
-                            )
-                            self._append_toolless_retry_messages(
-                                conversation_messages,
-                                final_content,
-                            )
-                            toolless_retry_used = True
-                            continue
-                        return final_content
+                if budget_plan.exhausted or tool_calls_used >= self.tool_call_budget:
+                    _LOGGER.warning(
+                        "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
+                        tool_calls_used,
+                        self.tool_call_budget,
+                    )
+                    return await self._call_llm_final_response_without_tools(
+                        conversation_messages,
+                        provider,
+                        transport="http_budget_final",
+                    )
+
+                # Continue the loop to get next response
+                continue
+
+            # No more tool calls, we have the final response
+            final_content = str(message.get("content") or "").strip()
+            _LOGGER.info(f"💬 Final response received (length: {len(final_content)})")
+            if self._should_retry_toolless_response(
+                final_content,
+                tools=tools,
+                retry_used=toolless_retry_used,
+                tool_calls_used=tool_calls_used,
+            ):
+                _LOGGER.info(
+                    "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
+                )
+                self._append_toolless_retry_messages(
+                    conversation_messages,
+                    final_content,
+                )
+                toolless_retry_used = True
+                continue
+            return final_content
 
         # If we hit the model-call guard, return what we have.
         _LOGGER.warning(
