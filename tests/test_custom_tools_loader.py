@@ -795,6 +795,42 @@ async def test_external_custom_tools_are_disabled_by_default(
 
 
 @pytest.mark.asyncio
+async def test_external_custom_tool_validation_does_not_mutate_live_registry(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
+) -> None:
+    """Validation should inspect packages without exposing them as live tools."""
+    _write_external_tool_package(tmp_path)
+    monkeypatch.setattr(
+        hass.config,
+        "path",
+        lambda *parts: str(tmp_path.joinpath(*parts)),
+    )
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: False,
+            CONF_ENABLE_CALCULATOR_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+
+    loader = CustomToolsLoader(hass, profile_entry)
+    await loader.initialize()
+
+    diagnostics = await loader.validate_external_tool_packages()
+
+    assert diagnostics["enabled"] is False
+    assert diagnostics["valid"] is True
+    assert diagnostics["load_errors"] == []
+    assert diagnostics["loaded_tools"][0]["id"] == "sample_tool"
+    assert loader.external_tools == []
+    assert "sample_tool" not in loader.tools
+    assert "sample_tool_status" not in {
+        tool_definition["name"] for tool_definition in loader.get_tool_definitions()
+    }
+
+
+@pytest.mark.asyncio
 async def test_external_custom_tool_package_loads_and_handles_calls(
     hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
 ) -> None:

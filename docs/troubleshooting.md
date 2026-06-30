@@ -205,6 +205,12 @@ Check:
 - The package directory is not a symlink.
 - Home Assistant logs do not show package load errors.
 
+You can validate external tools without changing the live MCP tool registry:
+
+```text
+mcp_assist.validate_external_custom_tools
+```
+
 You can reload external tools with the Home Assistant service:
 
 ```text

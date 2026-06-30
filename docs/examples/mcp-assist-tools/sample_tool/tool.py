@@ -44,18 +44,9 @@ class SampleTool(MCPAssistExternalTool):
     ) -> dict[str, Any]:
         """Return a normal MCP tool result."""
         settings = self.get_settings()
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": str(
-                        settings.get("status_text")
-                        or "Sample custom tool is working."
-                    ),
-                }
-            ],
-            "isError": False,
-        }
+        return self.ok(
+            settings.get("status_text") or "Sample custom tool is working."
+        )
 
     def get_prompt_instructions(self) -> str:
         """Add short guidance for the LLM."""

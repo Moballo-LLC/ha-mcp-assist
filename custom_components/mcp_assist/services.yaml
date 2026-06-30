@@ -2,6 +2,10 @@ reload_external_custom_tools:
   name: Reload external custom tools
   description: Reload external tool packages from the Home Assistant config directory and return diagnostics.
 
+validate_external_custom_tools:
+  name: Validate external custom tools
+  description: Validate external tool packages from the Home Assistant config directory without changing the live tool registry.
+
 get_chat_logs:
   name: Get chat logs
   description: Return recent opt-in conversation logs captured by Chat Log Mode.
