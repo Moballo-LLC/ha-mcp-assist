@@ -2610,6 +2610,35 @@ async def test_reload_external_custom_tools_clears_cache_and_notifies_clients(
 
 
 @pytest.mark.asyncio
+async def test_validate_external_custom_tools_does_not_clear_cached_surface(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Validation diagnostics should not mutate the live MCP tool surface."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server._cached_tools_list = [{"name": "current"}]
+    server._cached_tools_signature = ("current",)
+    server.tools = SimpleNamespace(
+        validate_external_tool_packages=AsyncMock(
+            return_value={
+                "enabled": False,
+                "valid": True,
+                "loaded_tools": [],
+                "load_errors": [],
+            }
+        )
+    )
+    server.broadcast_notification = AsyncMock()
+
+    diagnostics = await server.validate_external_custom_tools()
+
+    assert diagnostics["valid"] is True
+    assert server._cached_tools_list == [{"name": "current"}]
+    assert server._cached_tools_signature == ("current",)
+    server.broadcast_notification.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_tool_get_image_returns_image_block_from_local_file(
     hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
 ) -> None:

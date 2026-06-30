@@ -14,21 +14,49 @@ from __future__ import annotations
 
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 import hashlib
+import importlib
 import importlib.util
+import json
 from pathlib import Path
+import re
 import sys
-from typing import Any
+from typing import Any, Callable, Mapping, TypeVar
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
+from homeassistant.util import dt as dt_util
 
 from .const import CUSTOM_TOOL_SHARED_DIRECTORY, CUSTOM_TOOLS_DIRECTORY, DOMAIN
+
+_T = TypeVar("_T")
 
 _CURRENT_EXTERNAL_TOOL_CALL_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_external_tool_call_context",
     default=None,
 )
 _EXTERNAL_SHARED_MODULE_CACHE: dict[str, tuple[int, str]] = {}
+_SQL_VALIDATION_TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[(),;]")
+_SQL_WRITE_KEYWORDS = frozenset(
+    {
+        "alter",
+        "attach",
+        "create",
+        "delete",
+        "detach",
+        "drop",
+        "insert",
+        "merge",
+        "pragma",
+        "reindex",
+        "replace",
+        "truncate",
+        "update",
+        "upsert",
+        "vacuum",
+    }
+)
+_SQL_SELECT_FILE_OUTPUT_KEYWORDS = frozenset({"dumpfile", "outfile"})
 
 
 @dataclass(frozen=True)
@@ -157,6 +185,92 @@ class MCPAssistExternalTool:
             context=self.get_call_context(),
         )
 
+    async def analyze_image(
+        self,
+        *,
+        question: str,
+        camera_entity_id: str | None = None,
+        image_path: str | None = None,
+        image_url: str | None = None,
+        include_image: bool = False,
+        detail: str = "auto",
+    ) -> dict[str, Any]:
+        """Analyze an image using the active MCP Assist profile provider."""
+        return await analyze_image(
+            self.hass,
+            question=question,
+            camera_entity_id=camera_entity_id,
+            image_path=image_path,
+            image_url=image_url,
+            include_image=include_image,
+            detail=detail,
+            context=self.get_call_context(),
+        )
+
+    async def get_image(
+        self,
+        *,
+        camera_entity_id: str | None = None,
+        image_path: str | None = None,
+        image_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch an image through MCP Assist's validated image-source handling."""
+        return await get_image(
+            self.hass,
+            camera_entity_id=camera_entity_id,
+            image_path=image_path,
+            image_url=image_url,
+            context=self.get_call_context(),
+        )
+
+    async def async_run_recorder_job(
+        self,
+        job: Callable[[Any], _T],
+    ) -> _T:
+        """Run a read-only recorder job in the recorder executor."""
+        return await async_run_recorder_job(self.hass, job)
+
+    async def async_recorder_query(
+        self,
+        sql: str,
+        parameters: Mapping[str, Any] | None = None,
+        *,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Run a bounded read-only recorder SQL query."""
+        return await async_recorder_query(
+            self.hass,
+            sql,
+            parameters,
+            limit=limit,
+        )
+
+    def ok(
+        self,
+        text: Any,
+        *,
+        structured_content: dict[str, Any] | None = None,
+        content: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Build a standard successful MCP text result."""
+        return mcp_text_result(
+            text,
+            structured_content=structured_content,
+            content=content,
+        )
+
+    def error(
+        self,
+        message: Any,
+        *,
+        structured_content: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build a standard MCP error result."""
+        return mcp_error_result(
+            message,
+            structured_content=structured_content,
+        )
+
     def _set_loaded_settings(self, settings: dict[str, Any]) -> None:
         """Internal helper used by the loader to attach validated settings."""
         self.settings = dict(settings or {})
@@ -280,6 +394,278 @@ async def call_mcp_tool(
     )
 
 
+def mcp_text_result(
+    text: Any,
+    *,
+    is_error: bool = False,
+    structured_content: dict[str, Any] | None = None,
+    content: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build a standard MCP tool result with a text content block."""
+    result_content = [{"type": "text", "text": str(text)}]
+    if content:
+        result_content.extend(content)
+
+    result: dict[str, Any] = {
+        "content": result_content,
+        "isError": bool(is_error),
+    }
+    if structured_content is not None:
+        result["structuredContent"] = structured_content
+    return result
+
+
+def mcp_error_result(
+    message: Any,
+    *,
+    structured_content: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a standard MCP error result."""
+    return mcp_text_result(
+        message,
+        is_error=True,
+        structured_content=structured_content,
+    )
+
+
+def mcp_json_result(
+    payload: Any,
+    *,
+    text: str | None = None,
+    is_error: bool = False,
+) -> dict[str, Any]:
+    """Build a text-plus-structured MCP result for JSON-serializable data."""
+    result_text = text
+    if result_text is None:
+        result_text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    return mcp_text_result(
+        result_text,
+        is_error=is_error,
+        structured_content=payload if isinstance(payload, dict) else {"result": payload},
+    )
+
+
+def mcp_image_result(
+    image_bytes: bytes,
+    mime_type: str,
+    *,
+    text: str = "Fetched image.",
+    structured_content: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a standard MCP image result from raw image bytes."""
+    import base64
+
+    return mcp_text_result(
+        text,
+        structured_content=structured_content,
+        content=[
+            {
+                "type": "image",
+                "mimeType": str(mime_type or "image/jpeg"),
+                "data": base64.b64encode(image_bytes).decode("ascii"),
+            }
+        ],
+    )
+
+
+def entity_snapshot(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
+    """Return a compact, JSON-friendly snapshot for a Home Assistant entity."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+
+    return {
+        "entity_id": state.entity_id,
+        "state": state.state,
+        "name": state.name,
+        "unit_of_measurement": state.attributes.get("unit_of_measurement"),
+        "device_class": state.attributes.get("device_class"),
+        "last_changed": _format_datetime_value(state.last_changed),
+        "last_updated": _format_datetime_value(state.last_updated),
+    }
+
+
+def format_entity_state(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    include_last_changed: bool = False,
+    missing_text: str | None = None,
+) -> str:
+    """Format a Home Assistant entity's current state for tool output."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return missing_text if missing_text is not None else f"{entity_id}: unavailable"
+    return format_state(state, include_last_changed=include_last_changed)
+
+
+def format_state(
+    state: State,
+    *,
+    include_last_changed: bool = False,
+) -> str:
+    """Format a Home Assistant State object for compact tool output."""
+    label = str(state.name or state.entity_id)
+    value = str(state.state)
+    unit = state.attributes.get("unit_of_measurement")
+    if unit:
+        value = f"{value} {unit}"
+
+    rendered = f"{label}: {value}"
+    if include_last_changed:
+        rendered += f" (last changed {format_datetime(state.last_changed)})"
+    return rendered
+
+
+def format_datetime(
+    value: datetime | date | str | None,
+    *,
+    fallback: str = "unknown",
+) -> str:
+    """Format a date/time value in Home Assistant local time for tool output."""
+    formatted = _format_datetime_value(value)
+    return formatted if formatted else fallback
+
+
+def format_relative_time(
+    value: datetime | None,
+    *,
+    now: datetime | None = None,
+    fallback: str = "unknown",
+) -> str:
+    """Return a compact relative age such as '5 minutes ago'."""
+    if value is None:
+        return fallback
+
+    current = now or dt_util.utcnow()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    compared = value
+    if compared.tzinfo is None:
+        compared = compared.replace(tzinfo=timezone.utc)
+
+    seconds = int((current - compared).total_seconds())
+    suffix = "ago"
+    if seconds < 0:
+        seconds = abs(seconds)
+        suffix = "from now"
+
+    for unit_name, unit_seconds in (
+        ("day", 86400),
+        ("hour", 3600),
+        ("minute", 60),
+    ):
+        if seconds >= unit_seconds:
+            amount = seconds // unit_seconds
+            return f"{amount} {unit_name}{'' if amount == 1 else 's'} {suffix}"
+    return f"{seconds} second{'' if seconds == 1 else 's'} {suffix}"
+
+
+async def analyze_image(
+    hass: HomeAssistant,
+    *,
+    question: str,
+    camera_entity_id: str | None = None,
+    image_path: str | None = None,
+    image_url: str | None = None,
+    include_image: bool = False,
+    detail: str = "auto",
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Analyze an image using the active MCP Assist profile provider."""
+    arguments = _image_source_arguments(
+        camera_entity_id=camera_entity_id,
+        image_path=image_path,
+        image_url=image_url,
+    )
+    arguments["question"] = str(question or "").strip()
+    arguments["detail"] = str(detail or "auto")
+    if include_image:
+        arguments["include_image"] = True
+    return await call_mcp_tool(
+        hass,
+        "analyze_image",
+        arguments,
+        context=context,
+    )
+
+
+async def get_image(
+    hass: HomeAssistant,
+    *,
+    camera_entity_id: str | None = None,
+    image_path: str | None = None,
+    image_url: str | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fetch an image through MCP Assist's validated image-source handling."""
+    return await call_mcp_tool(
+        hass,
+        "get_image",
+        _image_source_arguments(
+            camera_entity_id=camera_entity_id,
+            image_path=image_path,
+            image_url=image_url,
+        ),
+        context=context,
+    )
+
+
+async def async_run_recorder_job(
+    hass: HomeAssistant,
+    job: Callable[[Any], _T],
+) -> _T:
+    """Run a read-only recorder job in Home Assistant's recorder executor."""
+    get_instance, session_scope = _recorder_helpers()
+    recorder_instance = get_instance(hass)
+
+    def _execute_job() -> _T:
+        with session_scope(hass=hass, read_only=True) as session:
+            return job(session)
+
+    return await recorder_instance.async_add_executor_job(_execute_job)
+
+
+async def async_recorder_query(
+    hass: HomeAssistant,
+    sql: str,
+    parameters: Mapping[str, Any] | None = None,
+    *,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Run a bounded read-only recorder SQL query in the recorder executor."""
+    normalized_sql = str(sql or "").strip()
+    if not _is_read_only_sql(normalized_sql):
+        raise ValueError("Recorder helper only accepts read-only SELECT/WITH queries.")
+    if limit is not None and limit < 1:
+        raise ValueError("Recorder query limit must be at least 1.")
+
+    def _query(session: Any) -> list[dict[str, Any]]:
+        from sqlalchemy import text
+
+        mapped_rows = session.execute(
+            text(normalized_sql),
+            dict(parameters or {}),
+        ).mappings()
+        rows = mapped_rows.fetchmany(limit) if limit is not None else mapped_rows.all()
+        normalized_rows = [dict(row) for row in rows]
+        return normalized_rows
+
+    return await async_run_recorder_job(hass, _query)
+
+
+def _recorder_helpers() -> tuple[Callable[[HomeAssistant], Any], Callable[..., Any]]:
+    """Return recorder helpers across supported Home Assistant releases."""
+    try:
+        recorder_helpers = importlib.import_module("homeassistant.helpers.recorder")
+        return recorder_helpers.get_instance, recorder_helpers.session_scope
+    except (AttributeError, ImportError):
+        recorder_component = importlib.import_module("homeassistant.components.recorder")
+        recorder_util = importlib.import_module("homeassistant.components.recorder.util")
+        return recorder_component.get_instance, recorder_util.session_scope
+
+
 def _find_external_tools_root(caller_path: Path) -> Path:
     for candidate in [caller_path.parent, *caller_path.parents]:
         if candidate.name == CUSTOM_TOOLS_DIRECTORY:
@@ -287,3 +673,178 @@ def _find_external_tools_root(caller_path: Path) -> Path:
     raise ImportError(
         f"Unable to locate {CUSTOM_TOOLS_DIRECTORY!r} from {caller_path}"
     )
+
+
+def _image_source_arguments(
+    *,
+    camera_entity_id: str | None,
+    image_path: str | None,
+    image_url: str | None,
+) -> dict[str, Any]:
+    arguments = {
+        key: value
+        for key, value in {
+            "camera_entity_id": camera_entity_id,
+            "image_path": image_path,
+            "image_url": image_url,
+        }.items()
+        if value
+    }
+    if len(arguments) != 1:
+        raise ValueError(
+            "Provide exactly one image source: camera_entity_id, image_path, or image_url."
+        )
+    return arguments
+
+
+def _format_datetime_value(value: datetime | date | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        local_value = dt_util.as_local(value)
+        return local_value.isoformat(timespec="seconds")
+    if isinstance(value, date):
+        return value.isoformat()
+    text_value = str(value).strip()
+    return text_value or None
+
+
+def _is_read_only_sql(sql: str) -> bool:
+    tokens = _sql_validation_tokens(sql)
+    if not tokens or ";" in tokens or any(token in _SQL_WRITE_KEYWORDS for token in tokens):
+        return False
+    if _has_select_file_output_clause(tokens):
+        return False
+
+    start_index = _first_sql_keyword_index(tokens)
+    if start_index is None:
+        return False
+
+    first_word = tokens[start_index]
+    if first_word == "select":
+        return True
+    if first_word != "with":
+        return False
+
+    return _cte_main_statement_keyword(tokens, start_index) == "select"
+
+
+def _has_select_file_output_clause(tokens: list[str]) -> bool:
+    """Return true when a SELECT can write results to the database host filesystem."""
+    return any(
+        token in _SQL_SELECT_FILE_OUTPUT_KEYWORDS and index > 0 and tokens[index - 1] == "into"
+        for index, token in enumerate(tokens)
+    )
+
+
+def _sql_validation_tokens(sql: str) -> list[str]:
+    """Tokenize SQL outside comments and quoted strings for safety checks."""
+    sanitized: list[str] = []
+    index = 0
+    length = len(sql)
+    while index < length:
+        char = sql[index]
+        next_char = sql[index + 1] if index + 1 < length else ""
+
+        if char == "-" and next_char == "-":
+            sanitized.append("  ")
+            index += 2
+            while index < length and sql[index] not in "\r\n":
+                sanitized.append(" ")
+                index += 1
+            continue
+
+        if char == "/" and next_char == "*":
+            executable_comment = index + 2 < length and sql[index + 2] == "!"
+            executable_comment_content: list[str] = []
+            sanitized.append("  ")
+            index += 2
+            if executable_comment:
+                sanitized.append(" ")
+                index += 1
+            while index < length:
+                if sql[index] == "*" and index + 1 < length and sql[index + 1] == "/":
+                    sanitized.append("  ")
+                    index += 2
+                    break
+                if executable_comment:
+                    executable_comment_content.append(sql[index])
+                else:
+                    sanitized.append(" ")
+                index += 1
+            if executable_comment_content:
+                sanitized.append(" ")
+                sanitized.append(" ".join(_sql_validation_tokens("".join(executable_comment_content))))
+                sanitized.append(" ")
+            continue
+
+        if char in {"'", '"', "`"}:
+            quote = char
+            sanitized.append(" ")
+            index += 1
+            while index < length:
+                if sql[index] == quote:
+                    sanitized.append(" ")
+                    index += 1
+                    if index < length and sql[index] == quote:
+                        sanitized.append(" ")
+                        index += 1
+                        continue
+                    break
+                sanitized.append(" ")
+                index += 1
+            continue
+
+        sanitized.append(char)
+        index += 1
+
+    return [token.lower() for token in _SQL_VALIDATION_TOKEN_RE.findall("".join(sanitized))]
+
+
+def _first_sql_keyword_index(tokens: list[str]) -> int | None:
+    for index, token in enumerate(tokens):
+        if token == "(":
+            continue
+        return index
+    return None
+
+
+def _cte_main_statement_keyword(tokens: list[str], with_index: int) -> str | None:
+    seen_as = False
+    in_body = False
+    completed_body = False
+    depth = 0
+
+    index = with_index + 1
+    if index < len(tokens) and tokens[index] == "recursive":
+        index += 1
+
+    for token in tokens[index:]:
+        if completed_body and depth == 0:
+            if token == ",":
+                seen_as = False
+                completed_body = False
+                continue
+            if token not in {"(", ")"}:
+                return token
+
+        if token == "as" and depth == 0:
+            seen_as = True
+            continue
+
+        if token == "(":
+            if seen_as and depth == 0:
+                in_body = True
+            depth += 1
+            continue
+
+        if token == ")":
+            if depth <= 0:
+                return None
+            depth -= 1
+            if in_body and depth == 0:
+                in_body = False
+                completed_body = True
+            continue
+
+    return None

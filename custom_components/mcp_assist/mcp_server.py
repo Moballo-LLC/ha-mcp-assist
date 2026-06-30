@@ -1202,6 +1202,30 @@ class MCPServer(
         await self.broadcast_notification("notifications/tools/list_changed")
         return diagnostics
 
+    async def validate_external_custom_tools(self) -> dict[str, Any]:
+        """Validate external custom tools without changing the live tool registry."""
+        if not self.tools:
+            return {
+                "enabled": self._external_custom_tools_enabled(),
+                "valid": False,
+                "loaded_tools": [],
+                "load_errors": ["Custom tools are not initialized"],
+            }
+
+        validate_external_tool_packages = getattr(
+            self.tools,
+            "validate_external_tool_packages",
+            None,
+        )
+        if not callable(validate_external_tool_packages):
+            return {
+                "enabled": self._external_custom_tools_enabled(),
+                "valid": False,
+                "loaded_tools": [],
+                "load_errors": ["Validation is not supported by the current custom tool loader"],
+            }
+        return await validate_external_tool_packages()
+
     async def async_apply_shared_settings(self) -> dict[str, Any]:
         """Apply changed shared MCP settings without reloading every profile."""
         previous_allowed_ips = list(self.allowed_ips)

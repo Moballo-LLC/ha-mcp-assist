@@ -80,6 +80,7 @@ from .const import (
     DEFAULT_TIMEOUT,
     DEFAULT_SEARXNG_URL,
     DEFAULT_MCP_BEARER_TOKEN,
+    SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS,
     SERVER_TYPE_OPENCLAW,
     CONF_OPENCLAW_HOST,
     CONF_OPENCLAW_PORT,
@@ -146,6 +147,34 @@ async def _async_handle_reload_external_custom_tools(call: ServiceCall) -> dict:
     return await reload_external_custom_tools()
 
 
+async def _async_handle_validate_external_custom_tools(call: ServiceCall) -> dict:
+    """Validate external custom tools without changing the live tool registry."""
+    hass = call.hass
+    server = hass.data.get(DOMAIN, {}).get("shared_mcp_server")
+    if server is None:
+        return {
+            "enabled": False,
+            "valid": False,
+            "loaded_tools": [],
+            "load_errors": ["Shared MCP server is not running"],
+        }
+
+    validate_external_custom_tools = getattr(
+        server,
+        "validate_external_custom_tools",
+        None,
+    )
+    if not callable(validate_external_custom_tools):
+        return {
+            "enabled": False,
+            "valid": False,
+            "loaded_tools": [],
+            "load_errors": ["Validation is not supported by this MCP server build"],
+        }
+
+    return await validate_external_custom_tools()
+
+
 async def _async_get_chat_log_manager(hass: HomeAssistant) -> ChatLogManager:
     """Get or create the shared chat log manager."""
     hass.data.setdefault(DOMAIN, {})
@@ -189,6 +218,13 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             _async_handle_reload_external_custom_tools,
             supports_response=SupportsResponse.OPTIONAL,
         )
+    if not hass.services.has_service(DOMAIN, SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS,
+            _async_handle_validate_external_custom_tools,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
     if not hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS):
         hass.services.async_register(
             DOMAIN,
@@ -209,6 +245,8 @@ async def _async_unregister_services(hass: HomeAssistant) -> None:
     """Unregister MCP Assist domain services when the last profile unloads."""
     if hass.services.has_service(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS):
         hass.services.async_remove(DOMAIN, SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS)
+    if hass.services.has_service(DOMAIN, SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS):
+        hass.services.async_remove(DOMAIN, SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS)
     if hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS):
         hass.services.async_remove(DOMAIN, SERVICE_GET_CHAT_LOGS)
     if hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS):

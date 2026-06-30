@@ -193,6 +193,7 @@ CUSTOM_TOOL_SETTINGS_DIRECTORY = "mcp-assist-tool-settings"
 CUSTOM_TOOL_SCHEMA_VERSION = 1
 CUSTOM_TOOL_MANIFEST_FILENAME = "mcp_tool.json"
 SERVICE_RELOAD_EXTERNAL_CUSTOM_TOOLS = "reload_external_custom_tools"
+SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS = "validate_external_custom_tools"
 SERVICE_GET_CHAT_LOGS = "get_chat_logs"
 SERVICE_CLEAR_CHAT_LOGS = "clear_chat_logs"
 

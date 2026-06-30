@@ -362,6 +362,56 @@ class CustomToolsLoader:
         self._refresh_tool_registry()
         return self.get_package_diagnostics()
 
+    async def validate_external_tool_packages(self) -> dict[str, Any]:
+        """Validate external packages without changing the live tool registry."""
+        reserved_tool_names = {
+            str(tool_definition.get("name") or "")
+            for tool_definition in self._get_builtin_tool_definitions()
+        }
+        reserved_tool_ids = {
+            loaded_tool.manifest.tool_id for loaded_tool in self.builtin_packages
+        }
+        validation_loader = ExternalCustomToolLoader(self.hass)
+        loaded_tools: list[LoadedToolPackage] = []
+        try:
+            loaded_tools = await validation_loader.load(
+                reserved_tool_names=reserved_tool_names,
+                reserved_tool_ids=reserved_tool_ids,
+            )
+            load_errors = list(validation_loader.last_load_errors)
+            return {
+                "enabled": self._external_custom_tools_enabled(),
+                "valid": not load_errors,
+                "tools_root": str(validation_loader.get_tools_root()),
+                "settings_root": str(validation_loader.get_settings_root()),
+                "last_loaded_at": validation_loader.last_loaded_at,
+                "scanned_packages": list(validation_loader.last_scanned_packages),
+                "load_errors": load_errors,
+                "loaded_tools": [
+                    {
+                        "id": loaded_tool.manifest.tool_id,
+                        "name": loaded_tool.manifest.name,
+                        "version": loaded_tool.manifest.version,
+                        "description": loaded_tool.manifest.description,
+                        "tool_names": list(loaded_tool.tool_names),
+                        "capabilities": list(loaded_tool.manifest.capabilities),
+                        "shared_settings_path": loaded_tool.shared_settings_path,
+                        "has_settings_schema": bool(loaded_tool.settings_schema),
+                    }
+                    for loaded_tool in loaded_tools
+                ],
+            }
+        finally:
+            for loaded_tool in loaded_tools:
+                try:
+                    await loaded_tool.instance.async_shutdown()
+                except Exception as err:
+                    _LOGGER.debug(
+                        "External custom tool %s failed during validation cleanup: %s",
+                        loaded_tool.manifest.tool_id,
+                        err,
+                    )
+
     def get_loaded_builtin_tool_info(self) -> list[dict[str, Any]]:
         """Return metadata for loaded built-in tool packages."""
         return [

@@ -212,6 +212,52 @@ During a tool call, packages can read:
 - `self.get_profile_settings()`
 - `self.get_call_context()`
 
+### Result, entity, time, and recorder helpers
+
+`MCPAssistExternalTool` includes helpers for common package code:
+
+```python
+return self.ok(
+    "Garage door is closed.",
+    structured_content={"entity_id": "cover.garage_door", "state": "closed"},
+)
+```
+
+For expected failures, return a normal MCP tool error:
+
+```python
+return self.error("Garage door status is not available right now.")
+```
+
+The module also exports standalone helpers for shared modules:
+
+```python
+from custom_components.mcp_assist.custom_tool_api import (
+    async_recorder_query,
+    entity_snapshot,
+    format_entity_state,
+    format_datetime,
+    format_relative_time,
+    mcp_error_result,
+    mcp_json_result,
+    mcp_text_result,
+)
+```
+
+Useful helpers include:
+
+- `mcp_text_result(...)`, `mcp_error_result(...)`, and `mcp_json_result(...)`
+- `self.ok(...)` and `self.error(...)`
+- `entity_snapshot(hass, entity_id)`
+- `format_entity_state(hass, entity_id)`
+- `format_datetime(...)` and `format_relative_time(...)`
+- `async_recorder_query(hass, sql, parameters, limit=...)`
+- `self.async_recorder_query(sql, parameters, limit=...)`
+
+Recorder helpers run through Home Assistant's recorder executor and only accept
+read-only `SELECT` or `WITH` SQL. They are intended for installation-specific
+history/audit tables that do not belong in MCP Assist core.
+
 ### Reusing core MCP tools
 
 External packages can call built-in MCP Assist tools instead of reimplementing
@@ -224,6 +270,15 @@ result = await self.call_mcp_tool(
         "camera_entity_id": "camera.driveway",
         "question": "What is in the driveway right now?",
     },
+)
+```
+
+For image helpers, prefer the convenience wrappers:
+
+```python
+result = await self.analyze_image(
+    camera_entity_id="camera.driveway",
+    question="What is in the driveway right now?",
 )
 ```
 
@@ -362,8 +417,13 @@ Follow these guidelines to keep packages portable and maintainable:
 
 You no longer need a full restart just to iterate on package code:
 
+- Home Assistant service: `mcp_assist.validate_external_custom_tools`
 - Home Assistant service: `mcp_assist.reload_external_custom_tools`
 - Diagnostics endpoint: `GET /external-tools/diagnostics`
+
+The validation service loads and validates external packages, returns
+diagnostics, and then shuts them down without exposing them in the live MCP tool
+registry. Use it before enabling custom tools or after editing package code.
 
 The diagnostics endpoint reports:
 
