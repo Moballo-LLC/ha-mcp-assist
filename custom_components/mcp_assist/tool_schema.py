@@ -173,6 +173,24 @@ ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
         "zone",
     }
 )
+ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS = ADAPTIVE_ENTITY_ID_DOMAINS | frozenset(
+    {
+        "entity",
+        "entities",
+    }
+)
+ADAPTIVE_ENTITY_ID_REFERENCE_RE = re.compile(
+    r"(?<![@\w])(?P<host>(?:"
+    + "|".join(
+        re.escape(domain)
+        for domain in sorted(ADAPTIVE_ENTITY_ID_DOMAINS, key=len, reverse=True)
+    )
+    + r")\.[a-z0-9_]+)(?=$|[^a-z0-9_])",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_URL_ACTION_TERMS = frozenset(
+    {"browse", "fetch", "read", "summarise", "summarize", "visit"}
+)
 ADAPTIVE_EXPLICIT_URL_INTENT_RE = re.compile(
     r"https?://\S+"
     r"|(?<!@)\bwww\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
@@ -487,10 +505,23 @@ def tool_definition_name(tool: dict[str, Any]) -> str:
     return str(tool.get("name") or "")
 
 
-def _is_adaptive_entity_id_like_host(host: str) -> bool:
+def _has_adaptive_url_action_context(text: str, match: re.Match[str]) -> bool:
+    """Return true when a bare-domain match is preceded by a URL-reading verb."""
+    preceding_terms = re.findall(r"\w+", text[: match.start()], flags=re.UNICODE)[-3:]
+    return any(term in ADAPTIVE_URL_ACTION_TERMS for term in preceding_terms)
+
+
+def _is_adaptive_entity_id_like_host(
+    host: str,
+    *,
+    text: str = "",
+    match: re.Match[str] | None = None,
+) -> bool:
     """Return true for dotted Home Assistant entity IDs that resemble bare domains."""
-    first_label = str(host or "").split(".", 1)[0].casefold()
-    return first_label in ADAPTIVE_ENTITY_ID_DOMAINS
+    labels = str(host or "").casefold().split(".")
+    if len(labels) != 2 or labels[0] not in ADAPTIVE_ENTITY_ID_DOMAINS:
+        return False
+    return not (match is not None and _has_adaptive_url_action_context(text, match))
 
 
 def _has_adaptive_url_intent(text: str) -> bool:
@@ -498,7 +529,11 @@ def _has_adaptive_url_intent(text: str) -> bool:
     if ADAPTIVE_EXPLICIT_URL_INTENT_RE.search(text):
         return True
     return any(
-        not _is_adaptive_entity_id_like_host(match.group("host"))
+        not _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=text,
+            match=match,
+        )
         for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
     )
 
@@ -508,11 +543,42 @@ def _strip_adaptive_url_intents(text: str) -> str:
     stripped = ADAPTIVE_EXPLICIT_URL_INTENT_RE.sub(" ", text)
 
     def replace_bare_domain(match: re.Match[str]) -> str:
-        if _is_adaptive_entity_id_like_host(match.group("host")):
+        if _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=stripped,
+            match=match,
+        ):
             return match.group(0)
         return " "
 
     return ADAPTIVE_BARE_DOMAIN_INTENT_RE.sub(replace_bare_domain, stripped)
+
+
+def _has_adaptive_entity_reference(text: str) -> bool:
+    """Return true when text contains an HA entity-id-shaped reference."""
+    return bool(_adaptive_entity_reference_domains(text))
+
+
+def _adaptive_entity_reference_domains(text: str) -> set[str]:
+    """Return HA entity domains referenced by entity-id-shaped text spans."""
+    domains: set[str] = set()
+    for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text):
+        host = match.group("host")
+        if _is_adaptive_entity_id_like_host(
+            host,
+            text=text,
+            match=match,
+        ):
+            domains.add(host.split(".", 1)[0].casefold())
+    for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text):
+        host = match.group("host")
+        if _is_adaptive_entity_id_like_host(
+            host,
+            text=text,
+            match=match,
+        ):
+            domains.add(host.split(".", 1)[0].casefold())
+    return domains
 
 
 def normalize_adaptive_query_terms(query: str) -> list[str]:
@@ -527,6 +593,9 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
             continue
         if term not in terms:
             terms.append(term)
+        if singular := _adaptive_singular_text_term(term):
+            if singular not in terms:
+                terms.append(singular)
     normalized_tokens = set(re.findall(r"\w+", normalized_query, flags=re.UNICODE))
     for alias, expanded_terms in ADAPTIVE_QUERY_ALIASES.items():
         matches_alias = (
@@ -621,19 +690,35 @@ def score_adaptive_tool_match(
     if terms and all(term in name_terms for term in terms):
         score += 40
 
+    matched_terms: set[str] = set()
+    matched_name_terms: set[str] = set()
     for term in terms:
         if term in name_terms:
             score += 24
+            matched_terms.add(term)
+            matched_name_terms.add(term)
         if term in keyword_terms:
             score += 18
+            matched_terms.add(term)
         if term in routing_terms:
             score += 14
+            matched_terms.add(term)
         if term in llm_description_terms:
             score += 12
+            matched_terms.add(term)
         if term in description_terms:
             score += 6
+            matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
+        entity_domains = _adaptive_entity_reference_domains(normalized_query)
+        if (
+            matched_terms
+            and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
+            and entity_domains
+            and not (matched_name_terms & entity_domains)
+        ):
+            return 0
         score += 1
     return score
 
