@@ -229,6 +229,9 @@ async def test_recorder_query_helper_rejects_writes_hidden_behind_ctes(hass) -> 
         "SELECT state INTO OUTFILE '/tmp/mcp_assist_states.txt' FROM states",
         "SELECT state INTO DUMPFILE '/tmp/mcp_assist_states.bin' FROM states",
         "SELECT state FROM states INTO OUTFILE '/tmp/mcp_assist_states.txt'",
+        "SELECT state /*!50000 INTO OUTFILE '/tmp/mcp_assist_states.txt' */ FROM states",
+        "SELECT state INTO /*!50000 OUTFILE */ '/tmp/mcp_assist_states.txt' FROM states",
+        "SELECT state /*!50000 INTO */ OUTFILE '/tmp/mcp_assist_states.txt' FROM states",
         """
         WITH exported AS (
             SELECT state INTO OUTFILE '/tmp/mcp_assist_states.txt' FROM states
@@ -257,4 +260,10 @@ def test_read_only_sql_validator_allows_select_ctes_and_ignores_literals() -> No
     )
     assert custom_tool_api_module._is_read_only_sql(
         "SELECT 'INTO OUTFILE /tmp/not-written' AS example_text FROM states"
+    )
+    assert custom_tool_api_module._is_read_only_sql(
+        "SELECT state /* INTO OUTFILE '/tmp/not-written' */ FROM states"
+    )
+    assert custom_tool_api_module._is_read_only_sql(
+        "SELECT /*!50000 'DELETE FROM states' AS example_text, */ state FROM states"
     )

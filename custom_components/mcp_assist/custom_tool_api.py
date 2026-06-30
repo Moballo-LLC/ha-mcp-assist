@@ -755,15 +755,27 @@ def _sql_validation_tokens(sql: str) -> list[str]:
             continue
 
         if char == "/" and next_char == "*":
+            executable_comment = index + 2 < length and sql[index + 2] == "!"
+            executable_comment_content: list[str] = []
             sanitized.append("  ")
             index += 2
+            if executable_comment:
+                sanitized.append(" ")
+                index += 1
             while index < length:
                 if sql[index] == "*" and index + 1 < length and sql[index + 1] == "/":
                     sanitized.append("  ")
                     index += 2
                     break
-                sanitized.append(" ")
+                if executable_comment:
+                    executable_comment_content.append(sql[index])
+                else:
+                    sanitized.append(" ")
                 index += 1
+            if executable_comment_content:
+                sanitized.append(" ")
+                sanitized.append(" ".join(_sql_validation_tokens("".join(executable_comment_content))))
+                sanitized.append(" ")
             continue
 
         if char in {"'", '"', "`"}:
