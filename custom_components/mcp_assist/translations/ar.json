@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "منفذ خادم MCP",
           "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "رمز Bearer لـ MCP"
         },
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "حدث خطا غير معروف.",
       "openclaw_not_paired": "الجهاز لم تتم الموافقة عليه بعد على خادم OpenClaw. يرجى الموافقة عليه والمحاولة مرة أخرى.",
       "openclaw_connection_failed": "تعذر الاتصال ببوابة OpenClaw. تحقق من المضيف والمنفذ والرمز المميز.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "يجب أن يكون رمز Bearer لـ MCP فارغًا أو مكوّنًا من 16 حرفًا على الأقل."
     },
     "abort": {
       "already_configured": "يوجد ملف شخصي بهذا الاسم بالفعل. يرجى اختيار اسم مختلف."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "منفذ خادم MCP",
           "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "رمز Bearer لـ MCP"
         },
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "يجب أن يكون رمز Bearer لـ MCP فارغًا أو مكوّنًا من 16 حرفًا على الأقل."
     }
   },
   "selector": {

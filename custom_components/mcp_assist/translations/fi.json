@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCP-palvelinportti",
           "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer -tunnus"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Tuntematon virhe tapahtui.",
       "openclaw_not_paired": "Laitetta ei ole vielä hyväksytty OpenClaw-palvelimella. Hyväksy se ja yritä uudelleen.",
       "openclaw_connection_failed": "Ei voitu muodostaa yhteyttä OpenClaw-yhdyskäytävään. Tarkista isäntä, portti ja tunnus.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer -tunnuksen on oltava tyhjä tai vähintään 16 merkkiä pitkä."
     },
     "abort": {
       "already_configured": "Taman niminen profiili on jo olemassa. Valitse toinen nimi."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCP-palvelinportti",
           "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer -tunnus"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer -tunnuksen on oltava tyhjä tai vähintään 16 merkkiä pitkä."
     }
   },
   "selector": {

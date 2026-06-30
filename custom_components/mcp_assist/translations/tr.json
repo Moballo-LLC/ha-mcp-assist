@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCP Sunucu Portu",
           "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer belirteci"
         },
         "data_description": {
           "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
           "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Bilinmeyen bir hata olustu.",
       "openclaw_not_paired": "Device not yet approved on the OpenClaw server. Lütfen onaylayın ve tekrar deneyin.",
       "openclaw_connection_failed": "Could not connect to the OpenClaw gateway. Ana bilgisayarı, bağlantı noktasını ve belirteci kontrol edin.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer belirteci boş olmalı veya en az 16 karakter içermelidir."
     },
     "abort": {
       "already_configured": "Bu ada sahip bir profil zaten mevcut. Lutfen farkli bir ad secin."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCP Sunucu Portu",
           "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer belirteci"
         },
         "data_description": {
           "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
           "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer belirteci boş olmalı veya en az 16 karakter içermelidir."
     }
   },
   "selector": {

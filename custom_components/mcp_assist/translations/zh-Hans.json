@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCP服务器端口",
           "allowed_ips": "额外允许的IP/范围",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer 令牌"
         },
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。"
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "发生未知错误。",
       "openclaw_not_paired": "设备尚未在 OpenClaw 服务器上获得批准。请批准并重试。",
       "openclaw_connection_failed": "无法连接到 OpenClaw 网关。检查主机、端口和令牌。",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP Bearer 令牌必须为空或至少包含 16 个字符。"
     },
     "abort": {
       "already_configured": "已存在同名配置文件。请选择其他名称。"
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCP服务器端口",
           "allowed_ips": "额外允许的IP/范围",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer 令牌"
         },
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。"
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP Bearer 令牌必须为空或至少包含 16 个字符。"
     }
   },
   "selector": {

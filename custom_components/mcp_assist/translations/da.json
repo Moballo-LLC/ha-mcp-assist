@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Yderligere tilladte IP'er/omraader",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
           "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "En ukendt fejl opstod.",
       "openclaw_not_paired": "Enhed endnu ikke godkendt på OpenClaw-serveren. Godkend det, og prøv igen.",
       "openclaw_connection_failed": "Kunne ikke oprette forbindelse til OpenClaw-gatewayen. Tjek værten, porten og tokenet.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer-token skal være tom eller mindst 16 tegn."
     },
     "abort": {
       "already_configured": "En profil med dette navn findes allerede. Vaelg venligst et andet navn."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Yderligere tilladte IP'er/omraader",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
           "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP bearer-token skal være tom eller mindst 16 tegn."
     }
   },
   "selector": {

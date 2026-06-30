@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "Порт сервера MCP",
           "allowed_ips": "Дополнительные разрешённые IP/диапазоны",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Bearer-токен MCP"
         },
         "data_description": {
           "mcp_port": "Локальный порт, используемый общим сервером MCP.",
           "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Необязательный bearer-токен, требуемый внешними клиентами MCP. Для новых настроек создаётся токен; очищайте это поле только если намеренно хотите использовать список разрешённых IP без bearer-аутентификации."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Произошла неизвестная ошибка.",
       "openclaw_not_paired": "Устройство еще не одобрено на сервере OpenClaw. Пожалуйста, подтвердите его и повторите попытку.",
       "openclaw_connection_failed": "Не удалось подключиться к шлюзу OpenClaw. Проверьте хост, порт и токен.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Bearer-токен MCP должен быть пустым или содержать не менее 16 символов."
     },
     "abort": {
       "already_configured": "Профиль с таким именем уже существует. Выберите другое имя."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "Порт сервера MCP",
           "allowed_ips": "Дополнительные разрешённые IP/диапазоны",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Bearer-токен MCP"
         },
         "data_description": {
           "mcp_port": "Локальный порт, используемый общим сервером MCP.",
           "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Необязательный bearer-токен, требуемый внешними клиентами MCP. Для новых настроек создаётся токен; очищайте это поле только если намеренно хотите использовать список разрешённых IP без bearer-аутентификации."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Bearer-токен MCP должен быть пустым или содержать не менее 16 символов."
     }
   },
   "selector": {

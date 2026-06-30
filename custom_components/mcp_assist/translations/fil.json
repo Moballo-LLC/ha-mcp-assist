@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "Port ng MCP Server",
           "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Bearer token ng MCP"
         },
         "data_description": {
           "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
           "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Isang hindi kilalang error ang naganap.",
       "openclaw_not_paired": "Hindi pa naaprubahan ang device sa OpenClaw server. Mangyaring aprubahan ito at subukang muli.",
       "openclaw_connection_failed": "Hindi makakonekta sa OpenClaw gateway. Suriin ang host, port, at token.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Ang MCP bearer token ay dapat walang laman o hindi bababa sa 16 na character."
     },
     "abort": {
       "already_configured": "Mayroon nang profile na may ganitong pangalan. Pumili ng ibang pangalan."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "Port ng MCP Server",
           "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Bearer token ng MCP"
         },
         "data_description": {
           "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
           "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Ang MCP bearer token ay dapat walang laman o hindi bababa sa 16 na character."
     }
   },
   "selector": {

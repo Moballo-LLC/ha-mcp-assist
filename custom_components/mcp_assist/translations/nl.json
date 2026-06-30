@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCP-serverpoort",
           "allowed_ips": "Extra toegestane IPs/bereiken",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Er is een onbekende fout opgetreden.",
       "openclaw_not_paired": "Apparaat nog niet goedgekeurd op de OpenClaw-server. Keur het goed en probeer het opnieuw.",
       "openclaw_connection_failed": "Kan geen verbinding maken met de OpenClaw-gateway. Controleer de host, poort en token.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Het MCP bearer-token moet leeg zijn of uit minstens 16 tekens bestaan."
     },
     "abort": {
       "already_configured": "Een profiel met deze naam bestaat al. Kies een andere naam."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCP-serverpoort",
           "allowed_ips": "Extra toegestane IPs/bereiken",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Het MCP bearer-token moet leeg zijn of uit minstens 16 tekens bestaan."
     }
   },
   "selector": {

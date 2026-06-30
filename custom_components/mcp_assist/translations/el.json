@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "Θυρα διακομιστη MCP",
           "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Διακριτικό Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
           "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth."
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "Προεκυψε αγνωστο σφαλμα.",
       "openclaw_not_paired": "Η συσκευή δεν έχει εγκριθεί ακόμη στον διακομιστή OpenClaw. Εγκρίνετέ το και προσπαθήστε ξανά.",
       "openclaw_connection_failed": "Δεν ήταν δυνατή η σύνδεση στην πύλη OpenClaw. Ελέγξτε τον κεντρικό υπολογιστή, τη θύρα και το διακριτικό.",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Το MCP bearer token πρέπει να είναι κενό ή να έχει τουλάχιστον 16 χαρακτήρες."
     },
     "abort": {
       "already_configured": "Υπαρχει ηδη προφιλ με αυτο το ονομα. Επιλεξτε διαφορετικο ονομα."
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "Θυρα διακομιστη MCP",
           "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "Διακριτικό Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
           "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth."
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "Το MCP bearer token πρέπει να είναι κενό ή να έχει τουλάχιστον 16 χαρακτήρες."
     }
   },
   "selector": {

@@ -206,12 +206,12 @@
         "data": {
           "mcp_port": "MCPサーバーポート",
           "allowed_ips": "追加の許可IP/範囲",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer トークン"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
           "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。"
         },
         "sections": {
           "context": {
@@ -331,7 +331,7 @@
       "unknown": "不明なエラーが発生しました。",
       "openclaw_not_paired": "デバイスは OpenClaw サーバーでまだ承認されていません。承認して再試行してください。",
       "openclaw_connection_failed": "OpenClaw ゲートウェイに接続できませんでした。ホスト、ポート、トークンを確認してください。",
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP Bearer トークンは空欄、または 16 文字以上である必要があります。"
     },
     "abort": {
       "already_configured": "この名前のプロファイルは既に存在します。別の名前を選択してください。"
@@ -535,12 +535,12 @@
         "data": {
           "mcp_port": "MCPサーバーポート",
           "allowed_ips": "追加の許可IP/範囲",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer トークン"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
           "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。"
         },
         "sections": {
           "context": {
@@ -645,7 +645,7 @@
       }
     },
     "error": {
-      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
+      "mcp_bearer_token_too_short": "MCP Bearer トークンは空欄、または 16 文字以上である必要があります。"
     }
   },
   "selector": {
