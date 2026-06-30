@@ -7,6 +7,7 @@ from typing import Any
 from .anthropic import AnthropicProvider
 from .base import (
     LLMProvider,
+    PromptCacheUsage,
     ProviderConfigField,
     ProviderSettings,
     StreamParseResult,
@@ -69,6 +70,7 @@ def build_provider_settings(
     *,
     max_tokens: int,
     temperature: float | None,
+    prompt_cache_key: str | None = None,
 ) -> ProviderSettings:
     """Build current provider settings from a conversation profile entry."""
     runtime_config = resolve_provider_runtime_config(entry)
@@ -84,6 +86,7 @@ def build_provider_settings(
         provider_options=provider_class.options_from_entry(entry),
         display_name=runtime_config.display_name,
         is_remote_service=runtime_config.is_remote_service,
+        prompt_cache_key=prompt_cache_key,
     )
 
 
@@ -103,6 +106,7 @@ __all__ = [
     "OpenAIProvider",
     "OpenClawProvider",
     "OpenRouterProvider",
+    "PromptCacheUsage",
     "ProviderConfigField",
     "ProviderSettings",
     "StreamParseResult",

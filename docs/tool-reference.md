@@ -101,6 +101,8 @@ Recorder tools answer questions about past entity state.
 These tools require Home Assistant recorder data for the relevant entities and
 time range. Use `period: "today"` or `period: "yesterday"` for calendar-day
 questions instead of approximating with a number of hours.
+Count analyses count transitions into the matching state, not repeated recorder
+rows that report the same state.
 
 ## Calculator and Unit Conversion
 

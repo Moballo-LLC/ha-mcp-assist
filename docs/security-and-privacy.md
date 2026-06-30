@@ -89,6 +89,12 @@ Cloud providers require API keys. Treat those keys as secrets:
 - Rotate keys if they were pasted into logs, issues, or screenshots.
 - Review provider billing and quota settings.
 
+Official OpenAI profiles send a hashed `prompt_cache_key` to improve provider
+prompt-cache routing. The key is derived from profile/provider metadata and does
+not include prompts, entity names, user text, or tool results. OpenAI still
+controls its own cache behavior, retention, and billing; review the provider's
+current prompt-caching policy if this matters for your deployment.
+
 ## Local Provider Privacy
 
 Local models can reduce third-party data exposure, but check your actual setup:

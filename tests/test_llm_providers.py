@@ -82,6 +82,7 @@ def _settings(
     base_url: str = "https://provider.example.invalid",
     display_name: str = "Test Provider",
     is_remote_service: bool = False,
+    prompt_cache_key: str | None = None,
 ) -> ProviderSettings:
     """Build provider settings for unit tests."""
     return ProviderSettings(
@@ -95,6 +96,7 @@ def _settings(
         provider_options=provider_options or {},
         display_name=display_name,
         is_remote_service=is_remote_service,
+        prompt_cache_key=prompt_cache_key,
     )
 
 
@@ -485,6 +487,104 @@ def test_openai_provider_uses_completion_tokens_for_gpt5() -> None:
     assert payload["max_completion_tokens"] == 321
     assert "max_tokens" not in payload
     assert "temperature" not in payload
+
+
+def test_openai_provider_applies_prompt_cache_key_and_stream_usage() -> None:
+    """Official OpenAI requests should opt into cache routing and stream usage."""
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url=OPENAI_BASE_URL,
+            prompt_cache_key="ha-mcp-assist-cache-key",
+        )
+    )
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+    )
+
+    assert payload["prompt_cache_key"] == "ha-mcp-assist-cache-key"
+    assert payload["stream_options"] == {"include_usage": True}
+
+
+def test_openai_provider_skips_prompt_cache_fields_for_custom_base_url() -> None:
+    """Custom OpenAI-compatible endpoints should not receive OpenAI-only fields."""
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url="https://openai-compatible.example.invalid",
+            prompt_cache_key="ha-mcp-assist-cache-key",
+        )
+    )
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+    )
+
+    assert "prompt_cache_key" not in payload
+    assert "stream_options" not in payload
+
+
+def test_openai_compatible_providers_do_not_emit_openai_cache_fields() -> None:
+    """OpenAI-compatible local endpoints should not receive OpenAI-only fields."""
+    provider = LMStudioProvider(
+        _settings(
+            SERVER_TYPE_LMSTUDIO,
+            prompt_cache_key="ha-mcp-assist-cache-key",
+        )
+    )
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+    )
+
+    assert "prompt_cache_key" not in payload
+    assert "stream_options" not in payload
+
+
+def test_openai_provider_extracts_prompt_cache_usage() -> None:
+    """OpenAI usage metadata should expose cached prompt tokens."""
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI))
+
+    usage = provider.extract_prompt_cache_usage(
+        {
+            "usage": {
+                "prompt_tokens": 4096,
+                "prompt_tokens_details": {"cached_tokens": 3072},
+            }
+        }
+    )
+
+    assert usage is not None
+    assert usage.input_tokens == 4096
+    assert usage.cached_tokens == 3072
+    assert usage.cache_read_tokens == 3072
+
+
+def test_stream_parser_allows_usage_only_chunks() -> None:
+    """Streaming usage chunks should not be treated as malformed deltas."""
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI))
+
+    parsed = provider.parse_stream_line(
+        'data: {"choices":[],"usage":{"prompt_tokens":4096,'
+        '"prompt_tokens_details":{"cached_tokens":2048}}}'
+    )
+
+    assert parsed is not None
+    assert parsed.delta == {}
+    assert parsed.usage == {
+        "prompt_tokens": 4096,
+        "prompt_tokens_details": {"cached_tokens": 2048},
+    }
 
 
 def test_ollama_provider_uses_native_tool_shapes() -> None:
