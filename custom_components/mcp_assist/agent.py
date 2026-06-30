@@ -2,6 +2,7 @@
 
 import asyncio
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 import json
 import logging
 import re
@@ -330,6 +331,17 @@ _SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
     rf"(?i)([\"']?(?:{_SENSITIVE_LOG_FIELD_PATTERN})[\"']?"
     r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
 )
+
+
+@dataclass(frozen=True)
+class ToolCallBudgetPlan:
+    """Provider tool-call plan with original-order indexes preserved."""
+
+    executable_calls: list[dict[str, Any]]
+    executable_indexes: list[int]
+    skipped_results_by_index: dict[int, dict[str, Any]]
+    original_count: int
+    exhausted: bool
 
 
 def _json_size_bytes(value: Any) -> int:
@@ -1615,7 +1627,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         }
         if error:
             summary["status"] = "error"
-        elif isinstance(result, dict) and result.get("isError"):
+        elif isinstance(result, dict) and (result.get("isError") or "error" in result):
             summary["status"] = "error"
         else:
             summary["status"] = "ok"
@@ -3306,22 +3318,25 @@ class MCPAssistConversationEntity(ConversationEntity):
         *,
         tool_calls_used: int,
         provider: LLMProvider,
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+    ) -> ToolCallBudgetPlan:
         """Split requested tool calls into executable and skipped budget results."""
         remaining = max(0, self.tool_call_budget - tool_calls_used)
         executable_tool_calls: list[dict[str, Any]] = []
-        skipped_tool_calls: list[dict[str, Any]] = []
+        executable_indexes: list[int] = []
+        skipped_tool_calls: list[tuple[int, dict[str, Any]]] = []
         budgeted_calls_added = 0
 
-        for tool_call in tool_calls:
+        for index, tool_call in enumerate(tool_calls):
             if not self._is_budgeted_tool_call(tool_call):
                 executable_tool_calls.append(tool_call)
+                executable_indexes.append(index)
                 continue
             if budgeted_calls_added < remaining:
                 executable_tool_calls.append(tool_call)
+                executable_indexes.append(index)
                 budgeted_calls_added += 1
                 continue
-            skipped_tool_calls.append(tool_call)
+            skipped_tool_calls.append((index, tool_call))
 
         if skipped_tool_calls:
             _LOGGER.warning(
@@ -3331,11 +3346,36 @@ class MCPAssistConversationEntity(ConversationEntity):
                 self.tool_call_budget,
             )
 
-        skipped_results = [
-            self._build_budget_skipped_tool_result(provider, tool_call)
-            for tool_call in skipped_tool_calls
+        skipped_results_by_index = {
+            index: self._build_budget_skipped_tool_result(provider, tool_call)
+            for index, tool_call in skipped_tool_calls
+        }
+        return ToolCallBudgetPlan(
+            executable_calls=executable_tool_calls,
+            executable_indexes=executable_indexes,
+            skipped_results_by_index=skipped_results_by_index,
+            original_count=len(tool_calls),
+            exhausted=bool(skipped_tool_calls),
+        )
+
+    @staticmethod
+    def _merge_tool_results_in_call_order(
+        plan: ToolCallBudgetPlan,
+        executable_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Merge executed and skipped tool results back into tool-call order."""
+        results_by_index = dict(plan.skipped_results_by_index)
+        for index, result in zip(
+            plan.executable_indexes,
+            executable_results,
+            strict=True,
+        ):
+            results_by_index[index] = result
+        return [
+            results_by_index[index]
+            for index in range(plan.original_count)
+            if index in results_by_index
         ]
-        return executable_tool_calls, skipped_results, bool(skipped_tool_calls)
 
     async def _execute_tool_calls(
         self, tool_calls: List[Dict[str, Any]]
@@ -3349,6 +3389,8 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         for index, tool_call in enumerate(tool_calls):
             if self._tool_call_name(tool_call) in ADAPTIVE_META_TOOL_NAMES:
+                # Meta tools update request-scoped schema state, so run them in
+                # this task rather than inside the gathered child tasks below.
                 results[index] = await self._execute_single_tool_call(tool_call)
             else:
                 concurrent_calls.append((index, tool_call))
@@ -3919,22 +3961,23 @@ class MCPAssistConversationEntity(ConversationEntity):
                 # Record tool calls to ChatLog for debug view
                 self._record_tool_calls_to_chatlog(valid_tool_calls)
 
-                (
-                    executable_tool_calls,
-                    skipped_tool_results,
-                    budget_exhausted,
-                ) = self._prepare_tool_calls_for_budget(
+                budget_plan = self._prepare_tool_calls_for_budget(
                     valid_tool_calls,
                     tool_calls_used=tool_calls_used,
                     provider=provider,
                 )
 
                 # Execute tools
-                tool_results = await self._execute_tool_calls(executable_tool_calls)
-                tool_calls_used += self._count_budgeted_tool_calls(
-                    executable_tool_calls
+                executable_tool_results = await self._execute_tool_calls(
+                    budget_plan.executable_calls
                 )
-                tool_results.extend(skipped_tool_results)
+                tool_calls_used += self._count_budgeted_tool_calls(
+                    budget_plan.executable_calls
+                )
+                tool_results = self._merge_tool_results_in_call_order(
+                    budget_plan,
+                    executable_tool_results,
+                )
 
                 # Record tool results to ChatLog for debug view
                 for idx, result in enumerate(tool_results):
@@ -3971,7 +4014,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tool_ids.clear()
                 completed_tools.clear()
 
-                if budget_exhausted or tool_calls_used >= self.tool_call_budget:
+                if budget_plan.exhausted or tool_calls_used >= self.tool_call_budget:
                     _LOGGER.warning(
                         "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
                         tool_calls_used,
@@ -4161,11 +4204,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                         # Record tool calls to ChatLog for debug view
                         self._record_tool_calls_to_chatlog(tool_calls)
 
-                        (
-                            executable_tool_calls,
-                            skipped_tool_results,
-                            budget_exhausted,
-                        ) = self._prepare_tool_calls_for_budget(
+                        budget_plan = self._prepare_tool_calls_for_budget(
                             tool_calls,
                             tool_calls_used=tool_calls_used,
                             provider=provider,
@@ -4173,13 +4212,16 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                         # Execute the tool calls
                         _LOGGER.info("⚡ Executing tool calls against MCP server...")
-                        tool_results = await self._execute_tool_calls(
-                            executable_tool_calls
+                        executable_tool_results = await self._execute_tool_calls(
+                            budget_plan.executable_calls
                         )
                         tool_calls_used += self._count_budgeted_tool_calls(
-                            executable_tool_calls
+                            budget_plan.executable_calls
                         )
-                        tool_results.extend(skipped_tool_results)
+                        tool_results = self._merge_tool_results_in_call_order(
+                            budget_plan,
+                            executable_tool_results,
+                        )
 
                         # Record tool results to ChatLog for debug view
                         for idx, result in enumerate(tool_results):
@@ -4219,7 +4261,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
 
                         if (
-                            budget_exhausted
+                            budget_plan.exhausted
                             or tool_calls_used >= self.tool_call_budget
                         ):
                             _LOGGER.warning(

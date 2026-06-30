@@ -694,6 +694,28 @@ def test_build_messages_includes_compact_tool_history_context(
     )
 
 
+def test_tool_history_summary_marks_error_result_status(
+    hass, profile_entry_factory
+) -> None:
+    """MCP failure result dictionaries should not be summarized as successful."""
+    entry = profile_entry_factory(options={CONF_MAX_HISTORY: 2})
+    agent = MCPAssistConversationEntity(hass, entry)
+    summaries: list[dict[str, object]] = []
+    token = agent_module._REQUEST_TOOL_HISTORY_SUMMARIES.set(summaries)
+
+    try:
+        agent._record_tool_history_summary(
+            "perform_action",
+            {"entity_id": "light.kitchen"},
+            {"error": "Service call failed"},
+        )
+    finally:
+        agent_module._REQUEST_TOOL_HISTORY_SUMMARIES.reset(token)
+
+    assert summaries[0]["status"] == "error"
+    assert "status=error" in agent._format_history_tool_context(summaries)
+
+
 def test_build_messages_supports_zero_history(
     hass, profile_entry_factory
 ) -> None:
@@ -1311,6 +1333,55 @@ async def test_adaptive_schema_load_survives_execute_tool_calls(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_schema_load_survives_mixed_execute_tool_calls(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Schema loads should remain visible when real tools run concurrently."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("discover_entities"), _tool("sample_tool_status")]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_call_mcp_tool",
+        AsyncMock(return_value={"content": [{"type": "text", "text": "ok"}]}),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._execute_tool_calls(
+            [
+                {
+                    "id": "call-1",
+                    "function": {
+                        "name": "discover_entities",
+                        "arguments": "{}",
+                    },
+                },
+                {
+                    "id": "load-1",
+                    "function": {
+                        "name": ADAPTIVE_TOOL_SCHEMA_NAME,
+                        "arguments": json.dumps(
+                            {"tool_names": ["sample_tool_status"]}
+                        ),
+                    },
+                },
+            ]
+        )
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_tool_status" in advertised_names
+
+
+@pytest.mark.asyncio
 async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -1817,20 +1888,62 @@ def test_adaptive_meta_tool_calls_do_not_consume_tool_budget(
         {"id": "call-2", "function": {"name": "perform_action"}},
     ]
 
-    executable, skipped, exhausted = agent._prepare_tool_calls_for_budget(
+    plan = agent._prepare_tool_calls_for_budget(
         tool_calls,
         tool_calls_used=0,
         provider=provider,
     )
 
-    assert [call["function"]["name"] for call in executable] == [
+    assert [call["function"]["name"] for call in plan.executable_calls] == [
         ADAPTIVE_TOOL_CATALOG_NAME,
         "discover_entities",
     ]
-    assert len(skipped) == 1
-    assert "budget_exhausted" in json.dumps(skipped[0])
-    assert agent._count_budgeted_tool_calls(executable) == 1
-    assert exhausted is True
+    assert list(plan.skipped_results_by_index) == [2]
+    assert "budget_exhausted" in json.dumps(plan.skipped_results_by_index[2])
+    assert agent._count_budgeted_tool_calls(plan.executable_calls) == 1
+    assert plan.exhausted is True
+
+
+def test_tool_budget_results_preserve_original_call_order(
+    hass, profile_entry_factory
+) -> None:
+    """Skipped real calls should stay in order when later meta calls can run."""
+    entry = profile_entry_factory(options={CONF_MAX_ITERATIONS: 1})
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    tool_calls = [
+        {"id": "call-1", "function": {"name": "discover_entities"}},
+        {"id": "call-2", "function": {"name": "perform_action"}},
+        {"id": "load-1", "function": {"name": ADAPTIVE_TOOL_SCHEMA_NAME}},
+    ]
+
+    plan = agent._prepare_tool_calls_for_budget(
+        tool_calls,
+        tool_calls_used=0,
+        provider=provider,
+    )
+    executable_results = [
+        provider.build_tool_result_message(
+            tool_call_id="call-1",
+            tool_name="discover_entities",
+            content="{}",
+        ),
+        provider.build_tool_result_message(
+            tool_call_id="load-1",
+            tool_name=ADAPTIVE_TOOL_SCHEMA_NAME,
+            content="{}",
+        ),
+    ]
+
+    results = agent._merge_tool_results_in_call_order(plan, executable_results)
+
+    assert [result["tool_call_id"] for result in results] == [
+        "call-1",
+        "call-2",
+        "load-1",
+    ]
+    skipped_content = json.loads(results[1]["content"])
+    assert skipped_content["budget_exhausted"] is True
 
 
 @pytest.mark.asyncio
