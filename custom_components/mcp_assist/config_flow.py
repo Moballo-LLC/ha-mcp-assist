@@ -111,6 +111,7 @@ from .const import (
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
     CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_ADAPTIVE,
     CONTEXT_MODE_STANDARD,
     DEFAULT_CONTROL_HA,
     DEFAULT_RESPONSE_MODE,
@@ -214,6 +215,7 @@ def _context_mode_selector() -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
             options=[
+                {"value": CONTEXT_MODE_ADAPTIVE, "label": "Adaptive"},
                 {"value": CONTEXT_MODE_STANDARD, "label": "Standard"},
                 {"value": CONTEXT_MODE_LIGHT, "label": "Light"},
             ],
@@ -1261,6 +1263,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 use_ssl=self.step2_data.get(CONF_OPENCLAW_USE_SSL, DEFAULT_OPENCLAW_USE_SSL),
                 device_auth=device_auth,
                 timeout=30,
+                locale=getattr(self.hass.config, "language", None),
             )
 
             try:

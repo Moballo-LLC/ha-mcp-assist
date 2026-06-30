@@ -99,8 +99,9 @@ Common settings:
 - **Temperature**: Response randomness.
 - **Max Response Tokens**: Maximum response length.
 - **Max History Messages**: Conversation memory depth.
-- **Context Mode**: Use Standard for the full profile tool context, or Light
-  for small local models that need a smaller request.
+- **Context Mode**: Use Adaptive by default. Choose Standard when you want the
+  full profile tool context sent upfront, or Light for small local models that
+  need the smallest request.
 - **Response Mode**: None, Smart, or Always.
 - **Control Home Assistant**: Whether the assistant can perform write actions.
 - **Max Tool Iterations**: How many tool calls are allowed for one request.

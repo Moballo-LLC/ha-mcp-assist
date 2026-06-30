@@ -6,6 +6,7 @@ from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
+import hashlib
 import hmac
 import ipaddress
 import inspect
@@ -90,6 +91,7 @@ from .const import (
     DEFAULT_ENABLE_DEVICE_TOOLS,
     DEFAULT_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     DEFAULT_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    LIGHT_CONTEXT_TOOL_NAMES,
     SERVER_TYPE_OLLAMA,
     TOOL_FAMILY_SHARED_SETTINGS,
     get_optional_tool_family,
@@ -108,6 +110,14 @@ from .llm_providers import (
     LLMProvider,
     build_provider_settings,
     create_llm_provider,
+)
+from .tool_schema import (
+    ADAPTIVE_META_TOOL_NAMES,
+    build_adaptive_llm_tools,
+    convert_mcp_tools_to_llm_tools,
+    estimate_tokens_from_bytes,
+    score_adaptive_tool_match,
+    tool_definition_name,
 )
 from .tools.packages.recorder.history import RecorderToolsMixin
 from .tools.packages.response_service.calendar import CalendarToolsMixin
@@ -210,6 +220,21 @@ def _json_size_bytes(value: Any) -> int:
     except Exception:
         serialized = str(value)
     return len(serialized.encode("utf-8"))
+
+
+def _json_fingerprint(value: Any) -> str:
+    """Return a short stable fingerprint for metadata-only diagnostics."""
+    try:
+        serialized = json.dumps(
+            value,
+            ensure_ascii=False,
+            default=str,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except Exception:
+        serialized = str(value)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
 
 
 def _mapping_count(value: Any) -> int:
@@ -659,6 +684,10 @@ class MCPServer(
                 self.handle_external_tool_diagnostics,
             )
             self.app.router.add_get(
+                "/debug/prompt-overhead",
+                self.handle_prompt_overhead_diagnostics,
+            )
+            self.app.router.add_get(
                 "/progress", self.handle_progress_stream
             )  # Progress streaming
 
@@ -900,6 +929,7 @@ class MCPServer(
                 "websocket": f"ws://<host>:{self.port}/ws",
                 "http": f"http://<host>:{self.port}/",
                 "health": f"http://<host>:{self.port}/health",
+                "prompt_overhead": f"http://<host>:{self.port}/debug/prompt-overhead",
             },
             "tools_available": len(await self._get_tools_list()),
             "timestamp": dt_util.now().isoformat(),
@@ -977,6 +1007,155 @@ class MCPServer(
                 diagnostics = get_external_diagnostics()
 
         return web.json_response(diagnostics)
+
+    async def handle_prompt_overhead_diagnostics(
+        self, request: web.Request
+    ) -> web.Response:
+        """Return metadata-only prompt overhead diagnostics for the MCP tool surface."""
+        client_ip = request.remote
+        _LOGGER.info(
+            "📏 Prompt overhead diagnostics request from %s",
+            _sanitize_log_value(client_ip),
+        )
+
+        if not self._is_ip_allowed(client_ip):
+            _LOGGER.warning(
+                "🚫 Blocked prompt overhead diagnostics request from unauthorized IP: %s",
+                _sanitize_log_value(client_ip),
+            )
+            return web.Response(status=403, text="Forbidden: IP not authorized")
+
+        try:
+            top_limit = int(request.query.get("top", 10))
+        except (TypeError, ValueError):
+            top_limit = 10
+        top_limit = min(max(top_limit, 1), 50)
+        query = str(request.query.get("query") or "").strip()
+        try:
+            preload_limit = int(request.query.get("preload_limit", 2))
+        except (TypeError, ValueError):
+            preload_limit = 2
+        preload_limit = min(max(preload_limit, 0), 8)
+
+        tools = await self._get_tools_list()
+        light_tools = [
+            tool
+            for tool in tools
+            if str(tool.get("name") or "") in LIGHT_CONTEXT_TOOL_NAMES
+        ]
+        adaptive_llm_tools = build_adaptive_llm_tools(
+            tools,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
+
+        diagnostics = {
+            "status": "ok",
+            "server": MCP_SERVER_NAME,
+            "timestamp": dt_util.now().isoformat(),
+            "note": (
+                "Metadata-only estimate. This endpoint does not include prompts, "
+                "conversation history, raw tool descriptions, raw schemas, tool "
+                "arguments, or tool results. Actual first provider payload size also "
+                "depends on the selected profile, provider transport, prompts, and "
+                "conversation history."
+            ),
+            "standard_context": self._build_prompt_overhead_summary(
+                tools,
+                top_limit=top_limit,
+            ),
+            "adaptive_context": self._build_prompt_overhead_summary(
+                light_tools,
+                top_limit=top_limit,
+                llm_tools=adaptive_llm_tools,
+            ),
+            "light_context": self._build_prompt_overhead_summary(
+                light_tools,
+                top_limit=top_limit,
+            ),
+        }
+        if query and preload_limit > 0:
+            diagnostics["adaptive_query_projection"] = (
+                self._build_adaptive_query_projection(
+                    tools,
+                    query=query,
+                    preload_limit=preload_limit,
+                    top_limit=top_limit,
+                )
+            )
+
+        return web.json_response(diagnostics)
+
+    def _select_adaptive_query_preloads(
+        self,
+        tools: list[dict[str, Any]],
+        *,
+        query: str,
+        preload_limit: int,
+        minimum_score: int = 18,
+    ) -> list[dict[str, Any]]:
+        """Return high-confidence adaptive preload candidates for diagnostics."""
+        scored: list[tuple[int, str, dict[str, Any]]] = []
+        for tool in tools:
+            tool_name = tool_definition_name(tool)
+            if (
+                not tool_name
+                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in ADAPTIVE_META_TOOL_NAMES
+            ):
+                continue
+            score = score_adaptive_tool_match(
+                tool,
+                query,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            )
+            if score >= minimum_score:
+                scored.append((score, tool_name, tool))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [
+            {"name": tool_name, "score": score, "tool": tool}
+            for score, tool_name, tool in scored[:preload_limit]
+        ]
+
+    def _build_adaptive_query_projection(
+        self,
+        tools: list[dict[str, Any]],
+        *,
+        query: str,
+        preload_limit: int,
+        top_limit: int,
+    ) -> dict[str, Any]:
+        """Build metadata-only adaptive preload projection for a sample query."""
+        preloads = self._select_adaptive_query_preloads(
+            tools,
+            query=query,
+            preload_limit=preload_limit,
+        )
+        preload_names = frozenset(str(item["name"]) for item in preloads)
+        llm_tools = build_adaptive_llm_tools(
+            tools,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            loaded_tool_names=preload_names,
+        )
+        projected_tools = [
+            tool
+            for tool in tools
+            if tool_definition_name(tool) in LIGHT_CONTEXT_TOOL_NAMES
+            or tool_definition_name(tool) in preload_names
+        ]
+        return {
+            "query_chars": len(query),
+            "preload_limit": preload_limit,
+            "preloaded_tools": [
+                {"name": str(item["name"]), "score": int(item["score"])}
+                for item in preloads
+            ],
+            "context": self._build_prompt_overhead_summary(
+                projected_tools,
+                top_limit=top_limit,
+                llm_tools=llm_tools,
+            ),
+        }
 
     async def reload_external_custom_tools(self) -> dict[str, Any]:
         """Reload external custom tools, clear caches, and notify clients."""
@@ -1230,6 +1409,161 @@ class MCPServer(
         """Get the tools list for health check."""
         tools_result = await self.handle_tools_list()
         return tools_result.get("tools", [])
+
+    def _build_prompt_overhead_summary(
+        self,
+        tools: list[dict[str, Any]],
+        *,
+        top_limit: int,
+        llm_tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Build metadata-only overhead metrics for a list of MCP tools."""
+        if llm_tools is None:
+            llm_tools = convert_mcp_tools_to_llm_tools(tools)
+        raw_tool_bytes = _json_size_bytes(tools)
+        compact_schema_bytes = _json_size_bytes(llm_tools)
+        per_tool: list[dict[str, Any]] = []
+        groups: dict[tuple[str, str], dict[str, Any]] = {}
+
+        for mcp_tool, llm_tool in zip(tools, llm_tools, strict=False):
+            tool_name = str(mcp_tool.get("name") or "")
+            source_info = self._get_tool_source_info(tool_name)
+            compact_tool_bytes = _json_size_bytes(llm_tool)
+            raw_mcp_tool_bytes = _json_size_bytes(mcp_tool)
+            per_tool.append(
+                {
+                    "name": tool_name,
+                    "source": source_info["source"],
+                    "package_id": source_info["package_id"],
+                    "raw_mcp_tool_bytes": raw_mcp_tool_bytes,
+                    "compact_llm_tool_schema_bytes": compact_tool_bytes,
+                    "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(
+                        compact_tool_bytes
+                    ),
+                }
+            )
+
+            group_key = (source_info["source"], source_info["package_id"])
+            group = groups.setdefault(
+                group_key,
+                {
+                    "source": source_info["source"],
+                    "package_id": source_info["package_id"],
+                    "package_name": source_info["package_name"],
+                    "tool_count": 0,
+                    "raw_mcp_tool_bytes": 0,
+                    "compact_llm_tool_schema_bytes": 0,
+                },
+            )
+            group["tool_count"] += 1
+            group["raw_mcp_tool_bytes"] += raw_mcp_tool_bytes
+            group["compact_llm_tool_schema_bytes"] += compact_tool_bytes
+
+        for llm_tool in llm_tools[len(tools) :]:
+            function = llm_tool.get("function")
+            tool_name = ""
+            if isinstance(function, dict):
+                tool_name = str(function.get("name") or "")
+            compact_tool_bytes = _json_size_bytes(llm_tool)
+            per_tool.append(
+                {
+                    "name": tool_name,
+                    "source": "adaptive_meta",
+                    "package_id": "adaptive_context",
+                    "raw_mcp_tool_bytes": 0,
+                    "compact_llm_tool_schema_bytes": compact_tool_bytes,
+                    "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(
+                        compact_tool_bytes
+                    ),
+                }
+            )
+            group = groups.setdefault(
+                ("adaptive_meta", "adaptive_context"),
+                {
+                    "source": "adaptive_meta",
+                    "package_id": "adaptive_context",
+                    "package_name": "Adaptive Context",
+                    "tool_count": 0,
+                    "raw_mcp_tool_bytes": 0,
+                    "compact_llm_tool_schema_bytes": 0,
+                },
+            )
+            group["tool_count"] += 1
+            group["compact_llm_tool_schema_bytes"] += compact_tool_bytes
+
+        top_tools = sorted(
+            per_tool,
+            key=lambda item: item["compact_llm_tool_schema_bytes"],
+            reverse=True,
+        )[:top_limit]
+        grouped_tools = sorted(
+            groups.values(),
+            key=lambda item: item["compact_llm_tool_schema_bytes"],
+            reverse=True,
+        )[:top_limit]
+        for group in grouped_tools:
+            group["approx_llm_tool_schema_tokens"] = estimate_tokens_from_bytes(
+                group["compact_llm_tool_schema_bytes"]
+            )
+
+        return {
+            "tool_count": len(llm_tools),
+            "compact_llm_tool_schema_fingerprint": _json_fingerprint(llm_tools),
+            "raw_mcp_tools_bytes": raw_tool_bytes,
+            "compact_llm_tool_schema_bytes": compact_schema_bytes,
+            "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(
+                compact_schema_bytes
+            ),
+            "average_compact_llm_tool_schema_bytes": (
+                round(compact_schema_bytes / len(llm_tools), 1) if llm_tools else 0
+            ),
+            "top_tools_by_schema_bytes": top_tools,
+            "top_tool_groups_by_schema_bytes": grouped_tools,
+        }
+
+    def _get_tool_source_info(self, tool_name: str) -> dict[str, str]:
+        """Return source metadata for prompt overhead diagnostics."""
+        if self.tools:
+            getter = getattr(self.tools, "get_tool_source_info", None)
+            if callable(getter):
+                try:
+                    source_info = getter(tool_name)
+                except Exception as err:
+                    _LOGGER.debug(
+                        "Unable to read tool source info for %s: %s",
+                        _sanitize_log_value(tool_name),
+                        _sanitize_log_value(err),
+                    )
+                else:
+                    if isinstance(source_info, dict):
+                        source = str(source_info.get("source") or "custom")
+                        package_id = str(
+                            source_info.get("package_id") or source_info.get("id") or source
+                        )
+                        package_name = str(
+                            source_info.get("package_name")
+                            or source_info.get("name")
+                            or package_id
+                        )
+                        return {
+                            "source": source,
+                            "package_id": package_id,
+                            "package_name": package_name,
+                        }
+
+        family = get_optional_tool_family(tool_name)
+        if family:
+            return {
+                "source": "core",
+                "package_id": family,
+                "package_name": family,
+            }
+
+        return {
+            "source": "core",
+            "package_id": "core",
+            "package_name": "Core MCP tools",
+        }
 
     def _get_media_tool_definitions(self) -> list[dict[str, Any]]:
         """Return generic media/image MCP tools."""
