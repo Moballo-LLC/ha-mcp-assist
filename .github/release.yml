@@ -20,6 +20,6 @@ changelog:
         - dependencies
         - github_actions
         - python
-    - title: Other Changes
+    - title: Included Changes
       labels:
         - "*"
