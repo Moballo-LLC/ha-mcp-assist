@@ -70,7 +70,12 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
+    score_adaptive_tool_match,
+)
+from custom_components.mcp_assist.tools.packages.recorder.recorder import (
+    RECORDER_TOOL_DEFINITIONS,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -1541,6 +1546,203 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "weather" in normalize_adaptive_query_terms("¿Qué tiempo hará mañana?")
     assert "weather" in normalize_adaptive_query_terms("明天天气怎么样")
     assert "search" in normalize_adaptive_query_terms("buscar en la web")
+    assert "access" in normalize_adaptive_query_terms(
+        "How many times was the front door opened today?"
+    )
+    assert "url" in normalize_adaptive_query_terms(
+        "Summarize https://example.com"
+    )
+    assert "url" in normalize_adaptive_query_terms("Summarize example.com")
+    assert "url" in normalize_adaptive_query_terms("read example.de")
+    assert "url" in normalize_adaptive_query_terms("summarize example.info")
+    assert "url" in normalize_adaptive_query_terms(
+        "read www.example.com/docs"
+    )
+    assert "url" in normalize_adaptive_query_terms(
+        "Summarize docs.example.co.uk."
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "What is sensor.compressor_power?"
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "Show switch.network_status"
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "Check sensor.organic_voc"
+    )
+    assert "url" not in normalize_adaptive_query_terms("Turn on light.kitchen")
+
+
+def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
+    """Count aliases should not fire when embedded inside unrelated words."""
+    terms = normalize_adaptive_query_terms(
+        "Review my account discounts; sometimes shipping is delayed."
+    )
+
+    assert "history" not in terms
+    assert "recorder" not in terms
+    assert "count" not in terms
+    assert "history" in normalize_adaptive_query_terms(
+        "How many times was the front door opened today?"
+    )
+
+
+def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
+    """Adaptive matching should avoid unrelated tiny substring matches."""
+    query = "How many times was the front door opened today?"
+    image_tool = {
+        "name": "analyze_image",
+        "description": "Analyze an image.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    waste_tool = {
+        "name": "waste_status",
+        "description": "Return upcoming waste collection status.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    access_tool = {
+        "name": "home_access_history",
+        "llmDescription": "Get lock and door access history or event counts.",
+        "description": "Return lock and garage-door access history.",
+        "routingHints": {
+            "preferred_when": "Door/garage open/close counts and lock access history.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(image_tool, query) == 0
+    assert score_adaptive_tool_match(waste_tool, query) == 0
+    assert score_adaptive_tool_match(access_tool, query) >= 18
+
+    matches = match_adaptive_tool_definitions(
+        [image_tool, waste_tool, access_tool],
+        query=query,
+        limit=3,
+    )
+
+    assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None:
+    """Present-tense open/close questions should still preload recorder analysis."""
+    analyze_tool = next(
+        tool
+        for tool in RECORDER_TOOL_DEFINITIONS
+        if tool["name"] == "analyze_entity_history"
+    )
+
+    for query in (
+        "Did the front door open today?",
+        "Did the garage door close today?",
+    ):
+        terms = normalize_adaptive_query_terms(query)
+
+        assert "history" in terms
+        assert "recorder" in terms
+        assert score_adaptive_tool_match(analyze_tool, query) >= 18
+
+    control_terms = normalize_adaptive_query_terms("Open the garage door")
+
+    assert "history" not in control_terms
+    assert "recorder" not in control_terms
+
+
+def test_adaptive_tool_scoring_avoids_non_plural_s_stems() -> None:
+    """Metadata terms like news should not match unrelated singular-looking words."""
+    search_tool = {
+        "name": "web_search",
+        "description": "Search the web for news, pages, and answers.",
+        "routingHints": {"keywords": ["search", "news"]},
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    light_tool = {
+        "name": "discover_lights",
+        "description": "Find lights and switches.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(search_tool, "new thermostat") == 0
+    assert score_adaptive_tool_match(light_tool, "light") > 0
+
+    matches = match_adaptive_tool_definitions(
+        [search_tool, light_tool],
+        query="new thermostat",
+        limit=3,
+    )
+
+    assert matches == []
+
+
+def test_adaptive_tool_scoring_prefers_read_url_for_urls() -> None:
+    """URL queries should load URL-reading tools, not incidental substring matches."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    convert_tool = {
+        "name": "convert_unit",
+        "description": "Convert units of measure.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    security_tool = {
+        "name": "home_security_posture",
+        "description": "Summarize home security posture.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    matches = match_adaptive_tool_definitions(
+        [convert_tool, security_tool, read_tool],
+        query="Summarize https://example.com",
+        limit=3,
+    )
+
+    assert [tool["name"] for tool in matches] == ["read_url"]
+
+
+def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
+    """Bare domain prompts should still surface URL-reading tools."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    convert_tool = {
+        "name": "convert_unit",
+        "description": "Convert units of measure.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    for query in (
+        "Summarize example.com",
+        "read example.de",
+        "summarize example.info",
+    ):
+        matches = match_adaptive_tool_definitions(
+            [convert_tool, read_tool],
+            query=query,
+            limit=2,
+        )
+
+        assert [tool["name"] for tool in matches] == ["read_url"]
+
+
+def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() -> None:
+    """HA entity IDs should not trigger URL-reading tools via dotted object IDs."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    for query in (
+        "What is sensor.compressor_power?",
+        "Show switch.network_status",
+        "Check sensor.organic_voc",
+        "Turn on light.kitchen",
+    ):
+        assert score_adaptive_tool_match(read_tool, query) == 0
+        assert match_adaptive_tool_definitions([read_tool], query=query, limit=1) == []
 
 
 @pytest.mark.asyncio
@@ -1614,6 +1816,69 @@ def test_compact_tool_result_for_llm_truncates_large_payloads(
     assert "Tool result truncated for model context" in compacted
     assert "Use limit/offset paging" in compacted
     assert len(compacted) < len(large_result)
+
+
+@pytest.mark.asyncio
+async def test_tool_budget_final_response_compacts_large_tool_results(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Budget-final prompts should stay compact enough for local models."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_TIMEOUT: 1},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    large_result = "\n".join(f"entity {index}: downstairs light" for index in range(200))
+    messages = [
+        {"role": "user", "content": "Are any downstairs lights on?"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "discover_entities", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": large_result},
+    ]
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {"message": {"role": "assistant", "content": "One downstairs light is on."}}
+        )
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_final_response_without_tools(
+        messages,
+        provider,
+        transport="streaming_budget_final",
+    )
+
+    assert result == "One downstairs light is on."
+    assert "tools" not in posts[0]["json"]
+    tool_messages = [
+        message
+        for message in posts[0]["json"]["messages"]
+        if message.get("role") == "tool"
+    ]
+    assert len(tool_messages) == 1
+    tool_content = tool_messages[0]["content"]
+    assert len(tool_content) < len(large_result)
+    assert "Tool result truncated for model context" in tool_content
+    assert "Use limit/offset paging" in tool_content
 
 
 @pytest.mark.asyncio
@@ -2319,6 +2584,56 @@ async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
     assert err.value.transport == "HTTP"
     assert err.value.attempts == 2
     assert len(posts) == 2
+
+
+@pytest.mark.asyncio
+async def test_tool_budget_final_timeout_logs_detail_and_returns_fallback(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """Budget-final timeout fallback should not emit a blank failure detail."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_TIMEOUT: 1,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    posts: list[dict] = []
+
+    class _TimeoutSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm_final_response_without_tools(
+            [{"role": "user", "content": "Are any downstairs lights on?"}],
+            provider,
+            transport="streaming_budget_final",
+        )
+
+    assert result == agent_module.TOOL_BUDGET_FALLBACK_RESPONSE
+    assert len(posts) == 2
+    assert "no-tools response failed: transport=streaming_budget_final" in caplog.text
+    assert "error=Ollama HTTP request timed out after 1 seconds" in caplog.text
+    assert "final budget response failed:" not in caplog.text
 
 
 @pytest.mark.asyncio

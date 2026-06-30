@@ -31,6 +31,7 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "after",
         "again",
         "also",
+        "and",
         "any",
         "are",
         "as",
@@ -50,20 +51,30 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "in",
         "is",
         "into",
+        "it",
         "let",
         "look",
+        "many",
         "me",
+        "much",
         "my",
         "of",
         "on",
         "please",
+        "read",
         "show",
+        "summarise",
+        "summarize",
+        "summary",
         "that",
         "the",
         "there",
         "this",
+        "today",
         "turn",
         "use",
+        "was",
+        "were",
         "what",
         "when",
         "where",
@@ -72,6 +83,109 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "would",
         "you",
     }
+)
+ADAPTIVE_NON_PLURAL_S_TERMS = frozenset(
+    {
+        "access",
+        "analysis",
+        "analytics",
+        "downstairs",
+        "news",
+        "series",
+        "species",
+        "status",
+        "upstairs",
+    }
+)
+ADAPTIVE_NON_PLURAL_S_SUFFIXES = ("ss", "us", "is", "ics", "ness", "stairs")
+ADAPTIVE_PRESENT_HISTORY_ACTIONS = frozenset({"close", "open"})
+ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS = frozenset(
+    {
+        "ago",
+        "count",
+        "counts",
+        "did",
+        "duration",
+        "ever",
+        "history",
+        "how",
+        "last",
+        "long",
+        "many",
+        "often",
+        "recorded",
+        "time",
+        "times",
+        "today",
+        "was",
+        "were",
+        "when",
+        "yesterday",
+    }
+)
+ADAPTIVE_PRESENT_HISTORY_TERMS = ("access", "history", "recorder")
+ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
+    {
+        "alarm_control_panel",
+        "automation",
+        "binary_sensor",
+        "button",
+        "calendar",
+        "camera",
+        "climate",
+        "conversation",
+        "cover",
+        "device_tracker",
+        "event",
+        "fan",
+        "humidifier",
+        "input_boolean",
+        "input_button",
+        "input_datetime",
+        "input_number",
+        "input_select",
+        "input_text",
+        "lawn_mower",
+        "light",
+        "lock",
+        "media_player",
+        "notify",
+        "number",
+        "person",
+        "remote",
+        "scene",
+        "script",
+        "select",
+        "sensor",
+        "siren",
+        "stt",
+        "sun",
+        "switch",
+        "text",
+        "timer",
+        "todo",
+        "tts",
+        "update",
+        "vacuum",
+        "valve",
+        "water_heater",
+        "weather",
+        "zone",
+    }
+)
+ADAPTIVE_EXPLICIT_URL_INTENT_RE = re.compile(
+    r"https?://\S+"
+    r"|(?<!@)\bwww\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    r"(?=$|[^a-z0-9_-])"
+    r"(?::\d{2,5})?(?:/[^\s]*)?",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_BARE_DOMAIN_INTENT_RE = re.compile(
+    r"(?<![@.])\b(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z]{2,63})"
+    r"(?=$|[^a-z0-9_-])"
+    r"(?::\d{2,5})?(?:/[^\s]*)?",
+    flags=re.IGNORECASE,
 )
 ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     # Weather and forecasts
@@ -196,6 +310,14 @@ ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     "geçmiş": ("history", "recorder"),
     "سجل": ("history", "recorder"),
     "इतिहास": ("history", "recorder"),
+    "count": ("history", "recorder"),
+    "times": ("count", "history", "recorder"),
+    "opened": ("open", "access", "count", "history", "recorder"),
+    "opening": ("open", "access", "history", "recorder"),
+    "closed": ("close", "access", "count", "history", "recorder"),
+    "closing": ("close", "access", "history", "recorder"),
+    "locked": ("lock", "access", "count", "history", "recorder"),
+    "unlocked": ("unlock", "access", "count", "history", "recorder"),
     # Images
     "imagen": ("image", "vision"),
     "bild": ("image", "vision"),
@@ -365,21 +487,92 @@ def tool_definition_name(tool: dict[str, Any]) -> str:
     return str(tool.get("name") or "")
 
 
+def _is_adaptive_entity_id_like_host(host: str) -> bool:
+    """Return true for dotted Home Assistant entity IDs that resemble bare domains."""
+    first_label = str(host or "").split(".", 1)[0].casefold()
+    return first_label in ADAPTIVE_ENTITY_ID_DOMAINS
+
+
+def _has_adaptive_url_intent(text: str) -> bool:
+    """Return true when text includes an explicit URL or a non-entity bare domain."""
+    if ADAPTIVE_EXPLICIT_URL_INTENT_RE.search(text):
+        return True
+    return any(
+        not _is_adaptive_entity_id_like_host(match.group("host"))
+        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
+    )
+
+
+def _strip_adaptive_url_intents(text: str) -> str:
+    """Remove URL-like spans already represented by url/web terms."""
+    stripped = ADAPTIVE_EXPLICIT_URL_INTENT_RE.sub(" ", text)
+
+    def replace_bare_domain(match: re.Match[str]) -> str:
+        if _is_adaptive_entity_id_like_host(match.group("host")):
+            return match.group(0)
+        return " "
+
+    return ADAPTIVE_BARE_DOMAIN_INTENT_RE.sub(replace_bare_domain, stripped)
+
+
 def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
     terms = []
+    if _has_adaptive_url_intent(normalized_query):
+        terms.extend(["url", "webpage", "web"])
+        normalized_query = _strip_adaptive_url_intents(normalized_query)
     for term in re.findall(r"\w+", normalized_query, flags=re.UNICODE):
         if len(term) < 2 or term in ADAPTIVE_QUERY_STOPWORDS:
             continue
         if term not in terms:
             terms.append(term)
+    normalized_tokens = set(re.findall(r"\w+", normalized_query, flags=re.UNICODE))
     for alias, expanded_terms in ADAPTIVE_QUERY_ALIASES.items():
-        if alias in normalized_query:
+        matches_alias = (
+            alias in normalized_tokens
+            if re.fullmatch(r"[a-z0-9_]+", alias)
+            else alias in normalized_query
+        )
+        if matches_alias:
             for term in expanded_terms:
                 if term not in terms:
                     terms.append(term)
+    if (
+        normalized_tokens & ADAPTIVE_PRESENT_HISTORY_ACTIONS
+        and normalized_tokens & ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS
+    ):
+        for term in ADAPTIVE_PRESENT_HISTORY_TERMS:
+            if term not in terms:
+                terms.append(term)
     return terms
+
+
+def _adaptive_text_terms(text: str) -> set[str]:
+    """Return normalized match terms for tool metadata text."""
+    normalized = re.sub(r"[_\-/]+", " ", str(text or "").casefold())
+    terms: set[str] = set()
+    for term in re.findall(r"\w+", normalized, flags=re.UNICODE):
+        if len(term) < 2:
+            continue
+        terms.add(term)
+        if singular := _adaptive_singular_text_term(term):
+            terms.add(singular)
+    return terms
+
+
+def _adaptive_singular_text_term(term: str) -> str | None:
+    """Return a conservative singular form for plural metadata terms."""
+    if len(term) <= 3 or not term.endswith("s"):
+        return None
+    if (
+        term in ADAPTIVE_NON_PLURAL_S_TERMS
+        or term.endswith(ADAPTIVE_NON_PLURAL_S_SUFFIXES)
+    ):
+        return None
+    if term.endswith("ies") and len(term) > 4:
+        return f"{term[:-3]}y"
+    return term[:-1]
 
 
 def _routing_hint_text(tool: dict[str, Any], *keys: str) -> str:
@@ -416,23 +609,28 @@ def score_adaptive_tool_match(
     description = str(tool.get("description") or "").casefold()
     keyword_text = _routing_hint_text(tool, "keywords")
     routing_text = _routing_hint_text(tool, "preferred_when", "example_queries")
+    name_terms = _adaptive_text_terms(name)
+    keyword_terms = _adaptive_text_terms(keyword_text)
+    routing_terms = _adaptive_text_terms(routing_text)
+    llm_description_terms = _adaptive_text_terms(llm_description)
+    description_terms = _adaptive_text_terms(description)
 
     score = 0
     if normalized_query and normalized_query == name:
         score += 100
-    if normalized_query and normalized_query in name:
+    if terms and all(term in name_terms for term in terms):
         score += 40
 
     for term in terms:
-        if term in name:
+        if term in name_terms:
             score += 24
-        if term in keyword_text:
+        if term in keyword_terms:
             score += 18
-        if term in routing_text:
+        if term in routing_terms:
             score += 14
-        if term in llm_description:
+        if term in llm_description_terms:
             score += 12
-        if term in description:
+        if term in description_terms:
             score += 6
 
     if name not in base_tool_names and score > 0:
