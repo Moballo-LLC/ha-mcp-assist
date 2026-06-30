@@ -74,6 +74,9 @@ from custom_components.mcp_assist.tool_schema import (
     normalize_adaptive_query_terms,
     score_adaptive_tool_match,
 )
+from custom_components.mcp_assist.tools.packages.recorder.recorder import (
+    RECORDER_TOOL_DEFINITIONS,
+)
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
 
@@ -1605,6 +1608,30 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None:
+    """Present-tense open/close questions should still preload recorder analysis."""
+    analyze_tool = next(
+        tool
+        for tool in RECORDER_TOOL_DEFINITIONS
+        if tool["name"] == "analyze_entity_history"
+    )
+
+    for query in (
+        "Did the front door open today?",
+        "Did the garage door close today?",
+    ):
+        terms = normalize_adaptive_query_terms(query)
+
+        assert "history" in terms
+        assert "recorder" in terms
+        assert score_adaptive_tool_match(analyze_tool, query) >= 18
+
+    control_terms = normalize_adaptive_query_terms("Open the garage door")
+
+    assert "history" not in control_terms
+    assert "recorder" not in control_terms
 
 
 def test_adaptive_tool_scoring_avoids_non_plural_s_stems() -> None:

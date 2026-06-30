@@ -98,6 +98,32 @@ ADAPTIVE_NON_PLURAL_S_TERMS = frozenset(
     }
 )
 ADAPTIVE_NON_PLURAL_S_SUFFIXES = ("ss", "us", "is", "ics", "ness", "stairs")
+ADAPTIVE_PRESENT_HISTORY_ACTIONS = frozenset({"close", "open"})
+ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS = frozenset(
+    {
+        "ago",
+        "count",
+        "counts",
+        "did",
+        "duration",
+        "ever",
+        "history",
+        "how",
+        "last",
+        "long",
+        "many",
+        "often",
+        "recorded",
+        "time",
+        "times",
+        "today",
+        "was",
+        "were",
+        "when",
+        "yesterday",
+    }
+)
+ADAPTIVE_PRESENT_HISTORY_TERMS = ("access", "history", "recorder")
 ADAPTIVE_BARE_DOMAIN_TLDS = frozenset(
     {
         "ai",
@@ -449,6 +475,13 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
             for term in expanded_terms:
                 if term not in terms:
                     terms.append(term)
+    if (
+        normalized_tokens & ADAPTIVE_PRESENT_HISTORY_ACTIONS
+        and normalized_tokens & ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS
+    ):
+        for term in ADAPTIVE_PRESENT_HISTORY_TERMS:
+            if term not in terms:
+                terms.append(term)
     return terms
 
 
