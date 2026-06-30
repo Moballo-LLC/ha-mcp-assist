@@ -205,11 +205,13 @@
         "description": "Ces parametres affectent TOUS les profils. Les modifications ici impacteront chaque agent de conversation MCP Assist.",
         "data": {
           "mcp_port": "Port du serveur MCP",
-          "allowed_ips": "IPs/Plages supplementaires autorisees"
+          "allowed_ips": "IPs/Plages supplementaires autorisees",
+          "mcp_bearer_token": "Jeton Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
-          "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost."
+          "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
+          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Echec de l'authentification. Veuillez verifier votre cle API.",
       "unknown": "Une erreur inconnue s'est produite.",
       "openclaw_not_paired": "Appareil non encore approuvé sur le serveur OpenClaw. Veuillez l'approuver et réessayer.",
-      "openclaw_connection_failed": "Impossible de se connecter à la passerelle OpenClaw. Vérifiez l'hôte, le port et le jeton."
+      "openclaw_connection_failed": "Impossible de se connecter à la passerelle OpenClaw. Vérifiez l'hôte, le port et le jeton.",
+      "mcp_bearer_token_too_short": "Le jeton Bearer MCP doit être vide ou comporter au moins 16 caractères."
     },
     "abort": {
       "already_configured": "Un profil avec ce nom existe deja. Veuillez choisir un nom different."
@@ -531,11 +534,13 @@
         "description": "Ces parametres sont partages entre TOUS les profils",
         "data": {
           "mcp_port": "Port du serveur MCP",
-          "allowed_ips": "IPs/Plages supplementaires autorisees"
+          "allowed_ips": "IPs/Plages supplementaires autorisees",
+          "mcp_bearer_token": "Jeton Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
-          "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost."
+          "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
+          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "Le jeton Bearer MCP doit être vide ou comporter au moins 16 caractères."
     }
   },
   "selector": {

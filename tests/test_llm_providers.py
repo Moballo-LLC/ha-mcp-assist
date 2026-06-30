@@ -118,6 +118,27 @@ def test_provider_selector_options_are_owned_by_provider_classes() -> None:
     ]
 
 
+def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
+    """Ollama should own llama-server malformed tool-call error detection."""
+    provider = OllamaProvider(_settings(SERVER_TYPE_OLLAMA))
+
+    assert provider.is_invalid_tool_arguments_error(
+        status=500,
+        error_text=(
+            '{"error":"llama-server returned invalid tool call arguments for '
+            '\\"discover_entities\\": unexpected end of JSON input"}'
+        ),
+    )
+    assert not provider.is_invalid_tool_arguments_error(
+        status=400,
+        error_text="invalid tool call arguments: unexpected end of JSON input",
+    )
+    assert not provider.is_invalid_tool_arguments_error(
+        status=500,
+        error_text="model not loaded",
+    )
+
+
 @pytest.mark.parametrize(
     (
         "server_type",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+import secrets
 from typing import Any
 
 import voluptuous as vol
@@ -66,6 +67,7 @@ from .const import (
     CONF_GOOGLE_MAPS_API_KEY,
     CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -124,6 +126,7 @@ from .const import (
     DEFAULT_GOOGLE_MAPS_API_KEY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
+    DEFAULT_MCP_BEARER_TOKEN,
     DEFAULT_INCLUDE_CURRENT_USER,
     DEFAULT_INCLUDE_HOME_LOCATION,
     DEFAULT_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -429,6 +432,22 @@ def _get_form_value(
     if current_values and key in current_values:
         return current_values[key]
     return fallback
+
+
+def generate_mcp_bearer_token() -> str:
+    """Generate a high-entropy bearer token for external MCP clients."""
+    return secrets.token_urlsafe(32)
+
+
+def _normalize_mcp_bearer_token(value: Any) -> str:
+    """Normalize the optional shared MCP bearer token."""
+    return str(value or "").strip()
+
+
+def _validate_mcp_bearer_token(value: Any) -> bool:
+    """Return whether an optional MCP bearer token is strong enough."""
+    token = _normalize_mcp_bearer_token(value)
+    return not token or len(token) >= 16
 
 
 def _optional_with_suggested_value(key: str, suggested_value: str | None) -> vol.Optional:
@@ -1162,6 +1181,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.step2_data: dict[str, Any] = {}
         self.step3_data: dict[str, Any] = {}
         self.step4_data: dict[str, Any] = {}
+        self._generated_mcp_bearer_token = generate_mcp_bearer_token()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -1453,6 +1473,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_ALLOWED_IPS: existing_entry.data.get(
                                 CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
                             ),
+                            CONF_MCP_BEARER_TOKEN: existing_entry.data.get(
+                                CONF_MCP_BEARER_TOKEN,
+                                DEFAULT_MCP_BEARER_TOKEN,
+                            ),
                             CONF_INCLUDE_CURRENT_USER: existing_entry.data.get(
                                 CONF_INCLUDE_CURRENT_USER,
                                 DEFAULT_INCLUDE_CURRENT_USER,
@@ -1738,6 +1762,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
+            user_input[CONF_MCP_BEARER_TOKEN] = _normalize_mcp_bearer_token(
+                user_input.get(
+                    CONF_MCP_BEARER_TOKEN,
+                    self._generated_mcp_bearer_token,
+                )
+            )
+            if not _validate_mcp_bearer_token(user_input[CONF_MCP_BEARER_TOKEN]):
+                errors[CONF_MCP_BEARER_TOKEN] = "mcp_bearer_token_too_short"
+
             _validate_shared_search_settings(user_input, built_in_specs, errors)
             _validate_shared_google_maps_settings(user_input, built_in_specs, errors)
 
@@ -1939,6 +1972,14 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         current_values, CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
                     ),
                 ): str,
+                vol.Optional(
+                    CONF_MCP_BEARER_TOKEN,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_MCP_BEARER_TOKEN,
+                        self._generated_mcp_bearer_token,
+                    ),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
                 DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
                 TOOLS_SECTION_KEY: _build_shared_tools_section(
@@ -2497,6 +2538,32 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs in options: %s", error_msg)
 
+            if CONF_MCP_BEARER_TOKEN in user_input:
+                token_value = user_input[CONF_MCP_BEARER_TOKEN]
+            else:
+                from . import get_system_entry
+
+                system_entry = get_system_entry(self.hass)
+                if system_entry:
+                    token_value = system_entry.options.get(
+                        CONF_MCP_BEARER_TOKEN,
+                        system_entry.data.get(
+                            CONF_MCP_BEARER_TOKEN,
+                            DEFAULT_MCP_BEARER_TOKEN,
+                        ),
+                    )
+                else:
+                    token_value = self.config_entry.options.get(
+                        CONF_MCP_BEARER_TOKEN,
+                        self.config_entry.data.get(
+                            CONF_MCP_BEARER_TOKEN,
+                            DEFAULT_MCP_BEARER_TOKEN,
+                        ),
+                    )
+            user_input[CONF_MCP_BEARER_TOKEN] = _normalize_mcp_bearer_token(token_value)
+            if not _validate_mcp_bearer_token(user_input[CONF_MCP_BEARER_TOKEN]):
+                errors[CONF_MCP_BEARER_TOKEN] = "mcp_bearer_token_too_short"
+
             _validate_shared_search_settings(user_input, built_in_specs, errors)
             _validate_shared_google_maps_settings(user_input, built_in_specs, errors)
 
@@ -2849,6 +2916,20 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         ),
                     ),
                 ): str,
+                vol.Optional(
+                    CONF_MCP_BEARER_TOKEN,
+                    default=_get_form_value(
+                        current_values,
+                        CONF_MCP_BEARER_TOKEN,
+                        sys_options.get(
+                            CONF_MCP_BEARER_TOKEN,
+                            sys_data.get(
+                                CONF_MCP_BEARER_TOKEN,
+                                DEFAULT_MCP_BEARER_TOKEN,
+                            ),
+                        ),
+                    ),
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
                 DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
                 TOOLS_SECTION_KEY: _build_shared_tools_section(

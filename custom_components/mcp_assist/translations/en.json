@@ -205,11 +205,13 @@
         "description": "⚠️ These settings affect ALL profiles. Changes here will impact every MCP Assist conversation agent.",
         "data": {
           "mcp_port": "MCP Server Port",
-          "allowed_ips": "Additional Allowed IPs/Ranges"
+          "allowed_ips": "Additional Allowed IPs/Ranges",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
-          "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost."
+          "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Authentication failed. Please verify your API key.",
       "unknown": "An unknown error occurred.",
       "openclaw_not_paired": "Device not yet approved on the OpenClaw server. Please approve it and try again.",
-      "openclaw_connection_failed": "Could not connect to the OpenClaw gateway. Check the host, port, and token."
+      "openclaw_connection_failed": "Could not connect to the OpenClaw gateway. Check the host, port, and token.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "A profile with this name already exists. Please choose a different name."
@@ -531,11 +534,13 @@
         "description": "⚠️ These settings are shared across ALL profiles",
         "data": {
           "mcp_port": "MCP Server Port",
-          "allowed_ips": "Additional Allowed IPs/Ranges"
+          "allowed_ips": "Additional Allowed IPs/Ranges",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
-          "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost."
+          "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

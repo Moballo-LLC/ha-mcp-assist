@@ -7,6 +7,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 import hashlib
+import hmac
 import ipaddress
 import inspect
 import json
@@ -59,6 +60,7 @@ from .const import (
     MAX_ENTITIES_PER_DISCOVERY,
     CONF_LMSTUDIO_URL,
     CONF_ALLOWED_IPS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_SEARCH_PROVIDER,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_ASSIST_BRIDGE,
@@ -76,6 +78,7 @@ from .const import (
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     DEFAULT_LMSTUDIO_URL,
     DEFAULT_ALLOWED_IPS,
+    DEFAULT_MCP_BEARER_TOKEN,
     DEFAULT_SEARCH_PROVIDER,
     DEFAULT_ENABLE_ASSIST_BRIDGE,
     DEFAULT_ENABLE_LLM_API_BRIDGE,
@@ -264,7 +267,9 @@ class MCPServer(
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.allowed_ips: list[str] = []
+        self._mcp_bearer_token = ""
         self._refresh_allowed_ips_from_settings()
+        self._refresh_mcp_auth_from_settings()
 
         # Custom tools will be initialized in start() after system entry exists
         self.tools = None
@@ -338,6 +343,25 @@ class MCPServer(
             "MCP server allowed IPs/ranges: %s",
             _sanitize_log_value(self.allowed_ips),
         )
+
+    def _refresh_mcp_auth_from_settings(self) -> None:
+        """Refresh bearer-token auth settings from shared server settings."""
+        token = self._get_shared_setting(
+            CONF_MCP_BEARER_TOKEN,
+            DEFAULT_MCP_BEARER_TOKEN,
+        )
+        self._mcp_bearer_token = str(token or "").strip()
+        if self._mcp_bearer_token:
+            _LOGGER.info("MCP server bearer-token authentication is enabled")
+        else:
+            _LOGGER.info(
+                "MCP server bearer-token authentication is disabled; relying on IP allowlist only"
+            )
+
+    @property
+    def bearer_auth_required(self) -> bool:
+        """Return whether inbound MCP requests require bearer-token auth."""
+        return bool(self._mcp_bearer_token)
 
     def _get_search_provider(self) -> str:
         """Get search provider (shared setting) with backward compatibility."""
@@ -798,23 +822,109 @@ class MCPServer(
 
         return False
 
+    @staticmethod
+    def _request_authorization_value(request: web.Request) -> str:
+        """Return the bearer value supplied by an inbound request."""
+        headers = getattr(request, "headers", {}) or {}
+        authorization = ""
+        with suppress(Exception):
+            authorization = str(headers.get("Authorization") or "").strip()
+        if authorization:
+            scheme, _, value = authorization.partition(" ")
+            if scheme.casefold() == "bearer" and value.strip():
+                return value.strip()
+
+        query = getattr(request, "query", {}) or {}
+        with suppress(Exception):
+            return str(query.get("access_token") or "").strip()
+        return ""
+
+    def _is_request_authenticated(self, request: web.Request) -> bool:
+        """Return whether a request satisfies bearer-token auth."""
+        if not self._mcp_bearer_token:
+            return True
+        provided_token = self._request_authorization_value(request)
+        return bool(provided_token) and hmac.compare_digest(
+            provided_token.encode("utf-8"),
+            self._mcp_bearer_token.encode("utf-8"),
+        )
+
+    @staticmethod
+    def _ip_for_request(request: web.Request) -> str:
+        """Return a request IP string for authorization checks and logs."""
+        return str(getattr(request, "remote", "") or "")
+
+    def _security_error_response(
+        self,
+        request: web.Request,
+        surface: str,
+        *,
+        json_rpc: bool = False,
+    ) -> web.Response | None:
+        """Return a response when IP or bearer-token authorization fails."""
+        client_ip = self._ip_for_request(request)
+        if not self._is_ip_allowed(client_ip):
+            _LOGGER.warning(
+                "🚫 Blocked %s request from unauthorized IP: %s",
+                surface,
+                _sanitize_log_value(client_ip),
+            )
+            if json_rpc:
+                return web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32000,
+                            "message": "Forbidden: IP not authorized",
+                        },
+                        "id": None,
+                    },
+                    status=403,
+                )
+            return web.Response(status=403, text="Forbidden: IP not authorized")
+
+        if not self._is_request_authenticated(request):
+            _LOGGER.warning(
+                "🚫 Blocked %s request from unauthenticated client: %s",
+                surface,
+                _sanitize_log_value(client_ip),
+            )
+            headers = {"WWW-Authenticate": 'Bearer realm="ha-mcp-assist"'}
+            if json_rpc:
+                return web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32001,
+                            "message": "Unauthorized: bearer token required",
+                        },
+                        "id": None,
+                    },
+                    status=401,
+                    headers=headers,
+                )
+            return web.Response(
+                status=401,
+                text="Unauthorized: bearer token required",
+                headers=headers,
+            )
+
+        return None
+
     async def handle_health(self, request: web.Request) -> web.Response:
         """Handle health check requests."""
         client_ip = request.remote
         _LOGGER.info("🏥 Health check from %s", _sanitize_log_value(client_ip))
 
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked health check from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(request, "health check"):
+            return security_response
 
         health_info = {
             "status": "healthy",
             "server": MCP_SERVER_NAME,
             "port": self.port,
             "version": "0.1.0",
+            "auth_required": self.bearer_auth_required,
             "endpoints": {
                 "websocket": f"ws://<host>:{self.port}/ws",
                 "http": f"http://<host>:{self.port}/",
@@ -870,12 +980,11 @@ class MCPServer(
             _sanitize_log_value(client_ip),
         )
 
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked external tool diagnostics request from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(
+            request,
+            "external tool diagnostics",
+        ):
+            return security_response
 
         diagnostics: dict[str, Any] = {
             "enabled": self._external_custom_tools_enabled(),
@@ -909,12 +1018,11 @@ class MCPServer(
             _sanitize_log_value(client_ip),
         )
 
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked prompt overhead diagnostics request from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(
+            request,
+            "prompt overhead diagnostics",
+        ):
+            return security_response
 
         try:
             top_limit = int(request.query.get("top", 10))
@@ -1088,12 +1196,23 @@ class MCPServer(
 
     async def async_apply_shared_settings(self) -> dict[str, Any]:
         """Apply changed shared MCP settings without reloading every profile."""
-        self._refresh_allowed_ips_from_settings()
-        await self._close_disallowed_websocket_clients()
-        await self._close_disallowed_stream_clients()
+        previous_allowed_ips = list(self.allowed_ips)
+        previous_token = self._mcp_bearer_token
         diagnostics = await self.reload_external_custom_tools()
+        try:
+            self._refresh_allowed_ips_from_settings()
+            self._refresh_mcp_auth_from_settings()
+            await self._close_disallowed_websocket_clients()
+            await self._close_disallowed_stream_clients()
+            if previous_token != self._mcp_bearer_token:
+                await self._close_clients_after_auth_change()
+        except Exception:
+            self.allowed_ips = previous_allowed_ips
+            self._mcp_bearer_token = previous_token
+            raise
         return {
             "allowed_ips": list(self.allowed_ips),
+            "auth_required": self.bearer_auth_required,
             "tool_diagnostics": diagnostics,
         }
 
@@ -1110,6 +1229,7 @@ class MCPServer(
                 code=WSCloseCode.POLICY_VIOLATION,
                 message=b"IP no longer authorized",
             )
+            self._websocket_clients.pop(ws, None)
 
     async def _close_disallowed_stream_clients(self) -> None:
         """Stop SSE/progress streams that no longer pass the IP allowlist."""
@@ -1143,18 +1263,46 @@ class MCPServer(
             with suppress(asyncio.QueueFull):
                 queue.put_nowait(None)
 
+    async def _close_clients_after_auth_change(self) -> None:
+        """Close long-lived clients after bearer-token settings change."""
+        for ws in list(self._websocket_clients):
+            _LOGGER.info("Closing MCP WebSocket client after auth settings changed")
+            await ws.close(
+                code=WSCloseCode.POLICY_VIOLATION,
+                message=b"Authentication settings changed",
+            )
+            self._websocket_clients.pop(ws, None)
+
+        for response in list(self._sse_client_ips):
+            _LOGGER.info("Closing MCP SSE client after auth settings changed")
+            if response in self.sse_clients:
+                self.sse_clients.remove(response)
+            self._sse_client_ips.pop(response, None)
+            try:
+                await response.write_eof()
+            except Exception as err:
+                _LOGGER.debug(
+                    "SSE client close failed after auth update: %s",
+                    _sanitize_log_value(err),
+                )
+
+        for queue in list(self._progress_queue_ips):
+            _LOGGER.info("Closing MCP progress stream after auth settings changed")
+            self.progress_queues.discard(queue)
+            self._progress_queue_ips.pop(queue, None)
+            with suppress(asyncio.QueueFull):
+                queue.put_nowait(None)
+
     async def handle_progress_stream(self, request: web.Request) -> web.StreamResponse:
         """SSE endpoint for progress updates during tool execution."""
         client_ip = request.remote
         _LOGGER.info("📊 Progress stream request from %s", _sanitize_log_value(client_ip))
 
-        # Check IP whitelist
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked progress stream request from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(
+            request,
+            "progress stream",
+        ):
+            return security_response
 
         response = web.StreamResponse(
             status=200,
@@ -1217,13 +1365,8 @@ class MCPServer(
         client_ip = request.remote
         _LOGGER.info("🌊 SSE connection request from %s", _sanitize_log_value(client_ip))
 
-        # Check IP whitelist
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked SSE connection from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(request, "SSE"):
+            return security_response
 
         response = web.StreamResponse()
         response.headers["Content-Type"] = "text/event-stream"
@@ -1615,13 +1758,8 @@ class MCPServer(
             _sanitize_log_value(client_ip),
         )
 
-        # Check IP whitelist
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked WebSocket connection from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(request, "WebSocket"):
+            return security_response
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
@@ -1691,23 +1829,12 @@ class MCPServer(
             _sanitize_log_value(client_ip),
         )
 
-        # Check IP whitelist
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked MCP request from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.json_response(
-                {
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32000,
-                        "message": "Forbidden: IP not authorized",
-                    },
-                    "id": None,
-                },
-                status=403,
-            )
+        if security_response := self._security_error_response(
+            request,
+            "MCP JSON-RPC",
+            json_rpc=True,
+        ):
+            return security_response
 
         request_id = None
         try:

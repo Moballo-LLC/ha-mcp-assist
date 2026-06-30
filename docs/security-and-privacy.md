@@ -56,11 +56,26 @@ The MCP server listens on the configured port, default `8090`. Use
 **Additional Allowed IPs/Ranges** only for clients that should be able to reach
 the MCP server.
 
+New setups include a generated **MCP Bearer Token** in shared server settings.
+External MCP clients should send it as:
+
+```http
+Authorization: Bearer <token>
+```
+
+Clients that cannot set headers for SSE or WebSocket connections may pass
+`access_token=<token>` in the query string. Prefer the header when the client
+supports it, because URLs are easier to copy into logs or screenshots. Clearing
+the token disables bearer-token checks and falls back to IP allowlisting only.
+
 Recommendations:
 
 - Do not expose the MCP server directly to the public internet.
 - Prefer local networks, Docker networks, or trusted add-on networks.
 - Keep allowed IP ranges narrow.
+- Keep bearer-token authentication enabled for external clients.
+- Rotate the bearer token if it is pasted into logs, issues, screenshots, or
+  shared client configuration.
 - Remove temporary ranges after testing.
 
 ## Provider API Keys

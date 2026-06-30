@@ -231,6 +231,21 @@ class OllamaProvider(LLMProvider):
             "content": content,
         }
 
+    def is_invalid_tool_arguments_error(
+        self,
+        *,
+        status: int,
+        error_text: str,
+    ) -> bool:
+        """Return whether llama-server rejected generated tool-call arguments."""
+        if status < 500:
+            return False
+        normalized = str(error_text or "").casefold()
+        return (
+            "invalid tool call arguments" in normalized
+            and "json" in normalized
+        )
+
     def context_window_error_message(
         self,
         *,

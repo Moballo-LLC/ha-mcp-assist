@@ -32,6 +32,7 @@ from custom_components.mcp_assist.const import (
     CONF_MAX_HISTORY,
     CONF_CONTEXT_MODE,
     CONF_MAX_ITERATIONS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_MAX_TOKENS,
     CONF_MODEL_NAME,
     CONF_PROFILE_NAME,
@@ -148,6 +149,42 @@ class _FakeAnthropicSession:
     def post(self, url: str, **kwargs):
         self._posts.append({"url": url, **kwargs})
         return self._responses.pop(0)
+
+
+class _FakeStreamContent:
+    """Minimal async byte iterator for streaming response tests."""
+
+    def __init__(self, lines: list[str]) -> None:
+        self._lines = [line.encode("utf-8") for line in lines]
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self._lines:
+            raise StopAsyncIteration
+        return self._lines.pop(0)
+
+
+class _FakeStreamingResponse(_FakeAnthropicResponse):
+    """Minimal async response with aiohttp-style streaming content."""
+
+    def __init__(
+        self,
+        lines: list[str] | None = None,
+        *,
+        payload: dict[str, object] | None = None,
+        status: int = 200,
+        text: str | None = None,
+    ) -> None:
+        super().__init__(payload or {}, status=status)
+        self.content = _FakeStreamContent(lines or [])
+        self._text = text
+
+    async def text(self) -> str:
+        if self._text is not None:
+            return self._text
+        return await super().text()
 
 
 def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
@@ -1454,6 +1491,62 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "search" in normalize_adaptive_query_terms("buscar en la web")
 
 
+@pytest.mark.asyncio
+async def test_fetch_mcp_tools_sends_shared_bearer_token(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Internal tools/list requests should authenticate when MCP bearer auth is enabled."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "internal-token-123456"})
+    entry = profile_entry_factory()
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "jsonrpc": "2.0",
+                "result": {"tools": [_tool("discover_entities")]},
+            }
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers=None):
+            captured["url"] = url
+            captured["payload"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    tools = await agent._fetch_mcp_tools_from_server()
+
+    assert tools is not None
+    assert tools[0]["name"] == "discover_entities"
+    assert captured["payload"]["method"] == "tools/list"
+    assert captured["headers"] == {
+        "Authorization": "Bearer internal-token-123456"
+    }
+
+
 def test_compact_tool_result_for_llm_truncates_large_payloads(
     hass, profile_entry_factory
 ) -> None:
@@ -2184,6 +2277,128 @@ async def test_ollama_invalid_tool_arguments_retry_without_malformed_history(
     }
 
 
+@pytest.mark.asyncio
+async def test_ollama_streaming_invalid_tool_error_finishes_without_tools(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """llama-server malformed tool-call 500s after tool results should not hard fail."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_MAX_ITERATIONS: 3,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_execute_tool_calls",
+        AsyncMock(
+            return_value=[
+                {
+                    "role": "tool",
+                    "tool_name": "discover_entities",
+                    "content": "No upstairs lights are on.",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    invalid_tool_error = (
+        '{"error":"llama-server returned invalid tool call arguments for '
+        '\\"discover_entities\\": unexpected end of JSON input"}'
+    )
+    posts: list[dict] = []
+    responses = [
+        _FakeStreamingResponse(
+            [
+                json.dumps(
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "discover_entities",
+                                        "arguments": {
+                                            "domain": "light",
+                                            "floor": "upstairs",
+                                            "state": "on",
+                                        },
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ),
+                json.dumps({"done": True}),
+            ]
+        ),
+        _FakeStreamingResponse(
+            status=500,
+            payload={
+                "error": (
+                    "llama-server returned invalid tool call arguments for "
+                    '"discover_entities": unexpected end of JSON input'
+                )
+            },
+            text=invalid_tool_error,
+        ),
+        _FakeStreamingResponse(
+            payload={
+                "message": {
+                    "role": "assistant",
+                    "content": "No upstairs lights are on.",
+                }
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm_streaming(
+            [{"role": "user", "content": "Are there any lights on upstairs?"}]
+        )
+
+    assert result == "No upstairs lights are on."
+    assert len(posts) == 3
+    assert "tools" in posts[1]["json"]
+    assert "tools" not in posts[2]["json"]
+    assert (
+        posts[2]["json"]["messages"][-1]["content"]
+        == agent_module.TOOL_BUDGET_FINAL_INSTRUCTION
+    )
+    assert "Streaming failed with status 500" not in caplog.text
+    assert "Streaming iteration 2 failed" not in caplog.text
+
+
 def test_toolless_check_retry_does_not_fire_after_tool_results(
     hass, profile_entry_factory
 ) -> None:
@@ -2384,6 +2599,64 @@ async def test_call_mcp_tool_includes_profile_context(
     assert captured["payload"]["params"]["context"] == {
         "profile_entry_id": entry.entry_id,
         "profile_name": "Kitchen Profile",
+    }
+
+
+@pytest.mark.asyncio
+async def test_call_mcp_tool_sends_shared_bearer_token(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Internal tools/call requests should authenticate when MCP bearer auth is enabled."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "internal-token-123456"})
+    entry = profile_entry_factory(data={CONF_PROFILE_NAME: "Kitchen Profile"})
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [{"type": "text", "text": "ok"}],
+                    "isError": False,
+                },
+            }
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers=None):
+            captured["url"] = url
+            captured["payload"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    result = await agent._call_mcp_tool("sample_tool_status", {})
+
+    assert result["content"][0]["text"] == "ok"
+    assert captured["payload"]["method"] == "tools/call"
+    assert captured["headers"] == {
+        "Authorization": "Bearer internal-token-123456"
     }
 
 

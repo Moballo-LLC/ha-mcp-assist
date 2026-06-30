@@ -205,11 +205,13 @@
         "description": "Esta configuracion afecta a TODOS los perfiles. Los cambios aqui impactaran a cada agente de conversacion de MCP Assist.",
         "data": {
           "mcp_port": "Puerto del servidor MCP",
-          "allowed_ips": "IPs/Rangos adicionales permitidos"
+          "allowed_ips": "IPs/Rangos adicionales permitidos",
+          "mcp_bearer_token": "Token Bearer de MCP"
         },
         "data_description": {
           "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
-          "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost."
+          "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
+          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Autenticacion fallida. Por favor, verifica tu clave API.",
       "unknown": "Ha ocurrido un error desconocido.",
       "openclaw_not_paired": "Dispositivo aún no aprobado en el servidor OpenClaw. Por favor, apruébalo e inténtalo de nuevo.",
-      "openclaw_connection_failed": "No se pudo conectar a la puerta de enlace OpenClaw. Verifique el host, el puerto y el token."
+      "openclaw_connection_failed": "No se pudo conectar a la puerta de enlace OpenClaw. Verifique el host, el puerto y el token.",
+      "mcp_bearer_token_too_short": "El token Bearer de MCP debe estar vacío o tener al menos 16 caracteres."
     },
     "abort": {
       "already_configured": "Ya existe un perfil con este nombre. Por favor, elige un nombre diferente."
@@ -531,11 +534,13 @@
         "description": "Esta configuracion se comparte entre TODOS los perfiles",
         "data": {
           "mcp_port": "Puerto del servidor MCP",
-          "allowed_ips": "IPs/Rangos adicionales permitidos"
+          "allowed_ips": "IPs/Rangos adicionales permitidos",
+          "mcp_bearer_token": "Token Bearer de MCP"
         },
         "data_description": {
           "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
-          "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost."
+          "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
+          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "El token Bearer de MCP debe estar vacío o tener al menos 16 caracteres."
     }
   },
   "selector": {

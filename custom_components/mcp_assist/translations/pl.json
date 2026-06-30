@@ -205,11 +205,13 @@
         "description": "Te ustawienia wpływają na WSZYSTKIE profile. Zmiany tutaj wpłyną na każdego agenta konwersacji MCP Assist.",
         "data": {
           "mcp_port": "Port serwera MCP",
-          "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy"
+          "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
+          "mcp_bearer_token": "Token Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
-          "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost."
+          "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Uwierzytelnianie nie powiodło się. Zweryfikuj swój klucz API.",
       "unknown": "Wystąpił nieznany błąd.",
       "openclaw_not_paired": "Urządzenie nie zostało jeszcze zatwierdzone na serwerze OpenClaw. Zatwierdź to i spróbuj ponownie.",
-      "openclaw_connection_failed": "Nie można połączyć się z bramą OpenClaw. Sprawdź hosta, port i token."
+      "openclaw_connection_failed": "Nie można połączyć się z bramą OpenClaw. Sprawdź hosta, port i token.",
+      "mcp_bearer_token_too_short": "Token bearer MCP musi być pusty albo mieć co najmniej 16 znaków."
     },
     "abort": {
       "already_configured": "Profil o tej nazwie już istnieje. Wybierz inną nazwę."
@@ -531,11 +534,13 @@
         "description": "Te ustawienia są współdzielone przez WSZYSTKIE profile",
         "data": {
           "mcp_port": "Port serwera MCP",
-          "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy"
+          "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
+          "mcp_bearer_token": "Token Bearer MCP"
         },
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
-          "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost."
+          "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "Token bearer MCP musi być pusty albo mieć co najmniej 16 znaków."
     }
   },
   "selector": {

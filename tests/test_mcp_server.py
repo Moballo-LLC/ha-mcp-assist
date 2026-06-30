@@ -41,6 +41,7 @@ from custom_components.mcp_assist.tools.packages.weather_forecast.weather import
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
     CONF_ALLOWED_IPS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_CALCULATOR_TOOLS,
     CONF_ENABLE_DEVICE_TOOLS,
@@ -277,6 +278,63 @@ def test_server_collects_allowed_ips_from_url_and_shared_settings(
     assert "192.168.1.25" in server.allowed_ips
 
 
+def test_server_bearer_auth_uses_shared_token(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Bearer-token auth should come from shared MCP server settings."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    assert server.bearer_auth_required is True
+    assert server._is_request_authenticated(
+        SimpleNamespace(
+            headers={"Authorization": "Bearer test-token-123456"},
+            query={},
+        )
+    )
+    assert server._is_request_authenticated(
+        SimpleNamespace(headers={}, query={"access_token": "test-token-123456"})
+    )
+    assert not server._is_request_authenticated(
+        SimpleNamespace(
+            headers={"Authorization": "Bearer wrong-token"},
+            query={},
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_health_and_json_rpc_require_bearer_token_when_configured(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Configured bearer auth should protect diagnostics and JSON-RPC endpoints."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server._get_tools_list = AsyncMock(return_value=[])
+
+    missing_health = await server.handle_health(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    assert missing_health.status == 401
+    assert missing_health.headers["WWW-Authenticate"] == 'Bearer realm="ha-mcp-assist"'
+
+    authenticated_health = await server.handle_health(
+        SimpleNamespace(
+            remote="127.0.0.1",
+            headers={"Authorization": "Bearer test-token-123456"},
+            query={},
+        )
+    )
+    assert authenticated_health.status == 200
+
+    missing_rpc = await server.handle_mcp_request(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    assert missing_rpc.status == 401
+    payload = json.loads(missing_rpc.text)
+    assert payload["error"]["message"] == "Unauthorized: bearer token required"
+
+
 @pytest.mark.asyncio
 async def test_server_applies_shared_allowed_ips_and_reloads_tools(
     hass, profile_entry_factory, system_entry_factory
@@ -338,6 +396,8 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         message=b"IP no longer authorized",
     )
     kept_ws.close.assert_not_awaited()
+    assert removed_ws not in server._websocket_clients
+    assert kept_ws in server._websocket_clients
     removed_sse.write_eof.assert_awaited_once()
     kept_sse.write_eof.assert_not_awaited()
     assert removed_sse not in server.sse_clients
@@ -350,6 +410,92 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
     server.broadcast_notification.assert_awaited_once_with(
         "notifications/tools/list_changed"
     )
+
+
+@pytest.mark.asyncio
+async def test_server_keeps_previous_auth_when_shared_apply_reload_fails(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Failed shared applies should not leave the running server on a rolled-back token."""
+    system_entry = system_entry_factory(
+        data={
+            CONF_ALLOWED_IPS: "10.0.0.0/24",
+            CONF_MCP_BEARER_TOKEN: "old-token-123456",
+        }
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        reload_tool_packages=AsyncMock(side_effect=RuntimeError("reload failed"))
+    )
+    server.broadcast_notification = AsyncMock()
+    ws = Mock()
+    ws.close = AsyncMock()
+    server._websocket_clients = {ws: "127.0.0.1"}
+
+    hass.config_entries.async_update_entry(
+        system_entry,
+        data={
+            **system_entry.data,
+            CONF_ALLOWED_IPS: "192.168.1.25",
+            CONF_MCP_BEARER_TOKEN: "new-token-123456",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="reload failed"):
+        await server.async_apply_shared_settings()
+
+    assert server._mcp_bearer_token == "old-token-123456"
+    assert "10.0.0.0/24" in server.allowed_ips
+    assert "192.168.1.25" not in server.allowed_ips
+    ws.close.assert_not_awaited()
+    server.broadcast_notification.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_server_closes_live_clients_when_bearer_token_changes(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Token rotation should force long-lived MCP clients to reconnect."""
+    system_entry = system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "old-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        reload_tool_packages=AsyncMock(
+            return_value={
+                "external_custom_tools_enabled": False,
+                "external_packages": [],
+                "built_in_packages": [],
+            }
+        )
+    )
+    server.broadcast_notification = AsyncMock()
+    ws = Mock()
+    ws.close = AsyncMock()
+    server._websocket_clients = {ws: "127.0.0.1"}
+    sse = Mock()
+    sse.write_eof = AsyncMock()
+    server.sse_clients = [sse]
+    server._sse_client_ips = {sse: "127.0.0.1"}
+    progress = asyncio.Queue()
+    server.progress_queues = {progress}
+    server._progress_queue_ips = {progress: "127.0.0.1"}
+
+    hass.config_entries.async_update_entry(
+        system_entry,
+        data={**system_entry.data, CONF_MCP_BEARER_TOKEN: "new-token-123456"},
+    )
+
+    result = await server.async_apply_shared_settings()
+
+    assert result["auth_required"] is True
+    ws.close.assert_awaited_once_with(
+        code=WSCloseCode.POLICY_VIOLATION,
+        message=b"Authentication settings changed",
+    )
+    assert ws not in server._websocket_clients
+    sse.write_eof.assert_awaited_once()
+    assert sse not in server.sse_clients
+    assert progress not in server.progress_queues
+    assert progress.get_nowait() is None
 
 
 @pytest.mark.asyncio
@@ -465,6 +611,37 @@ async def test_prompt_overhead_endpoint_rejects_unauthorized_ip(
 
     assert response.status == 403
     assert response.text == "Forbidden: IP not authorized"
+
+
+@pytest.mark.asyncio
+async def test_prompt_overhead_endpoint_requires_bearer_token_when_configured(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Prompt overhead diagnostics should use shared bearer-token auth."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server._get_tools_list = AsyncMock(return_value=[])
+
+    missing_token = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    assert missing_token.status == 401
+    assert (
+        missing_token.headers["WWW-Authenticate"]
+        == 'Bearer realm="ha-mcp-assist"'
+    )
+
+    authenticated = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(
+            remote="127.0.0.1",
+            headers={"Authorization": "Bearer test-token-123456"},
+            query={},
+        )
+    )
+    payload = json.loads(authenticated.text)
+
+    assert authenticated.status == 200
+    assert payload["status"] == "ok"
 
 
 @pytest.mark.asyncio

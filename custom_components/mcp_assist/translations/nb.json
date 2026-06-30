@@ -205,11 +205,13 @@
         "description": "Disse innstillingene pavirker ALLE profiler. Endringer her vil pavirke hver MCP Assist-samtalagent.",
         "data": {
           "mcp_port": "MCP-serverport",
-          "allowed_ips": "Ekstra tillatte IP-er/omrader"
+          "allowed_ips": "Ekstra tillatte IP-er/omrader",
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
-          "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost."
+          "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Autentisering mislyktes. Verifiser API-nokkelen din.",
       "unknown": "En ukjent feil oppstod.",
       "openclaw_not_paired": "Enheten er ennå ikke godkjent på OpenClaw-serveren. Vennligst godkjenn den og prøv igjen.",
-      "openclaw_connection_failed": "Kunne ikke koble til OpenClaw-gatewayen. Sjekk verten, porten og tokenet."
+      "openclaw_connection_failed": "Kunne ikke koble til OpenClaw-gatewayen. Sjekk verten, porten og tokenet.",
+      "mcp_bearer_token_too_short": "MCP bearer-token må være tom eller ha minst 16 tegn."
     },
     "abort": {
       "already_configured": "En profil med dette navnet finnes allerede. Velg et annet navn."
@@ -531,11 +534,13 @@
         "description": "Disse innstillingene deles av ALLE profiler",
         "data": {
           "mcp_port": "MCP-serverport",
-          "allowed_ips": "Ekstra tillatte IP-er/omrader"
+          "allowed_ips": "Ekstra tillatte IP-er/omrader",
+          "mcp_bearer_token": "MCP Bearer-token"
         },
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
-          "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost."
+          "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer-token må være tom eller ha minst 16 tegn."
     }
   },
   "selector": {
