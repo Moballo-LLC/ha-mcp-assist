@@ -9,6 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.components.conversation import ConversationInput
+from homeassistant.core import Context
 
 from custom_components.mcp_assist import agent as agent_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
@@ -41,6 +43,7 @@ from custom_components.mcp_assist.const import (
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT,
     CONF_TECHNICAL_PROMPT_MODE,
+    CONF_TIMEOUT,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
     CONF_PROFILE_ENABLE_CALCULATOR_TOOLS,
     CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
@@ -2157,6 +2160,172 @@ async def test_ollama_toolless_check_preamble_retries_with_tool_call(
         "floor": "upstairs",
         "state": "on",
     }
+
+
+@pytest.mark.asyncio
+async def test_call_llm_http_retries_provider_timeout_once(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """Provider HTTP fallback should retry one timeout before surfacing failure."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_TIMEOUT: 1,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    posts: list[dict] = []
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            if len(posts) == 1:
+                raise asyncio.TimeoutError
+            return _FakeAnthropicResponse(
+                {"message": {"role": "assistant", "content": "Recovered."}}
+            )
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm_http(
+            [{"role": "user", "content": "Are there any lights on upstairs?"}]
+        )
+
+    assert result == "Recovered."
+    assert len(posts) == 2
+    assert "HTTP transport timed out after 1s" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Repeated provider HTTP timeouts should raise the expected timeout type."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_TIMEOUT: 1,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    posts: list[dict] = []
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
+
+    with pytest.raises(agent_module.ProviderResponseTimeoutError) as err:
+        await agent._call_llm_http(
+            [{"role": "user", "content": "Are there any lights on upstairs?"}]
+        )
+
+    assert err.value.provider_name == "Ollama"
+    assert err.value.timeout_seconds == 1
+    assert err.value.transport == "HTTP"
+    assert err.value.attempts == 2
+    assert len(posts) == 2
+
+
+@pytest.mark.asyncio
+async def test_conversation_provider_timeout_returns_friendly_error_without_traceback(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """Expected provider timeouts should not be logged as unexpected exceptions."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(agent.history, "get_history", lambda conversation_id: [])
+    monkeypatch.setattr(
+        agent,
+        "_build_system_prompt_with_context",
+        AsyncMock(return_value="system"),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_prepare_adaptive_tools_for_request",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_build_messages",
+        lambda system_prompt, text, history: [{"role": "user", "content": text}],
+    )
+    monkeypatch.setattr(
+        agent,
+        "_call_llm",
+        AsyncMock(
+            side_effect=agent_module.ProviderResponseTimeoutError(
+                provider_name="Ollama",
+                timeout_seconds=60,
+                transport="HTTP",
+                attempts=2,
+                iteration=1,
+            )
+        ),
+    )
+    finish_mock = AsyncMock()
+    monkeypatch.setattr(agent, "_finish_persistent_chat_log_record", finish_mock)
+    user_input = ConversationInput(
+        text="Are there any lights on upstairs?",
+        context=Context(),
+        conversation_id="conversation-id",
+        device_id=None,
+        satellite_id=None,
+        language="en",
+        agent_id="test-agent",
+    )
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._async_handle_message_inner(
+            user_input,
+            "conversation-id",
+        )
+
+    assert result.continue_conversation is False
+    assert "Provider request timed out" in caplog.text
+    assert "Error processing conversation" not in caplog.text
+    finish_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
