@@ -56,6 +56,7 @@ _SQL_WRITE_KEYWORDS = frozenset(
         "vacuum",
     }
 )
+_SQL_SELECT_FILE_OUTPUT_KEYWORDS = frozenset({"dumpfile", "outfile"})
 
 
 @dataclass(frozen=True)
@@ -712,6 +713,8 @@ def _is_read_only_sql(sql: str) -> bool:
     tokens = _sql_validation_tokens(sql)
     if not tokens or ";" in tokens or any(token in _SQL_WRITE_KEYWORDS for token in tokens):
         return False
+    if _has_select_file_output_clause(tokens):
+        return False
 
     start_index = _first_sql_keyword_index(tokens)
     if start_index is None:
@@ -724,6 +727,14 @@ def _is_read_only_sql(sql: str) -> bool:
         return False
 
     return _cte_main_statement_keyword(tokens, start_index) == "select"
+
+
+def _has_select_file_output_clause(tokens: list[str]) -> bool:
+    """Return true when a SELECT can write results to the database host filesystem."""
+    return any(
+        token in _SQL_SELECT_FILE_OUTPUT_KEYWORDS and index > 0 and tokens[index - 1] == "into"
+        for index, token in enumerate(tokens)
+    )
 
 
 def _sql_validation_tokens(sql: str) -> list[str]:

@@ -223,6 +223,25 @@ async def test_recorder_query_helper_rejects_writes_hidden_behind_ctes(hass) -> 
             await async_recorder_query(hass, sql, {"entity_id": "light.example"})
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT state INTO OUTFILE '/tmp/mcp_assist_states.txt' FROM states",
+        "SELECT state INTO DUMPFILE '/tmp/mcp_assist_states.bin' FROM states",
+        "SELECT state FROM states INTO OUTFILE '/tmp/mcp_assist_states.txt'",
+        """
+        WITH exported AS (
+            SELECT state INTO OUTFILE '/tmp/mcp_assist_states.txt' FROM states
+        )
+        SELECT * FROM exported
+        """,
+    ],
+)
+def test_read_only_sql_validator_rejects_select_file_outputs(sql: str) -> None:
+    """MySQL/MariaDB SELECT file-output clauses are write-capable."""
+    assert not custom_tool_api_module._is_read_only_sql(sql)
+
+
 def test_read_only_sql_validator_allows_select_ctes_and_ignores_literals() -> None:
     """Safe SELECT CTEs should still be valid, even with write words in strings."""
     assert custom_tool_api_module._is_read_only_sql(
@@ -235,4 +254,7 @@ def test_read_only_sql_validator_allows_select_ctes_and_ignores_literals() -> No
     )
     assert custom_tool_api_module._is_read_only_sql(
         "SELECT 'delete from states' AS example_text FROM states"
+    )
+    assert custom_tool_api_module._is_read_only_sql(
+        "SELECT 'INTO OUTFILE /tmp/not-written' AS example_text FROM states"
     )
