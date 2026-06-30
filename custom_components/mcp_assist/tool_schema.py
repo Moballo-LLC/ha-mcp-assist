@@ -597,6 +597,24 @@ def _adaptive_entity_reference_terms(text: str) -> set[str]:
     return terms
 
 
+def _strip_adaptive_entity_references(text: str) -> str:
+    """Remove HA entity-id-shaped spans while keeping the rest of a query."""
+    stripped = str(text or "")
+
+    def replace_entity_reference(match: re.Match[str]) -> str:
+        if _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=stripped,
+            match=match,
+        ):
+            return " "
+        return match.group(0)
+
+    for pattern in (ADAPTIVE_BARE_DOMAIN_INTENT_RE, ADAPTIVE_ENTITY_ID_REFERENCE_RE):
+        stripped = pattern.sub(replace_entity_reference, stripped)
+    return stripped
+
+
 def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
@@ -732,11 +750,15 @@ def score_adaptive_tool_match(
             _adaptive_entity_reference_terms(normalized_query)
             | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
         )
+        outside_entity_reference_terms = _adaptive_text_terms(
+            _strip_adaptive_entity_references(normalized_query)
+        )
         if (
             matched_terms
             and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
             and entity_domains
             and matched_terms <= entity_reference_terms
+            and not (matched_terms & outside_entity_reference_terms)
             and not (matched_name_terms & entity_domains)
         ):
             return 0
