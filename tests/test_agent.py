@@ -32,6 +32,7 @@ from custom_components.mcp_assist.const import (
     CONF_MAX_HISTORY,
     CONF_CONTEXT_MODE,
     CONF_MAX_ITERATIONS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_MAX_TOKENS,
     CONF_MODEL_NAME,
     CONF_PROFILE_NAME,
@@ -1043,6 +1044,62 @@ async def test_get_mcp_tools_uses_stale_cache_on_refresh_failure(
     assert result == cached_tools
 
 
+@pytest.mark.asyncio
+async def test_fetch_mcp_tools_sends_shared_bearer_token(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Internal tools/list requests should authenticate when MCP bearer auth is enabled."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "internal-token-123456"})
+    entry = profile_entry_factory()
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "jsonrpc": "2.0",
+                "result": {"tools": [_tool("discover_entities")]},
+            }
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers=None):
+            captured["url"] = url
+            captured["payload"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    tools = await agent._fetch_mcp_tools_from_server()
+
+    assert tools is not None
+    assert tools[0]["function"]["name"] == "discover_entities"
+    assert captured["payload"]["method"] == "tools/list"
+    assert captured["headers"] == {
+        "Authorization": "Bearer internal-token-123456"
+    }
+
+
 def test_compact_tool_result_for_llm_truncates_large_payloads(
     hass, profile_entry_factory
 ) -> None:
@@ -1631,6 +1688,64 @@ async def test_call_mcp_tool_includes_profile_context(
     assert captured["payload"]["params"]["context"] == {
         "profile_entry_id": entry.entry_id,
         "profile_name": "Kitchen Profile",
+    }
+
+
+@pytest.mark.asyncio
+async def test_call_mcp_tool_sends_shared_bearer_token(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Internal tools/call requests should authenticate when MCP bearer auth is enabled."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "internal-token-123456"})
+    entry = profile_entry_factory(data={CONF_PROFILE_NAME: "Kitchen Profile"})
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [{"type": "text", "text": "ok"}],
+                    "isError": False,
+                },
+            }
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers=None):
+            captured["url"] = url
+            captured["payload"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.agent.aiohttp.ClientSession",
+        _FakeSession,
+    )
+
+    result = await agent._call_mcp_tool("sample_tool_status", {})
+
+    assert result["content"][0]["text"] == "ok"
+    assert captured["payload"]["method"] == "tools/call"
+    assert captured["headers"] == {
+        "Authorization": "Bearer internal-token-123456"
     }
 
 

@@ -75,6 +75,7 @@ from .const import (
     CONF_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_PROFILE_ENABLE_CALCULATOR_TOOLS,
     CONF_PROFILE_ENABLE_UNIT_CONVERSION_TOOLS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_FOLLOW_UP_PHRASES,
     CONF_END_WORDS,
     CONF_CLEAN_RESPONSES,
@@ -105,6 +106,7 @@ from .const import (
     DEFAULT_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
     DEFAULT_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     DEFAULT_PROFILE_ENABLE_CALCULATOR_TOOLS,
+    DEFAULT_MCP_BEARER_TOKEN,
     LIGHT_CONTEXT_MAX_HISTORY,
     LIGHT_CONTEXT_TOOL_NAMES,
     RESPONSE_MODE_INSTRUCTIONS,
@@ -304,6 +306,23 @@ class MCPAssistConversationEntity(ConversationEntity):
         if value is not None:
             return value
         return default
+
+    def _mcp_request_headers(self) -> dict[str, str] | None:
+        """Build auth headers for internal MCP server JSON-RPC calls."""
+        token = str(
+            self._get_shared_setting(CONF_MCP_BEARER_TOKEN, DEFAULT_MCP_BEARER_TOKEN)
+            or ""
+        ).strip()
+        if not token:
+            return None
+        return {"Authorization": f"Bearer {token}"}
+
+    def _mcp_post_kwargs(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Build aiohttp POST kwargs for internal MCP JSON-RPC calls."""
+        kwargs: dict[str, Any] = {"json": payload}
+        if headers := self._mcp_request_headers():
+            kwargs["headers"] = headers
+        return kwargs
 
     def _is_optional_tool_family_enabled(self, family: str) -> bool:
         """Return whether an optional tool family is enabled for this profile."""
@@ -2262,15 +2281,16 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             # Get tools list from MCP server
             timeout = aiohttp.ClientTimeout(total=5)
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "params": {},
+                "id": 1,
+            }
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
                     f"{mcp_url}/",
-                    json={
-                        "jsonrpc": "2.0",
-                        "method": "tools/list",
-                        "params": {},
-                        "id": 1,
-                    },
+                    **self._mcp_post_kwargs(payload),
                 ) as response:
                     if response.status != 200:
                         _LOGGER.warning("Failed to get MCP tools: %d", response.status)
@@ -2436,7 +2456,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(f"{mcp_url}/", json=payload) as response:
+                async with session.post(
+                    f"{mcp_url}/",
+                    **self._mcp_post_kwargs(payload),
+                ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         _LOGGER.error(
