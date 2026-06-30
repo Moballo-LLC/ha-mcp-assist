@@ -20,6 +20,7 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "after",
         "again",
         "also",
+        "and",
         "any",
         "are",
         "as",
@@ -39,20 +40,30 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "in",
         "is",
         "into",
+        "it",
         "let",
         "look",
+        "many",
         "me",
+        "much",
         "my",
         "of",
         "on",
         "please",
+        "read",
         "show",
+        "summarise",
+        "summarize",
+        "summary",
         "that",
         "the",
         "there",
         "this",
+        "today",
         "turn",
         "use",
+        "was",
+        "were",
         "what",
         "when",
         "where",
@@ -185,6 +196,14 @@ ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     "geçmiş": ("history", "recorder"),
     "سجل": ("history", "recorder"),
     "इतिहास": ("history", "recorder"),
+    "count": ("history", "recorder"),
+    "times": ("count", "history", "recorder"),
+    "opened": ("open", "access", "count", "history", "recorder"),
+    "opening": ("open", "access", "history", "recorder"),
+    "closed": ("close", "access", "count", "history", "recorder"),
+    "closing": ("close", "access", "history", "recorder"),
+    "locked": ("lock", "access", "count", "history", "recorder"),
+    "unlocked": ("unlock", "access", "count", "history", "recorder"),
     # Images
     "imagen": ("image", "vision"),
     "bild": ("image", "vision"),
@@ -340,6 +359,9 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
     terms = []
+    if re.search(r"https?://", normalized_query):
+        terms.extend(["url", "webpage", "web"])
+        normalized_query = re.sub(r"https?://\S+", " ", normalized_query)
     for term in re.findall(r"\w+", normalized_query, flags=re.UNICODE):
         if len(term) < 2 or term in ADAPTIVE_QUERY_STOPWORDS:
             continue
@@ -350,6 +372,19 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
             for term in expanded_terms:
                 if term not in terms:
                     terms.append(term)
+    return terms
+
+
+def _adaptive_text_terms(text: str) -> set[str]:
+    """Return normalized match terms for tool metadata text."""
+    normalized = re.sub(r"[_\-/]+", " ", str(text or "").casefold())
+    terms: set[str] = set()
+    for term in re.findall(r"\w+", normalized, flags=re.UNICODE):
+        if len(term) < 2:
+            continue
+        terms.add(term)
+        if term.endswith("s") and len(term) > 3:
+            terms.add(term[:-1])
     return terms
 
 
@@ -387,23 +422,28 @@ def score_adaptive_tool_match(
     description = str(tool.get("description") or "").casefold()
     keyword_text = _routing_hint_text(tool, "keywords")
     routing_text = _routing_hint_text(tool, "preferred_when", "example_queries")
+    name_terms = _adaptive_text_terms(name)
+    keyword_terms = _adaptive_text_terms(keyword_text)
+    routing_terms = _adaptive_text_terms(routing_text)
+    llm_description_terms = _adaptive_text_terms(llm_description)
+    description_terms = _adaptive_text_terms(description)
 
     score = 0
     if normalized_query and normalized_query == name:
         score += 100
-    if normalized_query and normalized_query in name:
+    if terms and all(term in name_terms for term in terms):
         score += 40
 
     for term in terms:
-        if term in name:
+        if term in name_terms:
             score += 24
-        if term in keyword_text:
+        if term in keyword_terms:
             score += 18
-        if term in routing_text:
+        if term in routing_terms:
             score += 14
-        if term in llm_description:
+        if term in llm_description_terms:
             score += 12
-        if term in description:
+        if term in description_terms:
             score += 6
 
     if name not in base_tool_names and score > 0:

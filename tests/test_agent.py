@@ -64,7 +64,9 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
+    score_adaptive_tool_match,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -1489,6 +1491,75 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "weather" in normalize_adaptive_query_terms("¿Qué tiempo hará mañana?")
     assert "weather" in normalize_adaptive_query_terms("明天天气怎么样")
     assert "search" in normalize_adaptive_query_terms("buscar en la web")
+    assert "access" in normalize_adaptive_query_terms(
+        "How many times was the front door opened today?"
+    )
+    assert "url" in normalize_adaptive_query_terms(
+        "Summarize https://example.com"
+    )
+
+
+def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
+    """Adaptive matching should avoid unrelated tiny substring matches."""
+    query = "How many times was the front door opened today?"
+    image_tool = {
+        "name": "analyze_image",
+        "description": "Analyze an image.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    waste_tool = {
+        "name": "waste_status",
+        "description": "Return upcoming waste collection status.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    access_tool = {
+        "name": "home_access_history",
+        "llmDescription": "Get lock and door access history or event counts.",
+        "description": "Return lock and garage-door access history.",
+        "routingHints": {
+            "preferred_when": "Door/garage open/close counts and lock access history.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(image_tool, query) == 0
+    assert score_adaptive_tool_match(waste_tool, query) == 0
+    assert score_adaptive_tool_match(access_tool, query) >= 18
+
+    matches = match_adaptive_tool_definitions(
+        [image_tool, waste_tool, access_tool],
+        query=query,
+        limit=3,
+    )
+
+    assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_tool_scoring_prefers_read_url_for_urls() -> None:
+    """URL queries should load URL-reading tools, not incidental substring matches."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    convert_tool = {
+        "name": "convert_unit",
+        "description": "Convert units of measure.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    security_tool = {
+        "name": "home_security_posture",
+        "description": "Summarize home security posture.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    matches = match_adaptive_tool_definitions(
+        [convert_tool, security_tool, read_tool],
+        query="Summarize https://example.com",
+        limit=3,
+    )
+
+    assert [tool["name"] for tool in matches] == ["read_url"]
 
 
 @pytest.mark.asyncio
