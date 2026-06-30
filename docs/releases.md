@@ -18,6 +18,15 @@ To keep release notes useful:
 - Apply labels consistently when release-note grouping matters.
 - Put user-facing context in the PR body when a title alone is not enough.
 
+The final GitHub release body should be edited after generation to use this
+shape:
+
+1. A short bulleted list of high-level notable changes.
+2. A `---` separator.
+3. The full generated changelog.
+
+Do not add a separate `CHANGELOG.md` just to satisfy this format.
+
 ## Version Source
 
 The integration version lives in:
@@ -114,7 +123,8 @@ git push origin vX.Y.Z
 ```
 
 7. Watch the **Release** workflow.
-8. Review the generated GitHub release notes.
+8. Edit the generated GitHub release body so it starts with notable changes,
+   then a `---` separator, then the full generated changelog.
 
 ## Versioning Guidance
 
@@ -148,6 +158,7 @@ integration still loads from `custom_components/mcp_assist` with domain
 - CI is green on `main`.
 - HACS and Hassfest validation pass.
 - The release tag will point at a commit reachable from `origin/main`.
-- The release notes generated from merged PRs read well.
+- The final release notes include notable changes, a `---` separator, and the
+  full generated changelog.
 - Any user-facing docs changed with the feature or behavior change.
 - Runtime dependency bounds remain as lenient as practical.
