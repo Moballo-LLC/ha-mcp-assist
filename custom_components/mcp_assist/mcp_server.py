@@ -884,11 +884,19 @@ class MCPServer(
             return web.Response(status=403, text="Forbidden: IP not authorized")
 
         if not self._is_request_authenticated(request):
-            _LOGGER.warning(
-                "🚫 Blocked %s request from unauthenticated client: %s",
-                surface,
-                _sanitize_log_value(client_ip),
-            )
+            provided_token = self._request_authorization_value(request)
+            if provided_token:
+                _LOGGER.warning(
+                    "Blocked %s request with invalid bearer token from client: %s",
+                    surface,
+                    _sanitize_log_value(client_ip),
+                )
+            else:
+                _LOGGER.debug(
+                    "Blocked %s request with missing bearer token from client: %s",
+                    surface,
+                    _sanitize_log_value(client_ip),
+                )
             headers = {"WWW-Authenticate": 'Bearer realm="ha-mcp-assist"'}
             if json_rpc:
                 return web.json_response(
