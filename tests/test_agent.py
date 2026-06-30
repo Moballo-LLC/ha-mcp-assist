@@ -1604,6 +1604,13 @@ def test_convert_mcp_tools_to_llm_tools_compacts_schema(
                         "description": "Maximum number of entities to return.",
                         "default": 20,
                     },
+                    "action": {
+                        "type": "string",
+                        "description": (
+                            "Specific action filter, such as opened, closed, "
+                            "locked, or unlocked."
+                        ),
+                    },
                 },
                 "required": [],
                 "additionalProperties": False,
@@ -1620,6 +1627,9 @@ def test_convert_mcp_tools_to_llm_tools_compacts_schema(
     assert "additionalProperties" not in parameters
     assert "required" not in parameters
     assert "description" not in parameters["properties"]["area"]
+    assert parameters["properties"]["action"]["description"] == (
+        "Specific action filter, such as opened, closed, locked, or unlocked."
+    )
     assert "default" not in parameters["properties"]["limit"]
 
 

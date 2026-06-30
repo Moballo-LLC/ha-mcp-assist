@@ -2231,7 +2231,7 @@ async def test_analyze_history_counts_calendar_yesterday_transitions(
         assert entity_id == "binary_sensor.front_door"
         assert kwargs["start_time"] == expected_start
         assert kwargs["end_time"] == expected_end
-        assert kwargs["include_start_time_state"] is False
+        assert kwargs["include_start_time_state"] is True
         return history_rows
 
     server._fetch_entity_history_states = AsyncMock(side_effect=fake_fetch)
@@ -2247,7 +2247,90 @@ async def test_analyze_history_counts_calendar_yesterday_transitions(
 
     text = result["content"][0]["text"]
     assert "Recorded opened events during yesterday: 35" in text
-    assert "Counted using recorder state: on" in text
+    assert "Counted transitions into recorder state: on" in text
+
+
+@pytest.mark.asyncio
+async def test_analyze_history_counts_target_transitions_not_matching_rows(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Opened counts should count transitions, not every matching recorder row."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set(
+        "binary_sensor.front_door",
+        "off",
+        {"friendly_name": "Front Door", "device_class": "door"},
+    )
+
+    fixed_now = datetime(2026, 4, 20, 21, 0, tzinfo=timezone.utc)
+    expected_start = datetime(2026, 4, 20, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.tools.packages.recorder.history.dt_util.now",
+        lambda: fixed_now,
+    )
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.tools.packages.recorder.history.dt_util.utcnow",
+        lambda: fixed_now,
+    )
+
+    history_rows = [
+        SimpleNamespace(
+            state="on",
+            last_changed=expected_start - timedelta(minutes=5),
+            last_updated=expected_start - timedelta(minutes=5),
+        ),
+        SimpleNamespace(
+            state="on",
+            last_changed=expected_start + timedelta(minutes=5),
+            last_updated=expected_start + timedelta(minutes=5),
+        ),
+        SimpleNamespace(
+            state="off",
+            last_changed=expected_start + timedelta(minutes=10),
+            last_updated=expected_start + timedelta(minutes=10),
+        ),
+        SimpleNamespace(
+            state="on",
+            last_changed=expected_start + timedelta(minutes=20),
+            last_updated=expected_start + timedelta(minutes=20),
+        ),
+        SimpleNamespace(
+            state="on",
+            last_changed=expected_start + timedelta(minutes=25),
+            last_updated=expected_start + timedelta(minutes=25),
+        ),
+        SimpleNamespace(
+            state="off",
+            last_changed=expected_start + timedelta(minutes=30),
+            last_updated=expected_start + timedelta(minutes=30),
+        ),
+        SimpleNamespace(
+            state="on",
+            last_changed=expected_start + timedelta(minutes=40),
+            last_updated=expected_start + timedelta(minutes=40),
+        ),
+    ]
+
+    async def fake_fetch(entity_id, *args, **kwargs):
+        assert entity_id == "binary_sensor.front_door"
+        assert kwargs["include_start_time_state"] is True
+        return history_rows
+
+    server._fetch_entity_history_states = AsyncMock(side_effect=fake_fetch)
+
+    result = await server.tool_analyze_entity_history(
+        {
+            "entity_id": "binary_sensor.front_door",
+            "event": "opened",
+            "analysis": "count",
+            "period": "today",
+        }
+    )
+
+    text = result["content"][0]["text"]
+    assert "Recorded opened events during today: 2" in text
+    assert "Counted transitions into recorder state: on" in text
 
 
 @pytest.mark.asyncio
