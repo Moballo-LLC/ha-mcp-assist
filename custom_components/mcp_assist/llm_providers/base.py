@@ -428,6 +428,16 @@ class LLMProvider:
         """Return a warning when provider-required stream metadata is absent."""
         return None
 
+    def is_invalid_tool_arguments_error(
+        self,
+        *,
+        status: int,
+        error_text: str,
+    ) -> bool:
+        """Return whether a provider error reports malformed model tool arguments."""
+        del status, error_text
+        return False
+
     def context_window_error_message(
         self,
         *,

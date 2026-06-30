@@ -3717,9 +3717,39 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 error_text = json.dumps(error_data, indent=2)
                             except Exception:
                                 error_text = await response.text()
-                            # Fallback to non-streaming
-                            _LOGGER.error(
-                                f"❌ Streaming failed with status {response.status}"
+                            if provider.is_invalid_tool_arguments_error(
+                                status=response.status,
+                                error_text=error_text,
+                            ):
+                                _LOGGER.info(
+                                    "%s streaming reported malformed tool-call arguments on iteration %d",
+                                    self.server_type,
+                                    iteration + 1,
+                                )
+                                if self._has_tool_results(conversation_messages):
+                                    return await self._call_llm_final_response_without_tools(
+                                        conversation_messages,
+                                        provider,
+                                        transport="streaming_invalid_tool_final",
+                                    )
+                                if invalid_tool_retry_used:
+                                    return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                                self._append_invalid_tool_call_retry_messages(
+                                    conversation_messages,
+                                    response_text,
+                                    [],
+                                )
+                                invalid_tool_retry_used = True
+                                response_text = ""
+                                sentence_buffer = ""
+                                tool_arg_buffers.clear()
+                                tool_names.clear()
+                                tool_ids.clear()
+                                completed_tools.clear()
+                                continue
+
+                            _LOGGER.warning(
+                                "Streaming failed with status %s", response.status
                             )
                             _LOGGER.debug(
                                 "Provider streaming error response: %s",
@@ -4166,6 +4196,31 @@ class MCPAssistConversationEntity(ConversationEntity):
                     if response.status != 200:
                         error_text = await response.text()
                         error_snippet = _provider_log_snippet(error_text)
+                        if provider.is_invalid_tool_arguments_error(
+                            status=response.status,
+                            error_text=error_text,
+                        ):
+                            _LOGGER.info(
+                                "%s HTTP transport reported malformed tool-call arguments on iteration %d",
+                                self.server_type,
+                                iteration + 1,
+                            )
+                            if self._has_tool_results(conversation_messages):
+                                return await self._call_llm_final_response_without_tools(
+                                    conversation_messages,
+                                    provider,
+                                    transport="http_invalid_tool_final",
+                                )
+                            if invalid_tool_retry_used:
+                                return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                            self._append_invalid_tool_call_retry_messages(
+                                conversation_messages,
+                                "",
+                                [],
+                            )
+                            invalid_tool_retry_used = True
+                            continue
+
                         _LOGGER.warning(
                             "%s API error: status=%s body=%s",
                             self.server_type,
