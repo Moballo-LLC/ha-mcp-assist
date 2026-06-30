@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
           "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
-          "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten."
+          "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten. Geben Sie FFFF ein, um beim Speichern ein neues Token zu generieren."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurieren Sie den gemeinsamen MCP-Listener, die IP-Zulassungsliste und die Bearer-Token-Authentifizierung.",
+            "data": {
+              "mcp_port": "MCP-Server-Port",
+              "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche",
+              "mcp_bearer_token": "MCP-Bearer-Token"
+            },
+            "data_description": {
+              "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
+              "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
+              "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten. Geben Sie FFFF ein, um beim Speichern ein neues Token zu generieren."
+            }
+          },
           "context": {
             "name": "Kontext",
             "description": "Steuern Sie, welche Home Assistant-Identitäts- und Standortdetails in KI-Eingabeaufforderungen und MCP-Tool-Call-Payloads enthalten sind.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Brücke",
               "enable_memory_tools": "Erinnerung",
-              "memory_default_ttl_days": "Standardspeicher TTL (Tage)",
-              "memory_max_ttl_days": "Maximaler Speicher TTL (Tage)",
-              "memory_max_items": "Max. gespeicherte Erinnerungen",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lesen Sie URL",
               "enable_recorder_tools": "Rekorder-Geschichte",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Machen Sie Google Places-Such- und Google Routes-Reisezeittools verfügbar. Erfordert einen Google Maps API-Schlüssel.",
               "enable_llm_api_bridge": "Machen Sie auf der Zulassungsliste stehende Home Assistant LLM APIs von Drittanbietern verfügbar, die von anderen Integrationen registriert wurden.",
               "enable_memory_tools": "Stellen Sie gemeinsam genutzte Persistent-Memory-Tools zur Verfügung, damit sich der Assistent vom Benutzer genehmigte Fakten und Präferenzen mit TTL-basiertem Ablauf merken, abrufen und vergessen kann.",
-              "memory_default_ttl_days": "Standardanzahl der Tage, die ein neuer Speicher beibehalten wird, wenn der Tool-Aufruf nicht ttl_days bereitstellt.",
-              "memory_max_ttl_days": "Maximale Anzahl an Tagen, die ein gespeicherter Speicher erhalten bleiben darf.",
-              "memory_max_items": "Obergrenze für aktiv gespeicherte Speicher. Wenn diese Grenze überschritten wird, werden die ältesten Speicher zuerst bereinigt.",
               "enable_music_assistant_support": "Machen Sie Music Assistant-Such-, Warteschlangen-, Bibliotheks- und Wiedergabetools verfügbar.",
               "enable_read_url_tool": "Machen Sie die URL-Lesung verfügbar, damit der Assistent bestimmte Webseiten überprüfen kann.",
               "enable_recorder_tools": "Machen Sie rekordergestützte Verlaufs-, Analyse- und Point-in-Time-Tools verfügbar.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
           "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
-          "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten."
+          "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten. Geben Sie FFFF ein, um beim Speichern ein neues Token zu generieren."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurieren Sie den gemeinsamen MCP-Listener, die IP-Zulassungsliste und die Bearer-Token-Authentifizierung.",
+            "data": {
+              "mcp_port": "MCP-Server-Port",
+              "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche",
+              "mcp_bearer_token": "MCP-Bearer-Token"
+            },
+            "data_description": {
+              "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
+              "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
+              "mcp_bearer_token": "Optionales Bearer-Token, das externe MCP-Clients senden müssen. Neue Einrichtungen erhalten ein generiertes Token; leeren Sie dieses Feld nur, wenn Sie bewusst IP-Zulassung ohne Bearer-Authentifizierung verwenden möchten. Geben Sie FFFF ein, um beim Speichern ein neues Token zu generieren."
+            }
+          },
           "context": {
             "name": "Kontext",
             "description": "Steuern Sie, welche Home Assistant-Identitäts- und Standortdetails in KI-Eingabeaufforderungen und MCP-Tool-Call-Payloads enthalten sind.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Brücke",
               "enable_memory_tools": "Erinnerung",
-              "memory_default_ttl_days": "Standardspeicher TTL (Tage)",
-              "memory_max_ttl_days": "Maximaler Speicher TTL (Tage)",
-              "memory_max_items": "Max. gespeicherte Erinnerungen",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lesen Sie URL",
               "enable_recorder_tools": "Rekorder-Geschichte",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Machen Sie Google Places-Such- und Google Routes-Reisezeittools verfügbar. Erfordert einen Google Maps API-Schlüssel.",
               "enable_llm_api_bridge": "Machen Sie auf der Zulassungsliste stehende Home Assistant LLM APIs von Drittanbietern verfügbar, die von anderen Integrationen registriert wurden.",
               "enable_memory_tools": "Stellen Sie gemeinsam genutzte Persistent-Memory-Tools zur Verfügung, damit sich der Assistent vom Benutzer genehmigte Fakten und Präferenzen mit TTL-basiertem Ablauf merken, abrufen und vergessen kann.",
-              "memory_default_ttl_days": "Standardanzahl der Tage, die ein neuer Speicher beibehalten wird, wenn der Tool-Aufruf nicht ttl_days bereitstellt.",
-              "memory_max_ttl_days": "Maximale Anzahl an Tagen, die ein gespeicherter Speicher erhalten bleiben darf.",
-              "memory_max_items": "Obergrenze für aktiv gespeicherte Speicher. Wenn diese Grenze überschritten wird, werden die ältesten Speicher zuerst bereinigt.",
               "enable_music_assistant_support": "Machen Sie Music Assistant-Such-, Warteschlangen-, Bibliotheks- und Wiedergabetools verfügbar.",
               "enable_read_url_tool": "Machen Sie die URL-Lesung verfügbar, damit der Assistent bestimmte Webseiten überprüfen kann.",
               "enable_recorder_tools": "Machen Sie rekordergestützte Verlaufs-, Analyse- und Point-in-Time-Tools verfügbar.",

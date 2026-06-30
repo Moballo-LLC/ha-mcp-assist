@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
         },
         "sections": {
+          "server": {
+            "name": "Palvelin",
+            "description": "Määritä jaettu MCP-kuuntelija, sallittujen IP-osoitteiden luettelo ja Bearer-token-todennus.",
+            "data": {
+              "mcp_port": "MCP-palvelinportti",
+              "allowed_ips": "Lisat sallitut IP:t/alueet",
+              "mcp_bearer_token": "MCP Bearer -tunnus"
+            },
+            "data_description": {
+              "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
+              "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
+              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+            }
+          },
           "context": {
             "name": "Konteksti",
             "description": "Hallitse, mitkä Home Assistant-identiteetti- ja sijaintitiedot sisältyvät tekoälykehotteisiin ja MCP-työkalukutsujen hyötykuormiin.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API silta",
               "enable_memory_tools": "Muisti",
-              "memory_default_ttl_days": "oletusmuisti TTL (päiviä)",
-              "memory_max_ttl_days": "Suurin muisti TTL (päiviä)",
-              "memory_max_items": "Tallennettujen muistien enimmäismäärä",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lue URL",
               "enable_recorder_tools": "Tallentimen historia",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Näytä Google Places-haku- ja Google Routes-matka-aikatyökalut. Vaatii Google Maps API-avaimen.",
               "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
               "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
-              "memory_default_ttl_days": "Oletuspäivien lukumäärä, jolloin uusi muisti säilytetään, kun työkalukutsu ei tarjoa ttl_days.",
-              "memory_max_ttl_days": "Tallennetun muistin säilytyspäivien enimmäismäärä.",
-              "memory_max_items": "Aktiivisten tallennettujen muistien yläraja. Vanhimmat muistot leikataan ensin, kun tämä raja ylittyy.",
               "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
               "enable_read_url_tool": "Näytä URL-luku, jotta avustaja voi tarkastaa tietyt verkkosivut.",
               "enable_recorder_tools": "Näytä tallentimen tukemat historia-, analyysi- ja ajankohtaiset työkalut.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
         },
         "sections": {
+          "server": {
+            "name": "Palvelin",
+            "description": "Määritä jaettu MCP-kuuntelija, sallittujen IP-osoitteiden luettelo ja Bearer-token-todennus.",
+            "data": {
+              "mcp_port": "MCP-palvelinportti",
+              "allowed_ips": "Lisat sallitut IP:t/alueet",
+              "mcp_bearer_token": "MCP Bearer -tunnus"
+            },
+            "data_description": {
+              "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
+              "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
+              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+            }
+          },
           "context": {
             "name": "Konteksti",
             "description": "Hallitse, mitkä Home Assistant-identiteetti- ja sijaintitiedot sisältyvät tekoälykehotteisiin ja MCP-työkalukutsujen hyötykuormiin.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API silta",
               "enable_memory_tools": "Muisti",
-              "memory_default_ttl_days": "oletusmuisti TTL (päiviä)",
-              "memory_max_ttl_days": "Suurin muisti TTL (päiviä)",
-              "memory_max_items": "Tallennettujen muistien enimmäismäärä",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lue URL",
               "enable_recorder_tools": "Tallentimen historia",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Näytä Google Places-haku- ja Google Routes-matka-aikatyökalut. Vaatii Google Maps API-avaimen.",
               "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
               "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
-              "memory_default_ttl_days": "Oletuspäivien lukumäärä, jolloin uusi muisti säilytetään, kun työkalukutsu ei tarjoa ttl_days.",
-              "memory_max_ttl_days": "Tallennetun muistin säilytyspäivien enimmäismäärä.",
-              "memory_max_items": "Aktiivisten tallennettujen muistien yläraja. Vanhimmat muistot leikataan ensin, kun tämä raja ylittyy.",
               "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
               "enable_read_url_tool": "Näytä URL-luku, jotta avustaja voi tarkastaa tietyt verkkosivut.",
               "enable_recorder_tools": "Näytä tallentimen tukemat historia-, analyysi- ja ajankohtaiset työkalut.",

@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
           "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering."
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurer den delte MCP-lytteren, listen over tillatte IP-adresser og bearer-token-autentisering.",
+            "data": {
+              "mcp_port": "MCP-serverport",
+              "allowed_ips": "Ekstra tillatte IP-er/omrader",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
+              "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
+              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+            }
+          },
           "context": {
             "name": "Kontekst",
             "description": "Kontroller hvilke Home Assistant-identitets- og plasseringsdetaljer som er inkludert i AI-forespørsler og MCP-verktøyanropsnyttelast.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Minne",
-              "memory_default_ttl_days": "Standardminne TTL (dager)",
-              "memory_max_ttl_days": "Maks minne TTL (dager)",
-              "memory_max_items": "Maks lagrede minner",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Les URL",
               "enable_recorder_tools": "Opptakerhistorikk",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Vis Google Places-oppslag og Google Routes reisetidsverktøy. Krever en Google Maps API nøkkel.",
               "enable_llm_api_bridge": "Vis godkjente tredjeparts Home Assistant LLM API-er registrert av andre integrasjoner.",
               "enable_memory_tools": "Vis verktøy for delt vedvarende minne slik at assistenten kan huske, huske og glemme brukergodkjente fakta og preferanser med TTL-basert utløp.",
-              "memory_default_ttl_days": "Standard antall dager et nytt minne beholdes når verktøykallet ikke gir ttl_days.",
-              "memory_max_ttl_days": "Maksimalt antall dager lagret minne kan beholdes.",
-              "memory_max_items": "Øvre grense for aktive lagrede minner. De eldste minnene beskjæres først når denne grensen overskrides.",
               "enable_music_assistant_support": "Vis Music Assistant søke-, kø-, bibliotek- og avspillingsverktøy.",
               "enable_read_url_tool": "Vis URL lesing slik at assistenten kan inspisere spesifikke nettsider.",
               "enable_recorder_tools": "Vis opptakerstøttet historie, analyse og punkt-i-tidsverktøy.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
           "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering."
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurer den delte MCP-lytteren, listen over tillatte IP-adresser og bearer-token-autentisering.",
+            "data": {
+              "mcp_port": "MCP-serverport",
+              "allowed_ips": "Ekstra tillatte IP-er/omrader",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
+              "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
+              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+            }
+          },
           "context": {
             "name": "Kontekst",
             "description": "Kontroller hvilke Home Assistant-identitets- og plasseringsdetaljer som er inkludert i AI-forespørsler og MCP-verktøyanropsnyttelast.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Minne",
-              "memory_default_ttl_days": "Standardminne TTL (dager)",
-              "memory_max_ttl_days": "Maks minne TTL (dager)",
-              "memory_max_items": "Maks lagrede minner",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Les URL",
               "enable_recorder_tools": "Opptakerhistorikk",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Vis Google Places-oppslag og Google Routes reisetidsverktøy. Krever en Google Maps API nøkkel.",
               "enable_llm_api_bridge": "Vis godkjente tredjeparts Home Assistant LLM API-er registrert av andre integrasjoner.",
               "enable_memory_tools": "Vis verktøy for delt vedvarende minne slik at assistenten kan huske, huske og glemme brukergodkjente fakta og preferanser med TTL-basert utløp.",
-              "memory_default_ttl_days": "Standard antall dager et nytt minne beholdes når verktøykallet ikke gir ttl_days.",
-              "memory_max_ttl_days": "Maksimalt antall dager lagret minne kan beholdes.",
-              "memory_max_items": "Øvre grense for aktive lagrede minner. De eldste minnene beskjæres først når denne grensen overskrides.",
               "enable_music_assistant_support": "Vis Music Assistant søke-, kø-, bibliotek- og avspillingsverktøy.",
               "enable_read_url_tool": "Vis URL lesing slik at assistenten kan inspisere spesifikke nettsider.",
               "enable_recorder_tools": "Vis opptakerstøttet historie, analyse og punkt-i-tidsverktøy.",

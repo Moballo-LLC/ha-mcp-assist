@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
           "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।",
-          "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों।"
+          "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों। सहेजते समय नया token बनाने के लिए FFFF दर्ज करें।"
         },
         "sections": {
+          "server": {
+            "name": "सर्वर",
+            "description": "साझा MCP listener, अनुमत IP सूची और Bearer token प्रमाणीकरण कॉन्फ़िगर करें।",
+            "data": {
+              "mcp_port": "MCP सर्वर पोर्ट",
+              "allowed_ips": "अतिरिक्त अनुमत IP/रेंज",
+              "mcp_bearer_token": "MCP Bearer टोकन"
+            },
+            "data_description": {
+              "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
+              "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।",
+              "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों। सहेजते समय नया token बनाने के लिए FFFF दर्ज करें।"
+            }
+          },
           "context": {
             "name": "प्रसंग",
             "description": "नियंत्रित करें कि AI संकेतों और MCP टूल-कॉल पेलोड में कौन सी Home Assistant पहचान और स्थान विवरण शामिल हैं।",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API ब्रिज",
               "enable_memory_tools": "याद",
-              "memory_default_ttl_days": "डिफ़ॉल्ट मेमोरी TTL (दिन)",
-              "memory_max_ttl_days": "अधिकतम मेमोरी TTL (दिन)",
-              "memory_max_items": "अधिकतम संग्रहित यादें",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "URL पढ़ें",
               "enable_recorder_tools": "रिकॉर्डर इतिहास",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Google Places लुकअप और Google Routes यात्रा-समय टूल को उजागर करें। Google Maps API कुंजी की आवश्यकता है।",
               "enable_llm_api_bridge": "अन्य एकीकरणों द्वारा पंजीकृत अनुमत सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API को उजागर करें।",
               "enable_memory_tools": "साझा किए गए स्थायी मेमोरी टूल को उजागर करें ताकि सहायक TTL-आधारित समाप्ति के साथ उपयोगकर्ता द्वारा अनुमोदित तथ्यों और प्राथमिकताओं को याद रख सके, याद कर सके और भूल सके।",
-              "memory_default_ttl_days": "जब टूल कॉल ttl_days प्रदान नहीं करता है तो नई मेमोरी रखे जाने वाले दिनों की डिफ़ॉल्ट संख्या।",
-              "memory_max_ttl_days": "किसी संग्रहीत स्मृति को अधिकतम कितने दिनों तक रखा जा सकता है।",
-              "memory_max_items": "सक्रिय संग्रहीत स्मृतियों पर ऊपरी सीमा। जब यह सीमा पार हो जाती है तो सबसे पहले सबसे पुरानी यादें छांट दी जाती हैं।",
               "enable_music_assistant_support": "Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल को उजागर करें।",
               "enable_read_url_tool": "URL रीडिंग को उजागर करें ताकि सहायक विशिष्ट वेब पेजों का निरीक्षण कर सके।",
               "enable_recorder_tools": "रिकॉर्डर-समर्थित इतिहास, विश्लेषण और पॉइंट-इन-टाइम टूल को उजागर करें।",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
           "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।",
-          "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों।"
+          "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों। सहेजते समय नया token बनाने के लिए FFFF दर्ज करें।"
         },
         "sections": {
+          "server": {
+            "name": "सर्वर",
+            "description": "साझा MCP listener, अनुमत IP सूची और Bearer token प्रमाणीकरण कॉन्फ़िगर करें।",
+            "data": {
+              "mcp_port": "MCP सर्वर पोर्ट",
+              "allowed_ips": "अतिरिक्त अनुमत IP/रेंज",
+              "mcp_bearer_token": "MCP Bearer टोकन"
+            },
+            "data_description": {
+              "mcp_port": "साझा MCP सर्वर द्वारा उपयोग किया जाने वाला स्थानीय पोर्ट।",
+              "allowed_ips": "वैकल्पिक अल्पविराम से अलग किए गए आईपी पते या CIDR श्रेणियां जो localhost के अतिरिक्त कनेक्ट हो सकती हैं।",
+              "mcp_bearer_token": "बाहरी MCP क्लाइंट के लिए आवश्यक वैकल्पिक bearer टोकन। नए सेटअप को जनरेट किया गया टोकन मिलता है; इस फ़ील्ड को केवल तभी खाली करें जब आप जानबूझकर bearer प्रमाणीकरण के बिना IP allowlisting चाहते हों। सहेजते समय नया token बनाने के लिए FFFF दर्ज करें।"
+            }
+          },
           "context": {
             "name": "प्रसंग",
             "description": "नियंत्रित करें कि AI संकेतों और MCP टूल-कॉल पेलोड में कौन सी Home Assistant पहचान और स्थान विवरण शामिल हैं।",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API ब्रिज",
               "enable_memory_tools": "याद",
-              "memory_default_ttl_days": "डिफ़ॉल्ट मेमोरी TTL (दिन)",
-              "memory_max_ttl_days": "अधिकतम मेमोरी TTL (दिन)",
-              "memory_max_items": "अधिकतम संग्रहित यादें",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "URL पढ़ें",
               "enable_recorder_tools": "रिकॉर्डर इतिहास",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Google Places लुकअप और Google Routes यात्रा-समय टूल को उजागर करें। Google Maps API कुंजी की आवश्यकता है।",
               "enable_llm_api_bridge": "अन्य एकीकरणों द्वारा पंजीकृत अनुमत सूचीबद्ध तृतीय-पक्ष Home Assistant LLM API को उजागर करें।",
               "enable_memory_tools": "साझा किए गए स्थायी मेमोरी टूल को उजागर करें ताकि सहायक TTL-आधारित समाप्ति के साथ उपयोगकर्ता द्वारा अनुमोदित तथ्यों और प्राथमिकताओं को याद रख सके, याद कर सके और भूल सके।",
-              "memory_default_ttl_days": "जब टूल कॉल ttl_days प्रदान नहीं करता है तो नई मेमोरी रखे जाने वाले दिनों की डिफ़ॉल्ट संख्या।",
-              "memory_max_ttl_days": "किसी संग्रहीत स्मृति को अधिकतम कितने दिनों तक रखा जा सकता है।",
-              "memory_max_items": "सक्रिय संग्रहीत स्मृतियों पर ऊपरी सीमा। जब यह सीमा पार हो जाती है तो सबसे पहले सबसे पुरानी यादें छांट दी जाती हैं।",
               "enable_music_assistant_support": "Music Assistant खोज, कतार, लाइब्रेरी और प्लेबैक टूल को उजागर करें।",
               "enable_read_url_tool": "URL रीडिंग को उजागर करें ताकि सहायक विशिष्ट वेब पेजों का निरीक्षण कर सके।",
               "enable_recorder_tools": "रिकॉर्डर-समर्थित इतिहास, विश्लेषण और पॉइंट-इन-टाइम टूल को उजागर करें।",

@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configureer de gedeelde MCP-listener, de IP-toelatingslijst en bearer-tokenverificatie.",
+            "data": {
+              "mcp_port": "MCP-serverpoort",
+              "allowed_ips": "Extra toegestane IPs/bereiken",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
+              "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
+              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+            }
+          },
           "context": {
             "name": "-context",
             "description": "Bepaal welke Home Assistant identiteits- en locatiegegevens worden opgenomen in AI-prompts en MCP tool-call-payloads.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Brug",
               "enable_memory_tools": "-geheugen",
-              "memory_default_ttl_days": "Standaardgeheugen TTL (dagen)",
-              "memory_max_ttl_days": "Maximaal geheugen TTL (dagen)",
-              "memory_max_items": "Maximaal aantal opgeslagen herinneringen",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lees URL",
               "enable_recorder_tools": "Recordergeschiedenis",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Toon tools voor het opzoeken van Google Places en Google Routes voor reistijd. Vereist een Google Maps API-sleutel.",
               "enable_llm_api_bridge": "Maak derde partijen op de toelatingslijst zichtbaar Home Assistant LLM API's die door andere integraties zijn geregistreerd.",
               "enable_memory_tools": "Stel gedeelde permanente geheugenhulpmiddelen bloot, zodat de assistent door de gebruiker goedgekeurde feiten en voorkeuren kan onthouden, oproepen en vergeten met op TTL gebaseerde vervaldatum.",
-              "memory_default_ttl_days": "Standaard aantal dagen dat een nieuw geheugen wordt bewaard als de gereedschapsoproep geen ttl_days oplevert.",
-              "memory_max_ttl_days": "Maximaal aantal dagen dat opgeslagen geheugen mag worden bewaard.",
-              "memory_max_items": "Bovengrens voor actieve opgeslagen geheugens. De oudste herinneringen worden als eerste gesnoeid wanneer deze limiet wordt overschreden.",
               "enable_music_assistant_support": "Stel Music Assistant zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen bloot.",
               "enable_read_url_tool": "Stel URL-gegevens beschikbaar zodat de assistent specifieke webpagina's kan inspecteren.",
               "enable_recorder_tools": "Leg door recorder ondersteunde geschiedenis, analyse en point-in-time tools bloot.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configureer de gedeelde MCP-listener, de IP-toelatingslijst en bearer-tokenverificatie.",
+            "data": {
+              "mcp_port": "MCP-serverpoort",
+              "allowed_ips": "Extra toegestane IPs/bereiken",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
+              "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
+              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+            }
+          },
           "context": {
             "name": "-context",
             "description": "Bepaal welke Home Assistant identiteits- en locatiegegevens worden opgenomen in AI-prompts en MCP tool-call-payloads.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Brug",
               "enable_memory_tools": "-geheugen",
-              "memory_default_ttl_days": "Standaardgeheugen TTL (dagen)",
-              "memory_max_ttl_days": "Maximaal geheugen TTL (dagen)",
-              "memory_max_items": "Maximaal aantal opgeslagen herinneringen",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Lees URL",
               "enable_recorder_tools": "Recordergeschiedenis",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Toon tools voor het opzoeken van Google Places en Google Routes voor reistijd. Vereist een Google Maps API-sleutel.",
               "enable_llm_api_bridge": "Maak derde partijen op de toelatingslijst zichtbaar Home Assistant LLM API's die door andere integraties zijn geregistreerd.",
               "enable_memory_tools": "Stel gedeelde permanente geheugenhulpmiddelen bloot, zodat de assistent door de gebruiker goedgekeurde feiten en voorkeuren kan onthouden, oproepen en vergeten met op TTL gebaseerde vervaldatum.",
-              "memory_default_ttl_days": "Standaard aantal dagen dat een nieuw geheugen wordt bewaard als de gereedschapsoproep geen ttl_days oplevert.",
-              "memory_max_ttl_days": "Maximaal aantal dagen dat opgeslagen geheugen mag worden bewaard.",
-              "memory_max_items": "Bovengrens voor actieve opgeslagen geheugens. De oudste herinneringen worden als eerste gesnoeid wanneer deze limiet wordt overschreden.",
               "enable_music_assistant_support": "Stel Music Assistant zoek-, wachtrij-, bibliotheek- en afspeelhulpmiddelen bloot.",
               "enable_read_url_tool": "Stel URL-gegevens beschikbaar zodat de assistent specifieke webpagina's kan inspecteren.",
               "enable_recorder_tools": "Leg door recorder ondersteunde geschiedenis, analyse en point-in-time tools bloot.",

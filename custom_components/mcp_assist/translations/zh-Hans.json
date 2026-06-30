@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。"
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
         },
         "sections": {
+          "server": {
+            "name": "服务器",
+            "description": "配置共享 MCP 监听器、IP 允许列表和 Bearer 令牌身份验证。",
+            "data": {
+              "mcp_port": "MCP服务器端口",
+              "allowed_ips": "额外允许的IP/范围",
+              "mcp_bearer_token": "MCP Bearer 令牌"
+            },
+            "data_description": {
+              "mcp_port": "共享MCP服务器使用的本地端口。",
+              "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
+              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+            }
+          },
           "context": {
             "name": "语境",
             "description": "控制 AI 提示和 MCP 工具调用负载中包含哪些 Home Assistant 身份和位置详细信息。",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API 桥",
               "enable_memory_tools": "记忆",
-              "memory_default_ttl_days": "默认内存 TTL（天）",
-              "memory_max_ttl_days": "最大内存 TTL（天）",
-              "memory_max_items": "最大存储内存",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "读取 URL",
               "enable_recorder_tools": "录音机历史",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "公开 Google Places 查找和 Google Routes 旅行时间工具。需要 Google Maps API 密钥。",
               "enable_llm_api_bridge": "公开由其他集成注册的列入白名单的第三方 Home Assistant LLM API。",
               "enable_memory_tools": "公开共享的持久内存工具，以便助手可以通过基于 TTL 的过期来记住、回忆和忘记用户批准的事实和偏好。",
-              "memory_default_ttl_days": "当工具调用未提供 ttl_days 时，新内存的默认保留天数。",
-              "memory_max_ttl_days": "任何存储的内存可以保留的最大天数。",
-              "memory_max_items": "活动存储内存的上限。当超过此限制时，最旧的内存将首先被修剪。",
               "enable_music_assistant_support": "公开 Music Assistant 搜索、队列、库和播放工具。",
               "enable_read_url_tool": "公开 URL 读取内容，以便助手可以检查特定网页。",
               "enable_recorder_tools": "公开记录器支持的历史记录、分析和时间点工具。",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。"
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
         },
         "sections": {
+          "server": {
+            "name": "服务器",
+            "description": "配置共享 MCP 监听器、IP 允许列表和 Bearer 令牌身份验证。",
+            "data": {
+              "mcp_port": "MCP服务器端口",
+              "allowed_ips": "额外允许的IP/范围",
+              "mcp_bearer_token": "MCP Bearer 令牌"
+            },
+            "data_description": {
+              "mcp_port": "共享MCP服务器使用的本地端口。",
+              "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
+              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+            }
+          },
           "context": {
             "name": "语境",
             "description": "控制 AI 提示和 MCP 工具调用负载中包含哪些 Home Assistant 身份和位置详细信息。",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API 桥",
               "enable_memory_tools": "记忆",
-              "memory_default_ttl_days": "默认内存 TTL（天）",
-              "memory_max_ttl_days": "最大内存 TTL（天）",
-              "memory_max_items": "最大存储内存",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "读取 URL",
               "enable_recorder_tools": "录音机历史",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "公开 Google Places 查找和 Google Routes 旅行时间工具。需要 Google Maps API 密钥。",
               "enable_llm_api_bridge": "公开由其他集成注册的列入白名单的第三方 Home Assistant LLM API。",
               "enable_memory_tools": "公开共享的持久内存工具，以便助手可以通过基于 TTL 的过期来记住、回忆和忘记用户批准的事实和偏好。",
-              "memory_default_ttl_days": "当工具调用未提供 ttl_days 时，新内存的默认保留天数。",
-              "memory_max_ttl_days": "任何存储的内存可以保留的最大天数。",
-              "memory_max_items": "活动存储内存的上限。当超过此限制时，最旧的内存将首先被修剪。",
               "enable_music_assistant_support": "公开 Music Assistant 搜索、队列、库和播放工具。",
               "enable_read_url_tool": "公开 URL 读取内容，以便助手可以检查特定网页。",
               "enable_recorder_tools": "公开记录器支持的历史记录、分析和时间点工具。",

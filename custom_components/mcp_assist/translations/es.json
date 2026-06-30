@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
           "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
-          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional."
+          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional. Introduce FFFF para generar un token nuevo al guardar."
         },
         "sections": {
+          "server": {
+            "name": "Servidor",
+            "description": "Configura el listener MCP compartido, la lista de IP permitidas y la autenticación con token Bearer.",
+            "data": {
+              "mcp_port": "Puerto del servidor MCP",
+              "allowed_ips": "IPs/Rangos adicionales permitidos",
+              "mcp_bearer_token": "Token Bearer de MCP"
+            },
+            "data_description": {
+              "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
+              "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
+              "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional. Introduce FFFF para generar un token nuevo al guardar."
+            }
+          },
           "context": {
             "name": "Contexto",
             "description": "Controle qué detalles de identidad y ubicación Home Assistant se incluyen en las indicaciones de IA y en las cargas útiles de llamadas de herramientas MCP.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Puente",
               "enable_memory_tools": "Memoria",
-              "memory_default_ttl_days": "Memoria predeterminada TTL (Días)",
-              "memory_max_ttl_days": "Memoria máxima TTL (días)",
-              "memory_max_items": "Memorias máximas almacenadas",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Leer URL",
               "enable_recorder_tools": "Historial del registrador",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Exponga las herramientas de búsqueda Google Places y de tiempo de viaje Google Routes. Requiere una clave Google Maps API.",
               "enable_llm_api_bridge": "Exponer Home Assistant LLM API de terceros incluidos en la lista permitida y registrados por otras integraciones.",
               "enable_memory_tools": "Exponga herramientas de memoria persistente compartida para que el asistente pueda recordar, recuperar y olvidar hechos y preferencias aprobados por el usuario con caducidad basada en TTL.",
-              "memory_default_ttl_days": "Número predeterminado de días que se conserva una nueva memoria cuando la llamada a la herramienta no proporciona ttl_days.",
-              "memory_max_ttl_days": "Número máximo de días que se puede retener cualquier memoria almacenada.",
-              "memory_max_items": "Límite superior de recuerdos almacenados activos. Los recuerdos más antiguos se eliminan primero cuando se excede este límite.",
               "enable_music_assistant_support": "Exponga las herramientas de búsqueda, cola, biblioteca y reproducción Music Assistant.",
               "enable_read_url_tool": "Exponga la lectura URL para que el asistente pueda inspeccionar páginas web específicas.",
               "enable_recorder_tools": "Exponga el historial, el análisis y las herramientas de un momento dado respaldados por grabadoras.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
           "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
-          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional."
+          "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional. Introduce FFFF para generar un token nuevo al guardar."
         },
         "sections": {
+          "server": {
+            "name": "Servidor",
+            "description": "Configura el listener MCP compartido, la lista de IP permitidas y la autenticación con token Bearer.",
+            "data": {
+              "mcp_port": "Puerto del servidor MCP",
+              "allowed_ips": "IPs/Rangos adicionales permitidos",
+              "mcp_bearer_token": "Token Bearer de MCP"
+            },
+            "data_description": {
+              "mcp_port": "El puerto local utilizado por el servidor MCP compartido.",
+              "allowed_ips": "Direcciones IP opcionales separadas por comas o rangos CIDR que pueden conectarse además de localhost.",
+              "mcp_bearer_token": "Token Bearer opcional requerido por clientes MCP externos. Las configuraciones nuevas reciben un token generado; borra este campo solo si quieres permitir IPs sin autenticación Bearer de forma intencional. Introduce FFFF para generar un token nuevo al guardar."
+            }
+          },
           "context": {
             "name": "Contexto",
             "description": "Controle qué detalles de identidad y ubicación Home Assistant se incluyen en las indicaciones de IA y en las cargas útiles de llamadas de herramientas MCP.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Puente",
               "enable_memory_tools": "Memoria",
-              "memory_default_ttl_days": "Memoria predeterminada TTL (Días)",
-              "memory_max_ttl_days": "Memoria máxima TTL (días)",
-              "memory_max_items": "Memorias máximas almacenadas",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Leer URL",
               "enable_recorder_tools": "Historial del registrador",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Exponga las herramientas de búsqueda Google Places y de tiempo de viaje Google Routes. Requiere una clave Google Maps API.",
               "enable_llm_api_bridge": "Exponer Home Assistant LLM API de terceros incluidos en la lista permitida y registrados por otras integraciones.",
               "enable_memory_tools": "Exponga herramientas de memoria persistente compartida para que el asistente pueda recordar, recuperar y olvidar hechos y preferencias aprobados por el usuario con caducidad basada en TTL.",
-              "memory_default_ttl_days": "Número predeterminado de días que se conserva una nueva memoria cuando la llamada a la herramienta no proporciona ttl_days.",
-              "memory_max_ttl_days": "Número máximo de días que se puede retener cualquier memoria almacenada.",
-              "memory_max_items": "Límite superior de recuerdos almacenados activos. Los recuerdos más antiguos se eliminan primero cuando se excede este límite.",
               "enable_music_assistant_support": "Exponga las herramientas de búsqueda, cola, biblioteca y reproducción Music Assistant.",
               "enable_read_url_tool": "Exponga la lectura URL para que el asistente pueda inspeccionar páginas web específicas.",
               "enable_recorder_tools": "Exponga el historial, el análisis y las herramientas de un momento dado respaldados por grabadoras.",

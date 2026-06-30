@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
           "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
-          "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer."
+          "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer. Inserisci FFFF per generare un nuovo token al salvataggio."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configura il listener MCP condiviso, l’elenco degli IP consentiti e l’autenticazione con token Bearer.",
+            "data": {
+              "mcp_port": "Porta server MCP",
+              "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
+              "mcp_bearer_token": "Token Bearer MCP"
+            },
+            "data_description": {
+              "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
+              "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
+              "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer. Inserisci FFFF per generare un nuovo token al salvataggio."
+            }
+          },
           "context": {
             "name": "Contesto",
             "description": "Controlla quali identità Home Assistant e dettagli sulla posizione sono inclusi nei prompt AI e nei payload delle chiamate allo strumento MCP.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Ponte",
               "enable_memory_tools": "Memoria",
-              "memory_default_ttl_days": "Memoria predefinita TTL (giorni)",
-              "memory_max_ttl_days": "Memoria massima TTL (giorni)",
-              "memory_max_items": "Numero massimo di memorie archiviate",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Leggi URL",
               "enable_recorder_tools": "Storia del registratore",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Esporre gli strumenti di ricerca Google Places e di tempo di viaggio Google Routes. Richiede una chiave Google Maps API.",
               "enable_llm_api_bridge": "Esporre Home Assistant LLM API di terze parti consentiti registrati da altre integrazioni.",
               "enable_memory_tools": "Esponi strumenti di memoria persistente condivisa in modo che l'assistente possa ricordare, richiamare e dimenticare fatti e preferenze approvati dall'utente con scadenza basata su TTL.",
-              "memory_default_ttl_days": "Numero predefinito di giorni in cui viene conservata una nuova memoria quando la chiamata dello strumento non fornisce ttl_days.",
-              "memory_max_ttl_days": "Numero massimo di giorni per cui è possibile conservare la memoria archiviata.",
-              "memory_max_items": "Limite superiore sulle memorie archiviate attive. I ricordi più vecchi vengono eliminati per primi quando viene superato questo limite.",
               "enable_music_assistant_support": "Esporre gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
               "enable_read_url_tool": "Esporre la lettura URL in modo che l'assistente possa ispezionare pagine Web specifiche.",
               "enable_recorder_tools": "Esponi strumenti di cronologia, analisi e point-in-time supportati dal registratore.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
           "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
-          "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer."
+          "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer. Inserisci FFFF per generare un nuovo token al salvataggio."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configura il listener MCP condiviso, l’elenco degli IP consentiti e l’autenticazione con token Bearer.",
+            "data": {
+              "mcp_port": "Porta server MCP",
+              "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
+              "mcp_bearer_token": "Token Bearer MCP"
+            },
+            "data_description": {
+              "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
+              "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
+              "mcp_bearer_token": "Token Bearer opzionale richiesto dai client MCP esterni. Le nuove configurazioni ricevono un token generato; cancella questo campo solo se vuoi intenzionalmente usare l’elenco di IP consentiti senza autenticazione Bearer. Inserisci FFFF per generare un nuovo token al salvataggio."
+            }
+          },
           "context": {
             "name": "Contesto",
             "description": "Controlla quali identità Home Assistant e dettagli sulla posizione sono inclusi nei prompt AI e nei payload delle chiamate allo strumento MCP.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Ponte",
               "enable_memory_tools": "Memoria",
-              "memory_default_ttl_days": "Memoria predefinita TTL (giorni)",
-              "memory_max_ttl_days": "Memoria massima TTL (giorni)",
-              "memory_max_items": "Numero massimo di memorie archiviate",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Leggi URL",
               "enable_recorder_tools": "Storia del registratore",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Esporre gli strumenti di ricerca Google Places e di tempo di viaggio Google Routes. Richiede una chiave Google Maps API.",
               "enable_llm_api_bridge": "Esporre Home Assistant LLM API di terze parti consentiti registrati da altre integrazioni.",
               "enable_memory_tools": "Esponi strumenti di memoria persistente condivisa in modo che l'assistente possa ricordare, richiamare e dimenticare fatti e preferenze approvati dall'utente con scadenza basata su TTL.",
-              "memory_default_ttl_days": "Numero predefinito di giorni in cui viene conservata una nuova memoria quando la chiamata dello strumento non fornisce ttl_days.",
-              "memory_max_ttl_days": "Numero massimo di giorni per cui è possibile conservare la memoria archiviata.",
-              "memory_max_items": "Limite superiore sulle memorie archiviate attive. I ricordi più vecchi vengono eliminati per primi quando viene superato questo limite.",
               "enable_music_assistant_support": "Esporre gli strumenti di ricerca, coda, libreria e riproduzione Music Assistant.",
               "enable_read_url_tool": "Esporre la lettura URL in modo che l'assistente possa ispezionare pagine Web specifiche.",
               "enable_recorder_tools": "Esponi strumenti di cronologia, analisi e point-in-time supportati dal registratore.",

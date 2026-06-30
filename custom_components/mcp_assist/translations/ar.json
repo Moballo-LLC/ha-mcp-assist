@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
         },
         "sections": {
+          "server": {
+            "name": "الخادم",
+            "description": "اضبط مستمع MCP المشترك، وقائمة عناوين IP المسموح بها، ومصادقة رمز Bearer.",
+            "data": {
+              "mcp_port": "منفذ خادم MCP",
+              "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
+              "mcp_bearer_token": "رمز Bearer لـ MCP"
+            },
+            "data_description": {
+              "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
+              "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
+              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+            }
+          },
           "context": {
             "name": "سياق",
             "description": "التحكم في هوية Home Assistant وتفاصيل الموقع المضمنة في مطالبات الذكاء الاصطناعي وحمولات استدعاء الأدوات MCP.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "جسر LLM API",
               "enable_memory_tools": "ذاكرة",
-              "memory_default_ttl_days": "الذاكرة الافتراضية TTL (أيام)",
-              "memory_max_ttl_days": "الحد الأقصى للذاكرة TTL (أيام)",
-              "memory_max_items": "ماكس الذكريات المخزنة",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "قراءة URL",
               "enable_recorder_tools": "تاريخ المسجل",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "كشف Google Places وأدوات وقت السفر Google Routes. يتطلب مفتاح Google Maps API.",
               "enable_llm_api_bridge": "كشف Home Assistant LLM API للجهات الخارجية المسجلة بواسطة عمليات التكامل الأخرى.",
               "enable_memory_tools": "اكشف عن أدوات الذاكرة المستمرة المشتركة حتى يتمكن المساعد من تذكر الحقائق والتفضيلات التي وافق عليها المستخدم واسترجاعها ونسيانها من خلال انتهاء الصلاحية المستند إلى TTL.",
-              "memory_default_ttl_days": "العدد الافتراضي للأيام التي يتم الاحتفاظ بالذاكرة الجديدة فيها عندما لا يوفر استدعاء الأداة ttl_days.",
-              "memory_max_ttl_days": "الحد الأقصى لعدد الأيام التي يمكن الاحتفاظ بأي ذاكرة مخزنة فيها.",
-              "memory_max_items": "الحد الأعلى للذكريات المخزنة النشطة. يتم تشذيب الذكريات الأقدم أولاً عند تجاوز هذا الحد.",
               "enable_music_assistant_support": "كشف أدوات البحث وقائمة الانتظار والمكتبة والتشغيل Music Assistant.",
               "enable_read_url_tool": "كشف قراءة URL حتى يتمكن المساعد من فحص صفحات ويب محددة.",
               "enable_recorder_tools": "كشف التاريخ والتحليل وأدوات النقطة الزمنية المدعومة بالمسجل.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
         },
         "sections": {
+          "server": {
+            "name": "الخادم",
+            "description": "اضبط مستمع MCP المشترك، وقائمة عناوين IP المسموح بها، ومصادقة رمز Bearer.",
+            "data": {
+              "mcp_port": "منفذ خادم MCP",
+              "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
+              "mcp_bearer_token": "رمز Bearer لـ MCP"
+            },
+            "data_description": {
+              "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
+              "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
+              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+            }
+          },
           "context": {
             "name": "سياق",
             "description": "التحكم في هوية Home Assistant وتفاصيل الموقع المضمنة في مطالبات الذكاء الاصطناعي وحمولات استدعاء الأدوات MCP.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "جسر LLM API",
               "enable_memory_tools": "ذاكرة",
-              "memory_default_ttl_days": "الذاكرة الافتراضية TTL (أيام)",
-              "memory_max_ttl_days": "الحد الأقصى للذاكرة TTL (أيام)",
-              "memory_max_items": "ماكس الذكريات المخزنة",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "قراءة URL",
               "enable_recorder_tools": "تاريخ المسجل",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "كشف Google Places وأدوات وقت السفر Google Routes. يتطلب مفتاح Google Maps API.",
               "enable_llm_api_bridge": "كشف Home Assistant LLM API للجهات الخارجية المسجلة بواسطة عمليات التكامل الأخرى.",
               "enable_memory_tools": "اكشف عن أدوات الذاكرة المستمرة المشتركة حتى يتمكن المساعد من تذكر الحقائق والتفضيلات التي وافق عليها المستخدم واسترجاعها ونسيانها من خلال انتهاء الصلاحية المستند إلى TTL.",
-              "memory_default_ttl_days": "العدد الافتراضي للأيام التي يتم الاحتفاظ بالذاكرة الجديدة فيها عندما لا يوفر استدعاء الأداة ttl_days.",
-              "memory_max_ttl_days": "الحد الأقصى لعدد الأيام التي يمكن الاحتفاظ بأي ذاكرة مخزنة فيها.",
-              "memory_max_items": "الحد الأعلى للذكريات المخزنة النشطة. يتم تشذيب الذكريات الأقدم أولاً عند تجاوز هذا الحد.",
               "enable_music_assistant_support": "كشف أدوات البحث وقائمة الانتظار والمكتبة والتشغيل Music Assistant.",
               "enable_read_url_tool": "كشف قراءة URL حتى يتمكن المساعد من فحص صفحات ويب محددة.",
               "enable_recorder_tools": "كشف التاريخ والتحليل وأدوات النقطة الزمنية المدعومة بالمسجل.",
