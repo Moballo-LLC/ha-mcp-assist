@@ -1555,6 +1555,8 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "url" in normalize_adaptive_query_terms("Summarize example.com")
     assert "url" in normalize_adaptive_query_terms("read example.de")
     assert "url" in normalize_adaptive_query_terms("summarize example.info")
+    assert "url" in normalize_adaptive_query_terms("Summarize weather.com")
+    assert "url" in normalize_adaptive_query_terms("read light.kitchen")
     assert "url" in normalize_adaptive_query_terms(
         "read www.example.com/docs"
     )
@@ -1717,6 +1719,8 @@ def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
         "Summarize example.com",
         "read example.de",
         "summarize example.info",
+        "Summarize weather.com",
+        "read light.kitchen",
     ):
         matches = match_adaptive_tool_definitions(
             [convert_tool, read_tool],

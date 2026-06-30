@@ -124,6 +124,27 @@ ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS = frozenset(
     }
 )
 ADAPTIVE_PRESENT_HISTORY_TERMS = ("access", "history", "recorder")
+ADAPTIVE_COMMON_PUBLIC_URL_TLDS = frozenset(
+    {
+        "ai",
+        "app",
+        "ca",
+        "co",
+        "com",
+        "de",
+        "dev",
+        "edu",
+        "fr",
+        "gov",
+        "info",
+        "io",
+        "me",
+        "net",
+        "org",
+        "uk",
+        "us",
+    }
+)
 ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
     {
         "alarm_control_panel",
@@ -172,6 +193,9 @@ ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
         "weather",
         "zone",
     }
+)
+ADAPTIVE_URL_ACTION_TERMS = frozenset(
+    {"browse", "fetch", "read", "summarise", "summarize", "visit"}
 )
 ADAPTIVE_EXPLICIT_URL_INTENT_RE = re.compile(
     r"https?://\S+"
@@ -487,10 +511,25 @@ def tool_definition_name(tool: dict[str, Any]) -> str:
     return str(tool.get("name") or "")
 
 
-def _is_adaptive_entity_id_like_host(host: str) -> bool:
+def _has_adaptive_url_action_context(text: str, match: re.Match[str]) -> bool:
+    """Return true when a bare-domain match is preceded by a URL-reading verb."""
+    preceding_terms = re.findall(r"\w+", text[: match.start()], flags=re.UNICODE)[-3:]
+    return any(term in ADAPTIVE_URL_ACTION_TERMS for term in preceding_terms)
+
+
+def _is_adaptive_entity_id_like_host(
+    host: str,
+    *,
+    text: str = "",
+    match: re.Match[str] | None = None,
+) -> bool:
     """Return true for dotted Home Assistant entity IDs that resemble bare domains."""
-    first_label = str(host or "").split(".", 1)[0].casefold()
-    return first_label in ADAPTIVE_ENTITY_ID_DOMAINS
+    labels = str(host or "").casefold().split(".")
+    if len(labels) != 2 or labels[0] not in ADAPTIVE_ENTITY_ID_DOMAINS:
+        return False
+    if labels[1] in ADAPTIVE_COMMON_PUBLIC_URL_TLDS:
+        return False
+    return not (match is not None and _has_adaptive_url_action_context(text, match))
 
 
 def _has_adaptive_url_intent(text: str) -> bool:
@@ -498,7 +537,11 @@ def _has_adaptive_url_intent(text: str) -> bool:
     if ADAPTIVE_EXPLICIT_URL_INTENT_RE.search(text):
         return True
     return any(
-        not _is_adaptive_entity_id_like_host(match.group("host"))
+        not _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=text,
+            match=match,
+        )
         for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
     )
 
@@ -508,7 +551,11 @@ def _strip_adaptive_url_intents(text: str) -> str:
     stripped = ADAPTIVE_EXPLICIT_URL_INTENT_RE.sub(" ", text)
 
     def replace_bare_domain(match: re.Match[str]) -> str:
-        if _is_adaptive_entity_id_like_host(match.group("host")):
+        if _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=stripped,
+            match=match,
+        ):
             return match.group(0)
         return " "
 
