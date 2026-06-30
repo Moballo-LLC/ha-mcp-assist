@@ -36,6 +36,12 @@ STORAGE_KEY = "mcp_assist.openclaw_device"
 STORAGE_VERSION = 1
 
 
+def _normalize_locale(locale: str | None) -> str:
+    """Return a compact BCP-47-ish locale for the OpenClaw handshake."""
+    normalized = str(locale or "").strip().replace("_", "-")
+    return normalized or "en-US"
+
+
 # --- Exceptions ---
 
 class OpenClawError(Exception):
@@ -159,6 +165,7 @@ class OpenClawClient:
         use_ssl: bool,
         device_auth: OpenClawDeviceAuth,
         timeout: int = 60,
+        locale: str | None = None,
     ) -> None:
         """Initialize OpenClaw client."""
         self._host = host
@@ -167,6 +174,7 @@ class OpenClawClient:
         self._use_ssl = use_ssl
         self._device_auth = device_auth
         self._timeout = timeout
+        self._locale = _normalize_locale(locale)
 
         self._ws = None
         self._connected = False
@@ -265,7 +273,7 @@ class OpenClawClient:
                 "mode": CLIENT_MODE,
             },
             "caps": [],
-            "locale": "en-US",
+            "locale": self._locale,
             "userAgent": f"{CLIENT_DISPLAY_NAME}/{CLIENT_VERSION}",
             "auth": {"token": self._token},
             "role": DEVICE_ROLE,

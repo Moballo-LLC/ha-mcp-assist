@@ -17,6 +17,7 @@ The index includes:
 
 import asyncio
 from contextlib import suppress
+import json
 import logging
 from collections.abc import Callable
 from typing import Any, Dict, List, Optional, Set
@@ -1008,8 +1009,6 @@ Focus on meaningful categories that would help discover relevant entities for us
         Raises:
             ValueError: If response cannot be parsed
         """
-        import json
-
         # Try to extract JSON from response
         # LLM might wrap it in markdown code blocks
         response_text = response_text.strip()
@@ -1027,41 +1026,93 @@ Focus on meaningful categories that would help discover relevant entities for us
         # Try to parse as JSON
         try:
             parsed = json.loads(response_text)
-            if not isinstance(parsed, dict):
-                raise ValueError("Response is not a JSON object")
-
-            # Validate structure
-            for category, data in parsed.items():
-                if not isinstance(data, dict):
-                    raise ValueError(f"Category {category} is not a dict")
-                if "pattern" not in data or "count" not in data:
-                    raise ValueError(f"Category {category} missing required fields")
+            self._validate_inferred_types(parsed)
         except json.JSONDecodeError as e:
-            # JSON parsing failed - try to repair incomplete JSON
-            _LOGGER.warning("Gap-filling JSON parsing failed at position %d: %s", e.pos, e.msg)
+            _LOGGER.debug(
+                "Gap-filling JSON parsing failed at position %d: %s",
+                e.pos,
+                e.msg,
+            )
             _LOGGER.debug("Response text (first 500 chars): %s", response_text[:500])
 
-            # Attempt to repair by closing incomplete JSON
-            repaired_text = response_text
-            # Count open braces
-            open_braces = repaired_text.count('{')
-            close_braces = repaired_text.count('}')
-
-            if open_braces > close_braces:
-                _LOGGER.info("Attempting to repair incomplete JSON (adding %d closing braces)", open_braces - close_braces)
-                repaired_text += '}' * (open_braces - close_braces)
-
-                try:
-                    parsed = json.loads(repaired_text)
-                    _LOGGER.info("✅ JSON repair successful - recovered %d categories", len(parsed))
-                    return parsed
-                except json.JSONDecodeError:
-                    _LOGGER.error("JSON repair failed, gap-filling will be skipped this cycle")
+            recovered = self._recover_complete_inferred_types(response_text)
+            if recovered:
+                _LOGGER.info(
+                    "Recovered %d complete inferred type categories from a truncated "
+                    "gap-filling response",
+                    len(recovered),
+                )
+                return recovered
 
             raise ValueError(f"Invalid JSON in LLM response: {e.msg}")
 
         _LOGGER.debug("Successfully parsed %d inferred types from LLM", len(parsed))
         return parsed
+
+    @staticmethod
+    def _validate_inferred_types(parsed: Any) -> None:
+        """Validate the inferred type response structure."""
+        if not isinstance(parsed, dict):
+            raise ValueError("Response is not a JSON object")
+
+        for category, data in parsed.items():
+            if not isinstance(data, dict):
+                raise ValueError(f"Category {category} is not a dict")
+            if "pattern" not in data or "count" not in data:
+                raise ValueError(f"Category {category} missing required fields")
+
+    @staticmethod
+    def _recover_complete_inferred_types(response_text: str) -> Dict[str, Any]:
+        """Recover complete top-level categories from a truncated JSON object."""
+        start = response_text.find("{")
+        if start < 0:
+            return {}
+
+        decoder = json.JSONDecoder()
+        recovered: Dict[str, Any] = {}
+        position = start + 1
+        length = len(response_text)
+
+        while position < length:
+            while position < length and response_text[position].isspace():
+                position += 1
+
+            if position >= length or response_text[position] == "}":
+                break
+            if response_text[position] == ",":
+                position += 1
+                continue
+            if response_text[position] != '"':
+                break
+
+            try:
+                key, position = decoder.raw_decode(response_text, position)
+            except json.JSONDecodeError:
+                break
+
+            while position < length and response_text[position].isspace():
+                position += 1
+            if position >= length or response_text[position] != ":":
+                break
+            position += 1
+
+            while position < length and response_text[position].isspace():
+                position += 1
+
+            try:
+                value, position = decoder.raw_decode(response_text, position)
+            except json.JSONDecodeError:
+                break
+
+            if (
+                isinstance(key, str)
+                and isinstance(value, dict)
+                and "pattern" in value
+                and "count" in value
+            ):
+                recovered[key] = value
+
+        return recovered
 
     async def _is_gap_filling_enabled(self) -> bool:
         """Check if gap-filling is enabled in config.

@@ -110,16 +110,18 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api"
 # No hardcoded model lists - models are fetched dynamically from provider APIs
 DEFAULT_MODEL_NAME = "model"
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a helpful Home Assistant voice assistant. Respond naturally and "
+    "You are a helpful Home Assistant voice assistant. For Home Assistant state "
+    "or control requests, use MCP tools before replying. Respond naturally and "
     "conversationally to user requests."
 )
 PROMPT_MODE_DEFAULT = "default"
 PROMPT_MODE_CUSTOM = "custom"
 CONTEXT_MODE_STANDARD = "standard"
+CONTEXT_MODE_ADAPTIVE = "adaptive"
 CONTEXT_MODE_LIGHT = "light"
 DEFAULT_SYSTEM_PROMPT_MODE = PROMPT_MODE_DEFAULT
 DEFAULT_TECHNICAL_PROMPT_MODE = PROMPT_MODE_DEFAULT
-DEFAULT_CONTEXT_MODE = CONTEXT_MODE_STANDARD
+DEFAULT_CONTEXT_MODE = CONTEXT_MODE_ADAPTIVE
 DEFAULT_CONTROL_HA = True
 DEFAULT_RESPONSE_MODE = "default"
 DEFAULT_FOLLOW_UP_MODE = "default"  # Keep for backward compatibility
@@ -452,6 +454,7 @@ Rules:
 - Never invent entity IDs or claim an action happened unless a tool confirmed it.
 - For Home Assistant tasks, discover the target first.
 - For direct read-only checks or simple control requests, call the needed tools in the same turn. Do not ask the user to confirm that you should look something up.
+- Do not reply only with a plan or promise to check; make the tool call before answering.
 - Ask a follow-up only when the target or requested action is genuinely ambiguous, risky, or unsafe.
 - Prefer entity-first control. Use device tools only when physical-device context matters.
 - Floors, labels, and aliases are valid discovery inputs.

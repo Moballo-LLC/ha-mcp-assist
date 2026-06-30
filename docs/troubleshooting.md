@@ -52,7 +52,9 @@ context window.
 
 Try:
 
-- Set the profile's **Context Mode** to **Light**.
+- Set the profile's **Context Mode** to **Adaptive** if it was changed to
+  Standard.
+- Use **Context Mode: Light** for very small direct-control local models.
 - Reduce **Max History Messages**.
 - Disable optional tool families the profile does not need.
 - Increase the Ollama **Context Window** setting if the model and hardware

@@ -49,13 +49,21 @@ from custom_components.mcp_assist.const import (
     CONF_PROFILE_ENABLE_WEB_SEARCH,
     CONF_CHAT_LOG_MODE,
     CONF_DEBUG_MODE,
+    DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TECHNICAL_PROMPT,
     DOMAIN,
+    CONTEXT_MODE_ADAPTIVE,
     CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD,
     DEFAULT_CONTEXT_MODE,
     PROMPT_MODE_CUSTOM,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_ANTHROPIC,
+)
+from custom_components.mcp_assist.tool_schema import (
+    ADAPTIVE_TOOL_CATALOG_NAME,
+    ADAPTIVE_TOOL_SCHEMA_NAME,
+    normalize_adaptive_query_terms,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -164,6 +172,18 @@ def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
     assert offset == 1
 
 
+def test_toolless_check_preamble_detects_supported_non_english_phrases(
+    hass, profile_entry_factory
+) -> None:
+    """Tool-less retry should not only work for English model preambles."""
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+
+    assert agent._is_toolless_check_preamble("Voy a comprobar las luces de arriba.")
+    assert agent._is_toolless_check_preamble("Je vais vérifier les lumières.")
+    assert agent._is_toolless_check_preamble("確認します。")
+    assert agent._is_toolless_check_preamble("سأتحقق من الأضواء.")
+
+
 def test_compact_streamed_tool_calls_drops_empty_placeholders() -> None:
     """Empty streamed tool-call slots should not be executed."""
     compacted = MCPAssistConversationEntity._compact_streamed_tool_calls(
@@ -175,6 +195,31 @@ def test_compact_streamed_tool_calls_drops_empty_placeholders() -> None:
     )
 
     assert compacted == [{"id": "call-1", "function": {"name": "get_index"}}]
+
+
+def test_partition_valid_tool_calls_rejects_partial_json_arguments() -> None:
+    """Malformed streamed tool arguments should be retried, not executed as {}."""
+    valid, invalid = MCPAssistConversationEntity._partition_valid_tool_calls(
+        [
+            {
+                "id": "call-1",
+                "function": {
+                    "name": "discover_entities",
+                    "arguments": '{"domain": "light"}',
+                },
+            },
+            {
+                "id": "call-2",
+                "function": {
+                    "name": "discover_entities",
+                    "arguments": '{"domain": "light"',
+                },
+            },
+        ]
+    )
+
+    assert [call["id"] for call in valid] == ["call-1"]
+    assert [call["id"] for call in invalid] == ["call-2"]
 
 
 def test_profile_tool_enablement_respects_shared_and_profile_settings(
@@ -295,6 +340,40 @@ def test_light_context_mode_advertises_core_profile_tools(
         "discover_devices",
         "get_device_details",
     }
+
+
+def test_adaptive_context_mode_advertises_core_and_meta_tools(
+    hass, profile_entry_factory
+) -> None:
+    """Adaptive context should start small and add selected schemas on demand."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("discover_entities"),
+        _tool("get_entity_details"),
+        _tool("perform_action"),
+        _tool("sample_custom_tool"),
+    ]
+
+    advertised = agent._build_llm_tools_for_context(tools)
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+
+    assert "discover_entities" in advertised_names
+    assert "perform_action" in advertised_names
+    assert ADAPTIVE_TOOL_CATALOG_NAME in advertised_names
+    assert ADAPTIVE_TOOL_SCHEMA_NAME in advertised_names
+    assert "sample_custom_tool" not in advertised_names
+
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(
+        frozenset({"sample_custom_tool"})
+    )
+    try:
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_custom_tool" in advertised_names
 
 
 def test_profile_tool_filtering_can_hide_convert_unit_without_hiding_add(
@@ -453,6 +532,32 @@ def test_optional_technical_instructions_omit_external_custom_tool_guidance_when
     assert "sample_tool_status" not in instructions
 
 
+@pytest.mark.asyncio
+async def test_adaptive_prompt_uses_compact_tool_loading_guidance(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Adaptive mode should not inline full optional custom-tool instructions."""
+    system_entry_factory(data={CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: True})
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
+        tools=SimpleNamespace(
+            get_external_prompt_instructions=lambda: (
+                "## External Custom Tools\nUse sample_tool_status for custom status."
+            ),
+        )
+    )
+
+    prompt = await agent._build_system_prompt_with_context(
+        SimpleNamespace(device_id=None)
+    )
+
+    assert "Adaptive Tool Loading" in prompt
+    assert ADAPTIVE_TOOL_CATALOG_NAME in prompt
+    assert ADAPTIVE_TOOL_SCHEMA_NAME in prompt
+    assert "sample_tool_status" not in prompt
+
+
 def test_profile_tool_filtering_can_disable_search_without_hiding_read_url(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -555,6 +660,62 @@ def test_build_messages_respects_configured_max_history(
     ]
 
 
+def test_build_messages_includes_compact_tool_history_context(
+    hass, profile_entry_factory
+) -> None:
+    """Follow-up turns should retain compact MCP target/action context."""
+    entry = profile_entry_factory(options={CONF_MAX_HISTORY: 2})
+    agent = MCPAssistConversationEntity(hass, entry)
+    history = [
+        {
+            "user": "Are any kitchen lights on?",
+            "assistant": "The kitchen pendant is on.",
+            "actions": [
+                {
+                    "type": "mcp_tool",
+                    "tool": "discover_entities",
+                    "status": "ok",
+                    "arguments": {
+                        "area": "Kitchen",
+                        "domain": "light",
+                        "state": "on",
+                    },
+                }
+            ],
+        }
+    ]
+
+    messages = agent._build_messages("system", "turn it off", history)
+
+    assert messages[2]["role"] == "assistant"
+    assert "The kitchen pendant is on." in messages[2]["content"]
+    assert "Tool context: discover_entities(area=Kitchen, domain=light, state=on)" in (
+        messages[2]["content"]
+    )
+
+
+def test_tool_history_summary_marks_error_result_status(
+    hass, profile_entry_factory
+) -> None:
+    """MCP failure result dictionaries should not be summarized as successful."""
+    entry = profile_entry_factory(options={CONF_MAX_HISTORY: 2})
+    agent = MCPAssistConversationEntity(hass, entry)
+    summaries: list[dict[str, object]] = []
+    token = agent_module._REQUEST_TOOL_HISTORY_SUMMARIES.set(summaries)
+
+    try:
+        agent._record_tool_history_summary(
+            "perform_action",
+            {"entity_id": "light.kitchen"},
+            {"error": "Service call failed"},
+        )
+    finally:
+        agent_module._REQUEST_TOOL_HISTORY_SUMMARIES.reset(token)
+
+    assert summaries[0]["status"] == "error"
+    assert "status=error" in agent._format_history_tool_context(summaries)
+
+
 def test_build_messages_supports_zero_history(
     hass, profile_entry_factory
 ) -> None:
@@ -629,6 +790,36 @@ def test_initial_payload_metrics_log_size_without_content(
     assert "please keep this private" not in caplog.text
 
 
+def test_initial_payload_metrics_log_at_info_when_debug_mode_enabled(
+    hass, profile_entry_factory, caplog
+) -> None:
+    """Profile Debug Mode should surface first-payload metrics without DEBUG logs."""
+    agent = MCPAssistConversationEntity(
+        hass, profile_entry_factory(data={CONF_DEBUG_MODE: True})
+    )
+    messages = [{"role": "user", "content": "private debug message"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "discover_entities", "parameters": {}},
+        }
+    ]
+    payload = {"model": "test-model", "messages": messages, "tools": tools}
+
+    with caplog.at_level(logging.INFO, logger=agent_module._LOGGER.name):
+        agent._log_initial_llm_payload_metrics(
+            transport="http",
+            iteration=0,
+            payload=payload,
+            messages=messages,
+            tools=tools,
+        )
+
+    assert "Initial LLM payload metrics" in caplog.text
+    assert "payload_bytes=" in caplog.text
+    assert "private debug message" not in caplog.text
+
+
 def test_build_messages_light_context_caps_history_to_two_turns(
     hass, profile_entry_factory
 ) -> None:
@@ -674,10 +865,10 @@ def test_chat_log_mode_defaults_off_and_can_be_enabled(
     assert enabled_agent.chat_log_mode is True
 
 
-def test_context_mode_defaults_to_standard_for_unknown_values(
+def test_context_mode_defaults_to_adaptive_for_unknown_values(
     hass, profile_entry_factory
 ) -> None:
-    """Unknown stored context mode values should fall back to standard behavior."""
+    """Unknown stored context mode values should fall back to adaptive behavior."""
     default_agent = MCPAssistConversationEntity(hass, profile_entry_factory())
     invalid_agent = MCPAssistConversationEntity(
         hass,
@@ -688,6 +879,7 @@ def test_context_mode_defaults_to_standard_for_unknown_values(
     )
 
     assert default_agent.context_mode == DEFAULT_CONTEXT_MODE
+    assert default_agent.context_mode == CONTEXT_MODE_ADAPTIVE
     assert invalid_agent.context_mode == DEFAULT_CONTEXT_MODE
 
 
@@ -983,9 +1175,9 @@ async def test_get_mcp_tools_uses_short_lived_cache(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """Repeated tool fetches with the same profile surface should reuse the cache."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
-    fetch_mock = AsyncMock(return_value=[{"type": "function", "function": {"name": "discover_entities"}}])
+    fetch_mock = AsyncMock(return_value=[_tool("discover_entities")])
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", fetch_mock)
 
     first = await agent._get_mcp_tools()
@@ -1000,7 +1192,7 @@ async def test_get_mcp_tools_refetches_when_external_custom_tool_signature_chang
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """External custom tool changes should invalidate the profile MCP-tool cache immediately."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
     state = {"signature": ("v1",)}
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
@@ -1008,8 +1200,8 @@ async def test_get_mcp_tools_refetches_when_external_custom_tool_signature_chang
     )
     fetch_mock = AsyncMock(
         side_effect=[
-            [{"type": "function", "function": {"name": "sample_tool_status"}}],
-            [{"type": "function", "function": {"name": "sample_tool_history"}}],
+            [_tool("sample_tool_status")],
+            [_tool("sample_tool_history")],
         ]
     )
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", fetch_mock)
@@ -1029,18 +1221,237 @@ async def test_get_mcp_tools_uses_stale_cache_on_refresh_failure(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """A transient tools/list failure should fall back to the last cached tool surface."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
-    cached_tools = [{"type": "function", "function": {"name": "discover_entities"}}]
-    agent._cached_llm_tools = list(cached_tools)
-    agent._cached_llm_tools_key = agent._build_mcp_tool_cache_key()
-    agent._cached_llm_tools_fetched_at = 0
+    cached_tools = [_tool("discover_entities")]
+    agent._cached_profile_mcp_tools = list(cached_tools)
+    agent._cached_profile_mcp_tools_key = agent._build_mcp_tool_cache_key()
+    agent._cached_profile_mcp_tools_fetched_at = 0
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", AsyncMock(return_value=None))
     monkeypatch.setattr("custom_components.mcp_assist.agent.time.monotonic", lambda: 9999.0)
 
     result = await agent._get_mcp_tools()
 
-    assert result == cached_tools
+    assert result == agent._convert_mcp_tools_to_llm_tools(cached_tools)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_meta_tools_catalog_and_load_schemas(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive meta tools should expose a compact catalog before loading schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    custom_tool = {
+        "name": "sample_tool_status",
+        "description": "private-schema-marker user-facing description",
+        "llmDescription": "Get sample custom status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "include_details": {
+                    "type": "boolean",
+                    "description": "private-schema-marker should stay hidden",
+                }
+            },
+        },
+        "routingHints": {
+            "keywords": ["status", "sample"],
+            "preferred_when": "Use when the user asks for custom package health.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), custom_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        catalog_result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_CATALOG_NAME,
+            {"query": "sample"},
+        )
+        catalog_payload = json.loads(catalog_result["content"][0]["text"])
+
+        assert catalog_payload["tools"][0]["name"] == "sample_tool_status"
+        assert catalog_payload["tools"][0]["schema_loaded"] is False
+        assert "inputSchema" not in catalog_result["content"][0]["text"]
+        assert "private-schema-marker" not in catalog_result["content"][0]["text"]
+
+        load_result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": ["sample_tool_status"]},
+        )
+        load_payload = json.loads(load_result["content"][0]["text"])
+
+        assert load_payload["loaded_tools"][0]["name"] == "sample_tool_status"
+        assert load_payload["not_found"] == []
+        assert "sample_tool_status" in agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_schema_load_survives_execute_tool_calls(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Schema loads should update the next advertised tool surface."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("discover_entities"),
+        _tool("sample_tool_status"),
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._execute_tool_calls(
+            [
+                {
+                    "id": "load-1",
+                    "function": {
+                        "name": ADAPTIVE_TOOL_SCHEMA_NAME,
+                        "arguments": json.dumps(
+                            {"tool_names": ["sample_tool_status"]}
+                        ),
+                    },
+                }
+            ]
+        )
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_tool_status" in advertised_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_schema_load_survives_mixed_execute_tool_calls(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Schema loads should remain visible when real tools run concurrently."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("discover_entities"), _tool("sample_tool_status")]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_call_mcp_tool",
+        AsyncMock(return_value={"content": [{"type": "text", "text": "ok"}]}),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._execute_tool_calls(
+            [
+                {
+                    "id": "call-1",
+                    "function": {
+                        "name": "discover_entities",
+                        "arguments": "{}",
+                    },
+                },
+                {
+                    "id": "load-1",
+                    "function": {
+                        "name": ADAPTIVE_TOOL_SCHEMA_NAME,
+                        "arguments": json.dumps(
+                            {"tool_names": ["sample_tool_status"]}
+                        ),
+                    },
+                },
+            ]
+        )
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_tool_status" in advertised_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive mode should avoid extra turns for high-confidence optional tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {
+            "keywords": ["weather", "forecast"],
+            "preferred_when": "Use when the user asks about weather.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "What is the weather tomorrow?"
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert "get_weather_forecast" in loaded_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_optional_tool_from_localized_query(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive query aliases should bridge non-English user text to tool metadata."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {
+            "keywords": ["weather", "forecast"],
+            "preferred_when": "Use when the user asks about weather.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "¿Qué tiempo hará mañana?"
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert "get_weather_forecast" in loaded_names
+
+
+def test_adaptive_query_terms_expand_unicode_aliases() -> None:
+    """Adaptive query matching should tokenize and expand non-English terms."""
+    assert "weather" in normalize_adaptive_query_terms("¿Qué tiempo hará mañana?")
+    assert "weather" in normalize_adaptive_query_terms("明天天气怎么样")
+    assert "search" in normalize_adaptive_query_terms("buscar en la web")
 
 
 def test_compact_tool_result_for_llm_truncates_large_payloads(
@@ -1221,8 +1632,10 @@ def test_agent_does_not_expose_provider_specific_transport_helpers() -> None:
 
 def test_default_prompt_uses_tools_without_extra_confirmation() -> None:
     """Routine voice-friendly home checks should happen in one assistant turn."""
+    assert "use MCP tools before replying" in DEFAULT_SYSTEM_PROMPT
     assert "call the needed tools in the same turn" in DEFAULT_TECHNICAL_PROMPT
     assert "Do not ask the user to confirm" in DEFAULT_TECHNICAL_PROMPT
+    assert "Do not reply only with a plan" in DEFAULT_TECHNICAL_PROMPT
     assert "Treat the tool-call budget as limited" in DEFAULT_TECHNICAL_PROMPT
 
 
@@ -1460,6 +1873,346 @@ async def test_tool_budget_skips_extra_calls_and_finishes_without_tools(
     skipped_content = json.loads(final_tool_result_blocks[1]["content"])
     assert skipped_content["budget_exhausted"] is True
     assert "configured tool-call budget" in skipped_content["error"]
+
+
+def test_adaptive_meta_tool_calls_do_not_consume_tool_budget(
+    hass, profile_entry_factory
+) -> None:
+    """Schema discovery should not spend the user's real MCP tool-call budget."""
+    entry = profile_entry_factory(options={CONF_MAX_ITERATIONS: 1})
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    tool_calls = [
+        {"id": "meta-1", "function": {"name": ADAPTIVE_TOOL_CATALOG_NAME}},
+        {"id": "call-1", "function": {"name": "discover_entities"}},
+        {"id": "call-2", "function": {"name": "perform_action"}},
+    ]
+
+    plan = agent._prepare_tool_calls_for_budget(
+        tool_calls,
+        tool_calls_used=0,
+        provider=provider,
+    )
+
+    assert [call["function"]["name"] for call in plan.executable_calls] == [
+        ADAPTIVE_TOOL_CATALOG_NAME,
+        "discover_entities",
+    ]
+    assert list(plan.skipped_results_by_index) == [2]
+    assert "budget_exhausted" in json.dumps(plan.skipped_results_by_index[2])
+    assert agent._count_budgeted_tool_calls(plan.executable_calls) == 1
+    assert plan.exhausted is True
+
+
+def test_tool_budget_results_preserve_original_call_order(
+    hass, profile_entry_factory
+) -> None:
+    """Skipped real calls should stay in order when later meta calls can run."""
+    entry = profile_entry_factory(options={CONF_MAX_ITERATIONS: 1})
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    tool_calls = [
+        {"id": "call-1", "function": {"name": "discover_entities"}},
+        {"id": "call-2", "function": {"name": "perform_action"}},
+        {"id": "load-1", "function": {"name": ADAPTIVE_TOOL_SCHEMA_NAME}},
+    ]
+
+    plan = agent._prepare_tool_calls_for_budget(
+        tool_calls,
+        tool_calls_used=0,
+        provider=provider,
+    )
+    executable_results = [
+        provider.build_tool_result_message(
+            tool_call_id="call-1",
+            tool_name="discover_entities",
+            content="{}",
+        ),
+        provider.build_tool_result_message(
+            tool_call_id="load-1",
+            tool_name=ADAPTIVE_TOOL_SCHEMA_NAME,
+            content="{}",
+        ),
+    ]
+
+    results = agent._merge_tool_results_in_call_order(plan, executable_results)
+
+    assert [result["tool_call_id"] for result in results] == [
+        "call-1",
+        "call-2",
+        "load-1",
+    ]
+    skipped_content = json.loads(results[1]["content"])
+    assert skipped_content["budget_exhausted"] is True
+
+
+@pytest.mark.asyncio
+async def test_ollama_toolless_check_preamble_retries_with_tool_call(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Ollama-style pre-tool narration should self-correct in the same turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_MAX_ITERATIONS: 1,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_name": "discover_entities",
+                "content": "No upstairs lights are on.",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "I'll check if there are any lights on upstairs for you.",
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": {
+                                    "domain": "light",
+                                    "floor": "upstairs",
+                                    "state": "on",
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "No upstairs lights are on.",
+                }
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_http(
+        [{"role": "user", "content": "Are there any lights on upstairs?"}]
+    )
+
+    assert result == "No upstairs lights are on."
+    assert len(posts) == 3
+    assert "tools" in posts[0]["json"]
+    assert "tools" in posts[1]["json"]
+    assert "tools" not in posts[2]["json"]
+
+    retry_messages = posts[1]["json"]["messages"]
+    assert retry_messages[-2] == {
+        "role": "assistant",
+        "content": "I'll check if there are any lights on upstairs for you.",
+    }
+    assert retry_messages[-1]["role"] == "system"
+    assert "no MCP tool call was made" in retry_messages[-1]["content"]
+
+    execute_mock.assert_awaited_once()
+    executed_calls = execute_mock.await_args.args[0]
+    assert [call["function"]["name"] for call in executed_calls] == [
+        "discover_entities"
+    ]
+    assert executed_calls[0]["function"]["arguments"] == {
+        "domain": "light",
+        "floor": "upstairs",
+        "state": "on",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ollama_invalid_tool_arguments_retry_without_malformed_history(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Malformed tool-call JSON should prompt a clean retry without bad history."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_MAX_ITERATIONS: 1,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_name": "discover_entities",
+                "content": "No upstairs lights are on.",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": '{"domain": "light"',
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": {
+                                    "domain": "light",
+                                    "floor": "upstairs",
+                                    "state": "on",
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "No upstairs lights are on.",
+                }
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_http(
+        [{"role": "user", "content": "Are there any lights on upstairs?"}]
+    )
+
+    assert result == "No upstairs lights are on."
+    assert len(posts) == 3
+    retry_messages = posts[1]["json"]["messages"]
+    assert not any(message.get("tool_calls") for message in retry_messages)
+    assert retry_messages[-1]["role"] == "system"
+    assert "invalid JSON arguments" in retry_messages[-1]["content"]
+    assert "function.arguments" in retry_messages[-1]["content"]
+
+    execute_mock.assert_awaited_once()
+    executed_calls = execute_mock.await_args.args[0]
+    assert executed_calls[0]["function"]["arguments"] == {
+        "domain": "light",
+        "floor": "upstairs",
+        "state": "on",
+    }
+
+
+def test_toolless_check_retry_does_not_fire_after_tool_results(
+    hass, profile_entry_factory
+) -> None:
+    """A post-tool summary that starts like a check should not trigger extra turns."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "discover_entities",
+                "description": "Find entities.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+
+    assert agent._should_retry_toolless_response(
+        "I'll check if any kitchen lights are on.",
+        tools=tools,
+        retry_used=False,
+        tool_calls_used=0,
+    )
+    assert not agent._should_retry_toolless_response(
+        "I can see the kitchen light is on.",
+        tools=tools,
+        retry_used=False,
+        tool_calls_used=1,
+    )
 
 
 def test_format_tool_result_for_llm_preserves_structured_results_without_binary(

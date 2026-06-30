@@ -2,6 +2,7 @@
 
 import asyncio
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 import json
 import logging
 import re
@@ -35,6 +36,20 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_profile,
 )
 from .provider_runtime import resolve_provider_runtime_config
+from .tool_schema import (
+    ADAPTIVE_META_TOOL_NAMES,
+    ADAPTIVE_TOOL_CATALOG_NAME,
+    ADAPTIVE_TOOL_SCHEMA_NAME,
+    build_adaptive_llm_tools,
+    build_tool_routing_summary,
+    compact_schema_for_llm,
+    compact_text,
+    convert_mcp_tools_to_llm_tools,
+    json_size_bytes,
+    match_adaptive_tool_definitions,
+    score_adaptive_tool_match,
+    tool_definition_name,
+)
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
@@ -83,6 +98,7 @@ from .const import (
     DEFAULT_TECHNICAL_PROMPT,
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
+    CONTEXT_MODE_ADAPTIVE,
     CONTEXT_MODE_LIGHT,
     CONTEXT_MODE_STANDARD,
     DEFAULT_DEBUG_MODE,
@@ -132,6 +148,20 @@ MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 MAX_PROVIDER_LOG_CHARS = 500
+TOOL_HISTORY_ARGUMENT_KEYS = (
+    "entity_id",
+    "entity_ids",
+    "area",
+    "floor",
+    "domain",
+    "device_class",
+    "state",
+    "action",
+    "service",
+    "script",
+    "automation",
+    "name",
+)
 TOOL_BUDGET_EXHAUSTED_RESULT = (
     "Tool call skipped because this request reached the configured tool-call "
     "budget. Answer from the tool results already available without calling more "
@@ -146,8 +176,147 @@ TOOL_BUDGET_FALLBACK_RESPONSE = (
     "I used the available tool budget before I could finish. Try a narrower "
     "request, or raise Max Tool Iterations if this needs a broader check."
 )
+TOOLLESS_RETRY_INSTRUCTION = (
+    "You just said you would check, but no MCP tool call was made. This is still "
+    "the same user request. Do not ask the user to wait or confirm. Call the "
+    "appropriate MCP tool now using the most specific available filters, or give "
+    "the final answer only if no tool is needed. After using tools, answer in "
+    "the user's language."
+)
+INVALID_TOOL_ARGUMENT_RETRY_INSTRUCTION = (
+    "The previous MCP tool call had invalid JSON arguments and was not executed. "
+    "This is still the same user request. Do not ask the user to confirm. Call "
+    "the needed MCP tool again with a complete JSON object in function.arguments, "
+    "or answer only if no tool is needed. After using tools, answer in the "
+    "user's language."
+)
+INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE = (
+    "I couldn't complete that because the model produced invalid tool-call "
+    "arguments more than once. Try again, or use a model with stronger "
+    "tool-calling support."
+)
+TOOLLESS_RESPONSE_PATTERNS = (
+    re.compile(
+        r"\b(?:i(?:'|’)?ll|i will|i(?:'|’)?m going to|i am going to|let me|i can)\s+"
+        r"(?:check|look|look up|find|see|verify|inspect|search)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^\s*checking\b", re.IGNORECASE),
+)
+TOOLLESS_RESPONSE_PREFIXES = tuple(
+    phrase.casefold()
+    for phrase in (
+        # German
+        "ich prüfe",
+        "ich überprüfe",
+        "ich schaue",
+        "ich werde prüfen",
+        "ich werde nachsehen",
+        "lass mich",
+        # French
+        "je vais vérifier",
+        "je vérifie",
+        "je vais regarder",
+        "je vais chercher",
+        "laissez-moi vérifier",
+        # Spanish
+        "voy a comprobar",
+        "voy a revisar",
+        "voy a verificar",
+        "déjame comprobar",
+        "permíteme comprobar",
+        "revisaré",
+        "comprobaré",
+        # Italian
+        "controllo",
+        "verifico",
+        "controllerò",
+        "lasciami controllare",
+        # Dutch
+        "ik controleer",
+        "ik ga controleren",
+        "ik kijk",
+        "laat me controleren",
+        # Polish
+        "sprawdzę",
+        "sprawdzam",
+        "już sprawdzam",
+        "pozwól mi sprawdzić",
+        # Portuguese
+        "vou verificar",
+        "vou conferir",
+        "deixe-me verificar",
+        "verifico",
+        # Russian
+        "я проверю",
+        "сейчас проверю",
+        "проверю",
+        "я посмотрю",
+        "посмотрю",
+        # Chinese
+        "我来查",
+        "我会检查",
+        "让我看看",
+        "正在检查",
+        "我查一下",
+        # Japanese
+        "確認します",
+        "調べます",
+        "見てみます",
+        "確認してみます",
+        # Korean
+        "확인하겠습니다",
+        "확인해볼게요",
+        "확인해 보겠습니다",
+        # Nordic languages
+        "jag kontrollerar",
+        "jag ska kontrollera",
+        "jag kollar",
+        "låt mig kontrollera",
+        "jeg sjekker",
+        "jeg skal sjekke",
+        "la meg sjekke",
+        "jeg tjekker",
+        "jeg vil tjekke",
+        "lad mig tjekke",
+        # Finnish, Czech, Greek, Turkish, Filipino
+        "tarkistan",
+        "katson",
+        "zkontroluji",
+        "podívám se",
+        "ověřím",
+        "θα ελέγξω",
+        "ελέγχω",
+        "ας ελέγξω",
+        "θα κοιτάξω",
+        "kontrol edeceğim",
+        "kontrol ediyorum",
+        "bakacağım",
+        "kontrol edeyim",
+        "susuriin ko",
+        "titingnan ko",
+        # Arabic, Hindi
+        "سأتحقق",
+        "سوف أتحقق",
+        "دعني أتحقق",
+        "سأفحص",
+        "سأبحث",
+        "मैं जांच",
+        "मैं जाँच",
+        "मैं देख",
+        "जांचता हूँ",
+        "जाँचता हूँ",
+        "देखता हूँ",
+    )
+)
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
+)
+_ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[set[str] | frozenset[str] | None] = ContextVar(
+    "mcp_assist_adaptive_loaded_tool_names", default=None
+)
+_REQUEST_TOOL_HISTORY_SUMMARIES: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "mcp_assist_request_tool_history_summaries", default=None
 )
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
@@ -164,6 +333,17 @@ _SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class ToolCallBudgetPlan:
+    """Provider tool-call plan with original-order indexes preserved."""
+
+    executable_calls: list[dict[str, Any]]
+    executable_indexes: list[int]
+    skipped_results_by_index: dict[int, dict[str, Any]]
+    original_count: int
+    exhausted: bool
+
+
 def _json_size_bytes(value: Any) -> int:
     """Return UTF-8 JSON size for logs without logging the JSON itself."""
     try:
@@ -171,6 +351,16 @@ def _json_size_bytes(value: Any) -> int:
     except Exception:
         serialized = str(value)
     return len(serialized.encode("utf-8"))
+
+
+def _adaptive_loaded_tool_names() -> set[str]:
+    """Return mutable request-scoped adaptive schema names."""
+    loaded_names = _ADAPTIVE_LOADED_TOOL_NAMES.get()
+    if isinstance(loaded_names, set):
+        return loaded_names
+    mutable_names = set(loaded_names or ())
+    _ADAPTIVE_LOADED_TOOL_NAMES.set(mutable_names)
+    return mutable_names
 
 
 def _mapping_key_summary(value: Any, *, max_keys: int = 10) -> str:
@@ -233,9 +423,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         self.entry = entry
         self.history = ConversationHistory()
         self._current_chat_log = None  # ChatLog for debug view tracking
-        self._cached_llm_tools: list[dict[str, Any]] | None = None
-        self._cached_llm_tools_key: tuple[Any, ...] | None = None
-        self._cached_llm_tools_fetched_at = 0.0
+        self._cached_profile_mcp_tools: list[dict[str, Any]] | None = None
+        self._cached_profile_mcp_tools_key: tuple[Any, ...] | None = None
+        self._cached_profile_mcp_tools_fetched_at = 0.0
 
         # Entity attributes
         profile_name = entry.data.get("profile_name", "MCP Assist")
@@ -461,9 +651,14 @@ class MCPAssistConversationEntity(ConversationEntity):
             CONF_CONTEXT_MODE,
             self.entry.data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
         )
-        if value in {CONTEXT_MODE_STANDARD, CONTEXT_MODE_LIGHT}:
+        if value in {CONTEXT_MODE_STANDARD, CONTEXT_MODE_ADAPTIVE, CONTEXT_MODE_LIGHT}:
             return value
         return DEFAULT_CONTEXT_MODE
+
+    @property
+    def adaptive_context_mode(self) -> bool:
+        """Return whether this profile should load optional tool schemas on demand."""
+        return self.context_mode == CONTEXT_MODE_ADAPTIVE
 
     @property
     def light_context_mode(self) -> bool:
@@ -686,6 +881,18 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return "\n\n".join(section for section in sections if section)
 
+    def _build_adaptive_technical_instructions(self) -> str:
+        """Build compact routing guidance for adaptive context mode."""
+        return (
+            "## Adaptive Tool Loading\n"
+            "- Start with the advertised Home Assistant tools for entity discovery and control.\n"
+            "- When a request needs optional, built-in package, or custom tools, "
+            f"call {ADAPTIVE_TOOL_CATALOG_NAME} with a short query, then call "
+            f"{ADAPTIVE_TOOL_SCHEMA_NAME} for the exact tool names you need.\n"
+            "- Do not ask the user to approve tool discovery; use these routing "
+            "tools in the same turn when needed."
+        )
+
     def _get_external_custom_tool_instructions(self) -> str:
         """Return prompt additions from loaded external custom tool packages."""
         if not self.external_custom_tools_enabled:
@@ -706,162 +913,26 @@ class MCPAssistConversationEntity(ConversationEntity):
     @staticmethod
     def _compact_text(text: str, *, max_len: int = 160) -> str:
         """Compact instructional text for lower token usage."""
-        normalized = " ".join(str(text).split()).strip()
-        if not normalized:
-            return ""
-
-        for separator in (". ", "\n", "; "):
-            if separator in normalized:
-                normalized = normalized.split(separator, 1)[0].strip()
-                break
-
-        if len(normalized) <= max_len:
-            return normalized
-
-        truncated = normalized[: max_len - 1].rstrip()
-        last_space = truncated.rfind(" ")
-        if last_space > 40:
-            truncated = truncated[:last_space]
-        return truncated.rstrip(" ,;:.") + "."
+        return compact_text(text, max_len=max_len)
 
     def _compact_schema_for_llm(self, schema: Any, *, keep_description: bool = False) -> Any:
         """Strip nonessential JSON-schema verbosity before sending tools to the LLM."""
-        if isinstance(schema, list):
-            compacted_list = [
-                self._compact_schema_for_llm(item, keep_description=keep_description)
-                for item in schema
-            ]
-            return [item for item in compacted_list if item not in (None, {}, [])]
-
-        if not isinstance(schema, dict):
-            return schema
-
-        compacted: dict[str, Any] = {}
-
-        for key, value in schema.items():
-            if key in {"$schema", "title", "default", "examples", "example"}:
-                continue
-
-            if key == "description":
-                if keep_description:
-                    compact_description = self._compact_text(str(value), max_len=120)
-                    if compact_description:
-                        compacted[key] = compact_description
-                continue
-
-            if key == "properties":
-                properties: dict[str, Any] = {}
-                for prop_name, prop_schema in value.items():
-                    compact_prop = self._compact_schema_for_llm(prop_schema)
-                    if compact_prop:
-                        properties[prop_name] = compact_prop
-                if properties:
-                    compacted[key] = properties
-                continue
-
-            if key == "required":
-                if value:
-                    compacted[key] = value
-                continue
-
-            if key == "additionalProperties":
-                continue
-
-            compact_value = self._compact_schema_for_llm(
-                value, keep_description=keep_description
-            )
-            if compact_value not in (None, {}, []):
-                compacted[key] = compact_value
-
-        return compacted
+        return compact_schema_for_llm(schema, keep_description=keep_description)
 
     def _convert_mcp_tools_to_llm_tools(
         self, tools: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Convert MCP tools to a compact provider-neutral function schema."""
-        llm_tools = []
-
-        for tool in tools:
-            parameters = self._compact_schema_for_llm(
-                tool.get("inputSchema", {}), keep_description=False
-            )
-            if not parameters:
-                parameters = {"type": "object", "properties": {}}
-            elif parameters.get("type") == "object" and "properties" not in parameters:
-                parameters["properties"] = {}
-
-            llm_description = self._compact_text(
-                str(tool.get("llmDescription") or tool.get("llm_description") or ""),
-                max_len=120,
-            )
-            base_description = self._compact_text(
-                llm_description or tool.get("description", ""),
-                max_len=140,
-            )
-            description_parts = [base_description.rstrip(" .")]
-            routing_summary = self._build_tool_routing_summary(tool.get("routingHints"))
-            if routing_summary:
-                description_parts.append(routing_summary)
-
-            llm_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool["name"],
-                        "description": self._compact_text(
-                            " | ".join(part for part in description_parts if part),
-                            max_len=220,
-                        ),
-                        "parameters": parameters,
-                    },
-                }
-            )
-
-        return llm_tools
+        return convert_mcp_tools_to_llm_tools(tools)
 
     def _build_tool_routing_summary(self, routing_hints: Any) -> str:
         """Build a compact description suffix from optional routing hints."""
-        if not isinstance(routing_hints, dict):
-            return ""
-
-        preferred_when = str(routing_hints.get("preferred_when") or "").strip()
-        if preferred_when:
-            compact_preferred = self._compact_text(preferred_when, max_len=90)
-            if compact_preferred:
-                return f"Use for: {compact_preferred}"
-
-        example_queries = routing_hints.get("example_queries")
-        if isinstance(example_queries, list):
-            cleaned_examples = [
-                str(item).strip()
-                for item in example_queries
-                if str(item).strip()
-            ][:1]
-            if cleaned_examples:
-                compact_example = self._compact_text(cleaned_examples[0], max_len=80)
-                if compact_example:
-                    return f"Example: {compact_example}"
-
-        keywords = routing_hints.get("keywords")
-        if isinstance(keywords, list):
-            cleaned_keywords = [
-                str(item).strip()
-                for item in keywords
-                if str(item).strip()
-            ][:3]
-            if cleaned_keywords:
-                return f"Keywords: {', '.join(cleaned_keywords)}"
-
-        return ""
+        return build_tool_routing_summary(routing_hints)
 
     @staticmethod
     def _json_size_bytes(value: Any) -> int:
         """Return UTF-8 JSON size for debug metrics without exposing contents."""
-        try:
-            text = json.dumps(value, ensure_ascii=False, default=str)
-        except Exception:
-            text = str(value)
-        return len(text.encode("utf-8"))
+        return json_size_bytes(value)
 
     @classmethod
     def _content_char_count(cls, value: Any) -> int:
@@ -897,11 +968,14 @@ class MCPAssistConversationEntity(ConversationEntity):
         tools: list[dict[str, Any]] | None,
     ) -> None:
         """Log compact first-payload metrics for prompt latency debugging."""
-        if iteration != 0 or not _LOGGER.isEnabledFor(logging.DEBUG):
+        if iteration != 0:
+            return
+        if not (self.debug_mode or _LOGGER.isEnabledFor(logging.DEBUG)):
             return
 
         tool_count = len(tools or [])
-        _LOGGER.debug(
+        log = _LOGGER.info if self.debug_mode else _LOGGER.debug
+        log(
             (
                 "Initial LLM payload metrics: provider=%s transport=%s "
                 "payload_bytes=%d messages=%d message_chars=%d tools=%d "
@@ -1314,6 +1388,80 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Drop empty streamed tool-call placeholders before execution."""
         return [tool_call for tool_call in tool_calls if tool_call]
 
+    @staticmethod
+    def _tool_call_arguments_are_valid(arguments: Any) -> bool:
+        """Return whether tool arguments are a complete JSON object."""
+        if arguments is None:
+            return True
+        if isinstance(arguments, dict):
+            return True
+        if isinstance(arguments, str):
+            if not arguments.strip():
+                return True
+            try:
+                parsed = json.loads(arguments)
+            except json.JSONDecodeError:
+                return False
+            return isinstance(parsed, dict)
+        return False
+
+    @classmethod
+    def _tool_call_is_valid_for_execution(cls, tool_call: Dict[str, Any]) -> bool:
+        """Return whether a provider tool call can safely be executed."""
+        function = tool_call.get("function")
+        if not isinstance(function, dict):
+            return False
+        name = str(function.get("name") or "").strip()
+        if not name:
+            return False
+        return cls._tool_call_arguments_are_valid(function.get("arguments"))
+
+    @classmethod
+    def _partition_valid_tool_calls(
+        cls,
+        tool_calls: List[Dict[str, Any]],
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Split provider tool calls into executable and malformed calls."""
+        valid_tool_calls: List[Dict[str, Any]] = []
+        invalid_tool_calls: List[Dict[str, Any]] = []
+
+        for tool_call in tool_calls:
+            if cls._tool_call_is_valid_for_execution(tool_call):
+                valid_tool_calls.append(tool_call)
+            else:
+                invalid_tool_calls.append(tool_call)
+
+        return valid_tool_calls, invalid_tool_calls
+
+    @classmethod
+    def _invalid_tool_call_names(cls, tool_calls: List[Dict[str, Any]]) -> str:
+        """Return a compact list of malformed tool-call names for logs/prompts."""
+        names = []
+        for tool_call in tool_calls:
+            name = cls._tool_call_name(tool_call)
+            if name not in names:
+                names.append(name)
+        return ", ".join(names)
+
+    @classmethod
+    def _append_invalid_tool_call_retry_messages(
+        cls,
+        conversation_messages: List[Dict[str, Any]],
+        response_text: str,
+        invalid_tool_calls: List[Dict[str, Any]],
+    ) -> None:
+        """Append corrective context after malformed tool-call arguments."""
+        if response_text.strip():
+            conversation_messages.append(
+                {"role": "assistant", "content": response_text.strip()}
+            )
+
+        tool_names = cls._invalid_tool_call_names(invalid_tool_calls)
+        instruction = INVALID_TOOL_ARGUMENT_RETRY_INSTRUCTION
+        if tool_names:
+            instruction = f"{instruction} Affected tool(s): {tool_names}."
+        conversation_messages.append({"role": "system", "content": instruction})
+
     def _record_tool_result_to_chatlog(
         self, tool_call_id: str, tool_name: str, tool_result: Dict[str, Any]
     ) -> None:
@@ -1443,6 +1591,92 @@ class MCPAssistConversationEntity(ConversationEntity):
         if error is not None:
             tool_entry["error"] = error
 
+    @staticmethod
+    def _compact_history_argument_value(value: Any) -> str:
+        """Return a tiny argument value for follow-up context."""
+        if isinstance(value, list):
+            items = [
+                str(item)
+                for item in value[:4]
+                if isinstance(item, (str, int, float, bool))
+            ]
+            suffix = ", ..." if len(value) > len(items) else ""
+            return compact_text(", ".join(items) + suffix, max_len=90)
+        if isinstance(value, (str, int, float, bool)):
+            return compact_text(str(value), max_len=90)
+        return ""
+
+    def _record_tool_history_summary(
+        self,
+        tool_name: str | None,
+        arguments: dict[str, Any],
+        result: dict[str, Any] | None = None,
+        *,
+        error: str | None = None,
+    ) -> None:
+        """Record compact real-tool context for future follow-up turns."""
+        if not tool_name or tool_name in ADAPTIVE_META_TOOL_NAMES:
+            return
+
+        summaries = _REQUEST_TOOL_HISTORY_SUMMARIES.get()
+        if summaries is None:
+            return
+
+        compact_arguments: dict[str, str] = {}
+        for key in TOOL_HISTORY_ARGUMENT_KEYS:
+            if key not in arguments:
+                continue
+            value = self._compact_history_argument_value(arguments[key])
+            if value:
+                compact_arguments[key] = value
+
+        summary: dict[str, Any] = {
+            "type": "mcp_tool",
+            "tool": tool_name,
+            "arguments": compact_arguments,
+        }
+        if error:
+            summary["status"] = "error"
+        elif isinstance(result, dict) and (result.get("isError") or "error" in result):
+            summary["status"] = "error"
+        else:
+            summary["status"] = "ok"
+
+        summaries.append(summary)
+
+    @staticmethod
+    def _format_history_tool_context(actions: Any) -> str:
+        """Return compact prior tool context for model history messages."""
+        if not isinstance(actions, list):
+            return ""
+
+        parts: list[str] = []
+        for action in actions:
+            if not isinstance(action, dict) or action.get("type") != "mcp_tool":
+                continue
+            tool_name = str(action.get("tool") or "")
+            if not tool_name:
+                continue
+            arguments = action.get("arguments")
+            argument_parts = []
+            if isinstance(arguments, dict):
+                argument_parts = [
+                    f"{key}={value}"
+                    for key, value in arguments.items()
+                    if value
+                ]
+            status = str(action.get("status") or "ok")
+            call_text = tool_name
+            if argument_parts:
+                call_text += f"({', '.join(argument_parts[:4])})"
+            if status != "ok":
+                call_text += f" status={status}"
+            parts.append(call_text)
+
+        if not parts:
+            return ""
+        return "Tool context: " + "; ".join(parts[-6:])
+
     async def _async_handle_message(
         self, user_input: ConversationInput, chat_log_instance: chat_log.ChatLog
     ) -> ConversationResult:
@@ -1461,6 +1695,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
             user_input
         )
+        adaptive_loaded_tools_token: Token[set[str] | frozenset[str] | None] = (
+            _ADAPTIVE_LOADED_TOOL_NAMES.set(set())
+        )
+        tool_history_token: Token[list[dict[str, Any]] | None] = (
+            _REQUEST_TOOL_HISTORY_SUMMARIES.set([])
+        )
         conversation_id = chat_log_instance.conversation_id
         persistent_chat_log = (
             self._build_persistent_chat_log_record(user_input, conversation_id)
@@ -1478,6 +1718,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         finally:
             # Clean up
             _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
+            _ADAPTIVE_LOADED_TOOL_NAMES.reset(adaptive_loaded_tools_token)
+            _REQUEST_TOOL_HISTORY_SUMMARIES.reset(tool_history_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
 
@@ -1517,6 +1759,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                     f"📝 System prompt built, length: {len(system_prompt)} chars"
                 )
 
+            adaptive_started_at = time.monotonic() if metrics_enabled else 0.0
+            await self._prepare_adaptive_tools_for_request(user_input.text)
+            adaptive_ms = (
+                (time.monotonic() - adaptive_started_at) * 1000
+                if metrics_enabled
+                else 0.0
+            )
+
             # Build conversation messages
             messages = self._build_messages(system_prompt, user_input.text, history)
             if metrics_enabled:
@@ -1524,7 +1774,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     (
                         "Initial prompt metrics: prompt_chars=%d messages=%d "
                         "message_chars=%d history_turns=%d history_ms=%.1f "
-                        "prompt_build_ms=%.1f setup_ms=%.1f"
+                        "prompt_build_ms=%.1f adaptive_prepare_ms=%.1f setup_ms=%.1f"
                     ),
                     len(system_prompt),
                     len(messages),
@@ -1532,6 +1782,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     len(history),
                     history_ms,
                     prompt_ms,
+                    adaptive_ms,
                     (time.monotonic() - setup_started_at) * 1000,
                 )
 
@@ -1616,6 +1867,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Parse response and execute any Home Assistant actions
         actions_taken = await self._execute_actions(response_text, user_input)
+        tool_history_summaries = _REQUEST_TOOL_HISTORY_SUMMARIES.get()
+        if tool_history_summaries:
+            actions_taken.extend(tool_history_summaries)
 
         # Add final assistant response to ChatLog
         if self._current_chat_log:
@@ -2122,11 +2376,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = (
-                ""
-                if self.light_context_mode
-                else self._build_optional_technical_instructions(current_area)
-            )
+            if self.light_context_mode:
+                optional_instructions = ""
+            elif self.adaptive_context_mode:
+                optional_instructions = self._build_adaptive_technical_instructions()
+            else:
+                optional_instructions = self._build_optional_technical_instructions(
+                    current_area
+                )
             if optional_instructions:
                 technical_prompt = (
                     f"{technical_prompt.rstrip()}\n\n{optional_instructions}"
@@ -2215,11 +2472,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = (
-                ""
-                if self.light_context_mode
-                else self._build_optional_technical_instructions("Unknown")
-            )
+            if self.light_context_mode:
+                optional_instructions = ""
+            elif self.adaptive_context_mode:
+                optional_instructions = self._build_adaptive_technical_instructions()
+            else:
+                optional_instructions = self._build_optional_technical_instructions(
+                    "Unknown"
+                )
             if optional_instructions:
                 technical_prompt = (
                     f"{technical_prompt.rstrip()}\n\n{optional_instructions}"
@@ -2248,7 +2508,17 @@ class MCPAssistConversationEntity(ConversationEntity):
             if history_limit > 0:
                 for turn in history[-history_limit:]:
                     messages.append({"role": "user", "content": turn["user"]})
-                    messages.append({"role": "assistant", "content": turn["assistant"]})
+                    assistant_content = str(turn["assistant"])
+                    tool_context = self._format_history_tool_context(
+                        turn.get("actions")
+                    )
+                    if tool_context:
+                        assistant_content = (
+                            f"{assistant_content.rstrip()}\n{tool_context}"
+                        )
+                    messages.append(
+                        {"role": "assistant", "content": assistant_content}
+                    )
 
         # Add current user message
         messages.append({"role": "user", "content": user_text})
@@ -2256,7 +2526,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         return messages
 
     async def _fetch_mcp_tools_from_server(self) -> Optional[List[Dict[str, Any]]]:
-        """Fetch and convert available tools from the MCP server."""
+        """Fetch profile-visible MCP tool definitions from the MCP server."""
         try:
             mcp_url = f"http://localhost:{self.mcp_port}"
 
@@ -2296,57 +2566,277 @@ class MCPAssistConversationEntity(ConversationEntity):
                         else:
                             _LOGGER.warning("⚠️ perform_action tool NOT found!")
 
-                        return self._convert_mcp_tools_to_llm_tools(tools)
+                        return tools
                     return None
 
         except Exception as err:
             _LOGGER.error("Failed to get MCP tools: %s", err)
             return None
 
-    async def _get_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
-        """Return available LLM-facing MCP tools, using a short-lived cache."""
+    async def _get_profile_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """Return profile-visible MCP tool definitions, using a short-lived cache."""
         cache_key = self._build_mcp_tool_cache_key()
         now = time.monotonic()
 
         if (
-            self._cached_llm_tools is not None
-            and self._cached_llm_tools_key == cache_key
-            and (now - self._cached_llm_tools_fetched_at) < MCP_TOOL_CACHE_TTL_SECONDS
+            self._cached_profile_mcp_tools is not None
+            and self._cached_profile_mcp_tools_key == cache_key
+            and (now - self._cached_profile_mcp_tools_fetched_at)
+            < MCP_TOOL_CACHE_TTL_SECONDS
         ):
             _LOGGER.debug(
-                "Using cached MCP tool schema for profile: tools=%d age_ms=%.1f",
-                len(self._cached_llm_tools),
-                (now - self._cached_llm_tools_fetched_at) * 1000,
+                "Using cached MCP tool definitions for profile: tools=%d age_ms=%.1f",
+                len(self._cached_profile_mcp_tools),
+                (now - self._cached_profile_mcp_tools_fetched_at) * 1000,
             )
-            return list(self._cached_llm_tools)
+            return list(self._cached_profile_mcp_tools)
 
         fetch_started_at = time.monotonic()
         tools = await self._fetch_mcp_tools_from_server()
         fetch_ms = (time.monotonic() - fetch_started_at) * 1000
         if tools is not None:
-            self._cached_llm_tools = list(tools)
-            self._cached_llm_tools_key = cache_key
-            self._cached_llm_tools_fetched_at = now
+            self._cached_profile_mcp_tools = list(tools)
+            self._cached_profile_mcp_tools_key = cache_key
+            self._cached_profile_mcp_tools_fetched_at = now
             _LOGGER.debug(
-                "Fetched MCP tool schema for profile: tools=%d latency_ms=%.1f",
+                "Fetched MCP tool definitions for profile: tools=%d latency_ms=%.1f",
                 len(tools),
                 fetch_ms,
             )
             return list(tools)
 
-        if self._cached_llm_tools is not None and self._cached_llm_tools_key == cache_key:
+        if (
+            self._cached_profile_mcp_tools is not None
+            and self._cached_profile_mcp_tools_key == cache_key
+        ):
             _LOGGER.warning(
                 "Using stale cached MCP tools after refresh failure: "
                 "tools=%d fetch_latency_ms=%.1f",
-                len(self._cached_llm_tools),
+                len(self._cached_profile_mcp_tools),
                 fetch_ms,
             )
-            return list(self._cached_llm_tools)
+            return list(self._cached_profile_mcp_tools)
 
         _LOGGER.debug(
-            "MCP tool schema fetch returned no tools: latency_ms=%.1f", fetch_ms
+            "MCP tool definition fetch returned no tools: latency_ms=%.1f", fetch_ms
         )
         return None
+
+    async def _get_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """Return available LLM-facing MCP tools for the current context mode."""
+        tools = await self._get_profile_mcp_tools()
+        if tools is None:
+            return None
+        return self._build_llm_tools_for_context(tools)
+
+    def _build_llm_tools_for_context(
+        self,
+        tools: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Build the advertised LLM tool surface for the current context mode."""
+        if self.adaptive_context_mode:
+            return build_adaptive_llm_tools(
+                tools,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+                loaded_tool_names=_adaptive_loaded_tool_names(),
+            )
+
+        return self._convert_mcp_tools_to_llm_tools(tools)
+
+    @staticmethod
+    def _tool_definition_name(tool: Dict[str, Any]) -> str:
+        """Return the MCP tool name for a raw tool definition."""
+        return tool_definition_name(tool)
+
+    def _adaptive_tool_catalog_entry(self, tool: Dict[str, Any]) -> dict[str, Any]:
+        """Return one compact catalog entry for model-facing adaptive discovery."""
+        tool_name = self._tool_definition_name(tool)
+        routing_summary = self._build_tool_routing_summary(tool.get("routingHints"))
+        summary = self._compact_text(
+            str(tool.get("llmDescription") or tool.get("llm_description") or "")
+            or str(tool.get("description") or ""),
+            max_len=110,
+        )
+        if routing_summary:
+            summary = self._compact_text(
+                f"{summary.rstrip(' .')} | {routing_summary}",
+                max_len=180,
+            )
+        family = get_optional_tool_family(tool_name)
+        entry: dict[str, Any] = {
+            "name": tool_name,
+            "summary": summary,
+            "schema_loaded": tool_name in _adaptive_loaded_tool_names(),
+        }
+        if family:
+            entry["family"] = family
+        return entry
+
+    def _match_adaptive_tool_definitions(
+        self,
+        tools: List[Dict[str, Any]],
+        *,
+        query: str = "",
+        tool_names: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[Dict[str, Any]]:
+        """Return adaptive catalog matches from profile-visible raw tools."""
+        return match_adaptive_tool_definitions(
+            tools,
+            query=query,
+            tool_names=tool_names,
+            limit=limit,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
+
+    def _select_initial_adaptive_tool_names(
+        self,
+        tools: List[Dict[str, Any]],
+        user_text: str,
+        *,
+        limit: int = 2,
+        minimum_score: int = 18,
+    ) -> frozenset[str]:
+        """Return highly likely optional tool schemas to preload for this request."""
+        scored: list[tuple[int, str]] = []
+        loaded_names = _adaptive_loaded_tool_names()
+        for tool in tools:
+            tool_name = self._tool_definition_name(tool)
+            if (
+                not tool_name
+                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in loaded_names
+                or tool_name in ADAPTIVE_META_TOOL_NAMES
+            ):
+                continue
+            score = score_adaptive_tool_match(
+                tool,
+                user_text,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            )
+            if score >= minimum_score:
+                scored.append((score, tool_name))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return frozenset(name for _score, name in scored[:limit])
+
+    async def _prepare_adaptive_tools_for_request(self, user_text: str) -> None:
+        """Preload obvious adaptive schemas before the first model turn."""
+        if not self.adaptive_context_mode:
+            return
+
+        tools = await self._get_profile_mcp_tools() or []
+        preload_names = self._select_initial_adaptive_tool_names(tools, user_text)
+        if not preload_names:
+            return
+
+        _adaptive_loaded_tool_names().update(preload_names)
+        _LOGGER.debug(
+            "Adaptive context preloaded tool schemas: %s",
+            ", ".join(sorted(preload_names)),
+        )
+
+    @staticmethod
+    def _normalize_requested_tool_names(value: Any) -> list[str]:
+        """Return normalized tool names from a string or list argument."""
+        if isinstance(value, str):
+            raw_names = value.split(",")
+        elif isinstance(value, list):
+            raw_names = value
+        else:
+            raw_names = []
+        names: list[str] = []
+        for raw_name in raw_names:
+            name = str(raw_name or "").strip()
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    @staticmethod
+    def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+        """Return an integer clamped to a small safe range."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return min(max(parsed, minimum), maximum)
+
+    async def _handle_adaptive_meta_tool(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Handle adaptive tool catalog/schema meta tools without MCP round-trips."""
+        profile_tools = await self._get_profile_mcp_tools() or []
+        query = str(arguments.get("query") or "").strip()
+
+        if tool_name == ADAPTIVE_TOOL_CATALOG_NAME:
+            limit = self._bounded_int(
+                arguments.get("limit"),
+                default=20,
+                minimum=1,
+                maximum=50,
+            )
+            matches = self._match_adaptive_tool_definitions(
+                profile_tools,
+                query=query,
+                limit=limit,
+            )
+            payload = {
+                "tools": [
+                    self._adaptive_tool_catalog_entry(tool)
+                    for tool in matches
+                ],
+                "loaded_tool_schemas": sorted(_adaptive_loaded_tool_names()),
+                "next_step": (
+                    f"Call {ADAPTIVE_TOOL_SCHEMA_NAME} with the exact tool names "
+                    "you need before using optional or custom tools."
+                ),
+            }
+        elif tool_name == ADAPTIVE_TOOL_SCHEMA_NAME:
+            requested_names = self._normalize_requested_tool_names(
+                arguments.get("tool_names")
+            )
+            limit = self._bounded_int(
+                arguments.get("limit"),
+                default=8,
+                minimum=1,
+                maximum=8,
+            )
+            matches = self._match_adaptive_tool_definitions(
+                profile_tools,
+                query=query,
+                tool_names=requested_names,
+                limit=limit,
+            )
+            matched_names = [self._tool_definition_name(tool) for tool in matches]
+            if matched_names:
+                _adaptive_loaded_tool_names().update(matched_names)
+            missing_names = [
+                name for name in requested_names if name not in set(matched_names)
+            ]
+            payload = {
+                "loaded_tools": [
+                    self._adaptive_tool_catalog_entry(tool)
+                    for tool in matches
+                ],
+                "not_found": missing_names,
+                "next_step": (
+                    "The loaded tool schemas will be available in the next model "
+                    "call. Use the loaded tool directly if it is needed to answer."
+                ),
+            }
+        else:
+            payload = {"error": f"Unknown adaptive meta tool: {tool_name}"}
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(payload, ensure_ascii=False),
+                }
+            ]
+        }
 
     def _filter_mcp_tools_for_profile(
         self, tools: List[Dict[str, Any]]
@@ -2729,7 +3219,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
             # Execute the tool
-            result = await self._call_mcp_tool(tool_name, arguments)
+            if tool_name in ADAPTIVE_META_TOOL_NAMES:
+                result = await self._handle_adaptive_meta_tool(tool_name, arguments)
+            else:
+                result = await self._call_mcp_tool(tool_name, arguments)
 
             # Format result for LLM consumption
             content = self._format_tool_result_for_llm(tool_name, result)
@@ -2738,6 +3231,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 result=result,
                 llm_content=content,
             )
+            self._record_tool_history_summary(tool_name, arguments, result)
 
             if tool_name == "set_conversation_state" and content:
                 if "conversation_state:true" in content.lower():
@@ -2760,6 +3254,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         except Exception as e:
             _LOGGER.error(f"Error executing tool {tool_name}: {e}")
             self._finish_persistent_tool_log(tool_entry, error=str(e))
+            self._record_tool_history_summary(
+                tool_name,
+                self._parse_tool_arguments(arguments_str),
+                error=str(e),
+            )
             error_content = json.dumps({"error": str(e)})
             return self._get_llm_provider().build_tool_result_message(
                 tool_call_id=tool_call_id,
@@ -2775,6 +3274,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         except (TypeError, ValueError):
             return max(1, int(DEFAULT_MAX_ITERATIONS))
 
+    @property
+    def model_turn_limit(self) -> int:
+        """Return the per-request model-call limit around the tool budget."""
+        adaptive_turn_allowance = 4 if self.adaptive_context_mode else 1
+        return self.tool_call_budget + adaptive_turn_allowance
+
     @staticmethod
     def _tool_call_id(tool_call: Dict[str, Any]) -> str:
         """Return a stable ID for a provider-normalized tool call."""
@@ -2785,6 +3290,16 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Return the function name for a provider-normalized tool call."""
         function = tool_call.get("function") or {}
         return str(function.get("name") or "unknown")
+
+    @classmethod
+    def _is_budgeted_tool_call(cls, tool_call: Dict[str, Any]) -> bool:
+        """Return whether a tool call should consume the user's MCP tool budget."""
+        return cls._tool_call_name(tool_call) not in ADAPTIVE_META_TOOL_NAMES
+
+    @classmethod
+    def _count_budgeted_tool_calls(cls, tool_calls: List[Dict[str, Any]]) -> int:
+        """Return how many calls in a list consume the MCP tool budget."""
+        return sum(1 for tool_call in tool_calls if cls._is_budgeted_tool_call(tool_call))
 
     def _build_budget_skipped_tool_result(
         self,
@@ -2809,11 +3324,25 @@ class MCPAssistConversationEntity(ConversationEntity):
         *,
         tool_calls_used: int,
         provider: LLMProvider,
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+    ) -> ToolCallBudgetPlan:
         """Split requested tool calls into executable and skipped budget results."""
         remaining = max(0, self.tool_call_budget - tool_calls_used)
-        executable_tool_calls = tool_calls[:remaining]
-        skipped_tool_calls = tool_calls[remaining:]
+        executable_tool_calls: list[dict[str, Any]] = []
+        executable_indexes: list[int] = []
+        skipped_tool_calls: list[tuple[int, dict[str, Any]]] = []
+        budgeted_calls_added = 0
+
+        for index, tool_call in enumerate(tool_calls):
+            if not self._is_budgeted_tool_call(tool_call):
+                executable_tool_calls.append(tool_call)
+                executable_indexes.append(index)
+                continue
+            if budgeted_calls_added < remaining:
+                executable_tool_calls.append(tool_call)
+                executable_indexes.append(index)
+                budgeted_calls_added += 1
+                continue
+            skipped_tool_calls.append((index, tool_call))
 
         if skipped_tool_calls:
             _LOGGER.warning(
@@ -2823,11 +3352,36 @@ class MCPAssistConversationEntity(ConversationEntity):
                 self.tool_call_budget,
             )
 
-        skipped_results = [
-            self._build_budget_skipped_tool_result(provider, tool_call)
-            for tool_call in skipped_tool_calls
+        skipped_results_by_index = {
+            index: self._build_budget_skipped_tool_result(provider, tool_call)
+            for index, tool_call in skipped_tool_calls
+        }
+        return ToolCallBudgetPlan(
+            executable_calls=executable_tool_calls,
+            executable_indexes=executable_indexes,
+            skipped_results_by_index=skipped_results_by_index,
+            original_count=len(tool_calls),
+            exhausted=bool(skipped_tool_calls),
+        )
+
+    @staticmethod
+    def _merge_tool_results_in_call_order(
+        plan: ToolCallBudgetPlan,
+        executable_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Merge executed and skipped tool results back into tool-call order."""
+        results_by_index = dict(plan.skipped_results_by_index)
+        for index, result in zip(
+            plan.executable_indexes,
+            executable_results,
+            strict=True,
+        ):
+            results_by_index[index] = result
+        return [
+            results_by_index[index]
+            for index in range(plan.original_count)
+            if index in results_by_index
         ]
-        return executable_tool_calls, skipped_results, bool(skipped_tool_calls)
 
     async def _execute_tool_calls(
         self, tool_calls: List[Dict[str, Any]]
@@ -2836,14 +3390,78 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not tool_calls:
             return []
 
-        return list(await asyncio.gather(
-            *(self._execute_single_tool_call(tool_call) for tool_call in tool_calls)
-        ))
+        results: list[dict[str, Any] | None] = [None] * len(tool_calls)
+        concurrent_calls: list[tuple[int, dict[str, Any]]] = []
+
+        for index, tool_call in enumerate(tool_calls):
+            if self._tool_call_name(tool_call) in ADAPTIVE_META_TOOL_NAMES:
+                # Meta tools update request-scoped schema state, so run them in
+                # this task rather than inside the gathered child tasks below.
+                results[index] = await self._execute_single_tool_call(tool_call)
+            else:
+                concurrent_calls.append((index, tool_call))
+
+        if concurrent_calls:
+            concurrent_results = await asyncio.gather(
+                *(
+                    self._execute_single_tool_call(tool_call)
+                    for _index, tool_call in concurrent_calls
+                )
+            )
+            for (index, _tool_call), result in zip(
+                concurrent_calls,
+                concurrent_results,
+                strict=True,
+            ):
+                results[index] = result
+
+        return [result for result in results if result is not None]
 
     @staticmethod
     def _has_tool_results(messages: List[Dict[str, Any]]) -> bool:
         """Return whether the conversation already has tool results to summarize."""
         return any(message.get("role") == "tool" for message in messages)
+
+    @staticmethod
+    def _is_toolless_check_preamble(response_text: str) -> bool:
+        """Return whether a response only promises to check without using tools."""
+        text = re.sub(r"\s+", " ", str(response_text or "")).strip()
+        if not text or len(text) > 240 or "?" in text:
+            return False
+        if any(pattern.search(text) for pattern in TOOLLESS_RESPONSE_PATTERNS):
+            return True
+        normalized = text.casefold().strip(" \t\r\n.,!;:…。！？¡¿")
+        return any(
+            normalized.startswith(prefix)
+            for prefix in TOOLLESS_RESPONSE_PREFIXES
+        )
+
+    def _should_retry_toolless_response(
+        self,
+        response_text: str,
+        *,
+        tools: List[Dict[str, Any]] | None,
+        retry_used: bool,
+        tool_calls_used: int = 0,
+    ) -> bool:
+        """Return whether to give the model one more chance to call a tool."""
+        if retry_used or not tools or tool_calls_used > 0:
+            return False
+        return self._is_toolless_check_preamble(response_text)
+
+    @staticmethod
+    def _append_toolless_retry_messages(
+        conversation_messages: List[Dict[str, Any]],
+        response_text: str,
+    ) -> None:
+        """Append corrective context after a tool-less preamble response."""
+        if response_text.strip():
+            conversation_messages.append(
+                {"role": "assistant", "content": response_text.strip()}
+            )
+        conversation_messages.append(
+            {"role": "system", "content": TOOLLESS_RETRY_INSTRUCTION}
+        )
 
     async def _call_llm_final_response_without_tools(
         self,
@@ -2964,11 +3582,13 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.warning("Streaming not available, falling back to HTTP")
             raise Exception("Streaming not available")
 
-        # Get MCP tools once
-        tools = await self._get_mcp_tools()
+        tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
         conversation_messages = list(messages)
         tool_calls_used = 0
+        toolless_retry_used = False
+        invalid_tool_retry_used = False
+        empty_stream_responses = 0
 
         # Buffers for streaming
         tool_arg_buffers = {}  # index -> partial JSON string
@@ -2978,8 +3598,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         sentence_buffer = ""
         completed_tools = set()
 
-        for iteration in range(self.max_iterations):
+        for iteration in range(self.model_turn_limit):
             _LOGGER.info(f"🔄 Stream iteration {iteration + 1}")
+            tools = await self._get_mcp_tools()
+            if not tools and iteration == 0:
+                _LOGGER.warning("No MCP tools available - proceeding without tools")
             if self.debug_mode and iteration == 0:
                 _LOGGER.info(f"🎯 Using model: {self.model_name}")
 
@@ -3116,6 +3739,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                                 # Handle streamed content
                                 if "content" in delta and delta["content"]:
+                                    empty_stream_responses = 0
                                     chunk = delta["content"]
                                     response_text += chunk
                                     sentence_buffer += chunk
@@ -3261,8 +3885,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 _LOGGER.debug(f"Stream parsing: {e}")
 
             except Exception as stream_error:
-                _LOGGER.error(
-                    f"❌ Streaming iteration {iteration + 1} failed: {stream_error}"
+                _LOGGER.warning(
+                    "Streaming iteration %d failed: %s",
+                    iteration + 1,
+                    stream_error,
                 )
                 if iteration == 0:
                     # First iteration failed, try fallback
@@ -3280,6 +3906,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             # If we got tool calls, execute them
             if has_tool_calls and current_tool_calls:
+                empty_stream_responses = 0
                 _LOGGER.info(
                     f"⚡ Executing {len(current_tool_calls)} streamed tool calls"
                 )
@@ -3295,8 +3922,36 @@ class MCPAssistConversationEntity(ConversationEntity):
                         ),
                     )
 
+                valid_tool_calls, invalid_tool_calls = self._partition_valid_tool_calls(
+                    current_tool_calls
+                )
+                if invalid_tool_calls:
+                    _LOGGER.info(
+                        "Skipping %d streamed tool call(s) with invalid JSON "
+                        "arguments: %s",
+                        len(invalid_tool_calls),
+                        self._invalid_tool_call_names(invalid_tool_calls),
+                    )
+
+                if not valid_tool_calls:
+                    if invalid_tool_retry_used:
+                        return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        response_text,
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
+                    response_text = ""
+                    sentence_buffer = ""
+                    tool_arg_buffers.clear()
+                    tool_names.clear()
+                    tool_ids.clear()
+                    completed_tools.clear()
+                    continue
+
                 prepared_tool_calls = provider.prepare_stream_tool_calls(
-                    current_tool_calls,
+                    valid_tool_calls,
                     stream_metadata,
                 )
                 warning = provider.missing_stream_metadata_warning(stream_metadata)
@@ -3310,27 +3965,30 @@ class MCPAssistConversationEntity(ConversationEntity):
                 conversation_messages.append(assistant_msg)
 
                 # Record tool calls to ChatLog for debug view
-                self._record_tool_calls_to_chatlog(current_tool_calls)
+                self._record_tool_calls_to_chatlog(valid_tool_calls)
 
-                (
-                    executable_tool_calls,
-                    skipped_tool_results,
-                    budget_exhausted,
-                ) = self._prepare_tool_calls_for_budget(
-                    current_tool_calls,
+                budget_plan = self._prepare_tool_calls_for_budget(
+                    valid_tool_calls,
                     tool_calls_used=tool_calls_used,
                     provider=provider,
                 )
 
                 # Execute tools
-                tool_results = await self._execute_tool_calls(executable_tool_calls)
-                tool_calls_used += len(executable_tool_calls)
-                tool_results.extend(skipped_tool_results)
+                executable_tool_results = await self._execute_tool_calls(
+                    budget_plan.executable_calls
+                )
+                tool_calls_used += self._count_budgeted_tool_calls(
+                    budget_plan.executable_calls
+                )
+                tool_results = self._merge_tool_results_in_call_order(
+                    budget_plan,
+                    executable_tool_results,
+                )
 
                 # Record tool results to ChatLog for debug view
                 for idx, result in enumerate(tool_results):
-                    if idx < len(current_tool_calls):
-                        tc = current_tool_calls[idx]
+                    if idx < len(valid_tool_calls):
+                        tc = valid_tool_calls[idx]
                         tool_call_id = result.get(
                             "tool_call_id", tc.get("id", "unknown")
                         )
@@ -3345,6 +4003,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
 
                 conversation_messages.extend(tool_results)
+                if invalid_tool_calls and not invalid_tool_retry_used:
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        "",
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
 
                 # Reset for next iteration - we don't want intermediate narration in final response
                 response_text = (
@@ -3355,7 +4020,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tool_ids.clear()
                 completed_tools.clear()
 
-                if budget_exhausted or tool_calls_used >= self.tool_call_budget:
+                if budget_plan.exhausted or tool_calls_used >= self.tool_call_budget:
                     _LOGGER.warning(
                         "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
                         tool_calls_used,
@@ -3372,12 +4037,39 @@ class MCPAssistConversationEntity(ConversationEntity):
             else:
                 # No tool calls, return the response
                 if response_text:
+                    if self._should_retry_toolless_response(
+                        response_text,
+                        tools=tools,
+                        retry_used=toolless_retry_used,
+                        tool_calls_used=tool_calls_used,
+                    ):
+                        _LOGGER.info(
+                            "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
+                        )
+                        self._append_toolless_retry_messages(
+                            conversation_messages,
+                            response_text,
+                        )
+                        toolless_retry_used = True
+                        response_text = ""
+                        sentence_buffer = ""
+                        continue
                     return response_text
                 else:
                     # No content and no tools, might need another iteration
-                    _LOGGER.warning("Empty response from streaming, retrying...")
+                    empty_stream_responses += 1
+                    if empty_stream_responses == 1:
+                        _LOGGER.debug("Empty response from streaming, retrying once")
+                        continue
+                    if self._has_tool_results(conversation_messages):
+                        return await self._call_llm_final_response_without_tools(
+                            conversation_messages,
+                            provider,
+                            transport="streaming_empty_final",
+                        )
+                    raise Exception("Streaming returned an empty response")
 
-        # Hit max iterations
+        # Hit the model-call guard before a final response arrived.
         if response_text:
             return response_text
         if self._has_tool_results(conversation_messages):
@@ -3411,10 +4103,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Call the active provider with its non-streaming HTTP transport."""
         _LOGGER.info(f"🚀 Using provider HTTP transport for {self.server_type}")
 
-        # Get MCP tools once
-        tools = await self._get_mcp_tools()
-        if not tools:
-            _LOGGER.warning("No MCP tools available - proceeding without tools")
+        tools: list[dict[str, Any]] | None = None
 
         if provider is None:
             provider = self._get_llm_provider()
@@ -3422,12 +4111,17 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Keep a mutable copy of messages for the conversation
         conversation_messages = list(messages)
         tool_calls_used = 0
+        toolless_retry_used = False
+        invalid_tool_retry_used = False
 
         # Tool execution loop
-        for iteration in range(self.max_iterations):
+        for iteration in range(self.model_turn_limit):
             _LOGGER.info(
                 f"🔄 HTTP Iteration {iteration + 1}: Calling {self.server_type} with {len(conversation_messages)} messages"
             )
+            tools = await self._get_mcp_tools()
+            if not tools and iteration == 0:
+                _LOGGER.warning("No MCP tools available - proceeding without tools")
 
             payload = provider.build_payload(conversation_messages, tools, stream=False)
             clean_payload = provider.clean_payload(payload)
@@ -3464,9 +4158,32 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                     # Check if there are tool calls to execute
                     if "tool_calls" in message and message["tool_calls"]:
-                        tool_calls = provider.normalize_tool_calls(
+                        (
+                            valid_raw_tool_calls,
+                            invalid_tool_calls,
+                        ) = self._partition_valid_tool_calls(
                             message["tool_calls"]
                         )
+                        if invalid_tool_calls:
+                            _LOGGER.info(
+                                "Skipping %d tool call(s) with invalid JSON "
+                                "arguments: %s",
+                                len(invalid_tool_calls),
+                                self._invalid_tool_call_names(invalid_tool_calls),
+                            )
+
+                        if not valid_raw_tool_calls:
+                            if invalid_tool_retry_used:
+                                return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                            self._append_invalid_tool_call_retry_messages(
+                                conversation_messages,
+                                str(message.get("content") or ""),
+                                invalid_tool_calls,
+                            )
+                            invalid_tool_retry_used = True
+                            continue
+
+                        tool_calls = provider.normalize_tool_calls(valid_raw_tool_calls)
                         _LOGGER.info(
                             f"🛠️ {self.server_type} requested {len(tool_calls)} tool calls"
                         )
@@ -3493,11 +4210,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                         # Record tool calls to ChatLog for debug view
                         self._record_tool_calls_to_chatlog(tool_calls)
 
-                        (
-                            executable_tool_calls,
-                            skipped_tool_results,
-                            budget_exhausted,
-                        ) = self._prepare_tool_calls_for_budget(
+                        budget_plan = self._prepare_tool_calls_for_budget(
                             tool_calls,
                             tool_calls_used=tool_calls_used,
                             provider=provider,
@@ -3505,11 +4218,16 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                         # Execute the tool calls
                         _LOGGER.info("⚡ Executing tool calls against MCP server...")
-                        tool_results = await self._execute_tool_calls(
-                            executable_tool_calls
+                        executable_tool_results = await self._execute_tool_calls(
+                            budget_plan.executable_calls
                         )
-                        tool_calls_used += len(executable_tool_calls)
-                        tool_results.extend(skipped_tool_results)
+                        tool_calls_used += self._count_budgeted_tool_calls(
+                            budget_plan.executable_calls
+                        )
+                        tool_results = self._merge_tool_results_in_call_order(
+                            budget_plan,
+                            executable_tool_results,
+                        )
 
                         # Record tool results to ChatLog for debug view
                         for idx, result in enumerate(tool_results):
@@ -3536,13 +4254,20 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                         # Add tool results to conversation
                         conversation_messages.extend(tool_results)
+                        if invalid_tool_calls and not invalid_tool_retry_used:
+                            self._append_invalid_tool_call_retry_messages(
+                                conversation_messages,
+                                "",
+                                invalid_tool_calls,
+                            )
+                            invalid_tool_retry_used = True
 
                         _LOGGER.info(
                             f"📊 Added {len(tool_results)} tool results to conversation"
                         )
 
                         if (
-                            budget_exhausted
+                            budget_plan.exhausted
                             or tool_calls_used >= self.tool_call_budget
                         ):
                             _LOGGER.warning(
@@ -3561,15 +4286,32 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                     else:
                         # No more tool calls, we have the final response
-                        final_content = message.get("content", "").strip()
+                        final_content = str(message.get("content") or "").strip()
                         _LOGGER.info(
                             f"💬 Final response received (length: {len(final_content)})"
                         )
+                        if self._should_retry_toolless_response(
+                            final_content,
+                            tools=tools,
+                            retry_used=toolless_retry_used,
+                            tool_calls_used=tool_calls_used,
+                        ):
+                            _LOGGER.info(
+                                "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
+                            )
+                            self._append_toolless_retry_messages(
+                                conversation_messages,
+                                final_content,
+                            )
+                            toolless_retry_used = True
+                            continue
                         return final_content
 
-        # If we hit max iterations, return what we have
+        # If we hit the model-call guard, return what we have.
         _LOGGER.warning(
-            f"⚠️ Hit maximum iterations ({self.max_iterations}) in tool execution loop"
+            "⚠️ Hit maximum model turns (%d) around tool-call budget (%d)",
+            self.model_turn_limit,
+            self.tool_call_budget,
         )
         if self._has_tool_results(conversation_messages):
             return await self._call_llm_final_response_without_tools(

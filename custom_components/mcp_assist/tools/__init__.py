@@ -298,6 +298,31 @@ class CustomToolsLoader:
             and not registry_entry.is_external
         )
 
+    def get_tool_source_info(self, tool_name: str) -> dict[str, Any] | None:
+        """Return metadata about the package that provides a tool."""
+        if not self._tool_registry_ready:
+            self._refresh_tool_registry()
+
+        registry_entry = self._tool_registry.get(tool_name)
+        if registry_entry is None:
+            return None
+
+        loaded_tool = registry_entry.loaded_tool_package
+        if loaded_tool is None:
+            return {
+                "source": "custom",
+                "package_id": registry_entry.provider_key,
+                "package_name": registry_entry.provider_key,
+            }
+
+        return {
+            "source": (
+                "external_custom" if registry_entry.is_external else "built_in"
+            ),
+            "package_id": loaded_tool.manifest.tool_id,
+            "package_name": loaded_tool.manifest.name,
+        }
+
     def get_builtin_toggle_specs(self) -> tuple[BuiltInToolToggleSpec, ...]:
         """Return built-in packaged-tool toggle metadata."""
         return self._builtin_toggle_specs

@@ -137,7 +137,7 @@
               "temperature": "Controls response randomness. Lower values are more deterministic.",
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
-              "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
+              "context_mode": "Adaptive keeps core tools ready and loads optional/custom tool schemas on demand. Standard sends the full profile tool context. Light uses the smallest context for small local models.",
               "max_iterations": "Caps how many MCP tool calls the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",
@@ -373,7 +373,7 @@
           "model_name": "The LLM model this profile should use.",
           "system_prompt": "Prefilled with the current effective system prompt. Edit it to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
           "technical_prompt": "Prefilled with the current effective technical instructions. Edit them to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
-          "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models."
+          "context_mode": "Adaptive keeps core tools ready and loads optional/custom tool schemas on demand. Standard sends the full profile tool context. Light uses the smallest context for small local models."
         },
         "sections": {
           "profile": {
@@ -477,7 +477,7 @@
               "temperature": "Controls response randomness. Lower values are more deterministic.",
               "max_tokens": "Caps how many tokens the model may generate in one response.",
               "max_history": "How many prior conversation messages to keep in context.",
-              "context_mode": "Standard sends the full profile tool context. Light keeps a smaller history window and advertises core Home Assistant tools for small local models.",
+              "context_mode": "Adaptive keeps core tools ready and loads optional/custom tool schemas on demand. Standard sends the full profile tool context. Light uses the smallest context for small local models.",
               "max_iterations": "Caps how many MCP tool calls the assistant may use for one request.",
               "timeout": "How long to wait for a provider response before timing out.",
               "debug_mode": "Enable more detailed logging for troubleshooting.",
