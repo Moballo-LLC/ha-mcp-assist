@@ -461,6 +461,7 @@ Rules:
 - Prefer entity-first control. Use device tools only when physical-device context matters.
 - Floors, labels, and aliases are valid discovery inputs.
 - Treat the tool-call budget as limited. Prefer one specific discovery call with filters such as domain, device_class, area, floor, label, or state before broader searches.
+- For history/count questions about a specific event or state such as opened, closed, locked, or unlocked, pass that specific event/action/state filter instead of a broad changed/history query.
 - Call get_index() only when you need a broad system overview.
 
 Core workflow:

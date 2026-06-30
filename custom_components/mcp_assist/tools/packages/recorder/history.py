@@ -380,7 +380,13 @@ class RecorderToolsMixin:
             entity_id=history_entity_id,
         )
 
-        include_start_time_state = analysis in {"duration", "streak", "stats"}
+        include_start_time_state = analysis in {
+            "count",
+            "duration",
+            "streak",
+            "stats",
+            "summary",
+        }
 
         async def _load_candidate_history(candidate: Dict[str, Any]) -> Dict[str, Any] | None:
             candidate_entity_id = candidate["entity_id"]
@@ -713,25 +719,22 @@ class RecorderToolsMixin:
 
             return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
 
-        if target_filter_states:
-            matched_states = [
-                state
-                for state in entity_states
-                if state.state.casefold() in target_filter_states
-            ]
-        else:
-            matched_states = entity_states
+        matched_states = self._matching_history_transitions(
+            entity_states,
+            target_filter_states,
+            query_start_time,
+        )
 
         if target_filter_states and not matched_states and len(history_candidates) > 1:
             for candidate in history_candidates[1:]:
                 candidate_history = await _load_candidate_history(candidate)
                 if candidate_history is None:
                     continue
-                candidate_matched_states = [
-                    state
-                    for state in candidate_history["entity_states"]
-                    if state.state.casefold() in candidate_history["target_filter_states"]
-                ]
+                candidate_matched_states = self._matching_history_transitions(
+                    candidate_history["entity_states"],
+                    candidate_history["target_filter_states"],
+                    query_start_time,
+                )
                 if candidate_matched_states:
                     history_entity_id = candidate_history["entity_id"]
                     current_state = candidate_history["current_state"]
@@ -765,7 +768,7 @@ class RecorderToolsMixin:
 
         if target_filter_states:
             text_parts.append(
-                f"Counted using recorder state{'s' if len(target_filter_states) != 1 else ''}: {', '.join(target_filter_states)}"
+                f"Counted transitions into recorder state{'s' if len(target_filter_states) != 1 else ''}: {', '.join(target_filter_states)}"
             )
 
         if analysis == "summary" and matched_states:
@@ -1008,6 +1011,47 @@ class RecorderToolsMixin:
             "first_start": first_start,
             "last_end": last_end,
         }
+
+    def _matching_history_transitions(
+        self,
+        entity_states: List[Any],
+        target_states: List[str],
+        start_time,
+    ) -> List[Any]:
+        """Return distinct in-window state transitions matching the requested target."""
+        target_state_set = set(target_states)
+        previous_state: str | None = None
+        matches: List[Any] = []
+
+        for state in entity_states:
+            state_value = str(state.state).casefold()
+            when = state.last_changed or state.last_updated
+
+            if previous_state is not None and state_value == previous_state:
+                continue
+
+            if self._history_state_is_in_window(when, start_time):
+                if target_state_set:
+                    if state_value in target_state_set:
+                        matches.append(state)
+                else:
+                    matches.append(state)
+
+            previous_state = state_value
+
+        return matches
+
+    def _history_state_is_in_window(self, when: Any, start_time: Any) -> bool:
+        """Return whether a recorder row represents an event inside the query window."""
+        if when is None or start_time is None:
+            return True
+        try:
+            return when >= start_time
+        except TypeError:
+            try:
+                return dt_util.as_utc(when) >= dt_util.as_utc(start_time)
+            except Exception:
+                return True
 
     def _calculate_numeric_history_stats(
         self,
