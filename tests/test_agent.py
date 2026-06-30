@@ -1786,6 +1786,52 @@ def test_adaptive_tool_scoring_ignores_generic_entity_terms_for_optional_tools()
     assert score_adaptive_tool_match(delivery_tool, "Any packages today?") > 0
 
 
+def test_adaptive_tool_scoring_keeps_domain_terms_outside_entity_ids() -> None:
+    """Entity references should not suppress explicit domain-tool requests."""
+    weather_tool = {
+        "name": "get_weather_forecast",
+        "description": "Get a Home Assistant weather forecast in one call.",
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {
+            "keywords": ["weather", "forecast"],
+            "preferred_when": "Use when the user asks about weather.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    explicit_weather_query = "What is the weather for sensor.outdoor_temperature?"
+    duplicate_entity_term_query = "What is the weather for sensor.weather?"
+    entity_only_query = "What is sensor.weather?"
+
+    assert score_adaptive_tool_match(weather_tool, explicit_weather_query) > 0
+    assert score_adaptive_tool_match(weather_tool, duplicate_entity_term_query) > 0
+    assert (
+        match_adaptive_tool_definitions(
+            [weather_tool],
+            query=explicit_weather_query,
+            limit=1,
+        )
+        == [weather_tool]
+    )
+    assert (
+        match_adaptive_tool_definitions(
+            [weather_tool],
+            query=duplicate_entity_term_query,
+            limit=1,
+        )
+        == [weather_tool]
+    )
+    assert score_adaptive_tool_match(weather_tool, entity_only_query) == 0
+    assert (
+        match_adaptive_tool_definitions(
+            [weather_tool],
+            query=entity_only_query,
+            limit=1,
+        )
+        == []
+    )
+
+
 def test_adaptive_tool_scoring_keeps_domain_specific_entity_tools() -> None:
     """Entity-id lookups should still match tools named for that entity domain."""
     calendar_tool = {
