@@ -1549,6 +1549,12 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "url" in normalize_adaptive_query_terms(
         "Summarize https://example.com"
     )
+    assert "url" in normalize_adaptive_query_terms(
+        "Summarize example.com"
+    )
+    assert "url" in normalize_adaptive_query_terms(
+        "read www.example.com/docs"
+    )
 
 
 def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
@@ -1649,6 +1655,28 @@ def test_adaptive_tool_scoring_prefers_read_url_for_urls() -> None:
         [convert_tool, security_tool, read_tool],
         query="Summarize https://example.com",
         limit=3,
+    )
+
+    assert [tool["name"] for tool in matches] == ["read_url"]
+
+
+def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
+    """Bare domain prompts should still surface URL-reading tools."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    convert_tool = {
+        "name": "convert_unit",
+        "description": "Convert units of measure.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    matches = match_adaptive_tool_definitions(
+        [convert_tool, read_tool],
+        query="Summarize example.com",
+        limit=2,
     )
 
     assert [tool["name"] for tool in matches] == ["read_url"]

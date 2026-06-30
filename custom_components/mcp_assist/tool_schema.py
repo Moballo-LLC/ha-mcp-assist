@@ -98,6 +98,34 @@ ADAPTIVE_NON_PLURAL_S_TERMS = frozenset(
     }
 )
 ADAPTIVE_NON_PLURAL_S_SUFFIXES = ("ss", "us", "is", "ics", "ness", "stairs")
+ADAPTIVE_BARE_DOMAIN_TLDS = frozenset(
+    {
+        "ai",
+        "app",
+        "ca",
+        "co",
+        "com",
+        "dev",
+        "edu",
+        "fr",
+        "gov",
+        "io",
+        "me",
+        "net",
+        "org",
+        "uk",
+        "us",
+    }
+)
+ADAPTIVE_URL_INTENT_RE = re.compile(
+    r"https?://\S+"
+    r"|(?<!@)\bwww\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    r"(?::\d{2,5})?(?:/[^\s]*)?"
+    r"|(?<![@.])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"(?:" + "|".join(sorted(ADAPTIVE_BARE_DOMAIN_TLDS)) + r")"
+    r"(?::\d{2,5})?(?:/[^\s]*)?",
+    flags=re.IGNORECASE,
+)
 ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     # Weather and forecasts
     "météo": ("weather", "forecast"),
@@ -402,9 +430,9 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
     terms = []
-    if re.search(r"https?://", normalized_query):
+    if ADAPTIVE_URL_INTENT_RE.search(normalized_query):
         terms.extend(["url", "webpage", "web"])
-        normalized_query = re.sub(r"https?://\S+", " ", normalized_query)
+        normalized_query = ADAPTIVE_URL_INTENT_RE.sub(" ", normalized_query)
     for term in re.findall(r"\w+", normalized_query, flags=re.UNICODE):
         if len(term) < 2 or term in ADAPTIVE_QUERY_STOPWORDS:
             continue
