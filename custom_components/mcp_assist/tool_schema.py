@@ -124,27 +124,6 @@ ADAPTIVE_PRESENT_HISTORY_CONTEXT_TOKENS = frozenset(
     }
 )
 ADAPTIVE_PRESENT_HISTORY_TERMS = ("access", "history", "recorder")
-ADAPTIVE_COMMON_PUBLIC_URL_TLDS = frozenset(
-    {
-        "ai",
-        "app",
-        "ca",
-        "co",
-        "com",
-        "de",
-        "dev",
-        "edu",
-        "fr",
-        "gov",
-        "info",
-        "io",
-        "me",
-        "net",
-        "org",
-        "uk",
-        "us",
-    }
-)
 ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
     {
         "alarm_control_panel",
@@ -541,8 +520,6 @@ def _is_adaptive_entity_id_like_host(
     """Return true for dotted Home Assistant entity IDs that resemble bare domains."""
     labels = str(host or "").casefold().split(".")
     if len(labels) != 2 or labels[0] not in ADAPTIVE_ENTITY_ID_DOMAINS:
-        return False
-    if labels[1] in ADAPTIVE_COMMON_PUBLIC_URL_TLDS:
         return False
     return not (match is not None and _has_adaptive_url_action_context(text, match))
 

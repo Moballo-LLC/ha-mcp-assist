@@ -1573,6 +1573,9 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
         "Check sensor.organic_voc"
     )
     assert "url" not in normalize_adaptive_query_terms("Turn on light.kitchen")
+    assert "url" not in normalize_adaptive_query_terms("Turn on light.app")
+    assert "url" not in normalize_adaptive_query_terms("Show calendar.uk")
+    assert "url" not in normalize_adaptive_query_terms("What is sensor.us?")
 
 
 def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
@@ -1745,6 +1748,9 @@ def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() ->
         "Show switch.network_status",
         "Check sensor.organic_voc",
         "Turn on light.kitchen",
+        "Turn on light.app",
+        "Show calendar.uk",
+        "What is sensor.us?",
     ):
         assert score_adaptive_tool_match(read_tool, query) == 0
         assert match_adaptive_tool_definitions([read_tool], query=query, limit=1) == []
