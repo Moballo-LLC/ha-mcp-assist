@@ -1370,6 +1370,31 @@ async def test_handle_tool_call_rejects_disabled_tools(
 
 
 @pytest.mark.asyncio
+async def test_unknown_tool_call_returns_tool_error_without_server_exception(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Unknown tool names should not be logged as JSON-RPC internal errors."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    with caplog.at_level(logging.ERROR, logger=mcp_server_module._LOGGER.name):
+        response = await server.process_mcp_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "tools/call",
+                "params": {"name": "list_available_tools", "arguments": {}},
+            }
+        )
+
+    assert response["id"] == 42
+    assert "error" not in response
+    assert response["result"]["isError"] is True
+    assert "adaptive agent meta tool" in response["result"]["content"][0]["text"]
+    assert "Error in MCP method tools/call" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_memory_tools_store_recall_and_forget(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
