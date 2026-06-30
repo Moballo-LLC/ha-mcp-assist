@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
           "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
-          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth."
+          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth. Ilagay ang FFFF para bumuo ng bagong token kapag sine-save."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "I-configure ang shared MCP listener, listahan ng pinapayagang IP, at Bearer token authentication.",
+            "data": {
+              "mcp_port": "Port ng MCP Server",
+              "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
+              "mcp_bearer_token": "Bearer token ng MCP"
+            },
+            "data_description": {
+              "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
+              "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
+              "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth. Ilagay ang FFFF para bumuo ng bagong token kapag sine-save."
+            }
+          },
           "context": {
             "name": "Konteksto",
             "description": "Kontrolin kung aling Home Assistant na pagkakakilanlan at mga detalye ng lokasyon ang kasama sa mga prompt ng AI at MCP na mga tool-call payload.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Alaala",
-              "memory_default_ttl_days": "Default na Memory TTL (Mga Araw)",
-              "memory_max_ttl_days": "Max Memory TTL (Mga Araw)",
-              "memory_max_items": "Max na Naka-imbak na Alaala",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Basahin ang URL",
               "enable_recorder_tools": "Kasaysayan ng Recorder",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Ilantad ang Google Places lookup at Google Routes na mga tool sa oras ng paglalakbay. Nangangailangan ng Google Maps API key.",
               "enable_llm_api_bridge": "Ilantad ang mga pinahihintulutang third-party na Home Assistant LLM API na nakarehistro ng iba pang mga pagsasama.",
               "enable_memory_tools": "Ilantad ang mga nakabahaging persisted memory tool upang matandaan, maalala, at makalimutan ng katulong ang mga katotohanan at kagustuhan na inaprubahan ng user na may TTL-based na expiry.",
-              "memory_default_ttl_days": "Default na bilang ng mga araw ang isang bagong memorya ay pinapanatili kapag ang tool call ay hindi nagbibigay ng ttl_days.",
-              "memory_max_ttl_days": "Pinakamataas na bilang ng mga araw na maaaring mapanatili ang anumang nakaimbak na memorya.",
-              "memory_max_items": "Upper bound sa mga aktibong nakaimbak na alaala. Ang mga pinakalumang alaala ay pinuputol muna kapag nalampasan ang limitasyong ito.",
               "enable_music_assistant_support": "Ilantad ang Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
               "enable_read_url_tool": "Ilantad ang URL na pagbabasa upang masuri ng assistant ang mga partikular na web page.",
               "enable_recorder_tools": "Ilantad ang kasaysayan, pagsusuri, at point-in-time na tool na sinusuportahan ng recorder.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
           "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
-          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth."
+          "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth. Ilagay ang FFFF para bumuo ng bagong token kapag sine-save."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "I-configure ang shared MCP listener, listahan ng pinapayagang IP, at Bearer token authentication.",
+            "data": {
+              "mcp_port": "Port ng MCP Server",
+              "allowed_ips": "Karagdagang Pinapayagang IP/Saklaw",
+              "mcp_bearer_token": "Bearer token ng MCP"
+            },
+            "data_description": {
+              "mcp_port": "Ang lokal na port na ginagamit ng nakabahaging MCP server.",
+              "allowed_ips": "Opsyonal na mga IP address na pinaghihiwalay ng kuwit o mga hanay ng CIDR na maaaring kumonekta bilang karagdagan sa localhost.",
+              "mcp_bearer_token": "Opsyonal na bearer token na kailangan ng mga external na MCP client. Ang mga bagong setup ay magkakaroon ng nabuong token; burahin lang ang field na ito kung sinasadya mong gumamit ng IP allowlisting nang walang bearer auth. Ilagay ang FFFF para bumuo ng bagong token kapag sine-save."
+            }
+          },
           "context": {
             "name": "Konteksto",
             "description": "Kontrolin kung aling Home Assistant na pagkakakilanlan at mga detalye ng lokasyon ang kasama sa mga prompt ng AI at MCP na mga tool-call payload.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Alaala",
-              "memory_default_ttl_days": "Default na Memory TTL (Mga Araw)",
-              "memory_max_ttl_days": "Max Memory TTL (Mga Araw)",
-              "memory_max_items": "Max na Naka-imbak na Alaala",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Basahin ang URL",
               "enable_recorder_tools": "Kasaysayan ng Recorder",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Ilantad ang Google Places lookup at Google Routes na mga tool sa oras ng paglalakbay. Nangangailangan ng Google Maps API key.",
               "enable_llm_api_bridge": "Ilantad ang mga pinahihintulutang third-party na Home Assistant LLM API na nakarehistro ng iba pang mga pagsasama.",
               "enable_memory_tools": "Ilantad ang mga nakabahaging persisted memory tool upang matandaan, maalala, at makalimutan ng katulong ang mga katotohanan at kagustuhan na inaprubahan ng user na may TTL-based na expiry.",
-              "memory_default_ttl_days": "Default na bilang ng mga araw ang isang bagong memorya ay pinapanatili kapag ang tool call ay hindi nagbibigay ng ttl_days.",
-              "memory_max_ttl_days": "Pinakamataas na bilang ng mga araw na maaaring mapanatili ang anumang nakaimbak na memorya.",
-              "memory_max_items": "Upper bound sa mga aktibong nakaimbak na alaala. Ang mga pinakalumang alaala ay pinuputol muna kapag nalampasan ang limitasyong ito.",
               "enable_music_assistant_support": "Ilantad ang Music Assistant na mga tool sa paghahanap, pila, library, at playback.",
               "enable_read_url_tool": "Ilantad ang URL na pagbabasa upang masuri ng assistant ang mga partikular na web page.",
               "enable_recorder_tools": "Ilantad ang kasaysayan, pagsusuri, at point-in-time na tool na sinusuportahan ng recorder.",

@@ -31,12 +31,14 @@ from custom_components.mcp_assist.config_flow import (
     DISABLE_WEATHER_FORECAST_FIELD,
     MCPAssistConfigFlow,
     MCPAssistOptionsFlow,
+    MEMORY_SECTION_KEY,
     MODEL_SECTION_KEY,
     PERFORMANCE_SECTION_KEY,
     PROFILE_SECTION_KEY,
     PROMPTS_SECTION_KEY,
     PROVIDER_SECTION_KEY,
     PROFILE_DISABLE_FIELD_BY_FAMILY,
+    SERVER_SECTION_KEY,
     STATIC_TOOL_FAMILY_ALPHABETICAL,
     TOOLS_SECTION_KEY,
     _build_profile_tools_section,
@@ -175,9 +177,6 @@ SHARED_TOOL_SECTION_ORDER = [
     CONF_ENABLE_LLM_API_BRIDGE,
     CONF_LLM_API_ALLOWLIST,
     CONF_ENABLE_MEMORY_TOOLS,
-    CONF_MEMORY_DEFAULT_TTL_DAYS,
-    CONF_MEMORY_MAX_TTL_DAYS,
-    CONF_MEMORY_MAX_ITEMS,
     CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     _builtin_shared_key("read_url"),
     CONF_ENABLE_RECORDER_TOOLS,
@@ -190,6 +189,34 @@ SHARED_TOOL_SECTION_ORDER = [
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
     _builtin_shared_key("wikipedia_search"),
 ]
+
+SHARED_MEMORY_SECTION_ORDER = [
+    CONF_MEMORY_DEFAULT_TTL_DAYS,
+    CONF_MEMORY_MAX_TTL_DAYS,
+    CONF_MEMORY_MAX_ITEMS,
+]
+CONFIG_STRINGS_PATH = Path("custom_components/mcp_assist/strings.json")
+TRANSLATION_DIR = Path("custom_components/mcp_assist/translations")
+
+
+def _config_string_paths(data: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
+    """Return leaf translation paths from a config string tree."""
+    if isinstance(data, dict):
+        paths: set[tuple[str, ...]] = set()
+        for key, value in data.items():
+            paths.update(_config_string_paths(value, (*prefix, key)))
+        return paths
+
+    return {prefix}
+
+
+def _load_config_strings() -> list[tuple[Path, dict[str, Any]]]:
+    """Load base and localized config string files."""
+    paths = [CONFIG_STRINGS_PATH, *sorted(TRANSLATION_DIR.glob("*.json"))]
+    return [
+        (path, json.loads(path.read_text(encoding="utf-8")))
+        for path in paths
+    ]
 
 
 def _section_field_names(form_section: section) -> set[str]:
@@ -206,6 +233,14 @@ def _schema_marker_by_field(data_schema: vol.Schema) -> dict[str, Any]:
         getattr(marker, "schema", marker): marker
         for marker in data_schema.schema.keys()
     }
+
+
+def _schema_section(data_schema: vol.Schema, key: str) -> section:
+    """Return a section from a schema keyed by voluptuous markers."""
+    for marker, value in data_schema.schema.items():
+        if getattr(marker, "schema", marker) == key:
+            return value
+    raise KeyError(key)
 
 
 def test_builtin_tool_toggle_specs_include_ui_descriptions() -> None:
@@ -358,10 +393,11 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     ):
         result = await flow.async_step_model()
 
-    assert MODEL_SECTION_KEY in result["data_schema"].schema
-    assert PROMPTS_SECTION_KEY in result["data_schema"].schema
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    assert MODEL_SECTION_KEY in top_level_keys
+    assert PROMPTS_SECTION_KEY in top_level_keys
 
-    prompts_section = result["data_schema"].schema[PROMPTS_SECTION_KEY]
+    prompts_section = _schema_section(result["data_schema"], PROMPTS_SECTION_KEY)
     assert isinstance(prompts_section, section)
 
     prompt_keys = {
@@ -414,7 +450,7 @@ async def test_model_step_prompt_overrides_are_optional(hass) -> None:
     ):
         result = await flow.async_step_model()
 
-    prompts_section = result["data_schema"].schema[PROMPTS_SECTION_KEY]
+    prompts_section = _schema_section(result["data_schema"], PROMPTS_SECTION_KEY)
     marker_by_key = {
         getattr(marker, "schema", marker): marker
         for marker in prompts_section.schema.schema.keys()
@@ -589,10 +625,11 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
 
     result = await flow.async_step_advanced()
 
-    assert CONVERSATION_SECTION_KEY in result["data_schema"].schema
-    assert PERFORMANCE_SECTION_KEY in result["data_schema"].schema
-    performance_section = result["data_schema"].schema[PERFORMANCE_SECTION_KEY]
-    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    assert CONVERSATION_SECTION_KEY in top_level_keys
+    assert PERFORMANCE_SECTION_KEY in top_level_keys
+    performance_section = _schema_section(result["data_schema"], PERFORMANCE_SECTION_KEY)
+    tools_section = _schema_section(result["data_schema"], TOOLS_SECTION_KEY)
     assert CONF_CONTEXT_MODE in _section_field_names(performance_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(performance_section)
     assert isinstance(tools_section, section)
@@ -681,27 +718,30 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
 
     result = await flow.async_step_mcp_server()
 
-    context_section = result["data_schema"].schema[CONTEXT_SECTION_KEY]
-    discovery_section = result["data_schema"].schema[DISCOVERY_SECTION_KEY]
-    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    server_section = _schema_section(result["data_schema"], SERVER_SECTION_KEY)
+    context_section = _schema_section(result["data_schema"], CONTEXT_SECTION_KEY)
+    discovery_section = _schema_section(result["data_schema"], DISCOVERY_SECTION_KEY)
+    memory_section = _schema_section(result["data_schema"], MEMORY_SECTION_KEY)
+    tools_section = _schema_section(result["data_schema"], TOOLS_SECTION_KEY)
 
+    assert isinstance(server_section, section)
     assert isinstance(context_section, section)
     assert isinstance(discovery_section, section)
+    assert isinstance(memory_section, section)
     assert isinstance(tools_section, section)
     top_level_keys = {
         getattr(key, "schema", key) for key in result["data_schema"].schema.keys()
     }
     assert top_level_keys == {
-        CONF_MCP_PORT,
-        CONF_ALLOWED_IPS,
-        CONF_MCP_BEARER_TOKEN,
+        SERVER_SECTION_KEY,
         CONTEXT_SECTION_KEY,
         DISCOVERY_SECTION_KEY,
+        MEMORY_SECTION_KEY,
         TOOLS_SECTION_KEY,
     }
     token_marker = next(
         key
-        for key in result["data_schema"].schema
+        for key in server_section.schema.schema
         if getattr(key, "schema", key) == CONF_MCP_BEARER_TOKEN
     )
     token_default = token_marker.default
@@ -709,16 +749,27 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
     assert isinstance(token_value, str)
     assert len(token_value) >= 32
 
+    server_keys = [
+        getattr(key, "schema", key) for key in server_section.schema.schema.keys()
+    ]
     context_keys = {
         getattr(key, "schema", key) for key in context_section.schema.schema.keys()
     }
     discovery_keys = {
         getattr(key, "schema", key) for key in discovery_section.schema.schema.keys()
     }
+    memory_keys = [
+        getattr(key, "schema", key) for key in memory_section.schema.schema.keys()
+    ]
     tool_keys = [
         getattr(key, "schema", key) for key in tools_section.schema.schema.keys()
     ]
 
+    assert server_keys == [
+        CONF_MCP_PORT,
+        CONF_ALLOWED_IPS,
+        CONF_MCP_BEARER_TOKEN,
+    ]
     assert context_keys == {
         CONF_INCLUDE_CURRENT_USER,
         CONF_INCLUDE_HOME_LOCATION,
@@ -729,6 +780,7 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
         CONF_ENABLE_GAP_FILLING,
         CONF_MAX_ENTITIES_PER_DISCOVERY,
     }
+    assert memory_keys == SHARED_MEMORY_SECTION_ORDER
     assert tool_keys == SHARED_TOOL_SECTION_ORDER
     tool_markers = {
         getattr(marker, "schema", marker): marker
@@ -891,14 +943,59 @@ async def test_options_mcp_step_preserves_bearer_token_default(
 
     result = await flow.async_step_mcp_server()
 
+    server_section = _schema_section(result["data_schema"], SERVER_SECTION_KEY)
     token_marker = next(
         key
-        for key in result["data_schema"].schema
+        for key in server_section.schema.schema
         if getattr(key, "schema", key) == CONF_MCP_BEARER_TOKEN
     )
     token_default = token_marker.default
     token_value = token_default() if callable(token_default) else token_default
     assert token_value == "saved-token-123456"
+
+
+async def test_options_mcp_step_regenerates_bearer_token_from_sentinel(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Entering FFFF should rotate the shared MCP bearer token."""
+    system_entry = system_entry_factory(
+        data={
+            CONF_MCP_PORT: 8090,
+            CONF_ALLOWED_IPS: "127.0.0.1",
+            CONF_MCP_BEARER_TOKEN: "old-token-123456",
+        }
+    )
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+    apply_mock = AsyncMock()
+
+    with (
+        patch(
+            "custom_components.mcp_assist.config_flow.generate_mcp_bearer_token",
+            return_value="regenerated-token-123456",
+        ),
+        patch("custom_components.mcp_assist._async_apply_shared_mcp_settings", apply_mock),
+    ):
+        result = await flow.async_step_mcp_server(
+            {
+                SERVER_SECTION_KEY: {
+                    CONF_MCP_PORT: 8090,
+                    CONF_ALLOWED_IPS: "127.0.0.1",
+                    CONF_MCP_BEARER_TOKEN: "ffff",
+                },
+                TOOLS_SECTION_KEY: {
+                    _builtin_shared_key("search"): False,
+                    CONF_SEARCH_PROVIDER: "none",
+                },
+            }
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert system_entry.data[CONF_MCP_BEARER_TOKEN] == "regenerated-token-123456"
+    apply_mock.assert_awaited_once_with(hass)
 
 
 async def test_options_mcp_step_preserves_google_maps_api_key_default(
@@ -914,7 +1011,7 @@ async def test_options_mcp_step_preserves_google_maps_api_key_default(
 
     result = await flow.async_step_mcp_server()
 
-    tools_section = result["data_schema"].schema[TOOLS_SECTION_KEY]
+    tools_section = _schema_section(result["data_schema"], TOOLS_SECTION_KEY)
     tool_markers = {
         getattr(marker, "schema", marker): marker
         for marker in tools_section.schema.schema.keys()
@@ -1037,44 +1134,69 @@ def test_optional_tool_family_checkbox_sets_stay_in_sync() -> None:
 
 def test_tool_translations_cover_all_declared_tool_fields() -> None:
     """Shared/profile tool fields should still have labels and descriptions."""
-    strings = json.loads(
-        Path("custom_components/mcp_assist/strings.json").read_text(encoding="utf-8")
+    expected_profile_fields = {
+        PROFILE_DISABLE_FIELD_BY_FAMILY[family]
+        for family in STATIC_TOOL_FAMILY_ALPHABETICAL
+    }
+    expected_server_fields = {
+        CONF_ALLOWED_IPS,
+        CONF_MCP_BEARER_TOKEN,
+        CONF_MCP_PORT,
+    }
+    expected_memory_fields = set(SHARED_MEMORY_SECTION_ORDER)
+    expected_shared_fields = {
+        TOOL_FAMILY_SHARED_SETTINGS[family][0]
+        for family in STATIC_TOOL_FAMILY_ALPHABETICAL
+    }
+    expected_profile_fields.update(
+        _builtin_profile_key(spec.package_id) for spec in BUILTIN_SPECS
     )
-    for root, advanced_step in (("config", "advanced"), ("options", "init")):
-        advanced_tools = strings[root]["step"][advanced_step]["sections"][TOOLS_SECTION_KEY]
-        shared_tools = strings[root]["step"]["mcp_server"]["sections"][TOOLS_SECTION_KEY]
-
-        expected_profile_fields = {
-            PROFILE_DISABLE_FIELD_BY_FAMILY[family]
-            for family in STATIC_TOOL_FAMILY_ALPHABETICAL
+    expected_shared_fields.update(
+        _builtin_shared_key(spec.package_id) for spec in BUILTIN_SPECS
+    )
+    expected_shared_fields.update(
+        {
+            CONF_BRAVE_API_KEY,
+            CONF_GOOGLE_MAPS_API_KEY,
+            CONF_LLM_API_ALLOWLIST,
+            CONF_SEARCH_PROVIDER,
+            CONF_SEARXNG_URL,
         }
-        expected_shared_fields = {
-            TOOL_FAMILY_SHARED_SETTINGS[family][0]
-            for family in STATIC_TOOL_FAMILY_ALPHABETICAL
-        }
-        expected_profile_fields.update(
-            _builtin_profile_key(spec.package_id) for spec in BUILTIN_SPECS
-        )
-        expected_shared_fields.update(
-            _builtin_shared_key(spec.package_id) for spec in BUILTIN_SPECS
-        )
-        expected_shared_fields.update(
-            {
-                CONF_BRAVE_API_KEY,
-                CONF_GOOGLE_MAPS_API_KEY,
-                CONF_LLM_API_ALLOWLIST,
-                CONF_MEMORY_DEFAULT_TTL_DAYS,
-                CONF_MEMORY_MAX_ITEMS,
-                CONF_MEMORY_MAX_TTL_DAYS,
-                CONF_SEARCH_PROVIDER,
-                CONF_SEARXNG_URL,
-            }
+    )
+
+    for path, strings in _load_config_strings():
+        for root, advanced_step in (("config", "advanced"), ("options", "init")):
+            advanced_tools = strings[root]["step"][advanced_step]["sections"][
+                TOOLS_SECTION_KEY
+            ]
+            shared_sections = strings[root]["step"]["mcp_server"]["sections"]
+            shared_server = shared_sections[SERVER_SECTION_KEY]
+            shared_memory = shared_sections[MEMORY_SECTION_KEY]
+            shared_tools = shared_sections[TOOLS_SECTION_KEY]
+
+            assert expected_profile_fields <= set(advanced_tools["data"]), path
+            assert expected_profile_fields <= set(advanced_tools["data_description"]), path
+            assert expected_server_fields <= set(shared_server["data"]), path
+            assert expected_server_fields <= set(shared_server["data_description"]), path
+            assert expected_memory_fields <= set(shared_memory["data"]), path
+            assert expected_memory_fields <= set(shared_memory["data_description"]), path
+            assert expected_shared_fields <= set(shared_tools["data"]), path
+            assert expected_shared_fields <= set(shared_tools["data_description"]), path
+            assert expected_memory_fields.isdisjoint(shared_tools["data"]), path
+            assert expected_memory_fields.isdisjoint(shared_tools["data_description"]), path
+
+
+def test_translation_files_match_base_config_string_keys() -> None:
+    """Localized string files should keep all config-flow translation keys."""
+    base_strings = json.loads(CONFIG_STRINGS_PATH.read_text(encoding="utf-8"))
+    base_paths = _config_string_paths(base_strings)
+
+    for path in sorted(TRANSLATION_DIR.glob("*.json")):
+        localized_paths = _config_string_paths(
+            json.loads(path.read_text(encoding="utf-8"))
         )
 
-        assert expected_profile_fields <= set(advanced_tools["data"])
-        assert expected_profile_fields <= set(advanced_tools["data_description"])
-        assert expected_shared_fields <= set(shared_tools["data"])
-        assert expected_shared_fields <= set(shared_tools["data_description"])
+        assert localized_paths == base_paths, path
 
 
 def test_provider_section_translations_cover_provider_specific_fields() -> None:
@@ -1125,14 +1247,14 @@ async def test_options_step_groups_profile_settings_into_sections(
     ):
         result = await flow.async_step_init()
 
-    top_level_keys = set(result["data_schema"].schema.keys())
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
     assert PROFILE_SECTION_KEY in top_level_keys
     assert MODEL_SECTION_KEY in top_level_keys
     assert PROMPTS_SECTION_KEY in top_level_keys
     assert CONVERSATION_SECTION_KEY in top_level_keys
     assert ADVANCED_SECTION_KEY in top_level_keys
     assert TOOLS_SECTION_KEY in top_level_keys
-    advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    advanced_section = _schema_section(result["data_schema"], ADVANCED_SECTION_KEY)
     assert CONF_CONTEXT_MODE in _section_field_names(advanced_section)
     assert CONF_CHAT_LOG_MODE in _section_field_names(advanced_section)
 
@@ -1157,8 +1279,8 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     ):
         result = await flow.async_step_init()
 
-    provider_section = result["data_schema"].schema[PROVIDER_SECTION_KEY]
-    advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    advanced_section = _schema_section(result["data_schema"], ADVANCED_SECTION_KEY)
 
     assert isinstance(provider_section, section)
     assert _section_field_names(provider_section) == {
@@ -1265,8 +1387,8 @@ async def test_options_step_for_ollama_uses_provider_default_url_when_missing(
     provider_values = fetch_models.await_args.args[1]
     assert OllamaProvider.model_base_url(provider_values) == DEFAULT_OLLAMA_URL
     assert OllamaProvider.model_base_url({CONF_LMSTUDIO_URL: ""}) == DEFAULT_OLLAMA_URL
-    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
-    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert CONNECTION_SECTION_KEY in _schema_marker_by_field(result["data_schema"])
+    connection_section = _schema_section(result["data_schema"], CONNECTION_SECTION_KEY)
     assert CONF_LMSTUDIO_URL in _section_field_names(connection_section)
 
 
@@ -1300,8 +1422,8 @@ async def test_options_step_for_openai_fetches_models_from_custom_base_url(
         fetch_models.await_args.args[1][CONF_LMSTUDIO_URL]
         == "https://proxy.example.com/v1"
     )
-    assert CONNECTION_SECTION_KEY in result["data_schema"].schema
-    connection_section = result["data_schema"].schema[CONNECTION_SECTION_KEY]
+    assert CONNECTION_SECTION_KEY in _schema_marker_by_field(result["data_schema"])
+    connection_section = _schema_section(result["data_schema"], CONNECTION_SECTION_KEY)
     assert {CONF_LMSTUDIO_URL, CONF_API_KEY} <= _section_field_names(
         connection_section
     )
@@ -1322,9 +1444,9 @@ async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_s
 
     result = await flow.async_step_init()
 
-    top_level_keys = set(result["data_schema"].schema.keys())
-    provider_section = result["data_schema"].schema[PROVIDER_SECTION_KEY]
-    advanced_section = result["data_schema"].schema[ADVANCED_SECTION_KEY]
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    advanced_section = _schema_section(result["data_schema"], ADVANCED_SECTION_KEY)
 
     assert MODEL_SECTION_KEY not in top_level_keys
     assert PROMPTS_SECTION_KEY not in top_level_keys

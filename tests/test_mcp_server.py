@@ -336,6 +336,45 @@ async def test_health_and_json_rpc_require_bearer_token_when_configured(
 
 
 @pytest.mark.asyncio
+async def test_missing_bearer_token_rejections_do_not_warn(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Expected missing-token rejects should not create warning-level HA alerts."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    with caplog.at_level(logging.WARNING, logger=mcp_server_module._LOGGER.name):
+        response = await server.handle_mcp_request(
+            SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+        )
+
+    assert response.status == 401
+    assert "missing bearer token" not in caplog.text
+    assert "unauthenticated client" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_invalid_bearer_token_rejections_still_warn(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Wrong bearer tokens should remain visible as warning-level security signals."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    with caplog.at_level(logging.WARNING, logger=mcp_server_module._LOGGER.name):
+        response = await server.handle_health(
+            SimpleNamespace(
+                remote="127.0.0.1",
+                headers={"Authorization": "Bearer wrong-token"},
+                query={},
+            )
+        )
+
+    assert response.status == 401
+    assert "invalid bearer token" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_server_applies_shared_allowed_ips_and_reloads_tools(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:

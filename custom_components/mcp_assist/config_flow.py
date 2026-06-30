@@ -439,9 +439,20 @@ def generate_mcp_bearer_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+MCP_BEARER_TOKEN_REGENERATE_VALUE = "FFFF"
+
+
 def _normalize_mcp_bearer_token(value: Any) -> str:
     """Normalize the optional shared MCP bearer token."""
     return str(value or "").strip()
+
+
+def _resolve_mcp_bearer_token(value: Any) -> str:
+    """Return the submitted MCP bearer token, generating a new one on request."""
+    token = _normalize_mcp_bearer_token(value)
+    if token.casefold() == MCP_BEARER_TOKEN_REGENERATE_VALUE.casefold():
+        return generate_mcp_bearer_token()
+    return token
 
 
 def _validate_mcp_bearer_token(value: Any) -> bool:
@@ -458,6 +469,7 @@ def _optional_with_suggested_value(key: str, suggested_value: str | None) -> vol
 
 
 TOOLS_SECTION_KEY = "tools"
+SERVER_SECTION_KEY = "server"
 DISCOVERY_SECTION_KEY = "discovery"
 CONTEXT_SECTION_KEY = "context"
 MEMORY_SECTION_KEY = "memory"
@@ -900,38 +912,6 @@ def _build_shared_tools_section(
                 )
             ] = TextSelector(TextSelectorConfig(multiline=True))
 
-        if setting_key == CONF_ENABLE_MEMORY_TOOLS:
-            shared_tool_fields[
-                vol.Optional(
-                    CONF_MEMORY_DEFAULT_TTL_DAYS,
-                    default=_get_form_value(
-                        defaults,
-                        CONF_MEMORY_DEFAULT_TTL_DAYS,
-                        DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
-                    ),
-                )
-            ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
-            shared_tool_fields[
-                vol.Optional(
-                    CONF_MEMORY_MAX_TTL_DAYS,
-                    default=_get_form_value(
-                        defaults,
-                        CONF_MEMORY_MAX_TTL_DAYS,
-                        DEFAULT_MEMORY_MAX_TTL_DAYS,
-                    ),
-                )
-            ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
-            shared_tool_fields[
-                vol.Optional(
-                    CONF_MEMORY_MAX_ITEMS,
-                    default=_get_form_value(
-                        defaults,
-                        CONF_MEMORY_MAX_ITEMS,
-                        DEFAULT_MEMORY_MAX_ITEMS,
-                    ),
-                )
-            ] = vol.All(vol.Coerce(int), vol.Range(min=10, max=5000))
-
         if spec and spec.requires_search_provider:
             shared_tool_fields[
                 vol.Required(
@@ -975,6 +955,29 @@ def _build_shared_tools_section(
 
     return section(
         vol.Schema(shared_tool_fields),
+        {"collapsed": False},
+    )
+
+
+def _build_shared_server_section(defaults: dict[str, Any]) -> section:
+    """Build the shared MCP server network and authentication section."""
+    return section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_MCP_PORT,
+                    default=defaults[CONF_MCP_PORT],
+                ): vol.Coerce(int),
+                vol.Optional(
+                    CONF_ALLOWED_IPS,
+                    default=defaults[CONF_ALLOWED_IPS],
+                ): str,
+                vol.Optional(
+                    CONF_MCP_BEARER_TOKEN,
+                    default=defaults[CONF_MCP_BEARER_TOKEN],
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            }
+        ),
         {"collapsed": False},
     )
 
@@ -1372,8 +1375,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         schema_dict: dict[Any, Any] = {
-            MODEL_SECTION_KEY: _build_model_section(current_model, model_field),
-            PROMPTS_SECTION_KEY: _build_prompt_section(
+            vol.Required(MODEL_SECTION_KEY): _build_model_section(current_model, model_field),
+            vol.Required(PROMPTS_SECTION_KEY): _build_prompt_section(
                 system_prompt_value=system_prompt_suggestion,
                 technical_prompt_value=technical_prompt_suggestion,
             ),
@@ -1588,7 +1591,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Build schema based on server type
         if not provider_class.uses_config_model_step:
             advanced_schema_dict = {
-                CONVERSATION_SECTION_KEY: _build_conversation_section(
+                vol.Required(CONVERSATION_SECTION_KEY): _build_conversation_section(
                     {
                         vol.Required(CONF_CONTROL_HA, default=DEFAULT_CONTROL_HA): bool,
                         vol.Required(
@@ -1616,7 +1619,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ): bool,
                     }
                 ),
-                PERFORMANCE_SECTION_KEY: _build_performance_section(
+                vol.Required(PERFORMANCE_SECTION_KEY): _build_performance_section(
                     {
                         vol.Required(CONF_TIMEOUT, default=60): vol.All(
                             vol.Coerce(int), vol.Range(min=5, max=300)
@@ -1629,7 +1632,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ): bool,
                     }
                 ),
-                PROVIDER_SECTION_KEY: _build_provider_section(
+                vol.Required(PROVIDER_SECTION_KEY): _build_provider_section(
                     _build_provider_field_schema_items(
                         provider_class.provider_options_fields
                     )
@@ -1682,10 +1685,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_CLEAN_RESPONSES, default=DEFAULT_CLEAN_RESPONSES): bool,
             }
             advanced_schema_dict = {
-                CONVERSATION_SECTION_KEY: _build_conversation_section(
+                vol.Required(CONVERSATION_SECTION_KEY): _build_conversation_section(
                     conversation_schema_items
                 ),
-                PERFORMANCE_SECTION_KEY: _build_performance_section(
+                vol.Required(PERFORMANCE_SECTION_KEY): _build_performance_section(
                     performance_schema_items
                 ),
             }
@@ -1694,13 +1697,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 provider_class.provider_options_fields
             )
             if provider_schema_items:
-                advanced_schema_dict[PROVIDER_SECTION_KEY] = _build_provider_section(
-                    provider_schema_items
+                advanced_schema_dict[vol.Required(PROVIDER_SECTION_KEY)] = (
+                    _build_provider_section(provider_schema_items)
                 )
 
-        advanced_schema_dict[TOOLS_SECTION_KEY] = _build_profile_tools_section(
-            getattr(self, "step4_data", {}),
-            built_in_specs,
+        advanced_schema_dict[vol.Required(TOOLS_SECTION_KEY)] = (
+            _build_profile_tools_section(
+                getattr(self, "step4_data", {}),
+                built_in_specs,
+            )
         )
 
         advanced_schema = vol.Schema(advanced_schema_dict)
@@ -1742,6 +1747,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             user_input = _flatten_section_values(
                 user_input,
+                SERVER_SECTION_KEY,
                 CONTEXT_SECTION_KEY,
                 DISCOVERY_SECTION_KEY,
                 MEMORY_SECTION_KEY,
@@ -1762,7 +1768,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
-            user_input[CONF_MCP_BEARER_TOKEN] = _normalize_mcp_bearer_token(
+            user_input[CONF_MCP_BEARER_TOKEN] = _resolve_mcp_bearer_token(
                 user_input.get(
                     CONF_MCP_BEARER_TOKEN,
                     self._generated_mcp_bearer_token,
@@ -1823,6 +1829,21 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
         shared_defaults = {
+            CONF_MCP_PORT: _get_form_value(
+                current_values,
+                CONF_MCP_PORT,
+                DEFAULT_MCP_PORT,
+            ),
+            CONF_ALLOWED_IPS: _get_form_value(
+                current_values,
+                CONF_ALLOWED_IPS,
+                DEFAULT_ALLOWED_IPS,
+            ),
+            CONF_MCP_BEARER_TOKEN: _get_form_value(
+                current_values,
+                CONF_MCP_BEARER_TOKEN,
+                self._generated_mcp_bearer_token,
+            ),
             CONF_SEARCH_PROVIDER: _get_form_value(
                 current_values,
                 CONF_SEARCH_PROVIDER,
@@ -1960,29 +1981,19 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Build schema for MCP server settings
         mcp_schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_MCP_PORT,
-                    default=_get_form_value(
-                        current_values, CONF_MCP_PORT, DEFAULT_MCP_PORT
-                    ),
-                ): vol.Coerce(int),
-                vol.Optional(
-                    CONF_ALLOWED_IPS,
-                    default=_get_form_value(
-                        current_values, CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS
-                    ),
-                ): str,
-                vol.Optional(
-                    CONF_MCP_BEARER_TOKEN,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_MCP_BEARER_TOKEN,
-                        self._generated_mcp_bearer_token,
-                    ),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
-                DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
-                TOOLS_SECTION_KEY: _build_shared_tools_section(
+                vol.Required(SERVER_SECTION_KEY): _build_shared_server_section(
+                    shared_defaults
+                ),
+                vol.Required(CONTEXT_SECTION_KEY): _build_shared_context_section(
+                    shared_defaults
+                ),
+                vol.Required(DISCOVERY_SECTION_KEY): _build_shared_discovery_section(
+                    shared_defaults
+                ),
+                vol.Required(MEMORY_SECTION_KEY): _build_shared_memory_section(
+                    shared_defaults
+                ),
+                vol.Required(TOOLS_SECTION_KEY): _build_shared_tools_section(
                     shared_defaults,
                     built_in_specs,
                 ),
@@ -2135,7 +2146,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             model_selector = str
 
         schema_dict: dict[Any, Any] = {
-            PROFILE_SECTION_KEY: _build_profile_identity_section(
+            vol.Required(PROFILE_SECTION_KEY): _build_profile_identity_section(
                 _get_form_value(
                     current_values,
                     CONF_PROFILE_NAME,
@@ -2176,17 +2187,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             data,
         )
 
-        schema_dict[CONNECTION_SECTION_KEY] = _build_connection_section(
+        schema_dict[vol.Required(CONNECTION_SECTION_KEY)] = _build_connection_section(
             connection_schema_items
         )
 
         if provider_class.uses_config_model_step:
-            schema_dict[MODEL_SECTION_KEY] = _build_model_section(
+            schema_dict[vol.Required(MODEL_SECTION_KEY)] = _build_model_section(
                 current_model, model_selector
             )
 
         if provider_class.uses_config_model_step:
-            schema_dict[PROMPTS_SECTION_KEY] = _build_prompt_section(
+            schema_dict[vol.Required(PROMPTS_SECTION_KEY)] = _build_prompt_section(
                 include_system_prompt=True,
                 system_prompt_value=system_prompt_suggestion,
                 technical_prompt_value=technical_prompt_suggestion,
@@ -2195,59 +2206,61 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         provider_schema_items: dict[Any, Any] = {}
 
         if server_type == SERVER_TYPE_OPENCLAW:
-            schema_dict[CONVERSATION_SECTION_KEY] = _build_conversation_section(
-                {
-                    vol.Required(
-                        CONF_CONTROL_HA,
-                        default=_get_form_value(
-                            current_values,
+            schema_dict[vol.Required(CONVERSATION_SECTION_KEY)] = (
+                _build_conversation_section(
+                    {
+                        vol.Required(
                             CONF_CONTROL_HA,
-                            options.get(
+                            default=_get_form_value(
+                                current_values,
                                 CONF_CONTROL_HA,
-                                data.get(CONF_CONTROL_HA, DEFAULT_CONTROL_HA),
-                            ),
-                        ),
-                    ): bool,
-                    vol.Required(
-                        CONF_RESPONSE_MODE, default=response_mode_value
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[
-                                {"value": "none", "label": "None"},
-                                {"value": "default", "label": "Smart"},
-                                {"value": "always", "label": "Always"},
-                            ],
-                            mode=SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_FOLLOW_UP_PHRASES,
-                        default=options.get(
-                            CONF_FOLLOW_UP_PHRASES,
-                            data.get(CONF_FOLLOW_UP_PHRASES, DEFAULT_FOLLOW_UP_PHRASES),
-                        ),
-                    ): TextSelector(TextSelectorConfig(multiline=True)),
-                    vol.Optional(
-                        CONF_END_WORDS,
-                        default=options.get(
-                            CONF_END_WORDS, data.get(CONF_END_WORDS, DEFAULT_END_WORDS)
-                        ),
-                    ): TextSelector(TextSelectorConfig(multiline=True)),
-                    vol.Optional(
-                        CONF_CLEAN_RESPONSES,
-                        default=_get_form_value(
-                            current_values,
-                            CONF_CLEAN_RESPONSES,
-                            options.get(
-                                CONF_CLEAN_RESPONSES,
-                                data.get(
-                                    CONF_CLEAN_RESPONSES,
-                                    DEFAULT_CLEAN_RESPONSES,
+                                options.get(
+                                    CONF_CONTROL_HA,
+                                    data.get(CONF_CONTROL_HA, DEFAULT_CONTROL_HA),
                                 ),
                             ),
+                        ): bool,
+                        vol.Required(
+                            CONF_RESPONSE_MODE, default=response_mode_value
+                        ): SelectSelector(
+                            SelectSelectorConfig(
+                                options=[
+                                    {"value": "none", "label": "None"},
+                                    {"value": "default", "label": "Smart"},
+                                    {"value": "always", "label": "Always"},
+                                ],
+                                mode=SelectSelectorMode.DROPDOWN,
+                            )
                         ),
-                    ): bool,
-                }
+                        vol.Optional(
+                            CONF_FOLLOW_UP_PHRASES,
+                            default=options.get(
+                                CONF_FOLLOW_UP_PHRASES,
+                                data.get(CONF_FOLLOW_UP_PHRASES, DEFAULT_FOLLOW_UP_PHRASES),
+                            ),
+                        ): TextSelector(TextSelectorConfig(multiline=True)),
+                        vol.Optional(
+                            CONF_END_WORDS,
+                            default=options.get(
+                                CONF_END_WORDS, data.get(CONF_END_WORDS, DEFAULT_END_WORDS)
+                            ),
+                        ): TextSelector(TextSelectorConfig(multiline=True)),
+                        vol.Optional(
+                            CONF_CLEAN_RESPONSES,
+                            default=_get_form_value(
+                                current_values,
+                                CONF_CLEAN_RESPONSES,
+                                options.get(
+                                    CONF_CLEAN_RESPONSES,
+                                    data.get(
+                                        CONF_CLEAN_RESPONSES,
+                                        DEFAULT_CLEAN_RESPONSES,
+                                    ),
+                                ),
+                            ),
+                        ): bool,
+                    }
+                )
             )
             provider_schema_items = _build_provider_field_schema_items(
                 provider_class.provider_options_fields,
@@ -2291,7 +2304,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 ): bool,
             }
         else:
-            schema_dict[CONVERSATION_SECTION_KEY] = _build_conversation_section(
+            schema_dict[vol.Required(CONVERSATION_SECTION_KEY)] = _build_conversation_section(
                 {
                     vol.Required(
                         CONF_CONTROL_HA,
@@ -2463,16 +2476,16 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             )
 
         if provider_schema_items:
-            schema_dict[PROVIDER_SECTION_KEY] = _build_provider_section(
+            schema_dict[vol.Required(PROVIDER_SECTION_KEY)] = _build_provider_section(
                 provider_schema_items
             )
-        schema_dict[TOOLS_SECTION_KEY] = _build_profile_tools_section(
+        schema_dict[vol.Required(TOOLS_SECTION_KEY)] = _build_profile_tools_section(
             current_values,
             built_in_specs,
             options,
             data,
         )
-        schema_dict[ADVANCED_SECTION_KEY] = _build_advanced_section(
+        schema_dict[vol.Required(ADVANCED_SECTION_KEY)] = _build_advanced_section(
             advanced_schema_items
         )
 
@@ -2518,6 +2531,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             user_input = _flatten_section_values(
                 user_input,
+                SERVER_SECTION_KEY,
                 CONTEXT_SECTION_KEY,
                 DISCOVERY_SECTION_KEY,
                 MEMORY_SECTION_KEY,
@@ -2560,7 +2574,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                             DEFAULT_MCP_BEARER_TOKEN,
                         ),
                     )
-            user_input[CONF_MCP_BEARER_TOKEN] = _normalize_mcp_bearer_token(token_value)
+            user_input[CONF_MCP_BEARER_TOKEN] = _resolve_mcp_bearer_token(token_value)
             if not _validate_mcp_bearer_token(user_input[CONF_MCP_BEARER_TOKEN]):
                 errors[CONF_MCP_BEARER_TOKEN] = "mcp_bearer_token_too_short"
 
@@ -2634,6 +2648,30 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             sys_data = self.config_entry.data
 
         shared_defaults = {
+            CONF_MCP_PORT: _get_form_value(
+                current_values,
+                CONF_MCP_PORT,
+                sys_options.get(CONF_MCP_PORT, sys_data.get(CONF_MCP_PORT, DEFAULT_MCP_PORT)),
+            ),
+            CONF_ALLOWED_IPS: _get_form_value(
+                current_values,
+                CONF_ALLOWED_IPS,
+                sys_options.get(
+                    CONF_ALLOWED_IPS,
+                    sys_data.get(CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS),
+                ),
+            ),
+            CONF_MCP_BEARER_TOKEN: _get_form_value(
+                current_values,
+                CONF_MCP_BEARER_TOKEN,
+                sys_options.get(
+                    CONF_MCP_BEARER_TOKEN,
+                    sys_data.get(
+                        CONF_MCP_BEARER_TOKEN,
+                        DEFAULT_MCP_BEARER_TOKEN,
+                    ),
+                ),
+            ),
             CONF_SEARCH_PROVIDER: _get_form_value(
                 current_values,
                 CONF_SEARCH_PROVIDER,
@@ -2894,45 +2932,19 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         # Build schema for MCP server settings
         mcp_schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_MCP_PORT,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_MCP_PORT,
-                        sys_options.get(
-                            CONF_MCP_PORT,
-                            sys_data.get(CONF_MCP_PORT, DEFAULT_MCP_PORT),
-                        ),
-                    ),
-                ): vol.Coerce(int),
-                vol.Optional(
-                    CONF_ALLOWED_IPS,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_ALLOWED_IPS,
-                        sys_options.get(
-                            CONF_ALLOWED_IPS,
-                            sys_data.get(CONF_ALLOWED_IPS, DEFAULT_ALLOWED_IPS),
-                        ),
-                    ),
-                ): str,
-                vol.Optional(
-                    CONF_MCP_BEARER_TOKEN,
-                    default=_get_form_value(
-                        current_values,
-                        CONF_MCP_BEARER_TOKEN,
-                        sys_options.get(
-                            CONF_MCP_BEARER_TOKEN,
-                            sys_data.get(
-                                CONF_MCP_BEARER_TOKEN,
-                                DEFAULT_MCP_BEARER_TOKEN,
-                            ),
-                        ),
-                    ),
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                CONTEXT_SECTION_KEY: _build_shared_context_section(shared_defaults),
-                DISCOVERY_SECTION_KEY: _build_shared_discovery_section(shared_defaults),
-                TOOLS_SECTION_KEY: _build_shared_tools_section(
+                vol.Required(SERVER_SECTION_KEY): _build_shared_server_section(
+                    shared_defaults
+                ),
+                vol.Required(CONTEXT_SECTION_KEY): _build_shared_context_section(
+                    shared_defaults
+                ),
+                vol.Required(DISCOVERY_SECTION_KEY): _build_shared_discovery_section(
+                    shared_defaults
+                ),
+                vol.Required(MEMORY_SECTION_KEY): _build_shared_memory_section(
+                    shared_defaults
+                ),
+                vol.Required(TOOLS_SECTION_KEY): _build_shared_tools_section(
                     shared_defaults,
                     built_in_specs,
                 ),

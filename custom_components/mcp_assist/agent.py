@@ -145,6 +145,14 @@ from .conversation_history import ConversationHistory
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class RecoverableStreamingFallbackError(Exception):
+    """Raised when streaming can safely fall back to provider HTTP transport."""
+
+
+class EmptyStreamingResponseError(RecoverableStreamingFallbackError):
+    """Raised when streaming completes without content or tool calls."""
+
 # Tool schemas are invalidated by settings and custom-tool signatures; this TTL is
 # just a safety refresh, not the primary change detector.
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
@@ -3727,13 +3735,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                     return True
 
         except aiohttp.ClientConnectionError as e:
-            _LOGGER.error(f"❌ Connection error: {e}")
+            _LOGGER.debug("Streaming probe connection error: %s", e)
             return False
         except Exception as e:
-            _LOGGER.error(f"❌ Basic streaming failed: {type(e).__name__}: {e}")
-            import traceback
-
-            _LOGGER.error(traceback.format_exc())
+            _LOGGER.debug(
+                "Basic streaming probe failed: %s: %s",
+                type(e).__name__,
+                e,
+                exc_info=True,
+            )
             return False
 
     async def _call_llm_streaming(self, messages: List[Dict[str, Any]]) -> str:
@@ -3745,8 +3755,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._streaming_available = await self._test_streaming_basic()
 
         if not self._streaming_available:
-            _LOGGER.warning("Streaming not available, falling back to HTTP")
-            raise Exception("Streaming not available")
+            _LOGGER.debug("Streaming not available; using provider HTTP transport")
+            raise RecoverableStreamingFallbackError("Streaming not available")
 
         tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
@@ -4270,7 +4280,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                             provider,
                             transport="streaming_empty_final",
                         )
-                    raise Exception("Streaming returned an empty response")
+                    raise EmptyStreamingResponseError(
+                        "Streaming returned an empty response"
+                    )
 
         # Hit the model-call guard before a final response arrived.
         if response_text:
@@ -4293,8 +4305,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
+        except RecoverableStreamingFallbackError as e:
+            _LOGGER.debug("%s; using provider HTTP transport", e)
+            return await self._call_llm_http(messages, provider=provider)
         except Exception as e:
-            _LOGGER.warning(f"Streaming failed ({e}), using provider HTTP transport")
+            _LOGGER.warning("Streaming failed (%s), using provider HTTP transport", e)
             return await self._call_llm_http(messages, provider=provider)
 
     async def _request_provider_http_response(

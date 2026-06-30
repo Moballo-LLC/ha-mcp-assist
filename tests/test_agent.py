@@ -2738,6 +2738,39 @@ async def test_ollama_streaming_invalid_tool_error_finishes_without_tools(
     assert "Streaming iteration 2 failed" not in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_empty_streaming_response_falls_back_without_warning(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """Recoverable empty streams should use HTTP fallback without warning alerts."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    streaming_mock = AsyncMock(
+        side_effect=agent_module.EmptyStreamingResponseError(
+            "Streaming returned an empty response"
+        )
+    )
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_streaming", streaming_mock)
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are there any lights on downstairs?"}]
+        )
+
+    assert result == "Recovered over HTTP."
+    streaming_mock.assert_awaited_once()
+    http_mock.assert_awaited_once()
+    assert "Streaming failed" not in caplog.text
+    assert "Streaming returned an empty response" not in caplog.text
+
+
 def test_toolless_check_retry_does_not_fire_after_tool_results(
     hass, profile_entry_factory
 ) -> None:
