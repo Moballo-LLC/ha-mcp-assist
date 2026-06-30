@@ -367,8 +367,14 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
             continue
         if term not in terms:
             terms.append(term)
+    normalized_tokens = set(re.findall(r"\w+", normalized_query, flags=re.UNICODE))
     for alias, expanded_terms in ADAPTIVE_QUERY_ALIASES.items():
-        if alias in normalized_query:
+        matches_alias = (
+            alias in normalized_tokens
+            if re.fullmatch(r"[a-z0-9_]+", alias)
+            else alias in normalized_query
+        )
+        if matches_alias:
             for term in expanded_terms:
                 if term not in terms:
                     terms.append(term)

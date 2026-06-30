@@ -1499,6 +1499,20 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     )
 
 
+def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
+    """Count aliases should not fire when embedded inside unrelated words."""
+    terms = normalize_adaptive_query_terms(
+        "Review my account discounts; sometimes shipping is delayed."
+    )
+
+    assert "history" not in terms
+    assert "recorder" not in terms
+    assert "count" not in terms
+    assert "history" in normalize_adaptive_query_terms(
+        "How many times was the front door opened today?"
+    )
+
+
 def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     """Adaptive matching should avoid unrelated tiny substring matches."""
     query = "How many times was the front door opened today?"
