@@ -36,6 +36,10 @@ from .tools.builtin_catalog import (
 )
 from .provider_runtime import resolve_provider_runtime_config
 from .tool_schema import (
+    ADAPTIVE_META_TOOL_NAMES,
+    ADAPTIVE_TOOL_CATALOG_NAME,
+    ADAPTIVE_TOOL_SCHEMA_NAME,
+    build_adaptive_llm_tools,
     build_tool_routing_summary,
     compact_schema_for_llm,
     compact_text,
@@ -90,6 +94,7 @@ from .const import (
     DEFAULT_TECHNICAL_PROMPT,
     PROMPT_MODE_DEFAULT,
     PROMPT_MODE_CUSTOM,
+    CONTEXT_MODE_ADAPTIVE,
     CONTEXT_MODE_LIGHT,
     CONTEXT_MODE_STANDARD,
     DEFAULT_DEBUG_MODE,
@@ -169,6 +174,9 @@ TOOLLESS_RESPONSE_PATTERNS = (
 )
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
+)
+_ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[frozenset[str]] = ContextVar(
+    "mcp_assist_adaptive_loaded_tool_names", default=frozenset()
 )
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
@@ -254,9 +262,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         self.entry = entry
         self.history = ConversationHistory()
         self._current_chat_log = None  # ChatLog for debug view tracking
-        self._cached_llm_tools: list[dict[str, Any]] | None = None
-        self._cached_llm_tools_key: tuple[Any, ...] | None = None
-        self._cached_llm_tools_fetched_at = 0.0
+        self._cached_profile_mcp_tools: list[dict[str, Any]] | None = None
+        self._cached_profile_mcp_tools_key: tuple[Any, ...] | None = None
+        self._cached_profile_mcp_tools_fetched_at = 0.0
 
         # Entity attributes
         profile_name = entry.data.get("profile_name", "MCP Assist")
@@ -482,9 +490,14 @@ class MCPAssistConversationEntity(ConversationEntity):
             CONF_CONTEXT_MODE,
             self.entry.data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
         )
-        if value in {CONTEXT_MODE_STANDARD, CONTEXT_MODE_LIGHT}:
+        if value in {CONTEXT_MODE_STANDARD, CONTEXT_MODE_ADAPTIVE, CONTEXT_MODE_LIGHT}:
             return value
         return DEFAULT_CONTEXT_MODE
+
+    @property
+    def adaptive_context_mode(self) -> bool:
+        """Return whether this profile should load optional tool schemas on demand."""
+        return self.context_mode == CONTEXT_MODE_ADAPTIVE
 
     @property
     def light_context_mode(self) -> bool:
@@ -706,6 +719,18 @@ class MCPAssistConversationEntity(ConversationEntity):
                 sections.append(external_custom_tool_instructions)
 
         return "\n\n".join(section for section in sections if section)
+
+    def _build_adaptive_technical_instructions(self) -> str:
+        """Build compact routing guidance for adaptive context mode."""
+        return (
+            "## Adaptive Tool Loading\n"
+            "- Start with the advertised Home Assistant tools for entity discovery and control.\n"
+            "- When a request needs optional, built-in package, or custom tools, "
+            f"call {ADAPTIVE_TOOL_CATALOG_NAME} with a short query, then call "
+            f"{ADAPTIVE_TOOL_SCHEMA_NAME} for the exact tool names you need.\n"
+            "- Do not ask the user to approve tool discovery; use these routing "
+            "tools in the same turn when needed."
+        )
 
     def _get_external_custom_tool_instructions(self) -> str:
         """Return prompt additions from loaded external custom tool packages."""
@@ -1349,6 +1374,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
             user_input
         )
+        adaptive_loaded_tools_token: Token[frozenset[str]] = (
+            _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+        )
         conversation_id = chat_log_instance.conversation_id
         persistent_chat_log = (
             self._build_persistent_chat_log_record(user_input, conversation_id)
@@ -1366,6 +1394,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         finally:
             # Clean up
             _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
+            _ADAPTIVE_LOADED_TOOL_NAMES.reset(adaptive_loaded_tools_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
 
@@ -2010,11 +2039,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = (
-                ""
-                if self.light_context_mode
-                else self._build_optional_technical_instructions(current_area)
-            )
+            if self.light_context_mode:
+                optional_instructions = ""
+            elif self.adaptive_context_mode:
+                optional_instructions = self._build_adaptive_technical_instructions()
+            else:
+                optional_instructions = self._build_optional_technical_instructions(
+                    current_area
+                )
             if optional_instructions:
                 technical_prompt = (
                     f"{technical_prompt.rstrip()}\n\n{optional_instructions}"
@@ -2103,11 +2135,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             technical_prompt = re.sub(r"\n{3,}", "\n\n", technical_prompt).strip()
 
-            optional_instructions = (
-                ""
-                if self.light_context_mode
-                else self._build_optional_technical_instructions("Unknown")
-            )
+            if self.light_context_mode:
+                optional_instructions = ""
+            elif self.adaptive_context_mode:
+                optional_instructions = self._build_adaptive_technical_instructions()
+            else:
+                optional_instructions = self._build_optional_technical_instructions(
+                    "Unknown"
+                )
             if optional_instructions:
                 technical_prompt = (
                     f"{technical_prompt.rstrip()}\n\n{optional_instructions}"
@@ -2144,7 +2179,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         return messages
 
     async def _fetch_mcp_tools_from_server(self) -> Optional[List[Dict[str, Any]]]:
-        """Fetch and convert available tools from the MCP server."""
+        """Fetch profile-visible MCP tool definitions from the MCP server."""
         try:
             mcp_url = f"http://localhost:{self.mcp_port}"
 
@@ -2184,57 +2219,287 @@ class MCPAssistConversationEntity(ConversationEntity):
                         else:
                             _LOGGER.warning("⚠️ perform_action tool NOT found!")
 
-                        return self._convert_mcp_tools_to_llm_tools(tools)
+                        return tools
                     return None
 
         except Exception as err:
             _LOGGER.error("Failed to get MCP tools: %s", err)
             return None
 
-    async def _get_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
-        """Return available LLM-facing MCP tools, using a short-lived cache."""
+    async def _get_profile_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """Return profile-visible MCP tool definitions, using a short-lived cache."""
         cache_key = self._build_mcp_tool_cache_key()
         now = time.monotonic()
 
         if (
-            self._cached_llm_tools is not None
-            and self._cached_llm_tools_key == cache_key
-            and (now - self._cached_llm_tools_fetched_at) < MCP_TOOL_CACHE_TTL_SECONDS
+            self._cached_profile_mcp_tools is not None
+            and self._cached_profile_mcp_tools_key == cache_key
+            and (now - self._cached_profile_mcp_tools_fetched_at)
+            < MCP_TOOL_CACHE_TTL_SECONDS
         ):
             _LOGGER.debug(
-                "Using cached MCP tool schema for profile: tools=%d age_ms=%.1f",
-                len(self._cached_llm_tools),
-                (now - self._cached_llm_tools_fetched_at) * 1000,
+                "Using cached MCP tool definitions for profile: tools=%d age_ms=%.1f",
+                len(self._cached_profile_mcp_tools),
+                (now - self._cached_profile_mcp_tools_fetched_at) * 1000,
             )
-            return list(self._cached_llm_tools)
+            return list(self._cached_profile_mcp_tools)
 
         fetch_started_at = time.monotonic()
         tools = await self._fetch_mcp_tools_from_server()
         fetch_ms = (time.monotonic() - fetch_started_at) * 1000
         if tools is not None:
-            self._cached_llm_tools = list(tools)
-            self._cached_llm_tools_key = cache_key
-            self._cached_llm_tools_fetched_at = now
+            self._cached_profile_mcp_tools = list(tools)
+            self._cached_profile_mcp_tools_key = cache_key
+            self._cached_profile_mcp_tools_fetched_at = now
             _LOGGER.debug(
-                "Fetched MCP tool schema for profile: tools=%d latency_ms=%.1f",
+                "Fetched MCP tool definitions for profile: tools=%d latency_ms=%.1f",
                 len(tools),
                 fetch_ms,
             )
             return list(tools)
 
-        if self._cached_llm_tools is not None and self._cached_llm_tools_key == cache_key:
+        if (
+            self._cached_profile_mcp_tools is not None
+            and self._cached_profile_mcp_tools_key == cache_key
+        ):
             _LOGGER.warning(
                 "Using stale cached MCP tools after refresh failure: "
                 "tools=%d fetch_latency_ms=%.1f",
-                len(self._cached_llm_tools),
+                len(self._cached_profile_mcp_tools),
                 fetch_ms,
             )
-            return list(self._cached_llm_tools)
+            return list(self._cached_profile_mcp_tools)
 
         _LOGGER.debug(
-            "MCP tool schema fetch returned no tools: latency_ms=%.1f", fetch_ms
+            "MCP tool definition fetch returned no tools: latency_ms=%.1f", fetch_ms
         )
         return None
+
+    async def _get_mcp_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """Return available LLM-facing MCP tools for the current context mode."""
+        tools = await self._get_profile_mcp_tools()
+        if tools is None:
+            return None
+        return self._build_llm_tools_for_context(tools)
+
+    def _build_llm_tools_for_context(
+        self,
+        tools: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Build the advertised LLM tool surface for the current context mode."""
+        if self.adaptive_context_mode:
+            return build_adaptive_llm_tools(
+                tools,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+                loaded_tool_names=_ADAPTIVE_LOADED_TOOL_NAMES.get(),
+            )
+
+        return self._convert_mcp_tools_to_llm_tools(tools)
+
+    @staticmethod
+    def _tool_definition_name(tool: Dict[str, Any]) -> str:
+        """Return the MCP tool name for a raw tool definition."""
+        return str(tool.get("name") or "")
+
+    def _adaptive_tool_search_text(self, tool: Dict[str, Any]) -> str:
+        """Return compact searchable text for an adaptive catalog entry."""
+        routing_hints = tool.get("routingHints")
+        routing_text = ""
+        if isinstance(routing_hints, dict):
+            routing_text = " ".join(
+                str(value)
+                for key, value in routing_hints.items()
+                if key in {"preferred_when", "keywords", "example_queries"}
+            )
+        return " ".join(
+            str(part or "")
+            for part in (
+                tool.get("name"),
+                tool.get("llmDescription"),
+                tool.get("llm_description"),
+                tool.get("description"),
+                routing_text,
+            )
+        ).casefold()
+
+    def _adaptive_tool_catalog_entry(self, tool: Dict[str, Any]) -> dict[str, Any]:
+        """Return one compact catalog entry for model-facing adaptive discovery."""
+        tool_name = self._tool_definition_name(tool)
+        routing_summary = self._build_tool_routing_summary(tool.get("routingHints"))
+        summary = self._compact_text(
+            str(tool.get("llmDescription") or tool.get("llm_description") or "")
+            or str(tool.get("description") or ""),
+            max_len=110,
+        )
+        if routing_summary:
+            summary = self._compact_text(
+                f"{summary.rstrip(' .')} | {routing_summary}",
+                max_len=180,
+            )
+        family = get_optional_tool_family(tool_name)
+        entry: dict[str, Any] = {
+            "name": tool_name,
+            "summary": summary,
+            "schema_loaded": tool_name in _ADAPTIVE_LOADED_TOOL_NAMES.get(),
+        }
+        if family:
+            entry["family"] = family
+        return entry
+
+    def _match_adaptive_tool_definitions(
+        self,
+        tools: List[Dict[str, Any]],
+        *,
+        query: str = "",
+        tool_names: list[str] | None = None,
+        limit: int = 20,
+    ) -> list[Dict[str, Any]]:
+        """Return adaptive catalog matches from profile-visible raw tools."""
+        visible_tools = [
+            tool
+            for tool in tools
+            if self._tool_definition_name(tool) not in ADAPTIVE_META_TOOL_NAMES
+        ]
+        by_name = {self._tool_definition_name(tool): tool for tool in visible_tools}
+
+        if tool_names:
+            matches: list[Dict[str, Any]] = []
+            for name in tool_names:
+                tool = by_name.get(name)
+                if tool and tool not in matches:
+                    matches.append(tool)
+            return matches[:limit]
+
+        query = " ".join(str(query or "").split()).casefold()
+        if not query:
+            return [
+                tool
+                for tool in visible_tools
+                if self._tool_definition_name(tool) not in LIGHT_CONTEXT_TOOL_NAMES
+            ][:limit]
+
+        terms = [term for term in query.split() if term]
+        scored: list[tuple[int, str, Dict[str, Any]]] = []
+        for tool in visible_tools:
+            tool_name = self._tool_definition_name(tool)
+            haystack = self._adaptive_tool_search_text(tool)
+            score = 0
+            if query == tool_name.casefold():
+                score += 100
+            if query in tool_name.casefold():
+                score += 40
+            score += sum(10 for term in terms if term in haystack)
+            if tool_name not in LIGHT_CONTEXT_TOOL_NAMES:
+                score += 1
+            if score > 0:
+                scored.append((score, tool_name, tool))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [tool for _score, _name, tool in scored[:limit]]
+
+    @staticmethod
+    def _normalize_requested_tool_names(value: Any) -> list[str]:
+        """Return normalized tool names from a string or list argument."""
+        if isinstance(value, str):
+            raw_names = value.split(",")
+        elif isinstance(value, list):
+            raw_names = value
+        else:
+            raw_names = []
+        names: list[str] = []
+        for raw_name in raw_names:
+            name = str(raw_name or "").strip()
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    @staticmethod
+    def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+        """Return an integer clamped to a small safe range."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return min(max(parsed, minimum), maximum)
+
+    async def _handle_adaptive_meta_tool(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Handle adaptive tool catalog/schema meta tools without MCP round-trips."""
+        profile_tools = await self._get_profile_mcp_tools() or []
+        query = str(arguments.get("query") or "").strip()
+
+        if tool_name == ADAPTIVE_TOOL_CATALOG_NAME:
+            limit = self._bounded_int(
+                arguments.get("limit"),
+                default=20,
+                minimum=1,
+                maximum=50,
+            )
+            matches = self._match_adaptive_tool_definitions(
+                profile_tools,
+                query=query,
+                limit=limit,
+            )
+            payload = {
+                "tools": [
+                    self._adaptive_tool_catalog_entry(tool)
+                    for tool in matches
+                ],
+                "loaded_tool_schemas": sorted(_ADAPTIVE_LOADED_TOOL_NAMES.get()),
+                "next_step": (
+                    f"Call {ADAPTIVE_TOOL_SCHEMA_NAME} with the exact tool names "
+                    "you need before using optional or custom tools."
+                ),
+            }
+        elif tool_name == ADAPTIVE_TOOL_SCHEMA_NAME:
+            requested_names = self._normalize_requested_tool_names(
+                arguments.get("tool_names")
+            )
+            limit = self._bounded_int(
+                arguments.get("limit"),
+                default=8,
+                minimum=1,
+                maximum=8,
+            )
+            matches = self._match_adaptive_tool_definitions(
+                profile_tools,
+                query=query,
+                tool_names=requested_names,
+                limit=limit,
+            )
+            matched_names = [self._tool_definition_name(tool) for tool in matches]
+            if matched_names:
+                loaded_names = set(_ADAPTIVE_LOADED_TOOL_NAMES.get())
+                loaded_names.update(matched_names)
+                _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset(loaded_names))
+            missing_names = [
+                name for name in requested_names if name not in set(matched_names)
+            ]
+            payload = {
+                "loaded_tools": [
+                    self._adaptive_tool_catalog_entry(tool)
+                    for tool in matches
+                ],
+                "not_found": missing_names,
+                "next_step": (
+                    "The loaded tool schemas will be available in the next model "
+                    "call. Use the loaded tool directly if it is needed to answer."
+                ),
+            }
+        else:
+            payload = {"error": f"Unknown adaptive meta tool: {tool_name}"}
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(payload, ensure_ascii=False),
+                }
+            ]
+        }
 
     def _filter_mcp_tools_for_profile(
         self, tools: List[Dict[str, Any]]
@@ -2617,7 +2882,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
             # Execute the tool
-            result = await self._call_mcp_tool(tool_name, arguments)
+            if tool_name in ADAPTIVE_META_TOOL_NAMES:
+                result = await self._handle_adaptive_meta_tool(tool_name, arguments)
+            else:
+                result = await self._call_mcp_tool(tool_name, arguments)
 
             # Format result for LLM consumption
             content = self._format_tool_result_for_llm(tool_name, result)
@@ -2666,7 +2934,8 @@ class MCPAssistConversationEntity(ConversationEntity):
     @property
     def model_turn_limit(self) -> int:
         """Return the per-request model-call limit around the tool budget."""
-        return self.tool_call_budget + 1
+        adaptive_turn_allowance = 4 if self.adaptive_context_mode else 1
+        return self.tool_call_budget + adaptive_turn_allowance
 
     @staticmethod
     def _tool_call_id(tool_call: Dict[str, Any]) -> str:
@@ -2678,6 +2947,16 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Return the function name for a provider-normalized tool call."""
         function = tool_call.get("function") or {}
         return str(function.get("name") or "unknown")
+
+    @classmethod
+    def _is_budgeted_tool_call(cls, tool_call: Dict[str, Any]) -> bool:
+        """Return whether a tool call should consume the user's MCP tool budget."""
+        return cls._tool_call_name(tool_call) not in ADAPTIVE_META_TOOL_NAMES
+
+    @classmethod
+    def _count_budgeted_tool_calls(cls, tool_calls: List[Dict[str, Any]]) -> int:
+        """Return how many calls in a list consume the MCP tool budget."""
+        return sum(1 for tool_call in tool_calls if cls._is_budgeted_tool_call(tool_call))
 
     def _build_budget_skipped_tool_result(
         self,
@@ -2705,8 +2984,19 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
         """Split requested tool calls into executable and skipped budget results."""
         remaining = max(0, self.tool_call_budget - tool_calls_used)
-        executable_tool_calls = tool_calls[:remaining]
-        skipped_tool_calls = tool_calls[remaining:]
+        executable_tool_calls: list[dict[str, Any]] = []
+        skipped_tool_calls: list[dict[str, Any]] = []
+        budgeted_calls_added = 0
+
+        for tool_call in tool_calls:
+            if not self._is_budgeted_tool_call(tool_call):
+                executable_tool_calls.append(tool_call)
+                continue
+            if budgeted_calls_added < remaining:
+                executable_tool_calls.append(tool_call)
+                budgeted_calls_added += 1
+                continue
+            skipped_tool_calls.append(tool_call)
 
         if skipped_tool_calls:
             _LOGGER.warning(
@@ -2752,9 +3042,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         *,
         tools: List[Dict[str, Any]] | None,
         retry_used: bool,
+        tool_calls_used: int = 0,
     ) -> bool:
         """Return whether to give the model one more chance to call a tool."""
-        if retry_used or not tools:
+        if retry_used or not tools or tool_calls_used > 0:
             return False
         return self._is_toolless_check_preamble(response_text)
 
@@ -2891,8 +3182,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.warning("Streaming not available, falling back to HTTP")
             raise Exception("Streaming not available")
 
-        # Get MCP tools once
-        tools = await self._get_mcp_tools()
+        tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
         conversation_messages = list(messages)
         tool_calls_used = 0
@@ -2908,6 +3198,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         for iteration in range(self.model_turn_limit):
             _LOGGER.info(f"🔄 Stream iteration {iteration + 1}")
+            tools = await self._get_mcp_tools()
+            if not tools and iteration == 0:
+                _LOGGER.warning("No MCP tools available - proceeding without tools")
             if self.debug_mode and iteration == 0:
                 _LOGGER.info(f"🎯 Using model: {self.model_name}")
 
@@ -3252,7 +3545,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 # Execute tools
                 tool_results = await self._execute_tool_calls(executable_tool_calls)
-                tool_calls_used += len(executable_tool_calls)
+                tool_calls_used += self._count_budgeted_tool_calls(
+                    executable_tool_calls
+                )
                 tool_results.extend(skipped_tool_results)
 
                 # Record tool results to ChatLog for debug view
@@ -3304,6 +3599,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                         response_text,
                         tools=tools,
                         retry_used=toolless_retry_used,
+                        tool_calls_used=tool_calls_used,
                     ):
                         _LOGGER.info(
                             "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"
@@ -3355,10 +3651,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Call the active provider with its non-streaming HTTP transport."""
         _LOGGER.info(f"🚀 Using provider HTTP transport for {self.server_type}")
 
-        # Get MCP tools once
-        tools = await self._get_mcp_tools()
-        if not tools:
-            _LOGGER.warning("No MCP tools available - proceeding without tools")
+        tools: list[dict[str, Any]] | None = None
 
         if provider is None:
             provider = self._get_llm_provider()
@@ -3373,6 +3666,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.info(
                 f"🔄 HTTP Iteration {iteration + 1}: Calling {self.server_type} with {len(conversation_messages)} messages"
             )
+            tools = await self._get_mcp_tools()
+            if not tools and iteration == 0:
+                _LOGGER.warning("No MCP tools available - proceeding without tools")
 
             payload = provider.build_payload(conversation_messages, tools, stream=False)
             clean_payload = provider.clean_payload(payload)
@@ -3453,7 +3749,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                         tool_results = await self._execute_tool_calls(
                             executable_tool_calls
                         )
-                        tool_calls_used += len(executable_tool_calls)
+                        tool_calls_used += self._count_budgeted_tool_calls(
+                            executable_tool_calls
+                        )
                         tool_results.extend(skipped_tool_results)
 
                         # Record tool results to ChatLog for debug view
@@ -3514,6 +3812,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                             final_content,
                             tools=tools,
                             retry_used=toolless_retry_used,
+                            tool_calls_used=tool_calls_used,
                         ):
                             _LOGGER.info(
                                 "Model returned a tool-less check preamble; retrying with corrective tool-use instruction"

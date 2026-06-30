@@ -52,11 +52,17 @@ from custom_components.mcp_assist.const import (
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TECHNICAL_PROMPT,
     DOMAIN,
+    CONTEXT_MODE_ADAPTIVE,
     CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD,
     DEFAULT_CONTEXT_MODE,
     PROMPT_MODE_CUSTOM,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_ANTHROPIC,
+)
+from custom_components.mcp_assist.tool_schema import (
+    ADAPTIVE_TOOL_CATALOG_NAME,
+    ADAPTIVE_TOOL_SCHEMA_NAME,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -298,6 +304,40 @@ def test_light_context_mode_advertises_core_profile_tools(
     }
 
 
+def test_adaptive_context_mode_advertises_core_and_meta_tools(
+    hass, profile_entry_factory
+) -> None:
+    """Adaptive context should start small and add selected schemas on demand."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("discover_entities"),
+        _tool("get_entity_details"),
+        _tool("perform_action"),
+        _tool("sample_custom_tool"),
+    ]
+
+    advertised = agent._build_llm_tools_for_context(tools)
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+
+    assert "discover_entities" in advertised_names
+    assert "perform_action" in advertised_names
+    assert ADAPTIVE_TOOL_CATALOG_NAME in advertised_names
+    assert ADAPTIVE_TOOL_SCHEMA_NAME in advertised_names
+    assert "sample_custom_tool" not in advertised_names
+
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(
+        frozenset({"sample_custom_tool"})
+    )
+    try:
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_custom_tool" in advertised_names
+
+
 def test_profile_tool_filtering_can_hide_convert_unit_without_hiding_add(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -452,6 +492,32 @@ def test_optional_technical_instructions_omit_external_custom_tool_guidance_when
 
     assert "External Custom Tools" not in instructions
     assert "sample_tool_status" not in instructions
+
+
+@pytest.mark.asyncio
+async def test_adaptive_prompt_uses_compact_tool_loading_guidance(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Adaptive mode should not inline full optional custom-tool instructions."""
+    system_entry_factory(data={CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: True})
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
+        tools=SimpleNamespace(
+            get_external_prompt_instructions=lambda: (
+                "## External Custom Tools\nUse sample_tool_status for custom status."
+            ),
+        )
+    )
+
+    prompt = await agent._build_system_prompt_with_context(
+        SimpleNamespace(device_id=None)
+    )
+
+    assert "Adaptive Tool Loading" in prompt
+    assert ADAPTIVE_TOOL_CATALOG_NAME in prompt
+    assert ADAPTIVE_TOOL_SCHEMA_NAME in prompt
+    assert "sample_tool_status" not in prompt
 
 
 def test_profile_tool_filtering_can_disable_search_without_hiding_read_url(
@@ -705,10 +771,10 @@ def test_chat_log_mode_defaults_off_and_can_be_enabled(
     assert enabled_agent.chat_log_mode is True
 
 
-def test_context_mode_defaults_to_standard_for_unknown_values(
+def test_context_mode_defaults_to_adaptive_for_unknown_values(
     hass, profile_entry_factory
 ) -> None:
-    """Unknown stored context mode values should fall back to standard behavior."""
+    """Unknown stored context mode values should fall back to adaptive behavior."""
     default_agent = MCPAssistConversationEntity(hass, profile_entry_factory())
     invalid_agent = MCPAssistConversationEntity(
         hass,
@@ -719,6 +785,7 @@ def test_context_mode_defaults_to_standard_for_unknown_values(
     )
 
     assert default_agent.context_mode == DEFAULT_CONTEXT_MODE
+    assert default_agent.context_mode == CONTEXT_MODE_ADAPTIVE
     assert invalid_agent.context_mode == DEFAULT_CONTEXT_MODE
 
 
@@ -1014,9 +1081,9 @@ async def test_get_mcp_tools_uses_short_lived_cache(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """Repeated tool fetches with the same profile surface should reuse the cache."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
-    fetch_mock = AsyncMock(return_value=[{"type": "function", "function": {"name": "discover_entities"}}])
+    fetch_mock = AsyncMock(return_value=[_tool("discover_entities")])
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", fetch_mock)
 
     first = await agent._get_mcp_tools()
@@ -1031,7 +1098,7 @@ async def test_get_mcp_tools_refetches_when_external_custom_tool_signature_chang
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """External custom tool changes should invalidate the profile MCP-tool cache immediately."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
     state = {"signature": ("v1",)}
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
@@ -1039,8 +1106,8 @@ async def test_get_mcp_tools_refetches_when_external_custom_tool_signature_chang
     )
     fetch_mock = AsyncMock(
         side_effect=[
-            [{"type": "function", "function": {"name": "sample_tool_status"}}],
-            [{"type": "function", "function": {"name": "sample_tool_history"}}],
+            [_tool("sample_tool_status")],
+            [_tool("sample_tool_history")],
         ]
     )
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", fetch_mock)
@@ -1060,18 +1127,75 @@ async def test_get_mcp_tools_uses_stale_cache_on_refresh_failure(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """A transient tools/list failure should fall back to the last cached tool surface."""
-    entry = profile_entry_factory()
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
     agent = MCPAssistConversationEntity(hass, entry)
-    cached_tools = [{"type": "function", "function": {"name": "discover_entities"}}]
-    agent._cached_llm_tools = list(cached_tools)
-    agent._cached_llm_tools_key = agent._build_mcp_tool_cache_key()
-    agent._cached_llm_tools_fetched_at = 0
+    cached_tools = [_tool("discover_entities")]
+    agent._cached_profile_mcp_tools = list(cached_tools)
+    agent._cached_profile_mcp_tools_key = agent._build_mcp_tool_cache_key()
+    agent._cached_profile_mcp_tools_fetched_at = 0
     monkeypatch.setattr(agent, "_fetch_mcp_tools_from_server", AsyncMock(return_value=None))
     monkeypatch.setattr("custom_components.mcp_assist.agent.time.monotonic", lambda: 9999.0)
 
     result = await agent._get_mcp_tools()
 
-    assert result == cached_tools
+    assert result == agent._convert_mcp_tools_to_llm_tools(cached_tools)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_meta_tools_catalog_and_load_schemas(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive meta tools should expose a compact catalog before loading schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    custom_tool = {
+        "name": "sample_tool_status",
+        "description": "private-schema-marker user-facing description",
+        "llmDescription": "Get sample custom status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "include_details": {
+                    "type": "boolean",
+                    "description": "private-schema-marker should stay hidden",
+                }
+            },
+        },
+        "routingHints": {
+            "keywords": ["status", "sample"],
+            "preferred_when": "Use when the user asks for custom package health.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), custom_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        catalog_result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_CATALOG_NAME,
+            {"query": "sample"},
+        )
+        catalog_payload = json.loads(catalog_result["content"][0]["text"])
+
+        assert catalog_payload["tools"][0]["name"] == "sample_tool_status"
+        assert catalog_payload["tools"][0]["schema_loaded"] is False
+        assert "inputSchema" not in catalog_result["content"][0]["text"]
+        assert "private-schema-marker" not in catalog_result["content"][0]["text"]
+
+        load_result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": ["sample_tool_status"]},
+        )
+        load_payload = json.loads(load_result["content"][0]["text"])
+
+        assert load_payload["loaded_tools"][0]["name"] == "sample_tool_status"
+        assert load_payload["not_found"] == []
+        assert "sample_tool_status" in agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
 
 def test_compact_tool_result_for_llm_truncates_large_payloads(
@@ -1495,6 +1619,35 @@ async def test_tool_budget_skips_extra_calls_and_finishes_without_tools(
     assert "configured tool-call budget" in skipped_content["error"]
 
 
+def test_adaptive_meta_tool_calls_do_not_consume_tool_budget(
+    hass, profile_entry_factory
+) -> None:
+    """Schema discovery should not spend the user's real MCP tool-call budget."""
+    entry = profile_entry_factory(options={CONF_MAX_ITERATIONS: 1})
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    tool_calls = [
+        {"id": "meta-1", "function": {"name": ADAPTIVE_TOOL_CATALOG_NAME}},
+        {"id": "call-1", "function": {"name": "discover_entities"}},
+        {"id": "call-2", "function": {"name": "perform_action"}},
+    ]
+
+    executable, skipped, exhausted = agent._prepare_tool_calls_for_budget(
+        tool_calls,
+        tool_calls_used=0,
+        provider=provider,
+    )
+
+    assert [call["function"]["name"] for call in executable] == [
+        ADAPTIVE_TOOL_CATALOG_NAME,
+        "discover_entities",
+    ]
+    assert len(skipped) == 1
+    assert "budget_exhausted" in json.dumps(skipped[0])
+    assert agent._count_budgeted_tool_calls(executable) == 1
+    assert exhausted is True
+
+
 @pytest.mark.asyncio
 async def test_ollama_toolless_check_preamble_retries_with_tool_call(
     hass, profile_entry_factory, monkeypatch
@@ -1613,6 +1766,37 @@ async def test_ollama_toolless_check_preamble_retries_with_tool_call(
         "floor": "upstairs",
         "state": "on",
     }
+
+
+def test_toolless_check_retry_does_not_fire_after_tool_results(
+    hass, profile_entry_factory
+) -> None:
+    """A post-tool summary that starts like a check should not trigger extra turns."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "discover_entities",
+                "description": "Find entities.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+
+    assert agent._should_retry_toolless_response(
+        "I'll check if any kitchen lights are on.",
+        tools=tools,
+        retry_used=False,
+        tool_calls_used=0,
+    )
+    assert not agent._should_retry_toolless_response(
+        "I can see the kitchen light is on.",
+        tools=tools,
+        retry_used=False,
+        tool_calls_used=1,
+    )
 
 
 def test_format_tool_result_for_llm_preserves_structured_results_without_binary(

@@ -522,6 +522,12 @@ async def test_prompt_overhead_diagnostics_reports_metadata_only(
     assert payload["standard_context"]["tool_count"] == 2
     assert payload["standard_context"]["compact_llm_tool_schema_bytes"] > 0
     assert payload["standard_context"]["approx_llm_tool_schema_tokens"] > 0
+    assert payload["adaptive_context"]["tool_count"] == 3
+    assert payload["adaptive_context"]["compact_llm_tool_schema_bytes"] > 0
+    assert any(
+        group["source"] == "adaptive_meta"
+        for group in payload["adaptive_context"]["top_tool_groups_by_schema_bytes"]
+    )
     assert payload["light_context"]["tool_count"] == 1
     assert payload["light_context"]["top_tools_by_schema_bytes"][0]["name"] == "run_script"
     assert payload["standard_context"]["top_tool_groups_by_schema_bytes"][0][

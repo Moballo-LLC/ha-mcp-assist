@@ -45,15 +45,19 @@ quantizations, provider APIs, and local server behavior change over time.
 ### Small Context Local Models
 
 If Ollama or another local provider rejects a request because it exceeds the
-model context window, try **Context Mode: Light** on that conversation profile.
+model context window, first confirm the profile is using **Context Mode:
+Adaptive**. Adaptive mode keeps core Home Assistant discovery/control tools
+available immediately and lets the model load optional, built-in package, or
+external custom tool schemas only when a request needs them.
+
+Use **Context Mode: Light** for the smallest direct local-control profiles.
 Light mode keeps at most two prior conversation turns, skips MCP Assist's
 optional tool-family prompt instructions, and advertises only core Home
 Assistant discovery/control tools to the model.
 
-Light mode is best for direct local-control profiles. Use Standard mode for
-profiles that need optional tools such as recorder history, weather, web search,
-memory, Music Assistant, or external custom tools. If the model and hardware can
-handle it, increasing the provider context-window setting can also help.
+Use Standard mode when you intentionally want the full profile tool surface sent
+upfront. If the model and hardware can handle it, increasing the provider
+context-window setting can also help.
 
 ## Instruct vs Reasoning Models
 

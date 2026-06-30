@@ -108,6 +108,7 @@ from .llm_providers import (
     create_llm_provider,
 )
 from .tool_schema import (
+    build_adaptive_llm_tools,
     convert_mcp_tools_to_llm_tools,
     estimate_tokens_from_bytes,
 )
@@ -908,6 +909,10 @@ class MCPServer(
             for tool in tools
             if str(tool.get("name") or "") in LIGHT_CONTEXT_TOOL_NAMES
         ]
+        adaptive_llm_tools = build_adaptive_llm_tools(
+            tools,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
 
         diagnostics = {
             "status": "ok",
@@ -923,6 +928,11 @@ class MCPServer(
             "standard_context": self._build_prompt_overhead_summary(
                 tools,
                 top_limit=top_limit,
+            ),
+            "adaptive_context": self._build_prompt_overhead_summary(
+                light_tools,
+                top_limit=top_limit,
+                llm_tools=adaptive_llm_tools,
             ),
             "light_context": self._build_prompt_overhead_summary(
                 light_tools,
@@ -1163,9 +1173,11 @@ class MCPServer(
         tools: list[dict[str, Any]],
         *,
         top_limit: int,
+        llm_tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Build metadata-only overhead metrics for a list of MCP tools."""
-        llm_tools = convert_mcp_tools_to_llm_tools(tools)
+        if llm_tools is None:
+            llm_tools = convert_mcp_tools_to_llm_tools(tools)
         raw_tool_bytes = _json_size_bytes(tools)
         compact_schema_bytes = _json_size_bytes(llm_tools)
         per_tool: list[dict[str, Any]] = []
@@ -1205,6 +1217,38 @@ class MCPServer(
             group["raw_mcp_tool_bytes"] += raw_mcp_tool_bytes
             group["compact_llm_tool_schema_bytes"] += compact_tool_bytes
 
+        for llm_tool in llm_tools[len(tools) :]:
+            function = llm_tool.get("function")
+            tool_name = ""
+            if isinstance(function, dict):
+                tool_name = str(function.get("name") or "")
+            compact_tool_bytes = _json_size_bytes(llm_tool)
+            per_tool.append(
+                {
+                    "name": tool_name,
+                    "source": "adaptive_meta",
+                    "package_id": "adaptive_context",
+                    "raw_mcp_tool_bytes": 0,
+                    "compact_llm_tool_schema_bytes": compact_tool_bytes,
+                    "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(
+                        compact_tool_bytes
+                    ),
+                }
+            )
+            group = groups.setdefault(
+                ("adaptive_meta", "adaptive_context"),
+                {
+                    "source": "adaptive_meta",
+                    "package_id": "adaptive_context",
+                    "package_name": "Adaptive Context",
+                    "tool_count": 0,
+                    "raw_mcp_tool_bytes": 0,
+                    "compact_llm_tool_schema_bytes": 0,
+                },
+            )
+            group["tool_count"] += 1
+            group["compact_llm_tool_schema_bytes"] += compact_tool_bytes
+
         top_tools = sorted(
             per_tool,
             key=lambda item: item["compact_llm_tool_schema_bytes"],
@@ -1221,14 +1265,14 @@ class MCPServer(
             )
 
         return {
-            "tool_count": len(tools),
+            "tool_count": len(llm_tools),
             "raw_mcp_tools_bytes": raw_tool_bytes,
             "compact_llm_tool_schema_bytes": compact_schema_bytes,
             "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(
                 compact_schema_bytes
             ),
             "average_compact_llm_tool_schema_bytes": (
-                round(compact_schema_bytes / len(tools), 1) if tools else 0
+                round(compact_schema_bytes / len(llm_tools), 1) if llm_tools else 0
             ),
             "top_tools_by_schema_bytes": top_tools,
             "top_tool_groups_by_schema_bytes": grouped_tools,

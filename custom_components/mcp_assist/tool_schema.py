@@ -5,6 +5,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
+ADAPTIVE_TOOL_CATALOG_NAME = "list_available_tools"
+ADAPTIVE_TOOL_SCHEMA_NAME = "load_tool_schemas"
+ADAPTIVE_META_TOOL_NAMES = frozenset(
+    {
+        ADAPTIVE_TOOL_CATALOG_NAME,
+        ADAPTIVE_TOOL_SCHEMA_NAME,
+    }
+)
+
 
 def compact_text(text: str, *, max_len: int = 160) -> str:
     """Compact instructional text for lower token usage."""
@@ -154,6 +163,69 @@ def convert_mcp_tools_to_llm_tools(
         )
 
     return llm_tools
+
+
+def build_adaptive_meta_tools() -> list[dict[str, Any]]:
+    """Return tiny meta tools for on-demand tool discovery in adaptive mode."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": ADAPTIVE_TOOL_CATALOG_NAME,
+                "description": (
+                    "Search optional, built-in, and custom MCP tools before loading "
+                    "their full schemas."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": ADAPTIVE_TOOL_SCHEMA_NAME,
+                "description": (
+                    "Load full schemas for specific optional/custom tools so they can "
+                    "be called on the next turn."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+                    },
+                },
+            },
+        },
+    ]
+
+
+def build_adaptive_llm_tools(
+    tools: list[dict[str, Any]],
+    *,
+    base_tool_names: frozenset[str],
+    loaded_tool_names: frozenset[str] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Return the LLM-facing tool surface for adaptive context mode."""
+    selected_tool_names = set(base_tool_names) | set(loaded_tool_names)
+    selected_tools = [
+        tool
+        for tool in tools
+        if str(tool.get("name") or "") in selected_tool_names
+    ]
+    return [
+        *convert_mcp_tools_to_llm_tools(selected_tools),
+        *build_adaptive_meta_tools(),
+    ]
 
 
 def json_size_bytes(value: Any) -> int:
