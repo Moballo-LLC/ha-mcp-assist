@@ -158,6 +158,8 @@ class EmptyStreamingResponseError(RecoverableStreamingFallbackError):
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
+TOOL_BUDGET_FINAL_TOOL_RESULT_CHARS = 2000
+TOOL_BUDGET_FINAL_TOOL_RESULT_LINES = 40
 MAX_PROVIDER_LOG_CHARS = 500
 PROVIDER_HTTP_TIMEOUT_ATTEMPTS = 2
 TOOL_HISTORY_ARGUMENT_KEYS = (
@@ -454,6 +456,12 @@ def _provider_log_snippet(value: Any, max_chars: int = MAX_PROVIDER_LOG_CHARS) -
     if len(text) <= max_chars:
         return text
     return f"{text[:max_chars].rstrip()}... [truncated {len(text) - max_chars} chars]"
+
+
+def _exception_log_snippet(err: BaseException) -> str:
+    """Return a useful log detail even for exceptions with an empty string value."""
+    snippet = _provider_log_snippet(err)
+    return snippet or err.__class__.__name__
 
 
 class MCPAssistConversationEntity(ConversationEntity):
@@ -1194,7 +1202,14 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return ()
 
-    def _compact_tool_result_for_llm(self, tool_name: str, content: Any) -> str:
+    def _compact_tool_result_for_llm(
+        self,
+        tool_name: str,
+        content: Any,
+        *,
+        max_chars: int = MAX_TOOL_RESULT_CHARS,
+        max_lines: int = MAX_TOOL_RESULT_LINES,
+    ) -> str:
         """Keep tool results useful while avoiding oversized follow-up payloads."""
         text = "" if content is None else str(content)
         text = text.replace("\r\n", "\n").strip()
@@ -1204,17 +1219,17 @@ class MCPAssistConversationEntity(ConversationEntity):
         original_length = len(text)
         original_lines = text.count("\n") + 1
 
-        if original_length <= MAX_TOOL_RESULT_CHARS and original_lines <= MAX_TOOL_RESULT_LINES:
+        if original_length <= max_chars and original_lines <= max_lines:
             return text
 
         lines = text.splitlines()
-        truncated_lines = lines[:MAX_TOOL_RESULT_LINES]
+        truncated_lines = lines[:max_lines]
         compacted = "\n".join(truncated_lines).strip()
 
-        if len(compacted) > MAX_TOOL_RESULT_CHARS:
-            compacted = compacted[:MAX_TOOL_RESULT_CHARS].rstrip()
+        if len(compacted) > max_chars:
+            compacted = compacted[:max_chars].rstrip()
             last_break = max(compacted.rfind("\n"), compacted.rfind(" "))
-            if last_break > int(MAX_TOOL_RESULT_CHARS * 0.7):
+            if last_break > int(max_chars * 0.7):
                 compacted = compacted[:last_break].rstrip()
 
         omitted_lines = max(0, original_lines - len(truncated_lines))
@@ -3589,6 +3604,52 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Return whether the conversation already has tool results to summarize."""
         return any(message.get("role") == "tool" for message in messages)
 
+    @classmethod
+    def _tool_names_by_call_id(
+        cls,
+        messages: List[Dict[str, Any]],
+    ) -> dict[str, str]:
+        """Return tool names keyed by provider tool-call id."""
+        tool_names: dict[str, str] = {}
+        for message in messages:
+            if message.get("role") != "assistant" or not message.get("tool_calls"):
+                continue
+            for tool_call in message.get("tool_calls", []):
+                tool_call_id = str(tool_call.get("id") or "")
+                if tool_call_id:
+                    tool_names[tool_call_id] = cls._tool_call_name(tool_call)
+        return tool_names
+
+    def _compact_tool_results_for_final_response(
+        self,
+        messages: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Return messages with tighter tool-result content for no-tools finalization."""
+        tool_names_by_id = self._tool_names_by_call_id(messages)
+        compacted_messages: list[dict[str, Any]] = []
+
+        for message in messages:
+            if message.get("role") != "tool":
+                compacted_messages.append(message)
+                continue
+
+            compacted_message = dict(message)
+            tool_call_id = str(compacted_message.get("tool_call_id") or "")
+            tool_name = str(
+                compacted_message.get("tool_name")
+                or tool_names_by_id.get(tool_call_id)
+                or "tool_result"
+            )
+            compacted_message["content"] = self._compact_tool_result_for_llm(
+                tool_name,
+                compacted_message.get("content"),
+                max_chars=TOOL_BUDGET_FINAL_TOOL_RESULT_CHARS,
+                max_lines=TOOL_BUDGET_FINAL_TOOL_RESULT_LINES,
+            )
+            compacted_messages.append(compacted_message)
+
+        return compacted_messages
+
     @staticmethod
     def _is_toolless_check_preamble(response_text: str) -> bool:
         """Return whether a response only promises to check without using tools."""
@@ -3638,10 +3699,49 @@ class MCPAssistConversationEntity(ConversationEntity):
         transport: str,
     ) -> str:
         """Ask the provider for a final answer with tools disabled."""
-        final_messages = [
-            *conversation_messages,
-            {"role": "system", "content": TOOL_BUDGET_FINAL_INSTRUCTION},
-        ]
+        return await self._call_llm_without_tools(
+            conversation_messages,
+            provider,
+            transport=transport,
+            final_instruction=TOOL_BUDGET_FINAL_INSTRUCTION,
+            fallback_response=TOOL_BUDGET_FALLBACK_RESPONSE,
+            compact_tool_results=True,
+        )
+
+    async def async_call_llm_without_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        transport: str = "direct_no_tools",
+    ) -> str:
+        """Call the active provider directly with tools disabled."""
+        provider = self._get_llm_provider()
+        return await self._call_llm_without_tools(
+            messages,
+            provider,
+            transport=transport,
+        )
+
+    async def _call_llm_without_tools(
+        self,
+        conversation_messages: List[Dict[str, Any]],
+        provider: LLMProvider,
+        *,
+        transport: str,
+        final_instruction: str | None = None,
+        fallback_response: str | None = None,
+        compact_tool_results: bool = False,
+    ) -> str:
+        """Ask a provider for a no-tools response."""
+        base_messages = (
+            self._compact_tool_results_for_final_response(conversation_messages)
+            if compact_tool_results
+            else list(conversation_messages)
+        )
+        final_messages = list(base_messages)
+        if final_instruction:
+            final_messages.append({"role": "system", "content": final_instruction})
+
         payload = provider.build_payload(final_messages, [], stream=False)
         clean_payload = self._prepare_provider_payload(provider, payload)
         self._log_initial_llm_payload_metrics(
@@ -3653,40 +3753,48 @@ class MCPAssistConversationEntity(ConversationEntity):
         )
 
         try:
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    provider.chat_url(),
-                    headers=provider.headers(),
-                    json=clean_payload,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        _LOGGER.warning(
-                            "%s final budget response failed: status=%s body=%s",
-                            self.server_type,
-                            response.status,
-                            _provider_log_snippet(error_text),
-                        )
-                        return TOOL_BUDGET_FALLBACK_RESPONSE
-
-                    data = await response.json()
-                    self._log_prompt_cache_usage(
-                        provider,
-                        data,
-                        transport=transport,
-                        iteration=-1,
-                    )
-                    message = provider.parse_http_message(data)
-                    final_content = str(message.get("content") or "").strip()
-                    return final_content or TOOL_BUDGET_FALLBACK_RESPONSE
-        except Exception as err:
-            _LOGGER.warning(
-                "%s final budget response failed: %s",
-                self.server_type,
-                _provider_log_snippet(err),
+            response = await self._request_provider_http_response(
+                provider,
+                clean_payload,
+                iteration=-1,
             )
-            return TOOL_BUDGET_FALLBACK_RESPONSE
+            if response.status != 200:
+                if fallback_response is None:
+                    raise ValueError(
+                        f"No-tools provider response failed with status {response.status}: "
+                        f"{_provider_log_snippet(response.error_text)}"
+                    )
+                _LOGGER.warning(
+                    "%s no-tools response failed: transport=%s status=%s body=%s",
+                    self.server_type,
+                    transport,
+                    response.status,
+                    _provider_log_snippet(response.error_text),
+                )
+                return fallback_response
+
+            data = response.data or {}
+            self._log_prompt_cache_usage(
+                provider,
+                data,
+                transport=transport,
+                iteration=-1,
+            )
+            message = provider.parse_http_message(data)
+            final_content = str(message.get("content") or "").strip()
+            if final_content or fallback_response is not None:
+                return final_content or str(fallback_response)
+            raise ValueError("No-tools provider response was empty")
+        except Exception as err:
+            if fallback_response is None:
+                raise
+            _LOGGER.warning(
+                "%s no-tools response failed: transport=%s error=%s",
+                self.server_type,
+                transport,
+                _exception_log_snippet(err),
+            )
+            return fallback_response
 
     async def _test_streaming_basic(self) -> bool:
         """Test basic streaming without tools to isolate connection issues."""
@@ -4234,7 +4342,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 completed_tools.clear()
 
                 if budget_plan.exhausted or tool_calls_used >= self.tool_call_budget:
-                    _LOGGER.warning(
+                    _LOGGER.info(
                         "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
                         tool_calls_used,
                         self.tool_call_budget,
@@ -4309,7 +4417,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             _LOGGER.debug("%s; using provider HTTP transport", e)
             return await self._call_llm_http(messages, provider=provider)
         except Exception as e:
-            _LOGGER.warning("Streaming failed (%s), using provider HTTP transport", e)
+            _LOGGER.warning(
+                "Streaming failed (%s), using provider HTTP transport",
+                _exception_log_snippet(e),
+            )
             return await self._call_llm_http(messages, provider=provider)
 
     async def _request_provider_http_response(
@@ -4555,7 +4666,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 _LOGGER.info(f"📊 Added {len(tool_results)} tool results to conversation")
 
                 if budget_plan.exhausted or tool_calls_used >= self.tool_call_budget:
-                    _LOGGER.warning(
+                    _LOGGER.info(
                         "Tool-call budget exhausted after %d/%d calls; requesting final answer without tools",
                         tool_calls_used,
                         self.tool_call_budget,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from custom_components.mcp_assist.const import DOMAIN
@@ -37,22 +35,17 @@ async def test_gap_filling_uses_profile_agent_when_system_entry_is_first(
     """LLM inference should skip the shared system entry and use a profile agent."""
     system_entry_factory()
     profile_entry = profile_entry_factory()
-    seen_inputs = []
+    seen_calls = []
 
     class FakeAgent:
         async def async_process(self, conversation_input):
-            seen_inputs.append(conversation_input)
-            return SimpleNamespace(
-                response=SimpleNamespace(
-                    speech={
-                        "plain": {
-                            "speech": (
-                                '{"presence": {"pattern": "binary_sensor.*_presence", '
-                                '"count": 2, "description": "Presence sensors"}}'
-                            )
-                        }
-                    }
-                )
+            raise AssertionError("gap filling should not use full conversation processing")
+
+        async def async_call_llm_without_tools(self, messages, *, transport):
+            seen_calls.append((messages, transport))
+            return (
+                '{"presence": {"pattern": "binary_sensor.*_presence", '
+                '"count": 2, "description": "Presence sensors"}}'
             )
 
     hass.data.setdefault(DOMAIN, {})[profile_entry.entry_id] = {"agent": FakeAgent()}
@@ -61,4 +54,4 @@ async def test_gap_filling_uses_profile_agent_when_system_entry_is_first(
     inferred = await manager._call_llm_for_inference("infer entities")
 
     assert inferred["presence"]["count"] == 2
-    assert seen_inputs[0].agent_id == profile_entry.entry_id
+    assert seen_calls == [([{"role": "user", "content": "infer entities"}], "index_gap_filling")]

@@ -1756,6 +1756,69 @@ def test_compact_tool_result_for_llm_truncates_large_payloads(
 
 
 @pytest.mark.asyncio
+async def test_tool_budget_final_response_compacts_large_tool_results(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Budget-final prompts should stay compact enough for local models."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_TIMEOUT: 1},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    large_result = "\n".join(f"entity {index}: downstairs light" for index in range(200))
+    messages = [
+        {"role": "user", "content": "Are any downstairs lights on?"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "discover_entities", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": large_result},
+    ]
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {"message": {"role": "assistant", "content": "One downstairs light is on."}}
+        )
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_final_response_without_tools(
+        messages,
+        provider,
+        transport="streaming_budget_final",
+    )
+
+    assert result == "One downstairs light is on."
+    assert "tools" not in posts[0]["json"]
+    tool_messages = [
+        message
+        for message in posts[0]["json"]["messages"]
+        if message.get("role") == "tool"
+    ]
+    assert len(tool_messages) == 1
+    tool_content = tool_messages[0]["content"]
+    assert len(tool_content) < len(large_result)
+    assert "Tool result truncated for model context" in tool_content
+    assert "Use limit/offset paging" in tool_content
+
+
+@pytest.mark.asyncio
 async def test_trigger_tts_is_a_noop(
     hass, profile_entry_factory
 ) -> None:
@@ -2458,6 +2521,56 @@ async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
     assert err.value.transport == "HTTP"
     assert err.value.attempts == 2
     assert len(posts) == 2
+
+
+@pytest.mark.asyncio
+async def test_tool_budget_final_timeout_logs_detail_and_returns_fallback(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """Budget-final timeout fallback should not emit a blank failure detail."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_TIMEOUT: 1,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    posts: list[dict] = []
+
+    class _TimeoutSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm_final_response_without_tools(
+            [{"role": "user", "content": "Are any downstairs lights on?"}],
+            provider,
+            transport="streaming_budget_final",
+        )
+
+    assert result == agent_module.TOOL_BUDGET_FALLBACK_RESPONSE
+    assert len(posts) == 2
+    assert "no-tools response failed: transport=streaming_budget_final" in caplog.text
+    assert "error=Ollama HTTP request timed out after 1 seconds" in caplog.text
+    assert "final budget response failed:" not in caplog.text
 
 
 @pytest.mark.asyncio

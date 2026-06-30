@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Set
 from collections import defaultdict
 from datetime import datetime
 
-from homeassistant.core import HomeAssistant, callback, Event, Context
+from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers import (
     area_registry as ar,
     entity_registry as er,
@@ -927,9 +927,6 @@ Focus on meaningful categories that would help discover relevant entities for us
         self._gap_filling_in_progress = True
 
         try:
-            # Call LLM via conversation agent
-            # TODO: Future improvement - use dedicated async_call_llm_direct() method
-            # instead of full async_process() to avoid conversation context overhead
             inferred = await self._call_llm_for_inference(prompt)
             _LOGGER.info("LLM gap-filling completed: found %d inferred types", len(inferred))
             return inferred
@@ -952,11 +949,9 @@ Focus on meaningful categories that would help discover relevant entities for us
         Raises:
             Exception: If LLM call fails or response cannot be parsed
         """
-        from homeassistant.components import conversation
         from .const import DOMAIN, SYSTEM_ENTRY_UNIQUE_ID
 
         domain_data = self.hass.data.get(DOMAIN, {})
-        entry = None
         agent = None
         for candidate in self.hass.config_entries.async_entries(DOMAIN):
             if candidate.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
@@ -964,35 +959,19 @@ Focus on meaningful categories that would help discover relevant entities for us
             agent_data = domain_data.get(candidate.entry_id, {})
             candidate_agent = agent_data.get("agent")
             if candidate_agent:
-                entry = candidate
                 agent = candidate_agent
                 break
 
-        if entry is None or agent is None:
+        if agent is None:
             raise ValueError("No profile agent found for LLM inference")
 
-        # Create a minimal conversation input with all required fields
-        conversation_input = conversation.ConversationInput(
-            text=prompt,
-            context=Context(),  # Minimal context
-            conversation_id=None,  # One-shot query
-            device_id=None,  # Not from a specific device
-            satellite_id=None,  # Not from a satellite
-            language="en",
-            agent_id=entry.entry_id,  # Use the entry ID as agent ID
+        _LOGGER.debug("Calling LLM for entity type inference without tools...")
+        response_text = await agent.async_call_llm_without_tools(
+            [{"role": "user", "content": prompt}],
+            transport="index_gap_filling",
         )
-
-        # Call the agent (uses configured max_tokens - user should set 2000+ for gap-filling)
-        _LOGGER.debug("Calling LLM for entity type inference...")
-        response = await agent.async_process(conversation_input)
-
-        if not response or not response.response:
-            raise ValueError("Empty response from LLM")
-
-        # Parse the response
-        response_text = response.response.speech.get("plain", {}).get("speech", "")
         if not response_text:
-            raise ValueError("No speech in LLM response")
+            raise ValueError("Empty response from LLM")
 
         # Parse JSON from response
         return self._parse_inferred_types(response_text)
