@@ -413,6 +413,45 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
 
 
 @pytest.mark.asyncio
+async def test_server_keeps_previous_auth_when_shared_apply_reload_fails(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Failed shared applies should not leave the running server on a rolled-back token."""
+    system_entry = system_entry_factory(
+        data={
+            CONF_ALLOWED_IPS: "10.0.0.0/24",
+            CONF_MCP_BEARER_TOKEN: "old-token-123456",
+        }
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        reload_tool_packages=AsyncMock(side_effect=RuntimeError("reload failed"))
+    )
+    server.broadcast_notification = AsyncMock()
+    ws = Mock()
+    ws.close = AsyncMock()
+    server._websocket_clients = {ws: "127.0.0.1"}
+
+    hass.config_entries.async_update_entry(
+        system_entry,
+        data={
+            **system_entry.data,
+            CONF_ALLOWED_IPS: "192.168.1.25",
+            CONF_MCP_BEARER_TOKEN: "new-token-123456",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="reload failed"):
+        await server.async_apply_shared_settings()
+
+    assert server._mcp_bearer_token == "old-token-123456"
+    assert "10.0.0.0/24" in server.allowed_ips
+    assert "192.168.1.25" not in server.allowed_ips
+    ws.close.assert_not_awaited()
+    server.broadcast_notification.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_server_closes_live_clients_when_bearer_token_changes(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:

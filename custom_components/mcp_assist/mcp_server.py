@@ -1196,14 +1196,20 @@ class MCPServer(
 
     async def async_apply_shared_settings(self) -> dict[str, Any]:
         """Apply changed shared MCP settings without reloading every profile."""
+        previous_allowed_ips = list(self.allowed_ips)
         previous_token = self._mcp_bearer_token
-        self._refresh_allowed_ips_from_settings()
-        self._refresh_mcp_auth_from_settings()
-        await self._close_disallowed_websocket_clients()
-        await self._close_disallowed_stream_clients()
-        if previous_token != self._mcp_bearer_token:
-            await self._close_clients_after_auth_change()
         diagnostics = await self.reload_external_custom_tools()
+        try:
+            self._refresh_allowed_ips_from_settings()
+            self._refresh_mcp_auth_from_settings()
+            await self._close_disallowed_websocket_clients()
+            await self._close_disallowed_stream_clients()
+            if previous_token != self._mcp_bearer_token:
+                await self._close_clients_after_auth_change()
+        except Exception:
+            self.allowed_ips = previous_allowed_ips
+            self._mcp_bearer_token = previous_token
+            raise
         return {
             "allowed_ips": list(self.allowed_ips),
             "auth_required": self.bearer_auth_required,
