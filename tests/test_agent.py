@@ -1601,6 +1601,32 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     assert [tool["name"] for tool in matches] == ["home_access_history"]
 
 
+def test_adaptive_tool_scoring_avoids_non_plural_s_stems() -> None:
+    """Metadata terms like news should not match unrelated singular-looking words."""
+    search_tool = {
+        "name": "web_search",
+        "description": "Search the web for news, pages, and answers.",
+        "routingHints": {"keywords": ["search", "news"]},
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    light_tool = {
+        "name": "discover_lights",
+        "description": "Find lights and switches.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(search_tool, "new thermostat") == 0
+    assert score_adaptive_tool_match(light_tool, "light") > 0
+
+    matches = match_adaptive_tool_definitions(
+        [search_tool, light_tool],
+        query="new thermostat",
+        limit=3,
+    )
+
+    assert matches == []
+
+
 def test_adaptive_tool_scoring_prefers_read_url_for_urls() -> None:
     """URL queries should load URL-reading tools, not incidental substring matches."""
     read_tool = {

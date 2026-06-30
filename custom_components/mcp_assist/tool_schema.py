@@ -84,6 +84,20 @@ ADAPTIVE_QUERY_STOPWORDS = frozenset(
         "you",
     }
 )
+ADAPTIVE_NON_PLURAL_S_TERMS = frozenset(
+    {
+        "access",
+        "analysis",
+        "analytics",
+        "downstairs",
+        "news",
+        "series",
+        "species",
+        "status",
+        "upstairs",
+    }
+)
+ADAPTIVE_NON_PLURAL_S_SUFFIXES = ("ss", "us", "is", "ics", "ness", "stairs")
 ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     # Weather and forecasts
     "météo": ("weather", "forecast"),
@@ -418,9 +432,23 @@ def _adaptive_text_terms(text: str) -> set[str]:
         if len(term) < 2:
             continue
         terms.add(term)
-        if term.endswith("s") and len(term) > 3:
-            terms.add(term[:-1])
+        if singular := _adaptive_singular_text_term(term):
+            terms.add(singular)
     return terms
+
+
+def _adaptive_singular_text_term(term: str) -> str | None:
+    """Return a conservative singular form for plural metadata terms."""
+    if len(term) <= 3 or not term.endswith("s"):
+        return None
+    if (
+        term in ADAPTIVE_NON_PLURAL_S_TERMS
+        or term.endswith(ADAPTIVE_NON_PLURAL_S_SUFFIXES)
+    ):
+        return None
+    if term.endswith("ies") and len(term) > 4:
+        return f"{term[:-3]}y"
+    return term[:-1]
 
 
 def _routing_hint_text(tool: dict[str, Any], *keys: str) -> str:
