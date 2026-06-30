@@ -14,6 +14,17 @@ ADAPTIVE_META_TOOL_NAMES = frozenset(
         ADAPTIVE_TOOL_SCHEMA_NAME,
     }
 )
+DESCRIPTION_WORTHY_SCHEMA_PROPERTIES = frozenset(
+    {
+        "action",
+        "event",
+        "mode",
+        "operation",
+        "period",
+        "state",
+        "target_state",
+    }
+)
 ADAPTIVE_QUERY_STOPWORDS = frozenset(
     {
         "about",
@@ -247,11 +258,20 @@ def compact_text(text: str, *, max_len: int = 160) -> str:
     return truncated.rstrip(" ,;:.") + "."
 
 
-def compact_schema_for_llm(schema: Any, *, keep_description: bool = False) -> Any:
+def compact_schema_for_llm(
+    schema: Any,
+    *,
+    keep_description: bool = False,
+    property_name: str | None = None,
+) -> Any:
     """Strip nonessential JSON-schema verbosity before sending tools to the LLM."""
     if isinstance(schema, list):
         compacted_list = [
-            compact_schema_for_llm(item, keep_description=keep_description)
+            compact_schema_for_llm(
+                item,
+                keep_description=keep_description,
+                property_name=property_name,
+            )
             for item in schema
         ]
         return [item for item in compacted_list if item not in (None, {}, [])]
@@ -266,7 +286,11 @@ def compact_schema_for_llm(schema: Any, *, keep_description: bool = False) -> An
             continue
 
         if key == "description":
-            if keep_description:
+            if (
+                keep_description
+                or str(property_name or "").casefold()
+                in DESCRIPTION_WORTHY_SCHEMA_PROPERTIES
+            ):
                 compact_description = compact_text(str(value), max_len=120)
                 if compact_description:
                     compacted[key] = compact_description
@@ -275,7 +299,10 @@ def compact_schema_for_llm(schema: Any, *, keep_description: bool = False) -> An
         if key == "properties":
             properties: dict[str, Any] = {}
             for prop_name, prop_schema in value.items():
-                compact_prop = compact_schema_for_llm(prop_schema)
+                compact_prop = compact_schema_for_llm(
+                    prop_schema,
+                    property_name=str(prop_name),
+                )
                 if compact_prop:
                     properties[prop_name] = compact_prop
             if properties:
@@ -291,7 +318,9 @@ def compact_schema_for_llm(schema: Any, *, keep_description: bool = False) -> An
             continue
 
         compact_value = compact_schema_for_llm(
-            value, keep_description=keep_description
+            value,
+            keep_description=keep_description,
+            property_name=property_name,
         )
         if compact_value not in (None, {}, []):
             compacted[key] = compact_value

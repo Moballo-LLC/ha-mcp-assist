@@ -29,6 +29,7 @@ from custom_components.mcp_assist.const import (
     CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     CONF_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_ENABLE_WEB_SEARCH,
+    CONF_LMSTUDIO_URL,
     CONF_CLEAN_RESPONSES,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_MAX_HISTORY,
@@ -60,8 +61,10 @@ from custom_components.mcp_assist.const import (
     CONTEXT_MODE_LIGHT,
     CONTEXT_MODE_STANDARD,
     DEFAULT_CONTEXT_MODE,
+    OPENAI_BASE_URL,
     PROMPT_MODE_CUSTOM,
     SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENAI,
     SERVER_TYPE_ANTHROPIC,
 )
 from custom_components.mcp_assist.tool_schema import (
@@ -827,6 +830,52 @@ def test_initial_payload_metrics_log_size_without_content(
     assert caplog.text.count("Initial LLM payload metrics") == 1
     assert "payload_bytes=" in caplog.text
     assert "message_chars=24" in caplog.text
+    assert "please keep this private" not in caplog.text
+
+
+def test_prompt_cache_usage_log_reports_tokens_without_content(
+    hass, profile_entry_factory, caplog
+) -> None:
+    """Prompt cache telemetry should log token counts without prompt contents."""
+    entry = profile_entry_factory(
+        unique_id="private-profile-name",
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_API_KEY: "sk-test-key",
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-5-mini",
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    provider = agent._get_llm_provider()
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [{"role": "user", "content": "please keep this private"}],
+            stream=True,
+        )
+    )
+
+    with caplog.at_level(logging.INFO, logger=agent_module._LOGGER.name):
+        agent._log_prompt_cache_usage(
+            provider,
+            {
+                "usage": {
+                    "prompt_tokens": 4096,
+                    "prompt_tokens_details": {"cached_tokens": 2048},
+                }
+            },
+            transport="streaming",
+            iteration=0,
+        )
+
+    assert payload["prompt_cache_key"].startswith("ha-mcp-assist-")
+    assert "private-profile-name" not in payload["prompt_cache_key"]
+    assert payload["stream_options"] == {"include_usage": True}
+    assert "Prompt cache usage" in caplog.text
+    assert "input_tokens=4096" in caplog.text
+    assert "cached_tokens=2048" in caplog.text
+    assert "cache_hit_pct=50.0" in caplog.text
     assert "please keep this private" not in caplog.text
 
 
@@ -1607,6 +1656,13 @@ def test_convert_mcp_tools_to_llm_tools_compacts_schema(
                         "description": "Maximum number of entities to return.",
                         "default": 20,
                     },
+                    "action": {
+                        "type": "string",
+                        "description": (
+                            "Specific action filter, such as opened, closed, "
+                            "locked, or unlocked."
+                        ),
+                    },
                 },
                 "required": [],
                 "additionalProperties": False,
@@ -1623,6 +1679,9 @@ def test_convert_mcp_tools_to_llm_tools_compacts_schema(
     assert "additionalProperties" not in parameters
     assert "required" not in parameters
     assert "description" not in parameters["properties"]["area"]
+    assert parameters["properties"]["action"]["description"] == (
+        "Specific action filter, such as opened, closed, locked, or unlocked."
+    )
     assert "default" not in parameters["properties"]["limit"]
 
 

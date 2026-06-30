@@ -3,6 +3,7 @@
 import asyncio
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+import hashlib
 import json
 import logging
 import re
@@ -759,6 +760,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.entry,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
+            prompt_cache_key=self._build_prompt_cache_key(),
         )
 
     def _get_llm_provider(self) -> LLMProvider:
@@ -1048,6 +1050,81 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._message_content_char_count(messages),
             tool_count,
             self._json_size_bytes(tools or []),
+        )
+
+    def _build_prompt_cache_key(self) -> str:
+        """Build a stable, non-identifying prompt-cache key for this profile."""
+        source = {
+            "entry_id": self.entry.entry_id,
+            "unique_id": self.entry.unique_id,
+            "server_type": self.server_type,
+            "model_name": self.model_name,
+            "context_mode": self.context_mode,
+        }
+        digest = hashlib.sha256(
+            json.dumps(source, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:24]
+        return f"ha-mcp-assist-{digest}"
+
+    def _prepare_provider_payload(
+        self,
+        provider: LLMProvider,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Prepare a provider payload without exposing provider-specific details."""
+        return provider.prepare_payload(payload)
+
+    def _log_prompt_cache_usage(
+        self,
+        provider: LLMProvider,
+        data: dict[str, Any],
+        *,
+        transport: str,
+        iteration: int,
+    ) -> None:
+        """Log provider prompt-cache usage without logging prompt contents."""
+        usage = provider.extract_prompt_cache_usage(data)
+        if usage is None:
+            return
+
+        cached_tokens = usage.cached_tokens
+        cache_read_tokens = usage.cache_read_tokens
+        cache_creation_tokens = usage.cache_creation_tokens
+        has_cache_activity = any(
+            value
+            for value in (
+                cached_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+            )
+        )
+        if not (
+            has_cache_activity
+            or self.debug_mode
+            or _LOGGER.isEnabledFor(logging.DEBUG)
+        ):
+            return
+
+        input_tokens = usage.input_tokens
+        cache_hit_pct = None
+        if input_tokens and cached_tokens is not None:
+            cache_hit_pct = round((cached_tokens / input_tokens) * 100, 1)
+
+        log = _LOGGER.info if self.debug_mode or has_cache_activity else _LOGGER.debug
+        log(
+            (
+                "Prompt cache usage: provider=%s transport=%s iteration=%d "
+                "input_tokens=%s cached_tokens=%s cache_read_tokens=%s "
+                "cache_creation_tokens=%s cache_hit_pct=%s"
+            ),
+            provider.server_type,
+            transport,
+            iteration,
+            input_tokens,
+            cached_tokens,
+            cache_read_tokens,
+            cache_creation_tokens,
+            cache_hit_pct,
         )
 
     def _build_mcp_tool_cache_key(self) -> tuple[Any, ...]:
@@ -3566,7 +3643,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             {"role": "system", "content": TOOL_BUDGET_FINAL_INSTRUCTION},
         ]
         payload = provider.build_payload(final_messages, [], stream=False)
-        clean_payload = provider.clean_payload(payload)
+        clean_payload = self._prepare_provider_payload(provider, payload)
         self._log_initial_llm_payload_metrics(
             transport=transport,
             iteration=-1,
@@ -3594,6 +3671,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                         return TOOL_BUDGET_FALLBACK_RESPONSE
 
                     data = await response.json()
+                    self._log_prompt_cache_usage(
+                        provider,
+                        data,
+                        transport=transport,
+                        iteration=-1,
+                    )
                     message = provider.parse_http_message(data)
                     final_content = str(message.get("content") or "").strip()
                     return final_content or TOOL_BUDGET_FALLBACK_RESPONSE
@@ -3612,6 +3695,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             [{"role": "user", "content": "Say hello"}],
             stream=True,
         )
+        clean_payload = self._prepare_provider_payload(provider, payload)
 
         _LOGGER.info("🧪 Testing basic streaming to: %s", provider.chat_url())
         _LOGGER.info(f"🧪 Model: {self.model_name}")
@@ -3622,7 +3706,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 async with session.post(
                     provider.chat_url(),
                     headers=provider.headers(),
-                    json=provider.clean_payload(payload),
+                    json=clean_payload,
                 ) as response:
                     _LOGGER.info(
                         f"✅ Basic streaming connected! Status: {response.status}"
@@ -3739,7 +3823,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     content_len = len(str(content)) if content else 0
                     _LOGGER.info("  [%d] %s: %d chars", i, role, content_len)
 
-            clean_payload = provider.clean_payload(payload)
+            clean_payload = self._prepare_provider_payload(provider, payload)
 
             self._log_initial_llm_payload_metrics(
                 transport="streaming",
@@ -3841,6 +3925,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 parsed_stream = provider.parse_stream_line(line_str)
                                 if parsed_stream is None:
                                     continue
+                                if parsed_stream.usage:
+                                    self._log_prompt_cache_usage(
+                                        provider,
+                                        {"usage": parsed_stream.usage},
+                                        transport="streaming",
+                                        iteration=iteration,
+                                    )
                                 if parsed_stream.done:
                                     break
 
@@ -4307,7 +4398,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 _LOGGER.warning("No MCP tools available - proceeding without tools")
 
             payload = provider.build_payload(conversation_messages, tools, stream=False)
-            clean_payload = provider.clean_payload(payload)
+            clean_payload = self._prepare_provider_payload(provider, payload)
             self._log_initial_llm_payload_metrics(
                 transport="http",
                 iteration=iteration,
@@ -4360,6 +4451,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                 )
 
             data = http_response.data or {}
+            self._log_prompt_cache_usage(
+                provider,
+                data,
+                transport="http",
+                iteration=iteration,
+            )
             message = provider.parse_http_message(data)
 
             # Check if there are tool calls to execute
