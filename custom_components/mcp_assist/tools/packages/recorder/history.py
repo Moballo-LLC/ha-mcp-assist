@@ -1032,10 +1032,7 @@ class RecorderToolsMixin:
 
             if self._history_state_is_in_window(when, start_time):
                 if target_state_set:
-                    if (
-                        state_value in target_state_set
-                        and previous_state not in target_state_set
-                    ):
+                    if state_value in target_state_set:
                         matches.append(state)
                 else:
                     matches.append(state)
