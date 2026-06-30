@@ -205,11 +205,13 @@
         "description": "Diese Einstellungen betreffen ALLE Profile. Aenderungen hier wirken sich auf jeden MCP Assist Konversationsagenten aus.",
         "data": {
           "mcp_port": "MCP-Server-Port",
-          "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche"
+          "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
-          "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können."
+          "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Authentifizierung fehlgeschlagen. Bitte ueberpruefen Sie Ihren API-Schluessel.",
       "unknown": "Ein unbekannter Fehler ist aufgetreten.",
       "openclaw_not_paired": "Gerät noch nicht auf dem OpenClaw-Server genehmigt. Bitte genehmigen Sie es und versuchen Sie es erneut.",
-      "openclaw_connection_failed": "Es konnte keine Verbindung zum OpenClaw-Gateway hergestellt werden. Überprüfen Sie Host, Port und Token."
+      "openclaw_connection_failed": "Es konnte keine Verbindung zum OpenClaw-Gateway hergestellt werden. Überprüfen Sie Host, Port und Token.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "Ein Profil mit diesem Namen existiert bereits. Bitte waehlen Sie einen anderen Namen."
@@ -531,11 +534,13 @@
         "description": "Diese Einstellungen werden von ALLEN Profilen gemeinsam genutzt",
         "data": {
           "mcp_port": "MCP-Server-Port",
-          "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche"
+          "allowed_ips": "Zusaetzliche erlaubte IPs/Bereiche",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Der lokale Port, der vom gemeinsam genutzten MCP-Server verwendet wird.",
-          "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können."
+          "allowed_ips": "Optional durch Kommas getrennte IP-Adressen oder CIDR-Bereiche, die zusätzlich zu localhost eine Verbindung herstellen können.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

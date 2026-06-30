@@ -205,11 +205,13 @@
         "description": "Queste impostazioni influenzano TUTTI i profili. Le modifiche qui avranno impatto su ogni agente di conversazione MCP Assist.",
         "data": {
           "mcp_port": "Porta server MCP",
-          "allowed_ips": "IP/Intervalli aggiuntivi consentiti"
+          "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
-          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost."
+          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Autenticazione fallita. Verifica la tua chiave API.",
       "unknown": "Si e verificato un errore sconosciuto.",
       "openclaw_not_paired": "Dispositivo non ancora approvato sul server OpenClaw. Per favore approvalo e riprova.",
-      "openclaw_connection_failed": "Impossibile connettersi al gateway OpenClaw. Controlla l'host, la porta e il token."
+      "openclaw_connection_failed": "Impossibile connettersi al gateway OpenClaw. Controlla l'host, la porta e il token.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "Esiste gia un profilo con questo nome. Scegli un nome diverso."
@@ -531,11 +534,13 @@
         "description": "Queste impostazioni sono condivise tra TUTTI i profili",
         "data": {
           "mcp_port": "Porta server MCP",
-          "allowed_ips": "IP/Intervalli aggiuntivi consentiti"
+          "allowed_ips": "IP/Intervalli aggiuntivi consentiti",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "La porta locale utilizzata dal server MCP condiviso.",
-          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost."
+          "allowed_ips": "Indirizzi IP separati da virgole opzionali o intervalli CIDR che possono connettersi oltre a localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

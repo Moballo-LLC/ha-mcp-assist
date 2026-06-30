@@ -90,6 +90,7 @@ from custom_components.mcp_assist.const import (
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
     CONF_MCP_PORT,
+    CONF_MCP_BEARER_TOKEN,
     CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_OLLAMA_KEEP_ALIVE,
@@ -693,10 +694,20 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
     assert top_level_keys == {
         CONF_MCP_PORT,
         CONF_ALLOWED_IPS,
+        CONF_MCP_BEARER_TOKEN,
         CONTEXT_SECTION_KEY,
         DISCOVERY_SECTION_KEY,
         TOOLS_SECTION_KEY,
     }
+    token_marker = next(
+        key
+        for key in result["data_schema"].schema
+        if getattr(key, "schema", key) == CONF_MCP_BEARER_TOKEN
+    )
+    token_default = token_marker.default
+    token_value = token_default() if callable(token_default) else token_default
+    assert isinstance(token_value, str)
+    assert len(token_value) >= 32
 
     context_keys = {
         getattr(key, "schema", key) for key in context_section.schema.schema.keys()
@@ -777,6 +788,23 @@ async def test_shared_mcp_step_requires_google_maps_api_key_when_enabled(hass) -
     assert result["errors"][CONF_GOOGLE_MAPS_API_KEY] == "google_maps_api_key_required"
 
 
+async def test_shared_mcp_step_rejects_short_bearer_token(hass) -> None:
+    """Shared MCP bearer tokens should be strong when enabled."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+
+    result = await flow.async_step_mcp_server(
+        {
+            CONF_MCP_PORT: 8090,
+            CONF_MCP_BEARER_TOKEN: "short",
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_MCP_BEARER_TOKEN] == "mcp_bearer_token_too_short"
+
+
 async def test_options_mcp_step_requires_searxng_url_when_selected(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -850,6 +878,29 @@ async def test_options_mcp_step_rejects_invalid_shared_port(
     assert system_entry.data[CONF_MCP_PORT] == 8090
 
 
+async def test_options_mcp_step_preserves_bearer_token_default(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Shared options should keep the saved MCP bearer token in form defaults."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "saved-token-123456"})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory()
+    flow.handler = entry.entry_id
+    flow.profile_options = {}
+
+    result = await flow.async_step_mcp_server()
+
+    token_marker = next(
+        key
+        for key in result["data_schema"].schema
+        if getattr(key, "schema", key) == CONF_MCP_BEARER_TOKEN
+    )
+    token_default = token_marker.default
+    token_value = token_default() if callable(token_default) else token_default
+    assert token_value == "saved-token-123456"
+
+
 async def test_options_mcp_step_preserves_google_maps_api_key_default(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -877,7 +928,7 @@ async def test_options_mcp_step_applies_shared_settings_to_running_server(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
     """Saving shared MCP settings should apply them without a full HA restart."""
-    system_entry = system_entry_factory()
+    system_entry = system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "saved-token-123456"})
     flow = MCPAssistOptionsFlow()
     flow.hass = hass
     entry = profile_entry_factory()
@@ -898,6 +949,7 @@ async def test_options_mcp_step_applies_shared_settings_to_running_server(
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert system_entry.data[CONF_MCP_PORT] == 8124
     assert system_entry.data[CONF_ALLOWED_IPS] == "192.168.1.25"
+    assert system_entry.data[CONF_MCP_BEARER_TOKEN] == "saved-token-123456"
     apply_mock.assert_awaited_once_with(hass)
 
 

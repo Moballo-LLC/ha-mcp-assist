@@ -205,11 +205,13 @@
         "description": "Nama asetukset vaikuttavat KAIKKIIN profiileihin. Muutokset taalla vaikuttavat jokaiseen MCP Assist -keskusteluagenttiin.",
         "data": {
           "mcp_port": "MCP-palvelinportti",
-          "allowed_ips": "Lisat sallitut IP:t/alueet"
+          "allowed_ips": "Lisat sallitut IP:t/alueet",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
-          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi."
+          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Todennus epaonnistui. Vahvista API-avaimesi.",
       "unknown": "Tuntematon virhe tapahtui.",
       "openclaw_not_paired": "Laitetta ei ole vielä hyväksytty OpenClaw-palvelimella. Hyväksy se ja yritä uudelleen.",
-      "openclaw_connection_failed": "Ei voitu muodostaa yhteyttä OpenClaw-yhdyskäytävään. Tarkista isäntä, portti ja tunnus."
+      "openclaw_connection_failed": "Ei voitu muodostaa yhteyttä OpenClaw-yhdyskäytävään. Tarkista isäntä, portti ja tunnus.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "Taman niminen profiili on jo olemassa. Valitse toinen nimi."
@@ -531,11 +534,13 @@
         "description": "Nama asetukset jaetaan KAIKKIEN profiilien kesken",
         "data": {
           "mcp_port": "MCP-palvelinportti",
-          "allowed_ips": "Lisat sallitut IP:t/alueet"
+          "allowed_ips": "Lisat sallitut IP:t/alueet",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
-          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi."
+          "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

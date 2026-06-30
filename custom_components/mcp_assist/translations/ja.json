@@ -205,11 +205,13 @@
         "description": "これらの設定はすべてのプロファイルに影響します。ここでの変更はすべてのMCP Assist会話エージェントに影響します。",
         "data": {
           "mcp_port": "MCPサーバーポート",
-          "allowed_ips": "追加の許可IP/範囲"
+          "allowed_ips": "追加の許可IP/範囲",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
-          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。"
+          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "認証に失敗しました。APIキーを確認してください。",
       "unknown": "不明なエラーが発生しました。",
       "openclaw_not_paired": "デバイスは OpenClaw サーバーでまだ承認されていません。承認して再試行してください。",
-      "openclaw_connection_failed": "OpenClaw ゲートウェイに接続できませんでした。ホスト、ポート、トークンを確認してください。"
+      "openclaw_connection_failed": "OpenClaw ゲートウェイに接続できませんでした。ホスト、ポート、トークンを確認してください。",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "この名前のプロファイルは既に存在します。別の名前を選択してください。"
@@ -531,11 +534,13 @@
         "description": "これらの設定はすべてのプロファイルで共有されます",
         "data": {
           "mcp_port": "MCPサーバーポート",
-          "allowed_ips": "追加の許可IP/範囲"
+          "allowed_ips": "追加の許可IP/範囲",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
-          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。"
+          "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

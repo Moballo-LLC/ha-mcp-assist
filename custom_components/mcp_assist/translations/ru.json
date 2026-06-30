@@ -205,11 +205,13 @@
         "description": "Эти настройки влияют на ВСЕ профили. Изменения здесь повлияют на каждого агента разговора MCP Assist.",
         "data": {
           "mcp_port": "Порт сервера MCP",
-          "allowed_ips": "Дополнительные разрешённые IP/диапазоны"
+          "allowed_ips": "Дополнительные разрешённые IP/диапазоны",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Локальный порт, используемый общим сервером MCP.",
-          "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost."
+          "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Аутентификация не удалась. Проверьте ваш API-ключ.",
       "unknown": "Произошла неизвестная ошибка.",
       "openclaw_not_paired": "Устройство еще не одобрено на сервере OpenClaw. Пожалуйста, подтвердите его и повторите попытку.",
-      "openclaw_connection_failed": "Не удалось подключиться к шлюзу OpenClaw. Проверьте хост, порт и токен."
+      "openclaw_connection_failed": "Не удалось подключиться к шлюзу OpenClaw. Проверьте хост, порт и токен.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "Профиль с таким именем уже существует. Выберите другое имя."
@@ -531,11 +534,13 @@
         "description": "Эти настройки используются ВСЕМИ профилями",
         "data": {
           "mcp_port": "Порт сервера MCP",
-          "allowed_ips": "Дополнительные разрешённые IP/диапазоны"
+          "allowed_ips": "Дополнительные разрешённые IP/диапазоны",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Локальный порт, используемый общим сервером MCP.",
-          "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost."
+          "allowed_ips": "Дополнительные IP-адреса, разделенные запятыми, или диапазоны CIDR, которые можно подключать в дополнение к localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {

@@ -205,11 +205,13 @@
         "description": "Tato nastaveni ovlivnuji VSECHNY profily. Zmeny zde ovlivni kazdeho konverzacniho agenta MCP Assist.",
         "data": {
           "mcp_port": "Port MCP serveru",
-          "allowed_ips": "Dalsi povolene IP/rozsahy"
+          "allowed_ips": "Dalsi povolene IP/rozsahy",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Místní port používaný sdíleným serverem MCP.",
-          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost."
+          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -328,7 +330,8 @@
       "auth_failed": "Autentizace selhala. Overte prosim svuj API klic.",
       "unknown": "Doslo k nezname chybe.",
       "openclaw_not_paired": "Zařízení ještě není schváleno na serveru OpenClaw. Schvalte to a zkuste to znovu.",
-      "openclaw_connection_failed": "Nelze se připojit k bráně OpenClaw. Zkontrolujte hostitele, port a token."
+      "openclaw_connection_failed": "Nelze se připojit k bráně OpenClaw. Zkontrolujte hostitele, port a token.",
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     },
     "abort": {
       "already_configured": "Profil s timto nazvem jiz existuje. Zvolte prosim jiny nazev."
@@ -531,11 +534,13 @@
         "description": "Tato nastaveni jsou sdilena mezi VSEMI profily",
         "data": {
           "mcp_port": "Port MCP serveru",
-          "allowed_ips": "Dalsi povolene IP/rozsahy"
+          "allowed_ips": "Dalsi povolene IP/rozsahy",
+          "mcp_bearer_token": "MCP Bearer Token"
         },
         "data_description": {
           "mcp_port": "Místní port používaný sdíleným serverem MCP.",
-          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost."
+          "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
         },
         "sections": {
           "context": {
@@ -638,6 +643,9 @@
           }
         }
       }
+    },
+    "error": {
+      "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },
   "selector": {
