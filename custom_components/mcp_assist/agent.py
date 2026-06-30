@@ -312,8 +312,8 @@ TOOLLESS_RESPONSE_PREFIXES = tuple(
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
-_ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[frozenset[str]] = ContextVar(
-    "mcp_assist_adaptive_loaded_tool_names", default=frozenset()
+_ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[set[str] | frozenset[str] | None] = ContextVar(
+    "mcp_assist_adaptive_loaded_tool_names", default=None
 )
 _REQUEST_TOOL_HISTORY_SUMMARIES: ContextVar[list[dict[str, Any]] | None] = ContextVar(
     "mcp_assist_request_tool_history_summaries", default=None
@@ -351,6 +351,16 @@ def _json_size_bytes(value: Any) -> int:
     except Exception:
         serialized = str(value)
     return len(serialized.encode("utf-8"))
+
+
+def _adaptive_loaded_tool_names() -> set[str]:
+    """Return mutable request-scoped adaptive schema names."""
+    loaded_names = _ADAPTIVE_LOADED_TOOL_NAMES.get()
+    if isinstance(loaded_names, set):
+        return loaded_names
+    mutable_names = set(loaded_names or ())
+    _ADAPTIVE_LOADED_TOOL_NAMES.set(mutable_names)
+    return mutable_names
 
 
 def _mapping_key_summary(value: Any, *, max_keys: int = 10) -> str:
@@ -1685,8 +1695,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
             user_input
         )
-        adaptive_loaded_tools_token: Token[frozenset[str]] = (
-            _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+        adaptive_loaded_tools_token: Token[set[str] | frozenset[str] | None] = (
+            _ADAPTIVE_LOADED_TOOL_NAMES.set(set())
         )
         tool_history_token: Token[list[dict[str, Any]] | None] = (
             _REQUEST_TOOL_HISTORY_SUMMARIES.set([])
@@ -2628,7 +2638,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             return build_adaptive_llm_tools(
                 tools,
                 base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
-                loaded_tool_names=_ADAPTIVE_LOADED_TOOL_NAMES.get(),
+                loaded_tool_names=_adaptive_loaded_tool_names(),
             )
 
         return self._convert_mcp_tools_to_llm_tools(tools)
@@ -2656,7 +2666,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         entry: dict[str, Any] = {
             "name": tool_name,
             "summary": summary,
-            "schema_loaded": tool_name in _ADAPTIVE_LOADED_TOOL_NAMES.get(),
+            "schema_loaded": tool_name in _adaptive_loaded_tool_names(),
         }
         if family:
             entry["family"] = family
@@ -2689,7 +2699,7 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> frozenset[str]:
         """Return highly likely optional tool schemas to preload for this request."""
         scored: list[tuple[int, str]] = []
-        loaded_names = _ADAPTIVE_LOADED_TOOL_NAMES.get()
+        loaded_names = _adaptive_loaded_tool_names()
         for tool in tools:
             tool_name = self._tool_definition_name(tool)
             if (
@@ -2720,9 +2730,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not preload_names:
             return
 
-        loaded_names = set(_ADAPTIVE_LOADED_TOOL_NAMES.get())
-        loaded_names.update(preload_names)
-        _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset(loaded_names))
+        _adaptive_loaded_tool_names().update(preload_names)
         _LOGGER.debug(
             "Adaptive context preloaded tool schemas: %s",
             ", ".join(sorted(preload_names)),
@@ -2779,7 +2787,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     self._adaptive_tool_catalog_entry(tool)
                     for tool in matches
                 ],
-                "loaded_tool_schemas": sorted(_ADAPTIVE_LOADED_TOOL_NAMES.get()),
+                "loaded_tool_schemas": sorted(_adaptive_loaded_tool_names()),
                 "next_step": (
                     f"Call {ADAPTIVE_TOOL_SCHEMA_NAME} with the exact tool names "
                     "you need before using optional or custom tools."
@@ -2803,9 +2811,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             matched_names = [self._tool_definition_name(tool) for tool in matches]
             if matched_names:
-                loaded_names = set(_ADAPTIVE_LOADED_TOOL_NAMES.get())
-                loaded_names.update(matched_names)
-                _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset(loaded_names))
+                _adaptive_loaded_tool_names().update(matched_names)
             missing_names = [
                 name for name in requested_names if name not in set(matched_names)
             ]
