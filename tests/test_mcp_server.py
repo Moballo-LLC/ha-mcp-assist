@@ -684,6 +684,38 @@ async def test_prompt_overhead_endpoint_requires_bearer_token_when_configured(
 
 
 @pytest.mark.asyncio
+async def test_external_tool_diagnostics_prefers_external_loader_payload(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """External diagnostics should expose the external-focused loaded tool shape."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        get_package_diagnostics=lambda: {
+            "built_in_packages": [{"id": "calculator"}],
+            "external_packages": [{"id": "sample_package"}],
+        },
+        get_external_diagnostics=lambda: {
+            "enabled": True,
+            "loaded_tools": [{"id": "sample_package"}],
+            "load_errors": [],
+        },
+    )
+
+    response = await server.handle_external_tool_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    payload = json.loads(response.text)
+
+    assert response.status == 200
+    assert payload == {
+        "enabled": True,
+        "loaded_tools": [{"id": "sample_package"}],
+        "load_errors": [],
+    }
+
+
+@pytest.mark.asyncio
 async def test_prompt_overhead_diagnostics_reports_metadata_only(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:

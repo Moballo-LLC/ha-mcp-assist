@@ -999,20 +999,21 @@ class MCPServer(
             "loaded": [],
         }
         if self.tools:
-            get_package_diagnostics = getattr(
-                self.tools,
-                "get_package_diagnostics",
-                None,
-            )
-            if callable(get_package_diagnostics):
-                diagnostics = get_package_diagnostics()
             get_external_diagnostics = getattr(
                 self.tools,
                 "get_external_diagnostics",
                 None,
             )
-            if callable(get_external_diagnostics) and not callable(get_package_diagnostics):
+            if callable(get_external_diagnostics):
                 diagnostics = get_external_diagnostics()
+            else:
+                get_package_diagnostics = getattr(
+                    self.tools,
+                    "get_package_diagnostics",
+                    None,
+                )
+                if callable(get_package_diagnostics):
+                    diagnostics = get_package_diagnostics()
 
         return web.json_response(diagnostics)
 
