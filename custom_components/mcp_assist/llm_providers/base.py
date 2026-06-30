@@ -33,6 +33,7 @@ class ProviderSettings:
     provider_options: dict[str, Any]
     display_name: str
     is_remote_service: bool
+    prompt_cache_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,17 @@ class StreamParseResult:
 
     delta: dict[str, Any]
     done: bool = False
+    usage: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class PromptCacheUsage:
+    """Provider-normalized prompt cache usage telemetry."""
+
+    input_tokens: int | None = None
+    cached_tokens: int | None = None
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
 
 
 def stringify_tool_arguments(arguments: Any) -> str:
@@ -340,6 +352,22 @@ class LLMProvider:
         """Clean a request payload before JSON serialization."""
         return clean_json_payload(payload)
 
+    def apply_prompt_cache_hints(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Apply provider-specific prompt-cache hints before sending a payload."""
+        return payload
+
+    def prepare_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Prepare a request payload for transport."""
+        return self.clean_payload(self.apply_prompt_cache_hints(payload))
+
+    def extract_prompt_cache_usage(
+        self,
+        data: dict[str, Any],
+    ) -> PromptCacheUsage | None:
+        """Extract provider-specific prompt-cache usage from a response."""
+        del data
+        return None
+
     def prepare_messages_for_stream(
         self, messages: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -369,8 +397,10 @@ class LLMProvider:
             return StreamParseResult(delta={}, done=True)
 
         data = json.loads(line[6:])
-        choice = data["choices"][0]
-        return StreamParseResult(delta=choice.get("delta", {}))
+        choices = data.get("choices") or []
+        if not choices:
+            return StreamParseResult(delta={}, usage=data.get("usage"))
+        return StreamParseResult(delta=choices[0].get("delta", {}), usage=data.get("usage"))
 
     def normalize_tool_calls(
         self, tool_calls: list[dict[str, Any]]

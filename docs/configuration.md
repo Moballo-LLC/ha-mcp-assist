@@ -56,6 +56,13 @@ For OpenAI, Google Gemini, Anthropic Claude, and OpenRouter, configure an API
 key and model name. Keep provider keys in Home Assistant secrets or another
 safe local workflow where possible.
 
+For official OpenAI profiles, MCP Assist sends a stable non-identifying
+`prompt_cache_key` so OpenAI can route repeated profile/tool prefixes to its
+prompt cache more effectively. OpenAI controls whether a specific request is
+cacheable. MCP Assist also requests streaming usage metadata so Debug Mode can
+show cached prompt-token counts when OpenAI returns them. OpenAI-compatible
+local providers do not receive these OpenAI-only fields.
+
 ## Prompt Settings
 
 MCP Assist has two prompt fields:
