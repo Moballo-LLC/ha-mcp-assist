@@ -1018,12 +1018,11 @@ class MCPServer(
             _sanitize_log_value(client_ip),
         )
 
-        if not self._is_ip_allowed(client_ip):
-            _LOGGER.warning(
-                "🚫 Blocked prompt overhead diagnostics request from unauthorized IP: %s",
-                _sanitize_log_value(client_ip),
-            )
-            return web.Response(status=403, text="Forbidden: IP not authorized")
+        if security_response := self._security_error_response(
+            request,
+            "prompt overhead diagnostics",
+        ):
+            return security_response
 
         try:
             top_limit = int(request.query.get("top", 10))
@@ -1224,6 +1223,7 @@ class MCPServer(
                 code=WSCloseCode.POLICY_VIOLATION,
                 message=b"IP no longer authorized",
             )
+            self._websocket_clients.pop(ws, None)
 
     async def _close_disallowed_stream_clients(self) -> None:
         """Stop SSE/progress streams that no longer pass the IP allowlist."""
@@ -1265,6 +1265,7 @@ class MCPServer(
                 code=WSCloseCode.POLICY_VIOLATION,
                 message=b"Authentication settings changed",
             )
+            self._websocket_clients.pop(ws, None)
 
         for response in list(self._sse_client_ips):
             _LOGGER.info("Closing MCP SSE client after auth settings changed")

@@ -396,6 +396,8 @@ async def test_server_applies_shared_allowed_ips_and_reloads_tools(
         message=b"IP no longer authorized",
     )
     kept_ws.close.assert_not_awaited()
+    assert removed_ws not in server._websocket_clients
+    assert kept_ws in server._websocket_clients
     removed_sse.write_eof.assert_awaited_once()
     kept_sse.write_eof.assert_not_awaited()
     assert removed_sse not in server.sse_clients
@@ -450,6 +452,7 @@ async def test_server_closes_live_clients_when_bearer_token_changes(
         code=WSCloseCode.POLICY_VIOLATION,
         message=b"Authentication settings changed",
     )
+    assert ws not in server._websocket_clients
     sse.write_eof.assert_awaited_once()
     assert sse not in server.sse_clients
     assert progress not in server.progress_queues
@@ -569,6 +572,37 @@ async def test_prompt_overhead_endpoint_rejects_unauthorized_ip(
 
     assert response.status == 403
     assert response.text == "Forbidden: IP not authorized"
+
+
+@pytest.mark.asyncio
+async def test_prompt_overhead_endpoint_requires_bearer_token_when_configured(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Prompt overhead diagnostics should use shared bearer-token auth."""
+    system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "test-token-123456"})
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server._get_tools_list = AsyncMock(return_value=[])
+
+    missing_token = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    assert missing_token.status == 401
+    assert (
+        missing_token.headers["WWW-Authenticate"]
+        == 'Bearer realm="ha-mcp-assist"'
+    )
+
+    authenticated = await server.handle_prompt_overhead_diagnostics(
+        SimpleNamespace(
+            remote="127.0.0.1",
+            headers={"Authorization": "Bearer test-token-123456"},
+            query={},
+        )
+    )
+    payload = json.loads(authenticated.text)
+
+    assert authenticated.status == 200
+    assert payload["status"] == "ok"
 
 
 @pytest.mark.asyncio
