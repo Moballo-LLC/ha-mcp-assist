@@ -999,20 +999,21 @@ class MCPServer(
             "loaded": [],
         }
         if self.tools:
-            get_package_diagnostics = getattr(
-                self.tools,
-                "get_package_diagnostics",
-                None,
-            )
-            if callable(get_package_diagnostics):
-                diagnostics = get_package_diagnostics()
             get_external_diagnostics = getattr(
                 self.tools,
                 "get_external_diagnostics",
                 None,
             )
-            if callable(get_external_diagnostics) and not callable(get_package_diagnostics):
+            if callable(get_external_diagnostics):
                 diagnostics = get_external_diagnostics()
+            else:
+                get_package_diagnostics = getattr(
+                    self.tools,
+                    "get_package_diagnostics",
+                    None,
+                )
+                if callable(get_package_diagnostics):
+                    diagnostics = get_package_diagnostics()
 
         return web.json_response(diagnostics)
 
@@ -2492,7 +2493,7 @@ class MCPServer(
 
     async def handle_tool_call(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle tools/call request."""
-        tool_name = params.get("name")
+        tool_name = str(params.get("name") or "").strip()
         arguments = params.get("arguments", {})
         context = params.get("context") or {}
 
@@ -2503,6 +2504,12 @@ class MCPServer(
             _mapping_count(context),
             _json_size_bytes(arguments),
         )
+
+        if not tool_name:
+            return self._build_text_tool_result(
+                "Tool name is required.",
+                is_error=True,
+            )
 
         if not self._is_tool_enabled(tool_name):
             raise ValueError(
@@ -2554,7 +2561,22 @@ class MCPServer(
                     context=context,
                 )
             else:
-                raise ValueError(f"Unknown tool: {tool_name}")
+                if tool_name in ADAPTIVE_META_TOOL_NAMES:
+                    return self._build_text_tool_result(
+                        (
+                            f"{tool_name} is an adaptive agent meta tool, not a "
+                            "direct MCP server tool. Use the MCP tools/list method "
+                            "to inspect tools this server exposes."
+                        ),
+                        is_error=True,
+                    )
+                return self._build_text_tool_result(
+                    (
+                        f"Unknown tool: {tool_name}. Use the MCP tools/list method "
+                        "to inspect tools this server exposes."
+                    ),
+                    is_error=True,
+                )
 
     def _build_text_tool_result(
         self,

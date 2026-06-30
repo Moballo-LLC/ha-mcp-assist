@@ -684,6 +684,38 @@ async def test_prompt_overhead_endpoint_requires_bearer_token_when_configured(
 
 
 @pytest.mark.asyncio
+async def test_external_tool_diagnostics_prefers_external_loader_payload(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """External diagnostics should expose the external-focused loaded tool shape."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        get_package_diagnostics=lambda: {
+            "built_in_packages": [{"id": "calculator"}],
+            "external_packages": [{"id": "sample_package"}],
+        },
+        get_external_diagnostics=lambda: {
+            "enabled": True,
+            "loaded_tools": [{"id": "sample_package"}],
+            "load_errors": [],
+        },
+    )
+
+    response = await server.handle_external_tool_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+    payload = json.loads(response.text)
+
+    assert response.status == 200
+    assert payload == {
+        "enabled": True,
+        "loaded_tools": [{"id": "sample_package"}],
+        "load_errors": [],
+    }
+
+
+@pytest.mark.asyncio
 async def test_prompt_overhead_diagnostics_reports_metadata_only(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -1335,6 +1367,31 @@ async def test_handle_tool_call_rejects_disabled_tools(
 
     with pytest.raises(ValueError, match="disabled"):
         await server.handle_tool_call({"name": "discover_devices", "arguments": {}})
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_call_returns_tool_error_without_server_exception(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Unknown tool names should not be logged as JSON-RPC internal errors."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    with caplog.at_level(logging.ERROR, logger=mcp_server_module._LOGGER.name):
+        response = await server.process_mcp_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "tools/call",
+                "params": {"name": "list_available_tools", "arguments": {}},
+            }
+        )
+
+    assert response["id"] == 42
+    assert "error" not in response
+    assert response["result"]["isError"] is True
+    assert "adaptive agent meta tool" in response["result"]["content"][0]["text"]
+    assert "Error in MCP method tools/call" not in caplog.text
 
 
 @pytest.mark.asyncio
