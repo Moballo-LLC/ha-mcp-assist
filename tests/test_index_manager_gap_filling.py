@@ -10,6 +10,26 @@ from custom_components.mcp_assist.const import DOMAIN
 from custom_components.mcp_assist.index_manager import IndexManager
 
 
+def test_gap_filling_parser_recovers_complete_categories_from_truncated_tail(hass) -> None:
+    """A truncated LLM response should not discard complete inferred categories."""
+    manager = IndexManager(hass)
+
+    inferred = manager._parse_inferred_types(
+        (
+            '{"presence": {"pattern": "binary_sensor.*_presence", "count": 2, '
+            '"description": "Presence sensors"}, "lights": {"pattern": "light.'
+        )
+    )
+
+    assert inferred == {
+        "presence": {
+            "pattern": "binary_sensor.*_presence",
+            "count": 2,
+            "description": "Presence sensors",
+        }
+    }
+
+
 @pytest.mark.asyncio
 async def test_gap_filling_uses_profile_agent_when_system_entry_is_first(
     hass, profile_entry_factory, system_entry_factory

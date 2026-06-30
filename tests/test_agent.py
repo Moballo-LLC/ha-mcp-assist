@@ -197,6 +197,31 @@ def test_compact_streamed_tool_calls_drops_empty_placeholders() -> None:
     assert compacted == [{"id": "call-1", "function": {"name": "get_index"}}]
 
 
+def test_partition_valid_tool_calls_rejects_partial_json_arguments() -> None:
+    """Malformed streamed tool arguments should be retried, not executed as {}."""
+    valid, invalid = MCPAssistConversationEntity._partition_valid_tool_calls(
+        [
+            {
+                "id": "call-1",
+                "function": {
+                    "name": "discover_entities",
+                    "arguments": '{"domain": "light"}',
+                },
+            },
+            {
+                "id": "call-2",
+                "function": {
+                    "name": "discover_entities",
+                    "arguments": '{"domain": "light"',
+                },
+            },
+        ]
+    )
+
+    assert [call["id"] for call in valid] == ["call-1"]
+    assert [call["id"] for call in invalid] == ["call-2"]
+
+
 def test_profile_tool_enablement_respects_shared_and_profile_settings(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
@@ -1921,6 +1946,124 @@ async def test_ollama_toolless_check_preamble_retries_with_tool_call(
     assert [call["function"]["name"] for call in executed_calls] == [
         "discover_entities"
     ]
+    assert executed_calls[0]["function"]["arguments"] == {
+        "domain": "light",
+        "floor": "upstairs",
+        "state": "on",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ollama_invalid_tool_arguments_retry_without_malformed_history(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Malformed tool-call JSON should prompt a clean retry without bad history."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_CONTEXT_MODE: CONTEXT_MODE_LIGHT,
+            CONF_MAX_ITERATIONS: 1,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_name": "discover_entities",
+                "content": "No upstairs lights are on.",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+
+    posts: list[dict] = []
+    responses = [
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": '{"domain": "light"',
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "discover_entities",
+                                "arguments": {
+                                    "domain": "light",
+                                    "floor": "upstairs",
+                                    "state": "on",
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        ),
+        _FakeAnthropicResponse(
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "No upstairs lights are on.",
+                }
+            }
+        ),
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    result = await agent._call_llm_http(
+        [{"role": "user", "content": "Are there any lights on upstairs?"}]
+    )
+
+    assert result == "No upstairs lights are on."
+    assert len(posts) == 3
+    retry_messages = posts[1]["json"]["messages"]
+    assert not any(message.get("tool_calls") for message in retry_messages)
+    assert retry_messages[-1]["role"] == "system"
+    assert "invalid JSON arguments" in retry_messages[-1]["content"]
+    assert "function.arguments" in retry_messages[-1]["content"]
+
+    execute_mock.assert_awaited_once()
+    executed_calls = execute_mock.await_args.args[0]
     assert executed_calls[0]["function"]["arguments"] == {
         "domain": "light",
         "floor": "upstairs",

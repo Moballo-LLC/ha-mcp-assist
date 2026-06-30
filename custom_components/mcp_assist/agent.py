@@ -182,6 +182,18 @@ TOOLLESS_RETRY_INSTRUCTION = (
     "the final answer only if no tool is needed. After using tools, answer in "
     "the user's language."
 )
+INVALID_TOOL_ARGUMENT_RETRY_INSTRUCTION = (
+    "The previous MCP tool call had invalid JSON arguments and was not executed. "
+    "This is still the same user request. Do not ask the user to confirm. Call "
+    "the needed MCP tool again with a complete JSON object in function.arguments, "
+    "or answer only if no tool is needed. After using tools, answer in the "
+    "user's language."
+)
+INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE = (
+    "I couldn't complete that because the model produced invalid tool-call "
+    "arguments more than once. Try again, or use a model with stronger "
+    "tool-calling support."
+)
 TOOLLESS_RESPONSE_PATTERNS = (
     re.compile(
         r"\b(?:i(?:'|’)?ll|i will|i(?:'|’)?m going to|i am going to|let me|i can)\s+"
@@ -1353,6 +1365,80 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> List[Dict[str, Any]]:
         """Drop empty streamed tool-call placeholders before execution."""
         return [tool_call for tool_call in tool_calls if tool_call]
+
+    @staticmethod
+    def _tool_call_arguments_are_valid(arguments: Any) -> bool:
+        """Return whether tool arguments are a complete JSON object."""
+        if arguments is None:
+            return True
+        if isinstance(arguments, dict):
+            return True
+        if isinstance(arguments, str):
+            if not arguments.strip():
+                return True
+            try:
+                parsed = json.loads(arguments)
+            except json.JSONDecodeError:
+                return False
+            return isinstance(parsed, dict)
+        return False
+
+    @classmethod
+    def _tool_call_is_valid_for_execution(cls, tool_call: Dict[str, Any]) -> bool:
+        """Return whether a provider tool call can safely be executed."""
+        function = tool_call.get("function")
+        if not isinstance(function, dict):
+            return False
+        name = str(function.get("name") or "").strip()
+        if not name:
+            return False
+        return cls._tool_call_arguments_are_valid(function.get("arguments"))
+
+    @classmethod
+    def _partition_valid_tool_calls(
+        cls,
+        tool_calls: List[Dict[str, Any]],
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Split provider tool calls into executable and malformed calls."""
+        valid_tool_calls: List[Dict[str, Any]] = []
+        invalid_tool_calls: List[Dict[str, Any]] = []
+
+        for tool_call in tool_calls:
+            if cls._tool_call_is_valid_for_execution(tool_call):
+                valid_tool_calls.append(tool_call)
+            else:
+                invalid_tool_calls.append(tool_call)
+
+        return valid_tool_calls, invalid_tool_calls
+
+    @classmethod
+    def _invalid_tool_call_names(cls, tool_calls: List[Dict[str, Any]]) -> str:
+        """Return a compact list of malformed tool-call names for logs/prompts."""
+        names = []
+        for tool_call in tool_calls:
+            name = cls._tool_call_name(tool_call)
+            if name not in names:
+                names.append(name)
+        return ", ".join(names)
+
+    @classmethod
+    def _append_invalid_tool_call_retry_messages(
+        cls,
+        conversation_messages: List[Dict[str, Any]],
+        response_text: str,
+        invalid_tool_calls: List[Dict[str, Any]],
+    ) -> None:
+        """Append corrective context after malformed tool-call arguments."""
+        if response_text.strip():
+            conversation_messages.append(
+                {"role": "assistant", "content": response_text.strip()}
+            )
+
+        tool_names = cls._invalid_tool_call_names(invalid_tool_calls)
+        instruction = INVALID_TOOL_ARGUMENT_RETRY_INSTRUCTION
+        if tool_names:
+            instruction = f"{instruction} Affected tool(s): {tool_names}."
+        conversation_messages.append({"role": "system", "content": instruction})
 
     def _record_tool_result_to_chatlog(
         self, tool_call_id: str, tool_name: str, tool_result: Dict[str, Any]
@@ -3453,6 +3539,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         conversation_messages = list(messages)
         tool_calls_used = 0
         toolless_retry_used = False
+        invalid_tool_retry_used = False
+        empty_stream_responses = 0
 
         # Buffers for streaming
         tool_arg_buffers = {}  # index -> partial JSON string
@@ -3603,6 +3691,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                                 # Handle streamed content
                                 if "content" in delta and delta["content"]:
+                                    empty_stream_responses = 0
                                     chunk = delta["content"]
                                     response_text += chunk
                                     sentence_buffer += chunk
@@ -3748,8 +3837,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 _LOGGER.debug(f"Stream parsing: {e}")
 
             except Exception as stream_error:
-                _LOGGER.error(
-                    f"❌ Streaming iteration {iteration + 1} failed: {stream_error}"
+                _LOGGER.warning(
+                    "Streaming iteration %d failed: %s",
+                    iteration + 1,
+                    stream_error,
                 )
                 if iteration == 0:
                     # First iteration failed, try fallback
@@ -3767,6 +3858,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             # If we got tool calls, execute them
             if has_tool_calls and current_tool_calls:
+                empty_stream_responses = 0
                 _LOGGER.info(
                     f"⚡ Executing {len(current_tool_calls)} streamed tool calls"
                 )
@@ -3782,8 +3874,36 @@ class MCPAssistConversationEntity(ConversationEntity):
                         ),
                     )
 
+                valid_tool_calls, invalid_tool_calls = self._partition_valid_tool_calls(
+                    current_tool_calls
+                )
+                if invalid_tool_calls:
+                    _LOGGER.info(
+                        "Skipping %d streamed tool call(s) with invalid JSON "
+                        "arguments: %s",
+                        len(invalid_tool_calls),
+                        self._invalid_tool_call_names(invalid_tool_calls),
+                    )
+
+                if not valid_tool_calls:
+                    if invalid_tool_retry_used:
+                        return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        response_text,
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
+                    response_text = ""
+                    sentence_buffer = ""
+                    tool_arg_buffers.clear()
+                    tool_names.clear()
+                    tool_ids.clear()
+                    completed_tools.clear()
+                    continue
+
                 prepared_tool_calls = provider.prepare_stream_tool_calls(
-                    current_tool_calls,
+                    valid_tool_calls,
                     stream_metadata,
                 )
                 warning = provider.missing_stream_metadata_warning(stream_metadata)
@@ -3797,14 +3917,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                 conversation_messages.append(assistant_msg)
 
                 # Record tool calls to ChatLog for debug view
-                self._record_tool_calls_to_chatlog(current_tool_calls)
+                self._record_tool_calls_to_chatlog(valid_tool_calls)
 
                 (
                     executable_tool_calls,
                     skipped_tool_results,
                     budget_exhausted,
                 ) = self._prepare_tool_calls_for_budget(
-                    current_tool_calls,
+                    valid_tool_calls,
                     tool_calls_used=tool_calls_used,
                     provider=provider,
                 )
@@ -3818,8 +3938,8 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 # Record tool results to ChatLog for debug view
                 for idx, result in enumerate(tool_results):
-                    if idx < len(current_tool_calls):
-                        tc = current_tool_calls[idx]
+                    if idx < len(valid_tool_calls):
+                        tc = valid_tool_calls[idx]
                         tool_call_id = result.get(
                             "tool_call_id", tc.get("id", "unknown")
                         )
@@ -3834,6 +3954,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
 
                 conversation_messages.extend(tool_results)
+                if invalid_tool_calls and not invalid_tool_retry_used:
+                    self._append_invalid_tool_call_retry_messages(
+                        conversation_messages,
+                        "",
+                        invalid_tool_calls,
+                    )
+                    invalid_tool_retry_used = True
 
                 # Reset for next iteration - we don't want intermediate narration in final response
                 response_text = (
@@ -3881,7 +4008,17 @@ class MCPAssistConversationEntity(ConversationEntity):
                     return response_text
                 else:
                     # No content and no tools, might need another iteration
-                    _LOGGER.warning("Empty response from streaming, retrying...")
+                    empty_stream_responses += 1
+                    if empty_stream_responses == 1:
+                        _LOGGER.debug("Empty response from streaming, retrying once")
+                        continue
+                    if self._has_tool_results(conversation_messages):
+                        return await self._call_llm_final_response_without_tools(
+                            conversation_messages,
+                            provider,
+                            transport="streaming_empty_final",
+                        )
+                    raise Exception("Streaming returned an empty response")
 
         # Hit the model-call guard before a final response arrived.
         if response_text:
@@ -3926,6 +4063,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         conversation_messages = list(messages)
         tool_calls_used = 0
         toolless_retry_used = False
+        invalid_tool_retry_used = False
 
         # Tool execution loop
         for iteration in range(self.model_turn_limit):
@@ -3971,9 +4109,32 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                     # Check if there are tool calls to execute
                     if "tool_calls" in message and message["tool_calls"]:
-                        tool_calls = provider.normalize_tool_calls(
+                        (
+                            valid_raw_tool_calls,
+                            invalid_tool_calls,
+                        ) = self._partition_valid_tool_calls(
                             message["tool_calls"]
                         )
+                        if invalid_tool_calls:
+                            _LOGGER.info(
+                                "Skipping %d tool call(s) with invalid JSON "
+                                "arguments: %s",
+                                len(invalid_tool_calls),
+                                self._invalid_tool_call_names(invalid_tool_calls),
+                            )
+
+                        if not valid_raw_tool_calls:
+                            if invalid_tool_retry_used:
+                                return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+                            self._append_invalid_tool_call_retry_messages(
+                                conversation_messages,
+                                str(message.get("content") or ""),
+                                invalid_tool_calls,
+                            )
+                            invalid_tool_retry_used = True
+                            continue
+
+                        tool_calls = provider.normalize_tool_calls(valid_raw_tool_calls)
                         _LOGGER.info(
                             f"🛠️ {self.server_type} requested {len(tool_calls)} tool calls"
                         )
@@ -4045,6 +4206,13 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                         # Add tool results to conversation
                         conversation_messages.extend(tool_results)
+                        if invalid_tool_calls and not invalid_tool_retry_used:
+                            self._append_invalid_tool_call_retry_messages(
+                                conversation_messages,
+                                "",
+                                invalid_tool_calls,
+                            )
+                            invalid_tool_retry_used = True
 
                         _LOGGER.info(
                             f"📊 Added {len(tool_results)} tool results to conversation"
