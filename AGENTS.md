@@ -52,6 +52,8 @@ editing this repository. It applies to the whole repository.
   intentionally redesigned.
 - GitHub generated release notes are configured by `.github/release.yml`.
   Release notes come from merged PR titles and labels.
+- The catch-all generated release-note category should use a clear title such
+  as `Included Changes`, not `Other Changes`.
 - Final GitHub release notes should start with a short bulleted list of
   high-level notable changes, followed by a `---` separator, followed by the
   full generated changelog.

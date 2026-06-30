@@ -17,6 +17,8 @@ To keep release notes useful:
 - Keep PRs small and atomic.
 - Apply labels consistently when release-note grouping matters.
 - Put user-facing context in the PR body when a title alone is not enough.
+- Keep the catch-all category title reader-friendly. This repo uses
+  `Included Changes` instead of GitHub's more generic `Other Changes` wording.
 
 The final GitHub release body should be edited after generation to use this
 shape:
