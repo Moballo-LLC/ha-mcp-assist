@@ -194,6 +194,21 @@ ADAPTIVE_ENTITY_ID_DOMAINS = frozenset(
         "zone",
     }
 )
+ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS = ADAPTIVE_ENTITY_ID_DOMAINS | frozenset(
+    {
+        "entity",
+        "entities",
+    }
+)
+ADAPTIVE_ENTITY_ID_REFERENCE_RE = re.compile(
+    r"(?<![@\w])(?P<host>(?:"
+    + "|".join(
+        re.escape(domain)
+        for domain in sorted(ADAPTIVE_ENTITY_ID_DOMAINS, key=len, reverse=True)
+    )
+    + r")\.[a-z0-9_]+)(?=$|[^a-z0-9_])",
+    flags=re.IGNORECASE,
+)
 ADAPTIVE_URL_ACTION_TERMS = frozenset(
     {"browse", "fetch", "read", "summarise", "summarize", "visit"}
 )
@@ -562,6 +577,27 @@ def _strip_adaptive_url_intents(text: str) -> str:
     return ADAPTIVE_BARE_DOMAIN_INTENT_RE.sub(replace_bare_domain, stripped)
 
 
+def _has_adaptive_entity_reference(text: str) -> bool:
+    """Return true when text contains an HA entity-id-shaped reference."""
+    if any(
+        _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=text,
+            match=match,
+        )
+        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
+    ):
+        return True
+    return any(
+        _is_adaptive_entity_id_like_host(
+            match.group("host"),
+            text=text,
+            match=match,
+        )
+        for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text)
+    )
+
+
 def normalize_adaptive_query_terms(query: str) -> list[str]:
     """Return useful search terms for adaptive tool matching."""
     normalized_query = str(query or "").casefold()
@@ -574,6 +610,9 @@ def normalize_adaptive_query_terms(query: str) -> list[str]:
             continue
         if term not in terms:
             terms.append(term)
+        if singular := _adaptive_singular_text_term(term):
+            if singular not in terms:
+                terms.append(singular)
     normalized_tokens = set(re.findall(r"\w+", normalized_query, flags=re.UNICODE))
     for alias, expanded_terms in ADAPTIVE_QUERY_ALIASES.items():
         matches_alias = (
@@ -668,19 +707,31 @@ def score_adaptive_tool_match(
     if terms and all(term in name_terms for term in terms):
         score += 40
 
+    matched_terms: set[str] = set()
     for term in terms:
         if term in name_terms:
             score += 24
+            matched_terms.add(term)
         if term in keyword_terms:
             score += 18
+            matched_terms.add(term)
         if term in routing_terms:
             score += 14
+            matched_terms.add(term)
         if term in llm_description_terms:
             score += 12
+            matched_terms.add(term)
         if term in description_terms:
             score += 6
+            matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
+        if (
+            matched_terms
+            and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
+            and _has_adaptive_entity_reference(normalized_query)
+        ):
+            return 0
         score += 1
     return score
 

@@ -1720,6 +1720,7 @@ def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
         "read example.de",
         "summarize example.info",
         "Summarize weather.com",
+        "read calendar.google.com",
         "read light.kitchen",
     ):
         matches = match_adaptive_tool_definitions(
@@ -1747,6 +1748,36 @@ def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() ->
     ):
         assert score_adaptive_tool_match(read_tool, query) == 0
         assert match_adaptive_tool_definitions([read_tool], query=query, limit=1) == []
+
+
+def test_adaptive_tool_scoring_ignores_generic_entity_terms_for_optional_tools() -> None:
+    """Entity-id lookups should not preload custom tools from generic domain terms."""
+    delivery_tool = {
+        "name": "morcos_delivery_status",
+        "description": "Answer package/mail status from porch/mailbox sensors.",
+        "llmDescription": "Package/mail status from sensors/history",
+        "routingHints": {
+            "preferred_when": "Current package, delivery, porch, or mailbox questions.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert (
+        score_adaptive_tool_match(
+            delivery_tool,
+            "What is sensor.compressor_power?",
+        )
+        == 0
+    )
+    assert (
+        match_adaptive_tool_definitions(
+            [delivery_tool],
+            query="What is sensor.compressor_power?",
+            limit=1,
+        )
+        == []
+    )
+    assert score_adaptive_tool_match(delivery_tool, "Any packages today?") > 0
 
 
 @pytest.mark.asyncio
