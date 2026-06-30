@@ -34,6 +34,17 @@ reports the Standard, Adaptive, and Light tool surfaces separately. It does not
 return prompts, conversation history, raw tool descriptions, schemas, tool
 arguments, or tool results.
 
+To preview Adaptive mode for a specific kind of request, pass a short sample
+query:
+
+```text
+http://<home-assistant-host>:8090/debug/prompt-overhead?query=weather%20tomorrow
+```
+
+The response includes a metadata-only Adaptive query projection with the tool
+schemas that would be preloaded, their match scores, and the projected first
+tool-schema size.
+
 ## What Chat Log Mode Records
 
 When enabled, MCP Assist stores recent conversation records in Home Assistant storage. Each record includes:

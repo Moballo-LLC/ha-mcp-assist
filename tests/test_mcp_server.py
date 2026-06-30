@@ -513,7 +513,10 @@ async def test_prompt_overhead_diagnostics_reports_metadata_only(
     server.tools = SimpleNamespace(get_tool_source_info=get_tool_source_info)
 
     response = await server.handle_prompt_overhead_diagnostics(
-        SimpleNamespace(remote="127.0.0.1", query={"top": "5"})
+        SimpleNamespace(
+            remote="127.0.0.1",
+            query={"top": "5", "query": "sample status"},
+        )
     )
     payload = json.loads(response.text)
 
@@ -523,11 +526,16 @@ async def test_prompt_overhead_diagnostics_reports_metadata_only(
     assert payload["standard_context"]["compact_llm_tool_schema_bytes"] > 0
     assert payload["standard_context"]["approx_llm_tool_schema_tokens"] > 0
     assert payload["adaptive_context"]["tool_count"] == 3
+    assert payload["adaptive_context"]["compact_llm_tool_schema_fingerprint"]
     assert payload["adaptive_context"]["compact_llm_tool_schema_bytes"] > 0
     assert any(
         group["source"] == "adaptive_meta"
         for group in payload["adaptive_context"]["top_tool_groups_by_schema_bytes"]
     )
+    preloaded_tools = payload["adaptive_query_projection"]["preloaded_tools"]
+    assert preloaded_tools[0]["name"] == "sample_status"
+    assert preloaded_tools[0]["score"] >= 18
+    assert payload["adaptive_query_projection"]["context"]["tool_count"] == 4
     assert payload["light_context"]["tool_count"] == 1
     assert payload["light_context"]["top_tools_by_schema_bytes"][0]["name"] == "run_script"
     assert payload["standard_context"]["top_tool_groups_by_schema_bytes"][0][

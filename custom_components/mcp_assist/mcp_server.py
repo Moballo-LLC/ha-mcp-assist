@@ -6,6 +6,7 @@ from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
+import hashlib
 import ipaddress
 import inspect
 import json
@@ -108,9 +109,12 @@ from .llm_providers import (
     create_llm_provider,
 )
 from .tool_schema import (
+    ADAPTIVE_META_TOOL_NAMES,
     build_adaptive_llm_tools,
     convert_mcp_tools_to_llm_tools,
     estimate_tokens_from_bytes,
+    score_adaptive_tool_match,
+    tool_definition_name,
 )
 from .tools.packages.recorder.history import RecorderToolsMixin
 from .tools.packages.response_service.calendar import CalendarToolsMixin
@@ -213,6 +217,21 @@ def _json_size_bytes(value: Any) -> int:
     except Exception:
         serialized = str(value)
     return len(serialized.encode("utf-8"))
+
+
+def _json_fingerprint(value: Any) -> str:
+    """Return a short stable fingerprint for metadata-only diagnostics."""
+    try:
+        serialized = json.dumps(
+            value,
+            ensure_ascii=False,
+            default=str,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except Exception:
+        serialized = str(value)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
 
 
 def _mapping_count(value: Any) -> int:
@@ -902,6 +921,12 @@ class MCPServer(
         except (TypeError, ValueError):
             top_limit = 10
         top_limit = min(max(top_limit, 1), 50)
+        query = str(request.query.get("query") or "").strip()
+        try:
+            preload_limit = int(request.query.get("preload_limit", 2))
+        except (TypeError, ValueError):
+            preload_limit = 2
+        preload_limit = min(max(preload_limit, 0), 8)
 
         tools = await self._get_tools_list()
         light_tools = [
@@ -939,8 +964,89 @@ class MCPServer(
                 top_limit=top_limit,
             ),
         }
+        if query and preload_limit > 0:
+            diagnostics["adaptive_query_projection"] = (
+                self._build_adaptive_query_projection(
+                    tools,
+                    query=query,
+                    preload_limit=preload_limit,
+                    top_limit=top_limit,
+                )
+            )
 
         return web.json_response(diagnostics)
+
+    def _select_adaptive_query_preloads(
+        self,
+        tools: list[dict[str, Any]],
+        *,
+        query: str,
+        preload_limit: int,
+        minimum_score: int = 18,
+    ) -> list[dict[str, Any]]:
+        """Return high-confidence adaptive preload candidates for diagnostics."""
+        scored: list[tuple[int, str, dict[str, Any]]] = []
+        for tool in tools:
+            tool_name = tool_definition_name(tool)
+            if (
+                not tool_name
+                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in ADAPTIVE_META_TOOL_NAMES
+            ):
+                continue
+            score = score_adaptive_tool_match(
+                tool,
+                query,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            )
+            if score >= minimum_score:
+                scored.append((score, tool_name, tool))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [
+            {"name": tool_name, "score": score, "tool": tool}
+            for score, tool_name, tool in scored[:preload_limit]
+        ]
+
+    def _build_adaptive_query_projection(
+        self,
+        tools: list[dict[str, Any]],
+        *,
+        query: str,
+        preload_limit: int,
+        top_limit: int,
+    ) -> dict[str, Any]:
+        """Build metadata-only adaptive preload projection for a sample query."""
+        preloads = self._select_adaptive_query_preloads(
+            tools,
+            query=query,
+            preload_limit=preload_limit,
+        )
+        preload_names = frozenset(str(item["name"]) for item in preloads)
+        llm_tools = build_adaptive_llm_tools(
+            tools,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            loaded_tool_names=preload_names,
+        )
+        projected_tools = [
+            tool
+            for tool in tools
+            if tool_definition_name(tool) in LIGHT_CONTEXT_TOOL_NAMES
+            or tool_definition_name(tool) in preload_names
+        ]
+        return {
+            "query_chars": len(query),
+            "preload_limit": preload_limit,
+            "preloaded_tools": [
+                {"name": str(item["name"]), "score": int(item["score"])}
+                for item in preloads
+            ],
+            "context": self._build_prompt_overhead_summary(
+                projected_tools,
+                top_limit=top_limit,
+                llm_tools=llm_tools,
+            ),
+        }
 
     async def reload_external_custom_tools(self) -> dict[str, Any]:
         """Reload external custom tools, clear caches, and notify clients."""
@@ -1266,6 +1372,7 @@ class MCPServer(
 
         return {
             "tool_count": len(llm_tools),
+            "compact_llm_tool_schema_fingerprint": _json_fingerprint(llm_tools),
             "raw_mcp_tools_bytes": raw_tool_bytes,
             "compact_llm_tool_schema_bytes": compact_schema_bytes,
             "approx_llm_tool_schema_tokens": estimate_tokens_from_bytes(

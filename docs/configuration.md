@@ -88,7 +88,9 @@ Adaptive context mode is the default. It advertises the core Home Assistant
 discovery/control tools plus two compact routing tools that let the model search
 and load optional, built-in package, or external custom tool schemas only when a
 request needs them. This keeps first-prompt overhead low without disabling those
-capabilities.
+capabilities. For obvious requests, Adaptive may preload a small number of
+high-confidence optional tool schemas from the user's wording so the model can
+avoid an extra schema-discovery turn.
 
 Light context mode keeps the profile's prompts but skips MCP Assist's optional
 tool-family prompt instructions, keeps at most two prior conversation turns, and

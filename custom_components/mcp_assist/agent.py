@@ -45,6 +45,9 @@ from .tool_schema import (
     compact_text,
     convert_mcp_tools_to_llm_tools,
     json_size_bytes,
+    match_adaptive_tool_definitions,
+    score_adaptive_tool_match,
+    tool_definition_name,
 )
 from .llm_providers import (
     LLMProvider,
@@ -144,6 +147,20 @@ MCP_TOOL_CACHE_TTL_SECONDS = 300.0
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 MAX_PROVIDER_LOG_CHARS = 500
+TOOL_HISTORY_ARGUMENT_KEYS = (
+    "entity_id",
+    "entity_ids",
+    "area",
+    "floor",
+    "domain",
+    "device_class",
+    "state",
+    "action",
+    "service",
+    "script",
+    "automation",
+    "name",
+)
 TOOL_BUDGET_EXHAUSTED_RESULT = (
     "Tool call skipped because this request reached the configured tool-call "
     "budget. Answer from the tool results already available without calling more "
@@ -177,6 +194,9 @@ _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
 )
 _ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[frozenset[str]] = ContextVar(
     "mcp_assist_adaptive_loaded_tool_names", default=frozenset()
+)
+_REQUEST_TOOL_HISTORY_SUMMARIES: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "mcp_assist_request_tool_history_summaries", default=None
 )
 _PERSISTENT_CHAT_LOG_RECORD: ContextVar[dict[str, Any] | None] = ContextVar(
     "mcp_assist_persistent_chat_log_record", default=None
@@ -1356,6 +1376,92 @@ class MCPAssistConversationEntity(ConversationEntity):
         if error is not None:
             tool_entry["error"] = error
 
+    @staticmethod
+    def _compact_history_argument_value(value: Any) -> str:
+        """Return a tiny argument value for follow-up context."""
+        if isinstance(value, list):
+            items = [
+                str(item)
+                for item in value[:4]
+                if isinstance(item, (str, int, float, bool))
+            ]
+            suffix = ", ..." if len(value) > len(items) else ""
+            return compact_text(", ".join(items) + suffix, max_len=90)
+        if isinstance(value, (str, int, float, bool)):
+            return compact_text(str(value), max_len=90)
+        return ""
+
+    def _record_tool_history_summary(
+        self,
+        tool_name: str | None,
+        arguments: dict[str, Any],
+        result: dict[str, Any] | None = None,
+        *,
+        error: str | None = None,
+    ) -> None:
+        """Record compact real-tool context for future follow-up turns."""
+        if not tool_name or tool_name in ADAPTIVE_META_TOOL_NAMES:
+            return
+
+        summaries = _REQUEST_TOOL_HISTORY_SUMMARIES.get()
+        if summaries is None:
+            return
+
+        compact_arguments: dict[str, str] = {}
+        for key in TOOL_HISTORY_ARGUMENT_KEYS:
+            if key not in arguments:
+                continue
+            value = self._compact_history_argument_value(arguments[key])
+            if value:
+                compact_arguments[key] = value
+
+        summary: dict[str, Any] = {
+            "type": "mcp_tool",
+            "tool": tool_name,
+            "arguments": compact_arguments,
+        }
+        if error:
+            summary["status"] = "error"
+        elif isinstance(result, dict) and result.get("isError"):
+            summary["status"] = "error"
+        else:
+            summary["status"] = "ok"
+
+        summaries.append(summary)
+
+    @staticmethod
+    def _format_history_tool_context(actions: Any) -> str:
+        """Return compact prior tool context for model history messages."""
+        if not isinstance(actions, list):
+            return ""
+
+        parts: list[str] = []
+        for action in actions:
+            if not isinstance(action, dict) or action.get("type") != "mcp_tool":
+                continue
+            tool_name = str(action.get("tool") or "")
+            if not tool_name:
+                continue
+            arguments = action.get("arguments")
+            argument_parts = []
+            if isinstance(arguments, dict):
+                argument_parts = [
+                    f"{key}={value}"
+                    for key, value in arguments.items()
+                    if value
+                ]
+            status = str(action.get("status") or "ok")
+            call_text = tool_name
+            if argument_parts:
+                call_text += f"({', '.join(argument_parts[:4])})"
+            if status != "ok":
+                call_text += f" status={status}"
+            parts.append(call_text)
+
+        if not parts:
+            return ""
+        return "Tool context: " + "; ".join(parts[-6:])
+
     async def _async_handle_message(
         self, user_input: ConversationInput, chat_log_instance: chat_log.ChatLog
     ) -> ConversationResult:
@@ -1377,6 +1483,9 @@ class MCPAssistConversationEntity(ConversationEntity):
         adaptive_loaded_tools_token: Token[frozenset[str]] = (
             _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
         )
+        tool_history_token: Token[list[dict[str, Any]] | None] = (
+            _REQUEST_TOOL_HISTORY_SUMMARIES.set([])
+        )
         conversation_id = chat_log_instance.conversation_id
         persistent_chat_log = (
             self._build_persistent_chat_log_record(user_input, conversation_id)
@@ -1395,6 +1504,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             # Clean up
             _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
             _ADAPTIVE_LOADED_TOOL_NAMES.reset(adaptive_loaded_tools_token)
+            _REQUEST_TOOL_HISTORY_SUMMARIES.reset(tool_history_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
 
@@ -1434,6 +1544,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                     f"📝 System prompt built, length: {len(system_prompt)} chars"
                 )
 
+            adaptive_started_at = time.monotonic() if metrics_enabled else 0.0
+            await self._prepare_adaptive_tools_for_request(user_input.text)
+            adaptive_ms = (
+                (time.monotonic() - adaptive_started_at) * 1000
+                if metrics_enabled
+                else 0.0
+            )
+
             # Build conversation messages
             messages = self._build_messages(system_prompt, user_input.text, history)
             if metrics_enabled:
@@ -1441,7 +1559,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     (
                         "Initial prompt metrics: prompt_chars=%d messages=%d "
                         "message_chars=%d history_turns=%d history_ms=%.1f "
-                        "prompt_build_ms=%.1f setup_ms=%.1f"
+                        "prompt_build_ms=%.1f adaptive_prepare_ms=%.1f setup_ms=%.1f"
                     ),
                     len(system_prompt),
                     len(messages),
@@ -1449,6 +1567,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     len(history),
                     history_ms,
                     prompt_ms,
+                    adaptive_ms,
                     (time.monotonic() - setup_started_at) * 1000,
                 )
 
@@ -1533,6 +1652,9 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Parse response and execute any Home Assistant actions
         actions_taken = await self._execute_actions(response_text, user_input)
+        tool_history_summaries = _REQUEST_TOOL_HISTORY_SUMMARIES.get()
+        if tool_history_summaries:
+            actions_taken.extend(tool_history_summaries)
 
         # Add final assistant response to ChatLog
         if self._current_chat_log:
@@ -2171,7 +2293,17 @@ class MCPAssistConversationEntity(ConversationEntity):
             if history_limit > 0:
                 for turn in history[-history_limit:]:
                     messages.append({"role": "user", "content": turn["user"]})
-                    messages.append({"role": "assistant", "content": turn["assistant"]})
+                    assistant_content = str(turn["assistant"])
+                    tool_context = self._format_history_tool_context(
+                        turn.get("actions")
+                    )
+                    if tool_context:
+                        assistant_content = (
+                            f"{assistant_content.rstrip()}\n{tool_context}"
+                        )
+                    messages.append(
+                        {"role": "assistant", "content": assistant_content}
+                    )
 
         # Add current user message
         messages.append({"role": "user", "content": user_text})
@@ -2299,28 +2431,7 @@ class MCPAssistConversationEntity(ConversationEntity):
     @staticmethod
     def _tool_definition_name(tool: Dict[str, Any]) -> str:
         """Return the MCP tool name for a raw tool definition."""
-        return str(tool.get("name") or "")
-
-    def _adaptive_tool_search_text(self, tool: Dict[str, Any]) -> str:
-        """Return compact searchable text for an adaptive catalog entry."""
-        routing_hints = tool.get("routingHints")
-        routing_text = ""
-        if isinstance(routing_hints, dict):
-            routing_text = " ".join(
-                str(value)
-                for key, value in routing_hints.items()
-                if key in {"preferred_when", "keywords", "example_queries"}
-            )
-        return " ".join(
-            str(part or "")
-            for part in (
-                tool.get("name"),
-                tool.get("llmDescription"),
-                tool.get("llm_description"),
-                tool.get("description"),
-                routing_text,
-            )
-        ).casefold()
+        return tool_definition_name(tool)
 
     def _adaptive_tool_catalog_entry(self, tool: Dict[str, Any]) -> dict[str, Any]:
         """Return one compact catalog entry for model-facing adaptive discovery."""
@@ -2355,47 +2466,62 @@ class MCPAssistConversationEntity(ConversationEntity):
         limit: int = 20,
     ) -> list[Dict[str, Any]]:
         """Return adaptive catalog matches from profile-visible raw tools."""
-        visible_tools = [
-            tool
-            for tool in tools
-            if self._tool_definition_name(tool) not in ADAPTIVE_META_TOOL_NAMES
-        ]
-        by_name = {self._tool_definition_name(tool): tool for tool in visible_tools}
+        return match_adaptive_tool_definitions(
+            tools,
+            query=query,
+            tool_names=tool_names,
+            limit=limit,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
 
-        if tool_names:
-            matches: list[Dict[str, Any]] = []
-            for name in tool_names:
-                tool = by_name.get(name)
-                if tool and tool not in matches:
-                    matches.append(tool)
-            return matches[:limit]
-
-        query = " ".join(str(query or "").split()).casefold()
-        if not query:
-            return [
-                tool
-                for tool in visible_tools
-                if self._tool_definition_name(tool) not in LIGHT_CONTEXT_TOOL_NAMES
-            ][:limit]
-
-        terms = [term for term in query.split() if term]
-        scored: list[tuple[int, str, Dict[str, Any]]] = []
-        for tool in visible_tools:
+    def _select_initial_adaptive_tool_names(
+        self,
+        tools: List[Dict[str, Any]],
+        user_text: str,
+        *,
+        limit: int = 2,
+        minimum_score: int = 18,
+    ) -> frozenset[str]:
+        """Return highly likely optional tool schemas to preload for this request."""
+        scored: list[tuple[int, str]] = []
+        loaded_names = _ADAPTIVE_LOADED_TOOL_NAMES.get()
+        for tool in tools:
             tool_name = self._tool_definition_name(tool)
-            haystack = self._adaptive_tool_search_text(tool)
-            score = 0
-            if query == tool_name.casefold():
-                score += 100
-            if query in tool_name.casefold():
-                score += 40
-            score += sum(10 for term in terms if term in haystack)
-            if tool_name not in LIGHT_CONTEXT_TOOL_NAMES:
-                score += 1
-            if score > 0:
-                scored.append((score, tool_name, tool))
+            if (
+                not tool_name
+                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in loaded_names
+                or tool_name in ADAPTIVE_META_TOOL_NAMES
+            ):
+                continue
+            score = score_adaptive_tool_match(
+                tool,
+                user_text,
+                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+            )
+            if score >= minimum_score:
+                scored.append((score, tool_name))
 
         scored.sort(key=lambda item: (-item[0], item[1]))
-        return [tool for _score, _name, tool in scored[:limit]]
+        return frozenset(name for _score, name in scored[:limit])
+
+    async def _prepare_adaptive_tools_for_request(self, user_text: str) -> None:
+        """Preload obvious adaptive schemas before the first model turn."""
+        if not self.adaptive_context_mode:
+            return
+
+        tools = await self._get_profile_mcp_tools() or []
+        preload_names = self._select_initial_adaptive_tool_names(tools, user_text)
+        if not preload_names:
+            return
+
+        loaded_names = set(_ADAPTIVE_LOADED_TOOL_NAMES.get())
+        loaded_names.update(preload_names)
+        _ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset(loaded_names))
+        _LOGGER.debug(
+            "Adaptive context preloaded tool schemas: %s",
+            ", ".join(sorted(preload_names)),
+        )
 
     @staticmethod
     def _normalize_requested_tool_names(value: Any) -> list[str]:
@@ -2894,6 +3020,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 result=result,
                 llm_content=content,
             )
+            self._record_tool_history_summary(tool_name, arguments, result)
 
             if tool_name == "set_conversation_state" and content:
                 if "conversation_state:true" in content.lower():
@@ -2916,6 +3043,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         except Exception as e:
             _LOGGER.error(f"Error executing tool {tool_name}: {e}")
             self._finish_persistent_tool_log(tool_entry, error=str(e))
+            self._record_tool_history_summary(
+                tool_name,
+                self._parse_tool_arguments(arguments_str),
+                error=str(e),
+            )
             error_content = json.dumps({"error": str(e)})
             return self._get_llm_provider().build_tool_result_message(
                 tool_call_id=tool_call_id,
@@ -3019,9 +3151,30 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not tool_calls:
             return []
 
-        return list(await asyncio.gather(
-            *(self._execute_single_tool_call(tool_call) for tool_call in tool_calls)
-        ))
+        results: list[dict[str, Any] | None] = [None] * len(tool_calls)
+        concurrent_calls: list[tuple[int, dict[str, Any]]] = []
+
+        for index, tool_call in enumerate(tool_calls):
+            if self._tool_call_name(tool_call) in ADAPTIVE_META_TOOL_NAMES:
+                results[index] = await self._execute_single_tool_call(tool_call)
+            else:
+                concurrent_calls.append((index, tool_call))
+
+        if concurrent_calls:
+            concurrent_results = await asyncio.gather(
+                *(
+                    self._execute_single_tool_call(tool_call)
+                    for _index, tool_call in concurrent_calls
+                )
+            )
+            for (index, _tool_call), result in zip(
+                concurrent_calls,
+                concurrent_results,
+                strict=True,
+            ):
+                results[index] = result
+
+        return [result for result in results if result is not None]
 
     @staticmethod
     def _has_tool_results(messages: List[Dict[str, Any]]) -> bool:

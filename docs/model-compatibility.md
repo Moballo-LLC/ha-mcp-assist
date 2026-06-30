@@ -48,7 +48,9 @@ If Ollama or another local provider rejects a request because it exceeds the
 model context window, first confirm the profile is using **Context Mode:
 Adaptive**. Adaptive mode keeps core Home Assistant discovery/control tools
 available immediately and lets the model load optional, built-in package, or
-external custom tool schemas only when a request needs them.
+external custom tool schemas only when a request needs them. It can also preload
+a small number of high-confidence optional schemas from the user's wording, such
+as weather or calendar requests, to avoid an extra model turn.
 
 Use **Context Mode: Light** for the smallest direct local-control profiles.
 Light mode keeps at most two prior conversation turns, skips MCP Assist's
@@ -58,6 +60,11 @@ Assistant discovery/control tools to the model.
 Use Standard mode when you intentionally want the full profile tool surface sent
 upfront. If the model and hardware can handle it, increasing the provider
 context-window setting can also help.
+
+For multi-turn conversations, MCP Assist keeps recent user/assistant turns and a
+compact summary of real MCP tools used in prior turns. That helps follow-ups
+like "turn it off" retain the previous target without replaying full tool
+results into the prompt.
 
 ## Instruct vs Reasoning Models
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 ADAPTIVE_TOOL_CATALOG_NAME = "list_available_tools"
@@ -11,6 +12,45 @@ ADAPTIVE_META_TOOL_NAMES = frozenset(
     {
         ADAPTIVE_TOOL_CATALOG_NAME,
         ADAPTIVE_TOOL_SCHEMA_NAME,
+    }
+)
+ADAPTIVE_QUERY_STOPWORDS = frozenset(
+    {
+        "about",
+        "after",
+        "again",
+        "also",
+        "any",
+        "are",
+        "can",
+        "check",
+        "could",
+        "did",
+        "does",
+        "for",
+        "from",
+        "get",
+        "has",
+        "have",
+        "how",
+        "into",
+        "let",
+        "look",
+        "please",
+        "show",
+        "that",
+        "the",
+        "there",
+        "this",
+        "turn",
+        "use",
+        "what",
+        "when",
+        "where",
+        "which",
+        "with",
+        "would",
+        "you",
     }
 )
 
@@ -118,6 +158,126 @@ def build_tool_routing_summary(routing_hints: Any) -> str:
             return f"Keywords: {', '.join(cleaned_keywords)}"
 
     return ""
+
+
+def tool_definition_name(tool: dict[str, Any]) -> str:
+    """Return the MCP tool name for a raw tool definition."""
+    return str(tool.get("name") or "")
+
+
+def normalize_adaptive_query_terms(query: str) -> list[str]:
+    """Return useful search terms for adaptive tool matching."""
+    terms = []
+    for term in re.findall(r"[a-z0-9_]+", str(query or "").casefold()):
+        if len(term) < 3 or term in ADAPTIVE_QUERY_STOPWORDS:
+            continue
+        if term not in terms:
+            terms.append(term)
+    return terms
+
+
+def _routing_hint_text(tool: dict[str, Any], *keys: str) -> str:
+    routing_hints = tool.get("routingHints")
+    if not isinstance(routing_hints, dict):
+        return ""
+
+    parts: list[str] = []
+    for key in keys:
+        value = routing_hints.get(key)
+        if isinstance(value, list):
+            parts.extend(str(item) for item in value)
+        elif value is not None:
+            parts.append(str(value))
+    return " ".join(parts).casefold()
+
+
+def score_adaptive_tool_match(
+    tool: dict[str, Any],
+    query: str,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> int:
+    """Score how well a raw tool definition matches an adaptive query."""
+    normalized_query = " ".join(str(query or "").split()).casefold()
+    terms = normalize_adaptive_query_terms(normalized_query)
+    if not normalized_query and not terms:
+        return 0
+
+    name = tool_definition_name(tool).casefold()
+    llm_description = str(
+        tool.get("llmDescription") or tool.get("llm_description") or ""
+    ).casefold()
+    description = str(tool.get("description") or "").casefold()
+    keyword_text = _routing_hint_text(tool, "keywords")
+    routing_text = _routing_hint_text(tool, "preferred_when", "example_queries")
+
+    score = 0
+    if normalized_query and normalized_query == name:
+        score += 100
+    if normalized_query and normalized_query in name:
+        score += 40
+
+    for term in terms:
+        if term in name:
+            score += 24
+        if term in keyword_text:
+            score += 18
+        if term in routing_text:
+            score += 14
+        if term in llm_description:
+            score += 12
+        if term in description:
+            score += 6
+
+    if name not in base_tool_names and score > 0:
+        score += 1
+    return score
+
+
+def match_adaptive_tool_definitions(
+    tools: list[dict[str, Any]],
+    *,
+    query: str = "",
+    tool_names: list[str] | None = None,
+    limit: int = 20,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Return matching raw tool definitions for adaptive discovery/loading."""
+    visible_tools = [
+        tool
+        for tool in tools
+        if tool_definition_name(tool) not in ADAPTIVE_META_TOOL_NAMES
+    ]
+    by_name = {tool_definition_name(tool): tool for tool in visible_tools}
+
+    if tool_names:
+        matches: list[dict[str, Any]] = []
+        for name in tool_names:
+            tool = by_name.get(name)
+            if tool and tool not in matches:
+                matches.append(tool)
+        return matches[:limit]
+
+    query = " ".join(str(query or "").split()).casefold()
+    if not query:
+        return [
+            tool
+            for tool in visible_tools
+            if tool_definition_name(tool) not in base_tool_names
+        ][:limit]
+
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+    for tool in visible_tools:
+        score = score_adaptive_tool_match(
+            tool,
+            query,
+            base_tool_names=base_tool_names,
+        )
+        if score > 0:
+            scored.append((score, tool_definition_name(tool), tool))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [tool for _score, _name, tool in scored[:limit]]
 
 
 def convert_mcp_tools_to_llm_tools(

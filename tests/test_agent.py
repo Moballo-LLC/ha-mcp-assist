@@ -622,6 +622,40 @@ def test_build_messages_respects_configured_max_history(
     ]
 
 
+def test_build_messages_includes_compact_tool_history_context(
+    hass, profile_entry_factory
+) -> None:
+    """Follow-up turns should retain compact MCP target/action context."""
+    entry = profile_entry_factory(options={CONF_MAX_HISTORY: 2})
+    agent = MCPAssistConversationEntity(hass, entry)
+    history = [
+        {
+            "user": "Are any kitchen lights on?",
+            "assistant": "The kitchen pendant is on.",
+            "actions": [
+                {
+                    "type": "mcp_tool",
+                    "tool": "discover_entities",
+                    "status": "ok",
+                    "arguments": {
+                        "area": "Kitchen",
+                        "domain": "light",
+                        "state": "on",
+                    },
+                }
+            ],
+        }
+    ]
+
+    messages = agent._build_messages("system", "turn it off", history)
+
+    assert messages[2]["role"] == "assistant"
+    assert "The kitchen pendant is on." in messages[2]["content"]
+    assert "Tool context: discover_entities(area=Kitchen, domain=light, state=on)" in (
+        messages[2]["content"]
+    )
+
+
 def test_build_messages_supports_zero_history(
     hass, profile_entry_factory
 ) -> None:
@@ -1196,6 +1230,79 @@ async def test_adaptive_meta_tools_catalog_and_load_schemas(
         assert "sample_tool_status" in agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
     finally:
         agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_schema_load_survives_execute_tool_calls(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Schema loads should update the next advertised tool surface."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("discover_entities"),
+        _tool("sample_tool_status"),
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._execute_tool_calls(
+            [
+                {
+                    "id": "load-1",
+                    "function": {
+                        "name": ADAPTIVE_TOOL_SCHEMA_NAME,
+                        "arguments": json.dumps(
+                            {"tool_names": ["sample_tool_status"]}
+                        ),
+                    },
+                }
+            ]
+        )
+        advertised = agent._build_llm_tools_for_context(tools)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    advertised_names = {tool["function"]["name"] for tool in advertised}
+    assert "sample_tool_status" in advertised_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive mode should avoid extra turns for high-confidence optional tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {
+            "keywords": ["weather", "forecast"],
+            "preferred_when": "Use when the user asks about weather.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "What is the weather tomorrow?"
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert "get_weather_forecast" in loaded_names
 
 
 def test_compact_tool_result_for_llm_truncates_large_payloads(
