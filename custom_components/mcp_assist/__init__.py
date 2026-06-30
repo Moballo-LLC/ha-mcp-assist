@@ -632,6 +632,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 timeout=entry.options.get(
                     CONF_TIMEOUT, entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
                 ),
+                locale=getattr(hass.config, "language", None),
             )
 
             try:

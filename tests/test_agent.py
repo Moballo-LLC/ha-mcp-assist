@@ -63,6 +63,7 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    normalize_adaptive_query_terms,
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
@@ -169,6 +170,18 @@ def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
     assert second_index == 1
     assert repeated_first_index == 0
     assert offset == 1
+
+
+def test_toolless_check_preamble_detects_supported_non_english_phrases(
+    hass, profile_entry_factory
+) -> None:
+    """Tool-less retry should not only work for English model preambles."""
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+
+    assert agent._is_toolless_check_preamble("Voy a comprobar las luces de arriba.")
+    assert agent._is_toolless_check_preamble("Je vais vérifier les lumières.")
+    assert agent._is_toolless_check_preamble("確認します。")
+    assert agent._is_toolless_check_preamble("سأتحقق من الأضواء.")
 
 
 def test_compact_streamed_tool_calls_drops_empty_placeholders() -> None:
@@ -1303,6 +1316,46 @@ async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
         agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
     assert "get_weather_forecast" in loaded_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_optional_tool_from_localized_query(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Adaptive query aliases should bridge non-English user text to tool metadata."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {
+            "keywords": ["weather", "forecast"],
+            "preferred_when": "Use when the user asks about weather.",
+        },
+    }
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "¿Qué tiempo hará mañana?"
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert "get_weather_forecast" in loaded_names
+
+
+def test_adaptive_query_terms_expand_unicode_aliases() -> None:
+    """Adaptive query matching should tokenize and expand non-English terms."""
+    assert "weather" in normalize_adaptive_query_terms("¿Qué tiempo hará mañana?")
+    assert "weather" in normalize_adaptive_query_terms("明天天气怎么样")
+    assert "search" in normalize_adaptive_query_terms("buscar en la web")
 
 
 def test_compact_tool_result_for_llm_truncates_large_payloads(

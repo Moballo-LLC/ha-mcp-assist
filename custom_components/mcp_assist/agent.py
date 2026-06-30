@@ -179,7 +179,8 @@ TOOLLESS_RETRY_INSTRUCTION = (
     "You just said you would check, but no MCP tool call was made. This is still "
     "the same user request. Do not ask the user to wait or confirm. Call the "
     "appropriate MCP tool now using the most specific available filters, or give "
-    "the final answer only if no tool is needed."
+    "the final answer only if no tool is needed. After using tools, answer in "
+    "the user's language."
 )
 TOOLLESS_RESPONSE_PATTERNS = (
     re.compile(
@@ -188,6 +189,112 @@ TOOLLESS_RESPONSE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(r"^\s*checking\b", re.IGNORECASE),
+)
+TOOLLESS_RESPONSE_PREFIXES = tuple(
+    phrase.casefold()
+    for phrase in (
+        # German
+        "ich prüfe",
+        "ich überprüfe",
+        "ich schaue",
+        "ich werde prüfen",
+        "ich werde nachsehen",
+        "lass mich",
+        # French
+        "je vais vérifier",
+        "je vérifie",
+        "je vais regarder",
+        "je vais chercher",
+        "laissez-moi vérifier",
+        # Spanish
+        "voy a comprobar",
+        "voy a revisar",
+        "voy a verificar",
+        "déjame comprobar",
+        "permíteme comprobar",
+        "revisaré",
+        "comprobaré",
+        # Italian
+        "controllo",
+        "verifico",
+        "controllerò",
+        "lasciami controllare",
+        # Dutch
+        "ik controleer",
+        "ik ga controleren",
+        "ik kijk",
+        "laat me controleren",
+        # Polish
+        "sprawdzę",
+        "sprawdzam",
+        "już sprawdzam",
+        "pozwól mi sprawdzić",
+        # Portuguese
+        "vou verificar",
+        "vou conferir",
+        "deixe-me verificar",
+        "verifico",
+        # Russian
+        "я проверю",
+        "сейчас проверю",
+        "проверю",
+        "я посмотрю",
+        "посмотрю",
+        # Chinese
+        "我来查",
+        "我会检查",
+        "让我看看",
+        "正在检查",
+        "我查一下",
+        # Japanese
+        "確認します",
+        "調べます",
+        "見てみます",
+        "確認してみます",
+        # Korean
+        "확인하겠습니다",
+        "확인해볼게요",
+        "확인해 보겠습니다",
+        # Nordic languages
+        "jag kontrollerar",
+        "jag ska kontrollera",
+        "jag kollar",
+        "låt mig kontrollera",
+        "jeg sjekker",
+        "jeg skal sjekke",
+        "la meg sjekke",
+        "jeg tjekker",
+        "jeg vil tjekke",
+        "lad mig tjekke",
+        # Finnish, Czech, Greek, Turkish, Filipino
+        "tarkistan",
+        "katson",
+        "zkontroluji",
+        "podívám se",
+        "ověřím",
+        "θα ελέγξω",
+        "ελέγχω",
+        "ας ελέγξω",
+        "θα κοιτάξω",
+        "kontrol edeceğim",
+        "kontrol ediyorum",
+        "bakacağım",
+        "kontrol edeyim",
+        "susuriin ko",
+        "titingnan ko",
+        # Arabic, Hindi
+        "سأتحقق",
+        "سوف أتحقق",
+        "دعني أتحقق",
+        "سأفحص",
+        "سأبحث",
+        "मैं जांच",
+        "मैं जाँच",
+        "मैं देख",
+        "जांचता हूँ",
+        "जाँचता हूँ",
+        "देखता हूँ",
+    )
 )
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
@@ -3187,7 +3294,13 @@ class MCPAssistConversationEntity(ConversationEntity):
         text = re.sub(r"\s+", " ", str(response_text or "")).strip()
         if not text or len(text) > 240 or "?" in text:
             return False
-        return any(pattern.search(text) for pattern in TOOLLESS_RESPONSE_PATTERNS)
+        if any(pattern.search(text) for pattern in TOOLLESS_RESPONSE_PATTERNS):
+            return True
+        normalized = text.casefold().strip(" \t\r\n.,!;:…。！？¡¿")
+        return any(
+            normalized.startswith(prefix)
+            for prefix in TOOLLESS_RESPONSE_PREFIXES
+        )
 
     def _should_retry_toolless_response(
         self,

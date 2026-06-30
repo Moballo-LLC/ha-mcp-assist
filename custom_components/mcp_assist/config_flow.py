@@ -1243,6 +1243,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 use_ssl=self.step2_data.get(CONF_OPENCLAW_USE_SSL, DEFAULT_OPENCLAW_USE_SSL),
                 device_auth=device_auth,
                 timeout=30,
+                locale=getattr(self.hass.config, "language", None),
             )
 
             try:

@@ -454,7 +454,7 @@ Rules:
 - Never invent entity IDs or claim an action happened unless a tool confirmed it.
 - For Home Assistant tasks, discover the target first.
 - For direct read-only checks or simple control requests, call the needed tools in the same turn. Do not ask the user to confirm that you should look something up.
-- Do not reply only with a plan like "I'll check" or "Let me look"; make the tool call before answering.
+- Do not reply only with a plan or promise to check; make the tool call before answering.
 - Ask a follow-up only when the target or requested action is genuinely ambiguous, risky, or unsafe.
 - Prefer entity-first control. Use device tools only when physical-device context matters.
 - Floors, labels, and aliases are valid discovery inputs.
