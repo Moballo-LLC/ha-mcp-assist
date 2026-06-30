@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Místní port používaný sdíleným serverem MCP.",
           "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
-          "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace."
+          "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace. Zadejte FFFF, aby se při uložení vygeneroval nový token."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Nastavte sdílený MCP listener, seznam povolených IP adres a ověřování bearer tokenem.",
+            "data": {
+              "mcp_port": "Port MCP serveru",
+              "allowed_ips": "Dalsi povolene IP/rozsahy",
+              "mcp_bearer_token": "Bearer token MCP"
+            },
+            "data_description": {
+              "mcp_port": "Místní port používaný sdíleným serverem MCP.",
+              "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
+              "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace. Zadejte FFFF, aby se při uložení vygeneroval nový token."
+            }
+          },
           "context": {
             "name": "Kontext",
             "description": "Ovládejte, které podrobnosti o identitě a umístění Home Assistant jsou zahrnuty do výzev AI a užitečných zatížení volání nástroje MCP.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "Most LLM API",
               "enable_memory_tools": "Paměť",
-              "memory_default_ttl_days": "Výchozí paměť TTL (dny)",
-              "memory_max_ttl_days": "Maximální paměť TTL (dny)",
-              "memory_max_items": "Max uložených vzpomínek",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Přečtěte si URL",
               "enable_recorder_tools": "Historie rekordéru",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Vystavte nástroje pro vyhledávání Google Places a Google Routes. Vyžaduje klíč Google Maps API.",
               "enable_llm_api_bridge": "Vystavte seznam povolených třetích stran Home Assistant LLM API registrovaných jinými integracemi.",
               "enable_memory_tools": "Vystavte nástroje sdílené trvalé paměti, aby si asistent mohl zapamatovat, vyvolat a zapomenout uživatelsky schválená fakta a preference s vypršením platnosti na základě TTL.",
-              "memory_default_ttl_days": "Výchozí počet dní, po které je nová paměť uchovávána, když volání nástroje neposkytuje ttl_days.",
-              "memory_max_ttl_days": "Maximální počet dní, po které může být uložená paměť zachována.",
-              "memory_max_items": "Horní hranice aktivních uložených pamětí. Při překročení tohoto limitu jsou nejdříve ořezány nejstarší paměti.",
               "enable_music_assistant_support": "Vystavte nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
               "enable_read_url_tool": "Vystavte čtení URL, aby asistent mohl zkontrolovat konkrétní webové stránky.",
               "enable_recorder_tools": "Odhalte historii, analýzu a nástroje pro konkrétní okamžiky podporovanou rekordérem.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Místní port používaný sdíleným serverem MCP.",
           "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
-          "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace."
+          "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace. Zadejte FFFF, aby se při uložení vygeneroval nový token."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Nastavte sdílený MCP listener, seznam povolených IP adres a ověřování bearer tokenem.",
+            "data": {
+              "mcp_port": "Port MCP serveru",
+              "allowed_ips": "Dalsi povolene IP/rozsahy",
+              "mcp_bearer_token": "Bearer token MCP"
+            },
+            "data_description": {
+              "mcp_port": "Místní port používaný sdíleným serverem MCP.",
+              "allowed_ips": "Volitelné čárkami oddělené IP adresy nebo rozsahy CIDR, které lze připojit navíc k localhost.",
+              "mcp_bearer_token": "Volitelný bearer token vyžadovaný externími klienty MCP. Nová nastavení získají vygenerovaný token; toto pole vymažte jen tehdy, pokud záměrně chcete povolit přístup pouze podle IP adres bez bearer autentizace. Zadejte FFFF, aby se při uložení vygeneroval nový token."
+            }
+          },
           "context": {
             "name": "Kontext",
             "description": "Ovládejte, které podrobnosti o identitě a umístění Home Assistant jsou zahrnuty do výzev AI a užitečných zatížení volání nástroje MCP.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "Most LLM API",
               "enable_memory_tools": "Paměť",
-              "memory_default_ttl_days": "Výchozí paměť TTL (dny)",
-              "memory_max_ttl_days": "Maximální paměť TTL (dny)",
-              "memory_max_items": "Max uložených vzpomínek",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Přečtěte si URL",
               "enable_recorder_tools": "Historie rekordéru",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Vystavte nástroje pro vyhledávání Google Places a Google Routes. Vyžaduje klíč Google Maps API.",
               "enable_llm_api_bridge": "Vystavte seznam povolených třetích stran Home Assistant LLM API registrovaných jinými integracemi.",
               "enable_memory_tools": "Vystavte nástroje sdílené trvalé paměti, aby si asistent mohl zapamatovat, vyvolat a zapomenout uživatelsky schválená fakta a preference s vypršením platnosti na základě TTL.",
-              "memory_default_ttl_days": "Výchozí počet dní, po které je nová paměť uchovávána, když volání nástroje neposkytuje ttl_days.",
-              "memory_max_ttl_days": "Maximální počet dní, po které může být uložená paměť zachována.",
-              "memory_max_items": "Horní hranice aktivních uložených pamětí. Při překročení tohoto limitu jsou nejdříve ořezány nejstarší paměti.",
               "enable_music_assistant_support": "Vystavte nástroje pro vyhledávání, frontu, knihovnu a přehrávání Music Assistant.",
               "enable_read_url_tool": "Vystavte čtení URL, aby asistent mohl zkontrolovat konkrétní webové stránky.",
               "enable_recorder_tools": "Odhalte historii, analýzu a nástroje pro konkrétní okamžiky podporovanou rekordérem.",

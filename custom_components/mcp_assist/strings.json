@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
           "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configure the shared MCP listener, IP allowlist, and bearer-token authentication.",
+            "data": {
+              "mcp_port": "MCP Server Port",
+              "allowed_ips": "Additional Allowed IPs/Ranges",
+              "mcp_bearer_token": "MCP Bearer Token"
+            },
+            "data_description": {
+              "mcp_port": "The local port used by the shared MCP server.",
+              "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
+              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+            }
+          },
           "context": {
             "name": "Context",
             "description": "Control which Home Assistant identity and location details are included in AI prompts and MCP tool-call payloads.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Memory",
-              "memory_default_ttl_days": "Default Memory TTL (Days)",
-              "memory_max_ttl_days": "Max Memory TTL (Days)",
-              "memory_max_items": "Max Stored Memories",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Read URL",
               "enable_recorder_tools": "Recorder History",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Expose Google Places lookup and Google Routes travel-time tools. Requires a Google Maps API key.",
               "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
               "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
-              "memory_default_ttl_days": "Default number of days a new memory is kept when the tool call does not provide ttl_days.",
-              "memory_max_ttl_days": "Maximum number of days any stored memory may be retained.",
-              "memory_max_items": "Upper bound on active stored memories. Oldest memories are pruned first when this limit is exceeded.",
               "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
               "enable_read_url_tool": "Expose URL reading so the assistant can inspect specific web pages.",
               "enable_recorder_tools": "Expose recorder-backed history, analysis, and point-in-time tools.",
@@ -366,7 +374,6 @@
           "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Ollama Keep Alive",
           "ollama_num_ctx": "Ollama Context Window",
-          "clean_responses": "Clean Responses for Voice Output",
           "openclaw_host": "Gateway Host",
           "openclaw_port": "Gateway Port",
           "openclaw_token": "Gateway Token",
@@ -541,9 +548,23 @@
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
           "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth."
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Configure the shared MCP listener, IP allowlist, and bearer-token authentication.",
+            "data": {
+              "mcp_port": "MCP Server Port",
+              "allowed_ips": "Additional Allowed IPs/Ranges",
+              "mcp_bearer_token": "MCP Bearer Token"
+            },
+            "data_description": {
+              "mcp_port": "The local port used by the shared MCP server.",
+              "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
+              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+            }
+          },
           "context": {
             "name": "Context",
             "description": "Control which Home Assistant identity and location details are included in AI prompts and MCP tool-call payloads.",
@@ -597,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Memory",
-              "memory_default_ttl_days": "Default Memory TTL (Days)",
-              "memory_max_ttl_days": "Max Memory TTL (Days)",
-              "memory_max_items": "Max Stored Memories",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Read URL",
               "enable_recorder_tools": "Recorder History",
@@ -624,9 +642,6 @@
               "enable_google_maps_tools": "Expose Google Places lookup and Google Routes travel-time tools. Requires a Google Maps API key.",
               "enable_llm_api_bridge": "Expose allowlisted third-party Home Assistant LLM APIs registered by other integrations.",
               "enable_memory_tools": "Expose shared persisted memory tools so the assistant can remember, recall, and forget user-approved facts and preferences with TTL-based expiry.",
-              "memory_default_ttl_days": "Default number of days a new memory is kept when the tool call does not provide ttl_days.",
-              "memory_max_ttl_days": "Maximum number of days any stored memory may be retained.",
-              "memory_max_items": "Upper bound on active stored memories. Oldest memories are pruned first when this limit is exceeded.",
               "enable_music_assistant_support": "Expose Music Assistant search, queue, library, and playback tools.",
               "enable_read_url_tool": "Expose URL reading so the assistant can inspect specific web pages.",
               "enable_recorder_tools": "Expose recorder-backed history, analysis, and point-in-time tools.",

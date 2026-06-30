@@ -127,7 +127,7 @@ Shared settings apply to all profiles:
 | --- | --- |
 | MCP Server Port | The HTTP/WebSocket MCP server port, default `8090` |
 | Additional Allowed IPs/Ranges | Extra clients allowed to connect to the MCP server |
-| MCP Bearer Token | Optional token external MCP clients must send as `Authorization: Bearer <token>` |
+| MCP Bearer Token | Optional token external MCP clients must send as `Authorization: Bearer <token>`. Enter `FFFF` and save to generate a replacement token. |
 | Smart Entity Index | Compact Home Assistant structure index and gap-filling behavior |
 | Max Entities Per Discovery | Upper bound for a single discovery result |
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |

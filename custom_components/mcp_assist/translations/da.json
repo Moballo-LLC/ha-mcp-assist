@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
           "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse."
+          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse. Indtast FFFF for at generere et nyt token, når du gemmer."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurer den delte MCP-lytter, listen over tilladte IP-adresser og bearer-token-godkendelse.",
+            "data": {
+              "mcp_port": "MCP-serverport",
+              "allowed_ips": "Yderligere tilladte IP'er/omraader",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
+              "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
+              "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse. Indtast FFFF for at generere et nyt token, når du gemmer."
+            }
+          },
           "context": {
             "name": "kontekst",
             "description": "Kontroller, hvilke Home Assistant-identitets- og placeringsdetaljer, der er inkluderet i AI-prompter og MCP-værktøjsopkaldsnyttelast.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Hukommelse",
-              "memory_default_ttl_days": "Standardhukommelse TTL (dage)",
-              "memory_max_ttl_days": "Maks. hukommelse TTL (dage)",
-              "memory_max_items": "Max lagrede hukommelser",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Læs URL",
               "enable_recorder_tools": "Optagerhistorik",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Vis Google Places opslag og Google Routes rejsetidsværktøjer. Kræver en Google Maps API nøgle.",
               "enable_llm_api_bridge": "Vis godkendte tredjeparts Home Assistant LLM API'er, der er registreret af andre integrationer.",
               "enable_memory_tools": "Vis værktøjer til delt vedvarende hukommelse, så assistenten kan huske, huske og glemme brugergodkendte fakta og præferencer med TTL-baseret udløb.",
-              "memory_default_ttl_days": "Standard antal dage, en ny hukommelse opbevares, når værktøjskaldet ikke leverer ttl_days.",
-              "memory_max_ttl_days": "Maksimalt antal dage, en hvilken som helst lagret hukommelse kan bevares.",
-              "memory_max_items": "Øvre grænse for aktive lagrede hukommelser. Ældste minder beskæres først, når denne grænse overskrides.",
               "enable_music_assistant_support": "Vis Music Assistant søge-, kø-, biblioteks- og afspilningsværktøjer.",
               "enable_read_url_tool": "Udvis URL-læsning, så assistenten kan inspicere specifikke websider.",
               "enable_recorder_tools": "Afslør optagerstøttet historie, analyse og punkt-i-tidsværktøjer.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
           "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse."
+          "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse. Indtast FFFF for at generere et nyt token, når du gemmer."
         },
         "sections": {
+          "server": {
+            "name": "Server",
+            "description": "Konfigurer den delte MCP-lytter, listen over tilladte IP-adresser og bearer-token-godkendelse.",
+            "data": {
+              "mcp_port": "MCP-serverport",
+              "allowed_ips": "Yderligere tilladte IP'er/omraader",
+              "mcp_bearer_token": "MCP Bearer-token"
+            },
+            "data_description": {
+              "mcp_port": "Den lokale port, der bruges af den delte MCP-server.",
+              "allowed_ips": "Valgfri kommaseparerede IP-adresser eller CIDR-områder, der kan forbindes ud over localhost.",
+              "mcp_bearer_token": "Valgfri bearer-token, som kræves af eksterne MCP-klienter. Nye opsætninger får en genereret token; ryd kun dette felt, hvis du bevidst vil bruge IP-tilladelsesliste uden bearer-godkendelse. Indtast FFFF for at generere et nyt token, når du gemmer."
+            }
+          },
           "context": {
             "name": "kontekst",
             "description": "Kontroller, hvilke Home Assistant-identitets- og placeringsdetaljer, der er inkluderet i AI-prompter og MCP-værktøjsopkaldsnyttelast.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "LLM API Bridge",
               "enable_memory_tools": "Hukommelse",
-              "memory_default_ttl_days": "Standardhukommelse TTL (dage)",
-              "memory_max_ttl_days": "Maks. hukommelse TTL (dage)",
-              "memory_max_items": "Max lagrede hukommelser",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Læs URL",
               "enable_recorder_tools": "Optagerhistorik",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Vis Google Places opslag og Google Routes rejsetidsværktøjer. Kræver en Google Maps API nøgle.",
               "enable_llm_api_bridge": "Vis godkendte tredjeparts Home Assistant LLM API'er, der er registreret af andre integrationer.",
               "enable_memory_tools": "Vis værktøjer til delt vedvarende hukommelse, så assistenten kan huske, huske og glemme brugergodkendte fakta og præferencer med TTL-baseret udløb.",
-              "memory_default_ttl_days": "Standard antal dage, en ny hukommelse opbevares, når værktøjskaldet ikke leverer ttl_days.",
-              "memory_max_ttl_days": "Maksimalt antal dage, en hvilken som helst lagret hukommelse kan bevares.",
-              "memory_max_items": "Øvre grænse for aktive lagrede hukommelser. Ældste minder beskæres først, når denne grænse overskrides.",
               "enable_music_assistant_support": "Vis Music Assistant søge-, kø-, biblioteks- og afspilningsværktøjer.",
               "enable_read_url_tool": "Udvis URL-læsning, så assistenten kan inspicere specifikke websider.",
               "enable_recorder_tools": "Afslør optagerstøttet historie, analyse og punkt-i-tidsværktøjer.",

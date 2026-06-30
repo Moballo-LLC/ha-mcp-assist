@@ -67,6 +67,8 @@ Clients that cannot set headers for SSE or WebSocket connections may pass
 `access_token=<token>` in the query string. Prefer the header when the client
 supports it, because URLs are easier to copy into logs or screenshots. Clearing
 the token disables bearer-token checks and falls back to IP allowlisting only.
+To rotate the token from shared server settings, enter `FFFF` in the token field
+and save; MCP Assist will replace it with a newly generated token.
 
 Recommendations:
 

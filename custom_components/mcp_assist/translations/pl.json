@@ -211,9 +211,23 @@
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
           "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer."
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
         },
         "sections": {
+          "server": {
+            "name": "Serwer",
+            "description": "Skonfiguruj współdzielony listener MCP, listę dozwolonych adresów IP i uwierzytelnianie tokenem Bearer.",
+            "data": {
+              "mcp_port": "Port serwera MCP",
+              "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
+              "mcp_bearer_token": "Token Bearer MCP"
+            },
+            "data_description": {
+              "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
+              "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
+              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+            }
+          },
           "context": {
             "name": "Kontekst",
             "description": "Kontroluj, które szczegóły tożsamości i lokalizacji Home Assistant mają być uwzględniane w podpowiedziach AI i ładunkach wywołań narzędzi MCP.",
@@ -267,9 +281,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "Mostek LLM API",
               "enable_memory_tools": "Pamięć",
-              "memory_default_ttl_days": "Pamięć domyślna TTL (dni)",
-              "memory_max_ttl_days": "Maksymalna pamięć TTL (dni)",
-              "memory_max_items": "Maksymalna liczba zapisanych wspomnień",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Przeczytaj URL",
               "enable_recorder_tools": "Historia rejestratora",
@@ -293,9 +304,6 @@
               "enable_google_maps_tools": "Udostępnij narzędzia wyszukiwania Google Places i Google Routes czasu podróży. Wymaga klucza Google Maps API.",
               "enable_llm_api_bridge": "Ujawnij listę dozwolonych Home Assistant LLM API innych firm zarejestrowanych przez inne integracje.",
               "enable_memory_tools": "Udostępnij narzędzia współdzielonej pamięci trwałej, aby asystent mógł zapamiętać, przywołać i zapomnieć fakty i preferencje zatwierdzone przez użytkownika z wygaśnięciem opartym na TTL.",
-              "memory_default_ttl_days": "Domyślna liczba dni przechowywania nowej pamięci, gdy wywołanie narzędzia nie udostępnia ttl_days.",
-              "memory_max_ttl_days": "Maksymalna liczba dni przechowywania dowolnej zapisanej pamięci.",
-              "memory_max_items": "Górna granica aktywnych przechowywanych pamięci. Po przekroczeniu tego limitu w pierwszej kolejności usuwane są najstarsze wspomnienia.",
               "enable_music_assistant_support": "Udostępnij narzędzia wyszukiwania, kolejkowania, biblioteki i odtwarzania Music Assistant.",
               "enable_read_url_tool": "Udostępnij odczyt URL, aby asystent mógł sprawdzić określone strony internetowe.",
               "enable_recorder_tools": "Udostępnij historię, analizę i narzędzia oparte na rejestratorach.",
@@ -540,9 +548,23 @@
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
           "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer."
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
         },
         "sections": {
+          "server": {
+            "name": "Serwer",
+            "description": "Skonfiguruj współdzielony listener MCP, listę dozwolonych adresów IP i uwierzytelnianie tokenem Bearer.",
+            "data": {
+              "mcp_port": "Port serwera MCP",
+              "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
+              "mcp_bearer_token": "Token Bearer MCP"
+            },
+            "data_description": {
+              "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
+              "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
+              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+            }
+          },
           "context": {
             "name": "Kontekst",
             "description": "Kontroluj, które szczegóły tożsamości i lokalizacji Home Assistant mają być uwzględniane w podpowiedziach AI i ładunkach wywołań narzędzi MCP.",
@@ -596,9 +618,6 @@
               "enable_google_maps_tools": "Google Places and Routes",
               "enable_llm_api_bridge": "Mostek LLM API",
               "enable_memory_tools": "Pamięć",
-              "memory_default_ttl_days": "Pamięć domyślna TTL (dni)",
-              "memory_max_ttl_days": "Maksymalna pamięć TTL (dni)",
-              "memory_max_items": "Maksymalna liczba zapisanych wspomnień",
               "enable_music_assistant_support": "Music Assistant",
               "enable_read_url_tool": "Przeczytaj URL",
               "enable_recorder_tools": "Historia rejestratora",
@@ -623,9 +642,6 @@
               "enable_google_maps_tools": "Udostępnij narzędzia wyszukiwania Google Places i Google Routes czasu podróży. Wymaga klucza Google Maps API.",
               "enable_llm_api_bridge": "Ujawnij listę dozwolonych Home Assistant LLM API innych firm zarejestrowanych przez inne integracje.",
               "enable_memory_tools": "Udostępnij narzędzia współdzielonej pamięci trwałej, aby asystent mógł zapamiętać, przywołać i zapomnieć fakty i preferencje zatwierdzone przez użytkownika z wygaśnięciem opartym na TTL.",
-              "memory_default_ttl_days": "Domyślna liczba dni przechowywania nowej pamięci, gdy wywołanie narzędzia nie udostępnia ttl_days.",
-              "memory_max_ttl_days": "Maksymalna liczba dni przechowywania dowolnej zapisanej pamięci.",
-              "memory_max_items": "Górna granica aktywnych przechowywanych pamięci. Po przekroczeniu tego limitu w pierwszej kolejności usuwane są najstarsze wspomnienia.",
               "enable_music_assistant_support": "Udostępnij narzędzia wyszukiwania, kolejkowania, biblioteki i odtwarzania Music Assistant.",
               "enable_read_url_tool": "Udostępnij odczyt URL, aby asystent mógł sprawdzić określone strony internetowe.",
               "enable_recorder_tools": "Udostępnij historię, analizę i narzędzia oparte na rejestratorach.",
