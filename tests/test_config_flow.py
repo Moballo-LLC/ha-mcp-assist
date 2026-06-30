@@ -393,8 +393,9 @@ async def test_model_step_always_shows_prompt_fields_without_mode_dropdowns(hass
     ):
         result = await flow.async_step_model()
 
-    assert MODEL_SECTION_KEY in result["data_schema"].schema
-    assert PROMPTS_SECTION_KEY in result["data_schema"].schema
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    assert MODEL_SECTION_KEY in top_level_keys
+    assert PROMPTS_SECTION_KEY in top_level_keys
 
     prompts_section = _schema_section(result["data_schema"], PROMPTS_SECTION_KEY)
     assert isinstance(prompts_section, section)
@@ -624,8 +625,9 @@ async def test_advanced_step_groups_profile_tools_into_checkbox_section(hass) ->
 
     result = await flow.async_step_advanced()
 
-    assert CONVERSATION_SECTION_KEY in result["data_schema"].schema
-    assert PERFORMANCE_SECTION_KEY in result["data_schema"].schema
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    assert CONVERSATION_SECTION_KEY in top_level_keys
+    assert PERFORMANCE_SECTION_KEY in top_level_keys
     performance_section = _schema_section(result["data_schema"], PERFORMANCE_SECTION_KEY)
     tools_section = _schema_section(result["data_schema"], TOOLS_SECTION_KEY)
     assert CONF_CONTEXT_MODE in _section_field_names(performance_section)
