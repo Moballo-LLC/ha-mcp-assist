@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
 
 from custom_components.mcp_assist.discovery import SmartDiscovery
 
@@ -135,6 +138,74 @@ def test_format_smart_results_page_includes_paging_metadata(hass) -> None:
     assert page["items"][0]["entity_id"] == "_summary"
     assert page["items"][0]["next_offset"] == 2
     assert len(page["items"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_area_discovery_honors_entity_type_for_area_and_floor(hass) -> None:
+    """Legacy entity_type should still narrow area and floor discovery."""
+    floor_registry = fr.async_get(hass)
+    upstairs = floor_registry.async_create("Upstairs")
+    area_registry = ar.async_get(hass)
+    bedroom = area_registry.async_create("Blue Bedroom", floor_id=upstairs.floor_id)
+    entity_registry = er.async_get(hass)
+
+    light_entry = entity_registry.async_get_or_create(
+        "light",
+        "test",
+        "upstairs_lamp",
+        suggested_object_id="upstairs_lamp",
+    )
+    binary_sensor_entry = entity_registry.async_get_or_create(
+        "binary_sensor",
+        "test",
+        "upstairs_motion",
+        suggested_object_id="upstairs_motion",
+    )
+    entity_registry.async_update_entity(light_entry.entity_id, area_id=bedroom.id)
+    entity_registry.async_update_entity(binary_sensor_entry.entity_id, area_id=bedroom.id)
+    hass.states.async_set(
+        "light.upstairs_lamp",
+        "on",
+        {"friendly_name": "Upstairs Lamp"},
+    )
+    hass.states.async_set(
+        "binary_sensor.upstairs_motion",
+        "on",
+        {"friendly_name": "Upstairs Motion"},
+    )
+
+    discovery = SmartDiscovery(hass)
+
+    with patch(
+        "custom_components.mcp_assist.discovery.async_should_expose",
+        return_value=True,
+    ):
+        floor_page = await discovery.discover_entities_page(
+            entity_type="light",
+            area="upstairs",
+            limit=20,
+        )
+        area_page = await discovery.discover_entities_page(
+            entity_type="light",
+            area="Blue Bedroom",
+            limit=20,
+        )
+
+    floor_entity_ids = [
+        entity["entity_id"]
+        for entity in floor_page["items"]
+        if entity["entity_id"] != "_summary"
+    ]
+    area_entity_ids = [
+        entity["entity_id"]
+        for entity in area_page["items"]
+        if entity["entity_id"] != "_summary"
+    ]
+
+    assert floor_entity_ids == ["light.upstairs_lamp"]
+    assert floor_page["total_found"] == 1
+    assert area_entity_ids == ["light.upstairs_lamp"]
+    assert area_page["total_found"] == 1
 
 
 @pytest.mark.asyncio
