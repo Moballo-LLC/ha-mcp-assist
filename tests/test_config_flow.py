@@ -195,6 +195,28 @@ SHARED_MEMORY_SECTION_ORDER = [
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
 ]
+CONFIG_STRINGS_PATH = Path("custom_components/mcp_assist/strings.json")
+TRANSLATION_DIR = Path("custom_components/mcp_assist/translations")
+
+
+def _config_string_paths(data: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
+    """Return leaf translation paths from a config string tree."""
+    if isinstance(data, dict):
+        paths: set[tuple[str, ...]] = set()
+        for key, value in data.items():
+            paths.update(_config_string_paths(value, (*prefix, key)))
+        return paths
+
+    return {prefix}
+
+
+def _load_config_strings() -> list[tuple[Path, dict[str, Any]]]:
+    """Load base and localized config string files."""
+    paths = [CONFIG_STRINGS_PATH, *sorted(TRANSLATION_DIR.glob("*.json"))]
+    return [
+        (path, json.loads(path.read_text(encoding="utf-8")))
+        for path in paths
+    ]
 
 
 def _section_field_names(form_section: section) -> set[str]:
@@ -1110,56 +1132,69 @@ def test_optional_tool_family_checkbox_sets_stay_in_sync() -> None:
 
 def test_tool_translations_cover_all_declared_tool_fields() -> None:
     """Shared/profile tool fields should still have labels and descriptions."""
-    strings = json.loads(
-        Path("custom_components/mcp_assist/strings.json").read_text(encoding="utf-8")
+    expected_profile_fields = {
+        PROFILE_DISABLE_FIELD_BY_FAMILY[family]
+        for family in STATIC_TOOL_FAMILY_ALPHABETICAL
+    }
+    expected_server_fields = {
+        CONF_ALLOWED_IPS,
+        CONF_MCP_BEARER_TOKEN,
+        CONF_MCP_PORT,
+    }
+    expected_memory_fields = set(SHARED_MEMORY_SECTION_ORDER)
+    expected_shared_fields = {
+        TOOL_FAMILY_SHARED_SETTINGS[family][0]
+        for family in STATIC_TOOL_FAMILY_ALPHABETICAL
+    }
+    expected_profile_fields.update(
+        _builtin_profile_key(spec.package_id) for spec in BUILTIN_SPECS
     )
-    for root, advanced_step in (("config", "advanced"), ("options", "init")):
-        advanced_tools = strings[root]["step"][advanced_step]["sections"][TOOLS_SECTION_KEY]
-        shared_sections = strings[root]["step"]["mcp_server"]["sections"]
-        shared_server = shared_sections[SERVER_SECTION_KEY]
-        shared_memory = shared_sections[MEMORY_SECTION_KEY]
-        shared_tools = shared_sections[TOOLS_SECTION_KEY]
+    expected_shared_fields.update(
+        _builtin_shared_key(spec.package_id) for spec in BUILTIN_SPECS
+    )
+    expected_shared_fields.update(
+        {
+            CONF_BRAVE_API_KEY,
+            CONF_GOOGLE_MAPS_API_KEY,
+            CONF_LLM_API_ALLOWLIST,
+            CONF_SEARCH_PROVIDER,
+            CONF_SEARXNG_URL,
+        }
+    )
 
-        expected_profile_fields = {
-            PROFILE_DISABLE_FIELD_BY_FAMILY[family]
-            for family in STATIC_TOOL_FAMILY_ALPHABETICAL
-        }
-        expected_server_fields = {
-            CONF_ALLOWED_IPS,
-            CONF_MCP_BEARER_TOKEN,
-            CONF_MCP_PORT,
-        }
-        expected_memory_fields = set(SHARED_MEMORY_SECTION_ORDER)
-        expected_shared_fields = {
-            TOOL_FAMILY_SHARED_SETTINGS[family][0]
-            for family in STATIC_TOOL_FAMILY_ALPHABETICAL
-        }
-        expected_profile_fields.update(
-            _builtin_profile_key(spec.package_id) for spec in BUILTIN_SPECS
-        )
-        expected_shared_fields.update(
-            _builtin_shared_key(spec.package_id) for spec in BUILTIN_SPECS
-        )
-        expected_shared_fields.update(
-            {
-                CONF_BRAVE_API_KEY,
-                CONF_GOOGLE_MAPS_API_KEY,
-                CONF_LLM_API_ALLOWLIST,
-                CONF_SEARCH_PROVIDER,
-                CONF_SEARXNG_URL,
-            }
+    for path, strings in _load_config_strings():
+        for root, advanced_step in (("config", "advanced"), ("options", "init")):
+            advanced_tools = strings[root]["step"][advanced_step]["sections"][
+                TOOLS_SECTION_KEY
+            ]
+            shared_sections = strings[root]["step"]["mcp_server"]["sections"]
+            shared_server = shared_sections[SERVER_SECTION_KEY]
+            shared_memory = shared_sections[MEMORY_SECTION_KEY]
+            shared_tools = shared_sections[TOOLS_SECTION_KEY]
+
+            assert expected_profile_fields <= set(advanced_tools["data"]), path
+            assert expected_profile_fields <= set(advanced_tools["data_description"]), path
+            assert expected_server_fields <= set(shared_server["data"]), path
+            assert expected_server_fields <= set(shared_server["data_description"]), path
+            assert expected_memory_fields <= set(shared_memory["data"]), path
+            assert expected_memory_fields <= set(shared_memory["data_description"]), path
+            assert expected_shared_fields <= set(shared_tools["data"]), path
+            assert expected_shared_fields <= set(shared_tools["data_description"]), path
+            assert expected_memory_fields.isdisjoint(shared_tools["data"]), path
+            assert expected_memory_fields.isdisjoint(shared_tools["data_description"]), path
+
+
+def test_translation_files_match_base_config_string_keys() -> None:
+    """Localized string files should keep all config-flow translation keys."""
+    base_strings = json.loads(CONFIG_STRINGS_PATH.read_text(encoding="utf-8"))
+    base_paths = _config_string_paths(base_strings)
+
+    for path in sorted(TRANSLATION_DIR.glob("*.json")):
+        localized_paths = _config_string_paths(
+            json.loads(path.read_text(encoding="utf-8"))
         )
 
-        assert expected_profile_fields <= set(advanced_tools["data"])
-        assert expected_profile_fields <= set(advanced_tools["data_description"])
-        assert expected_server_fields <= set(shared_server["data"])
-        assert expected_server_fields <= set(shared_server["data_description"])
-        assert expected_memory_fields <= set(shared_memory["data"])
-        assert expected_memory_fields <= set(shared_memory["data_description"])
-        assert expected_shared_fields <= set(shared_tools["data"])
-        assert expected_shared_fields <= set(shared_tools["data_description"])
-        assert expected_memory_fields.isdisjoint(shared_tools["data"])
-        assert expected_memory_fields.isdisjoint(shared_tools["data_description"])
+        assert localized_paths == base_paths, path
 
 
 def test_provider_section_translations_cover_provider_specific_fields() -> None:
