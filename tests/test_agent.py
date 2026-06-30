@@ -1780,6 +1780,32 @@ def test_adaptive_tool_scoring_ignores_generic_entity_terms_for_optional_tools()
     assert score_adaptive_tool_match(delivery_tool, "Any packages today?") > 0
 
 
+def test_adaptive_tool_scoring_keeps_domain_specific_entity_tools() -> None:
+    """Entity-id lookups should still match tools named for that entity domain."""
+    calendar_tool = {
+        "name": "get_calendar_events",
+        "description": "Get calendar events for a Home Assistant calendar entity.",
+        "llmDescription": "Read events from a calendar entity_id.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    delivery_tool = {
+        "name": "morcos_delivery_status",
+        "description": "Answer package/mail status from porch/mailbox sensors.",
+        "llmDescription": "Package/mail status from sensors/history",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(
+        calendar_tool,
+        "What's on calendar.work today?",
+    ) > 0
+    assert match_adaptive_tool_definitions(
+        [delivery_tool, calendar_tool],
+        query="What's on calendar.work today?",
+        limit=2,
+    ) == [calendar_tool]
+
+
 @pytest.mark.asyncio
 async def test_fetch_mcp_tools_sends_shared_bearer_token(
     hass, profile_entry_factory, system_entry_factory, monkeypatch

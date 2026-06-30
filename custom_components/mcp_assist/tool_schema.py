@@ -579,23 +579,29 @@ def _strip_adaptive_url_intents(text: str) -> str:
 
 def _has_adaptive_entity_reference(text: str) -> bool:
     """Return true when text contains an HA entity-id-shaped reference."""
-    if any(
-        _is_adaptive_entity_id_like_host(
-            match.group("host"),
+    return bool(_adaptive_entity_reference_domains(text))
+
+
+def _adaptive_entity_reference_domains(text: str) -> set[str]:
+    """Return HA entity domains referenced by entity-id-shaped text spans."""
+    domains: set[str] = set()
+    for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text):
+        host = match.group("host")
+        if _is_adaptive_entity_id_like_host(
+            host,
             text=text,
             match=match,
-        )
-        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text)
-    ):
-        return True
-    return any(
-        _is_adaptive_entity_id_like_host(
-            match.group("host"),
+        ):
+            domains.add(host.split(".", 1)[0].casefold())
+    for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text):
+        host = match.group("host")
+        if _is_adaptive_entity_id_like_host(
+            host,
             text=text,
             match=match,
-        )
-        for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text)
-    )
+        ):
+            domains.add(host.split(".", 1)[0].casefold())
+    return domains
 
 
 def normalize_adaptive_query_terms(query: str) -> list[str]:
@@ -708,10 +714,12 @@ def score_adaptive_tool_match(
         score += 40
 
     matched_terms: set[str] = set()
+    matched_name_terms: set[str] = set()
     for term in terms:
         if term in name_terms:
             score += 24
             matched_terms.add(term)
+            matched_name_terms.add(term)
         if term in keyword_terms:
             score += 18
             matched_terms.add(term)
@@ -726,10 +734,12 @@ def score_adaptive_tool_match(
             matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
+        entity_domains = _adaptive_entity_reference_domains(normalized_query)
         if (
             matched_terms
             and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
-            and _has_adaptive_entity_reference(normalized_query)
+            and entity_domains
+            and not (matched_name_terms & entity_domains)
         ):
             return 0
         score += 1
