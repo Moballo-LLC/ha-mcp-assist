@@ -207,3 +207,32 @@ async def test_recorder_query_helper_rejects_writes(hass) -> None:
     """Recorder query helper should only expose the read-only path."""
     with pytest.raises(ValueError, match="read-only"):
         await async_recorder_query(hass, "DELETE FROM states")
+
+
+@pytest.mark.asyncio
+async def test_recorder_query_helper_rejects_writes_hidden_behind_ctes(hass) -> None:
+    """Writable statements after or inside CTEs should not pass as read-only."""
+    blocked_sql = [
+        "WITH stale AS (SELECT 1) DELETE FROM states WHERE entity_id = :entity_id",
+        "WITH deleted AS (DELETE FROM states RETURNING *) SELECT * FROM deleted",
+        "WITH stale AS (SELECT 1) UPDATE states SET state = 'off'",
+    ]
+
+    for sql in blocked_sql:
+        with pytest.raises(ValueError, match="read-only"):
+            await async_recorder_query(hass, sql, {"entity_id": "light.example"})
+
+
+def test_read_only_sql_validator_allows_select_ctes_and_ignores_literals() -> None:
+    """Safe SELECT CTEs should still be valid, even with write words in strings."""
+    assert custom_tool_api_module._is_read_only_sql(
+        """
+        WITH recent AS (
+            SELECT state FROM states WHERE entity_id = :entity_id
+        )
+        SELECT * FROM recent
+        """
+    )
+    assert custom_tool_api_module._is_read_only_sql(
+        "SELECT 'delete from states' AS example_text FROM states"
+    )

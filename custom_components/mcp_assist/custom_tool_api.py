@@ -20,6 +20,7 @@ import importlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any, Callable, Mapping, TypeVar
 
@@ -35,6 +36,26 @@ _CURRENT_EXTERNAL_TOOL_CALL_CONTEXT: ContextVar[dict[str, Any] | None] = Context
     default=None,
 )
 _EXTERNAL_SHARED_MODULE_CACHE: dict[str, tuple[int, str]] = {}
+_SQL_VALIDATION_TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[(),;]")
+_SQL_WRITE_KEYWORDS = frozenset(
+    {
+        "alter",
+        "attach",
+        "create",
+        "delete",
+        "detach",
+        "drop",
+        "insert",
+        "merge",
+        "pragma",
+        "reindex",
+        "replace",
+        "truncate",
+        "update",
+        "upsert",
+        "vacuum",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -688,6 +709,119 @@ def _format_datetime_value(value: datetime | date | str | None) -> str | None:
 
 
 def _is_read_only_sql(sql: str) -> bool:
-    stripped = sql.lstrip(" \t\r\n(").lower()
-    first_word = stripped.split(None, 1)[0] if stripped else ""
-    return first_word in {"select", "with"}
+    tokens = _sql_validation_tokens(sql)
+    if not tokens or ";" in tokens or any(token in _SQL_WRITE_KEYWORDS for token in tokens):
+        return False
+
+    start_index = _first_sql_keyword_index(tokens)
+    if start_index is None:
+        return False
+
+    first_word = tokens[start_index]
+    if first_word == "select":
+        return True
+    if first_word != "with":
+        return False
+
+    return _cte_main_statement_keyword(tokens, start_index) == "select"
+
+
+def _sql_validation_tokens(sql: str) -> list[str]:
+    """Tokenize SQL outside comments and quoted strings for safety checks."""
+    sanitized: list[str] = []
+    index = 0
+    length = len(sql)
+    while index < length:
+        char = sql[index]
+        next_char = sql[index + 1] if index + 1 < length else ""
+
+        if char == "-" and next_char == "-":
+            sanitized.append("  ")
+            index += 2
+            while index < length and sql[index] not in "\r\n":
+                sanitized.append(" ")
+                index += 1
+            continue
+
+        if char == "/" and next_char == "*":
+            sanitized.append("  ")
+            index += 2
+            while index < length:
+                if sql[index] == "*" and index + 1 < length and sql[index + 1] == "/":
+                    sanitized.append("  ")
+                    index += 2
+                    break
+                sanitized.append(" ")
+                index += 1
+            continue
+
+        if char in {"'", '"', "`"}:
+            quote = char
+            sanitized.append(" ")
+            index += 1
+            while index < length:
+                if sql[index] == quote:
+                    sanitized.append(" ")
+                    index += 1
+                    if index < length and sql[index] == quote:
+                        sanitized.append(" ")
+                        index += 1
+                        continue
+                    break
+                sanitized.append(" ")
+                index += 1
+            continue
+
+        sanitized.append(char)
+        index += 1
+
+    return [token.lower() for token in _SQL_VALIDATION_TOKEN_RE.findall("".join(sanitized))]
+
+
+def _first_sql_keyword_index(tokens: list[str]) -> int | None:
+    for index, token in enumerate(tokens):
+        if token == "(":
+            continue
+        return index
+    return None
+
+
+def _cte_main_statement_keyword(tokens: list[str], with_index: int) -> str | None:
+    seen_as = False
+    in_body = False
+    completed_body = False
+    depth = 0
+
+    index = with_index + 1
+    if index < len(tokens) and tokens[index] == "recursive":
+        index += 1
+
+    for token in tokens[index:]:
+        if completed_body and depth == 0:
+            if token == ",":
+                seen_as = False
+                completed_body = False
+                continue
+            if token not in {"(", ")"}:
+                return token
+
+        if token == "as" and depth == 0:
+            seen_as = True
+            continue
+
+        if token == "(":
+            if seen_as and depth == 0:
+                in_body = True
+            depth += 1
+            continue
+
+        if token == ")":
+            if depth <= 0:
+                return None
+            depth -= 1
+            if in_body and depth == 0:
+                in_body = False
+                completed_body = True
+            continue
+
+    return None
