@@ -33,6 +33,22 @@ from homeassistant.helpers import (
 from homeassistant.helpers.entity_registry import EVENT_ENTITY_REGISTRY_UPDATED
 from homeassistant.components.homeassistant import async_should_expose
 
+from .const import (
+    CONF_PROFILE_NAME,
+    CONF_SERVER_TYPE,
+    DOMAIN,
+    SERVER_TYPE_ANTHROPIC,
+    SERVER_TYPE_GEMINI,
+    SERVER_TYPE_LLAMACPP,
+    SERVER_TYPE_LMSTUDIO,
+    SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENAI,
+    SERVER_TYPE_OPENCLAW,
+    SERVER_TYPE_OPENROUTER,
+    SERVER_TYPE_VLLM,
+    SYSTEM_ENTRY_UNIQUE_ID,
+)
+
 try:
     from homeassistant.helpers import floor_registry as fr
 except ImportError:  # pragma: no cover - older Home Assistant versions
@@ -44,6 +60,19 @@ except ImportError:  # pragma: no cover - older Home Assistant versions
     lr = None
 
 _LOGGER = logging.getLogger(__name__)
+
+INDEX_GAP_FILLING_PROVIDER_PRIORITY = {
+    SERVER_TYPE_OPENAI: 0,
+    SERVER_TYPE_ANTHROPIC: 1,
+    SERVER_TYPE_GEMINI: 2,
+    SERVER_TYPE_OPENROUTER: 3,
+    SERVER_TYPE_VLLM: 20,
+    SERVER_TYPE_LMSTUDIO: 21,
+    SERVER_TYPE_LLAMACPP: 22,
+    SERVER_TYPE_OLLAMA: 23,
+    SERVER_TYPE_OPENCLAW: 100,
+}
+INDEX_GAP_FILLING_UNKNOWN_DIRECT_PROVIDER_PRIORITY = 50
 
 
 class IndexManager:
@@ -949,32 +978,125 @@ Focus on meaningful categories that would help discover relevant entities for us
         Raises:
             Exception: If LLM call fails or response cannot be parsed
         """
-        from .const import DOMAIN, SYSTEM_ENTRY_UNIQUE_ID
-
         domain_data = self.hass.data.get(DOMAIN, {})
-        agent = None
+        direct_agents: list[tuple[Any, Any]] = []
+        openclaw_agents: list[tuple[Any, Any]] = []
+        last_error: Exception | None = None
         for candidate in self.hass.config_entries.async_entries(DOMAIN):
             if candidate.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
                 continue
             agent_data = domain_data.get(candidate.entry_id, {})
             candidate_agent = agent_data.get("agent")
-            if candidate_agent:
-                agent = candidate_agent
-                break
+            if not candidate_agent:
+                continue
 
-        if agent is None:
-            raise ValueError("No profile agent found for LLM inference")
+            if candidate.data.get(CONF_SERVER_TYPE) == SERVER_TYPE_OPENCLAW:
+                openclaw_agents.append((candidate, candidate_agent))
+                continue
 
-        _LOGGER.debug("Calling LLM for entity type inference without tools...")
+            direct_agents.append((candidate, candidate_agent))
+
+        direct_agents.sort(key=lambda item: self._gap_filling_profile_sort_key(item[0]))
+        openclaw_agents.sort(key=lambda item: self._gap_filling_profile_sort_key(item[0]))
+
+        for candidate, agent in direct_agents:
+            try:
+                response_text = await self._call_direct_agent_for_inference(
+                    candidate,
+                    agent,
+                    prompt,
+                )
+                return self._parse_inferred_types(response_text)
+            except Exception as err:
+                last_error = err
+                _LOGGER.debug(
+                    "LLM inference failed for profile %s: %s",
+                    candidate.entry_id,
+                    err,
+                )
+
+        for candidate, agent in openclaw_agents:
+            try:
+                response_text = await self._call_openclaw_agent_for_inference(
+                    candidate,
+                    agent,
+                    prompt,
+                )
+                return self._parse_inferred_types(response_text)
+            except Exception as err:
+                last_error = err
+                _LOGGER.debug(
+                    "OpenClaw LLM inference failed for profile %s: %s",
+                    candidate.entry_id,
+                    err,
+                )
+
+        if last_error is not None:
+            raise ValueError("No profile agent could complete LLM inference") from last_error
+        raise ValueError("No profile agent found for LLM inference")
+
+    @staticmethod
+    def _gap_filling_profile_sort_key(entry: Any) -> tuple[int, str, str]:
+        """Return a deterministic auto-rank key for shared index inference."""
+        server_type = str(entry.data.get(CONF_SERVER_TYPE) or "")
+        provider_priority = INDEX_GAP_FILLING_PROVIDER_PRIORITY.get(
+            server_type,
+            INDEX_GAP_FILLING_UNKNOWN_DIRECT_PROVIDER_PRIORITY,
+        )
+        profile_name = str(entry.data.get(CONF_PROFILE_NAME) or entry.title or "")
+        return (provider_priority, profile_name.casefold(), str(entry.entry_id))
+
+    async def _call_direct_agent_for_inference(
+        self,
+        entry: Any,
+        agent: Any,
+        prompt: str,
+    ) -> str:
+        """Call a direct HTTP-backed profile for index inference."""
+        _LOGGER.debug(
+            "Calling LLM for entity type inference without tools: profile=%s",
+            entry.entry_id,
+        )
         response_text = await agent.async_call_llm_without_tools(
             [{"role": "user", "content": prompt}],
             transport="index_gap_filling",
         )
         if not response_text:
             raise ValueError("Empty response from LLM")
+        return response_text
 
-        # Parse JSON from response
-        return self._parse_inferred_types(response_text)
+    async def _call_openclaw_agent_for_inference(
+        self,
+        entry: Any,
+        agent: Any,
+        prompt: str,
+    ) -> str:
+        """Call an OpenClaw profile through its conversation transport."""
+        from homeassistant.components import conversation
+        from homeassistant.core import Context
+
+        conversation_input = conversation.ConversationInput(
+            text=prompt,
+            context=Context(),
+            conversation_id=None,
+            device_id=None,
+            satellite_id=None,
+            language="en",
+            agent_id=entry.entry_id,
+        )
+
+        _LOGGER.debug(
+            "Calling OpenClaw profile for entity type inference: profile=%s",
+            entry.entry_id,
+        )
+        response = await agent.async_process(conversation_input)
+        if not response or not response.response:
+            raise ValueError("Empty response from LLM")
+
+        response_text = response.response.speech.get("plain", {}).get("speech", "")
+        if not response_text:
+            raise ValueError("No speech in LLM response")
+        return response_text
 
     def _parse_inferred_types(self, response_text: str) -> Dict[str, Any]:
         """Parse LLM response into structured inferred types.
