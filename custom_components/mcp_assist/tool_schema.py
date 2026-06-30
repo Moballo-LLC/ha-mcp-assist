@@ -143,12 +143,16 @@ ADAPTIVE_BARE_DOMAIN_TLDS = frozenset(
         "us",
     }
 )
+ADAPTIVE_BARE_DOMAIN_TLD_PATTERN = "|".join(
+    sorted(ADAPTIVE_BARE_DOMAIN_TLDS, key=lambda tld: (-len(tld), tld))
+)
 ADAPTIVE_URL_INTENT_RE = re.compile(
     r"https?://\S+"
     r"|(?<!@)\bwww\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
     r"(?::\d{2,5})?(?:/[^\s]*)?"
     r"|(?<![@.])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-    r"(?:" + "|".join(sorted(ADAPTIVE_BARE_DOMAIN_TLDS)) + r")"
+    r"(?:" + ADAPTIVE_BARE_DOMAIN_TLD_PATTERN + r")"
+    r"(?=$|[^a-z0-9_-])"
     r"(?::\d{2,5})?(?:/[^\s]*)?",
     flags=re.IGNORECASE,
 )

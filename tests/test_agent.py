@@ -1558,6 +1558,18 @@ def test_adaptive_query_terms_expand_unicode_aliases() -> None:
     assert "url" in normalize_adaptive_query_terms(
         "read www.example.com/docs"
     )
+    assert "url" in normalize_adaptive_query_terms(
+        "Summarize docs.example.co.uk."
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "What is sensor.compressor_power?"
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "Show switch.network_status"
+    )
+    assert "url" not in normalize_adaptive_query_terms(
+        "Check sensor.organic_voc"
+    )
 
 
 def test_adaptive_query_terms_match_count_aliases_on_tokens() -> None:
@@ -1707,6 +1719,23 @@ def test_adaptive_tool_scoring_prefers_read_url_for_bare_domains() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["read_url"]
+
+
+def test_adaptive_tool_scoring_ignores_entity_ids_with_domain_like_prefixes() -> None:
+    """HA entity IDs should not trigger URL-reading tools via dotted object IDs."""
+    read_tool = {
+        "name": "read_url",
+        "description": "Read and summarize a web page URL.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    for query in (
+        "What is sensor.compressor_power?",
+        "Show switch.network_status",
+        "Check sensor.organic_voc",
+    ):
+        assert score_adaptive_tool_match(read_tool, query) == 0
+        assert match_adaptive_tool_definitions([read_tool], query=query, limit=1) == []
 
 
 @pytest.mark.asyncio
