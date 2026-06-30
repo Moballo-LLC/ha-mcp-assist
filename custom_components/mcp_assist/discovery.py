@@ -253,7 +253,7 @@ class SmartDiscovery:
             )
         elif area and not floor and not label and not device_class and not name_pattern and not inferred_type:
             return await self._discover_area_entities_page(
-                area, domain, state, limit, offset
+                area, entity_type, domain, state, limit, offset
             )
         else:
             # Fall back to general discovery (handles device_class, name_pattern, and inferred_type)
@@ -1191,15 +1191,29 @@ class SmartDiscovery:
         return self._format_smart_results_page(results, limit, offset)
 
     async def _discover_area_entities(
-        self, area: str, domain: Optional[str], state: Optional[str], limit: int, offset: int = 0
+        self,
+        area: str,
+        entity_type: Optional[str],
+        domain: Optional[str],
+        state: Optional[str],
+        limit: int,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """Discover entities in a specific area with smart grouping."""
         return (
-            await self._discover_area_entities_page(area, domain, state, limit, offset)
+            await self._discover_area_entities_page(
+                area, entity_type, domain, state, limit, offset
+            )
         )["items"]
 
     async def _discover_area_entities_page(
-        self, area: str, domain: Optional[str], state: Optional[str], limit: int, offset: int = 0
+        self,
+        area: str,
+        entity_type: Optional[str],
+        domain: Optional[str],
+        state: Optional[str],
+        limit: int,
+        offset: int = 0,
     ) -> Dict[str, Any]:
         """Discover entities in a specific area with smart grouping and paging."""
         area_registry = ar.async_get(self.hass)
@@ -1222,7 +1236,7 @@ class SmartDiscovery:
             floor_entry = self._resolve_floor_entry(area, floor_registry)
             if floor_entry:
                 return await self._discover_general_entities_page(
-                    entity_type=None,
+                    entity_type=entity_type,
                     area=None,
                     floor=floor_entry.name,
                     label=None,
@@ -1269,6 +1283,10 @@ class SmartDiscovery:
             # Apply domain filter
             entity_domain = entity_id.split(".")[0]
             if domain and entity_domain != domain:
+                continue
+
+            # Apply legacy entity_type filter
+            if entity_type and entity_domain != entity_type:
                 continue
 
             # Apply state filter
