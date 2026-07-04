@@ -1,7 +1,8 @@
-# Mirrors custom_components/mcp_assist/manifest.json requirements so Dependabot
-# can see the integration's runtime dependency surface.
-aiohttp>=3.14.1
-pyyaml>=6.0.3
+# Mirrors custom_components/mcp_assist/manifest.json requirements for Dependabot
+# visibility only. Keep these no stricter than the manifest so this mirror does
+# not narrow the Home Assistant compatibility window by accident.
+aiohttp>=3.8.0
+pyyaml>=6.0
 ddgs>=6.0.0
-websockets>=16.0
-cryptography>=49.0.0
+websockets>=12.0
+cryptography>=41.0.0

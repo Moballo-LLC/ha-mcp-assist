@@ -12,16 +12,36 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     groups:
+      ha-test-harness:
+        applies-to: "version-updates"
+        patterns:
+          - "pytest-homeassistant-custom-component"
+          - "voluptuous-openapi"
+          - "hassil"
+          - "home-assistant-intents"
+        update-types:
+          - "minor"
+          - "patch"
       python-minor-updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        exclude-patterns:
+          - "pytest-homeassistant-custom-component"
+          - "voluptuous-openapi"
+          - "hassil"
+          - "home-assistant-intents"
         update-types:
           - "minor"
       python-patch-updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        exclude-patterns:
+          - "pytest-homeassistant-custom-component"
+          - "voluptuous-openapi"
+          - "hassil"
+          - "home-assistant-intents"
         update-types:
           - "patch"
     open-pull-requests-limit: 5
