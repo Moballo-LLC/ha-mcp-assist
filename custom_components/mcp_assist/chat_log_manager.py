@@ -15,6 +15,10 @@ _STORAGE_VERSION = 1
 _STORAGE_KEY = f"{DOMAIN}_chat_logs"
 _MAX_STRING_CHARS = 12000
 _MAX_COLLECTION_ITEMS = 100
+_MAX_DEPTH = 8
+# Debounce persistence: chat logs are written once per conversation turn and
+# the whole (multi-MB) file is rewritten each time, so coalesce rapid writes.
+_SAVE_DELAY_SECONDS = 15
 
 
 class ChatLogManager:
@@ -36,6 +40,19 @@ class ChatLogManager:
         """Load persisted chat logs."""
         async with self._lock:
             await self._ensure_loaded_locked()
+
+    async def async_shutdown(self) -> None:
+        """Flush any pending debounced save before this manager is dropped.
+
+        On an integration reload/unload the manager is discarded while a
+        delayed save may still be scheduled. Without flushing, a new manager
+        reloads the stale file and the old delayed callback can later overwrite
+        it — losing recent logs or resurrecting cleared ones. Writing now also
+        cancels the pending delayed save inside the Store.
+        """
+        async with self._lock:
+            if self._loaded:
+                await self._store.async_save(self._data_to_save())
 
     async def async_record(
         self,
@@ -113,7 +130,10 @@ class ChatLogManager:
 
             deleted_count = original_count - len(self._entries)
             if deleted_count:
-                await self._save_locked()
+                # Deletion must be durable before we return: a debounced save
+                # would leave cleared (possibly sensitive) logs on disk for the
+                # delay window, and a reload in that gap would resurrect them.
+                await self._save_locked(immediate=True)
 
         return {"deleted_count": deleted_count, "remaining_count": len(self._entries)}
 
@@ -131,9 +151,22 @@ class ChatLogManager:
         ]
         self._loaded = True
 
-    async def _save_locked(self) -> None:
-        """Persist the current chat log list."""
-        await self._store.async_save({"entries": list(self._entries)})
+    async def _save_locked(self, *, immediate: bool = False) -> None:
+        """Persist the current chat log list.
+
+        Record writes are debounced (``async_delay_save``) to avoid rewriting
+        the whole file every turn; Home Assistant flushes any pending delayed
+        save on shutdown, so nothing is lost. Destructive clears pass
+        ``immediate=True`` to make the deletion durable before returning.
+        """
+        if immediate:
+            await self._store.async_save(self._data_to_save())
+        else:
+            self._store.async_delay_save(self._data_to_save, _SAVE_DELAY_SECONDS)
+
+    def _data_to_save(self) -> dict[str, Any]:
+        """Return the payload for the store (read at flush time)."""
+        return {"entries": list(self._entries)}
 
     def _normalize_loaded_record(self, item: Any) -> dict[str, Any] | None:
         """Normalize a loaded record from storage."""
@@ -158,24 +191,45 @@ class ChatLogManager:
         normalized.setdefault("tools", [])
         return normalized
 
-    def _json_safe(self, value: Any) -> Any:
-        """Convert values to a bounded JSON-serializable shape."""
+    def _json_safe(
+        self,
+        value: Any,
+        _depth: int = 0,
+        _ancestors: frozenset[int] = frozenset(),
+    ) -> Any:
+        """Convert values to a bounded JSON-serializable shape.
+
+        Guards against runaway or self-referential structures: nesting is
+        capped at _MAX_DEPTH, and a value that appears in its own ancestry
+        (a cycle) is replaced with a marker instead of recursing forever.
+        """
         if value is None or isinstance(value, (bool, int, float)):
             return value
         if isinstance(value, str):
             return self._truncate_text(value)
-        if isinstance(value, dict):
-            safe_dict: dict[str, Any] = {}
-            for index, (key, item_value) in enumerate(value.items()):
-                if index >= _MAX_COLLECTION_ITEMS:
-                    safe_dict["_truncated_items"] = len(value) - _MAX_COLLECTION_ITEMS
-                    break
-                safe_dict[str(key)] = self._json_safe(item_value)
-            return safe_dict
-        if isinstance(value, (list, tuple, set)):
+
+        if isinstance(value, (dict, list, tuple, set)):
+            if id(value) in _ancestors:
+                return "[circular reference]"
+            if _depth >= _MAX_DEPTH:
+                return f"[max depth {_MAX_DEPTH} exceeded]"
+            child_ancestors = _ancestors | {id(value)}
+            child_depth = _depth + 1
+
+            if isinstance(value, dict):
+                safe_dict: dict[str, Any] = {}
+                for index, (key, item_value) in enumerate(value.items()):
+                    if index >= _MAX_COLLECTION_ITEMS:
+                        safe_dict["_truncated_items"] = len(value) - _MAX_COLLECTION_ITEMS
+                        break
+                    safe_dict[str(key)] = self._json_safe(
+                        item_value, child_depth, child_ancestors
+                    )
+                return safe_dict
+
             sequence = list(value)
             items = [
-                self._json_safe(item)
+                self._json_safe(item, child_depth, child_ancestors)
                 for item in sequence[:_MAX_COLLECTION_ITEMS]
             ]
             if len(sequence) > _MAX_COLLECTION_ITEMS:

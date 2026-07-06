@@ -818,8 +818,14 @@ async def _async_release_mcp_server(hass: HomeAssistant) -> None:
                 await async_stop_index_manager()
             hass.data[DOMAIN].pop("mcp_port", None)
             hass.data[DOMAIN].pop("mcp_refcount", None)
-            hass.data[DOMAIN].pop("chat_log_manager", None)
+            chat_log_manager = hass.data[DOMAIN].get("chat_log_manager")
+            # Flush any pending debounced save so a reload can't reload a stale
+            # file and later have this manager's delayed callback clobber it.
+            async_shutdown_chat_logs = getattr(chat_log_manager, "async_shutdown", None)
+            if callable(async_shutdown_chat_logs):
+                await async_shutdown_chat_logs()
             await _async_unregister_services(hass)
+            hass.data[DOMAIN].pop("chat_log_manager", None)
         else:
             _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
             _rebind_shared_server_entry(hass)
