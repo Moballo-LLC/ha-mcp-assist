@@ -117,7 +117,10 @@ class ChatLogManager:
 
             deleted_count = original_count - len(self._entries)
             if deleted_count:
-                await self._save_locked()
+                # Deletion must be durable before we return: a debounced save
+                # would leave cleared (possibly sensitive) logs on disk for the
+                # delay window, and a reload in that gap would resurrect them.
+                await self._save_locked(immediate=True)
 
         return {"deleted_count": deleted_count, "remaining_count": len(self._entries)}
 
@@ -135,13 +138,18 @@ class ChatLogManager:
         ]
         self._loaded = True
 
-    async def _save_locked(self) -> None:
-        """Persist the current chat log list via a debounced delayed save.
+    async def _save_locked(self, *, immediate: bool = False) -> None:
+        """Persist the current chat log list.
 
-        Home Assistant flushes any pending delayed save on shutdown, so no log
-        is lost; this just avoids rewriting the whole file on every turn.
+        Record writes are debounced (``async_delay_save``) to avoid rewriting
+        the whole file every turn; Home Assistant flushes any pending delayed
+        save on shutdown, so nothing is lost. Destructive clears pass
+        ``immediate=True`` to make the deletion durable before returning.
         """
-        self._store.async_delay_save(self._data_to_save, _SAVE_DELAY_SECONDS)
+        if immediate:
+            await self._store.async_save(self._data_to_save())
+        else:
+            self._store.async_delay_save(self._data_to_save, _SAVE_DELAY_SECONDS)
 
     def _data_to_save(self) -> dict[str, Any]:
         """Return the payload for the store (read at flush time)."""

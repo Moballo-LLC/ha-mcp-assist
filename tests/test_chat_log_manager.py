@@ -138,3 +138,30 @@ async def test_chat_log_manager_bounds_deep_nesting(hass) -> None:
     # Walk down and confirm a max-depth marker appears rather than 50 levels.
     text = str(stored)
     assert "max depth" in text
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_clear_saves_immediately(hass, monkeypatch) -> None:
+    """Clearing logs must flush synchronously, not via the debounced delay."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+    await manager.async_record({"created_at": "1", "conversation_id": "one"})
+
+    immediate_saves: list[dict] = []
+    delayed_saves: list[float] = []
+
+    async def _immediate(data):
+        immediate_saves.append(data)
+
+    monkeypatch.setattr(manager._store, "async_save", _immediate)
+    monkeypatch.setattr(
+        manager._store,
+        "async_delay_save",
+        lambda data_func, delay=0: delayed_saves.append(delay),
+    )
+
+    result = await manager.async_clear()
+
+    assert result["deleted_count"] == 1
+    assert immediate_saves and immediate_saves[0] == {"entries": []}
+    assert delayed_saves == []
