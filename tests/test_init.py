@@ -39,6 +39,7 @@ from custom_components.mcp_assist.const import (
     CONF_MEMORY_DEFAULT_TTL_DAYS,
     CONF_MEMORY_MAX_TTL_DAYS,
     CONF_MEMORY_MAX_ITEMS,
+    CONF_MCP_BEARER_TOKEN,
     CONF_MCP_PORT,
     CONF_PROFILE_NAME,
     CONF_SEARCH_PROVIDER,
@@ -185,6 +186,26 @@ async def test_ensure_system_entry_uses_defaults_without_profiles(hass) -> None:
     assert CONF_MEMORY_DEFAULT_TTL_DAYS in system_entry.data
     assert CONF_MEMORY_MAX_TTL_DAYS in system_entry.data
     assert CONF_MEMORY_MAX_ITEMS in system_entry.data
+
+
+@pytest.mark.asyncio
+async def test_ensure_system_entry_generates_bearer_token_on_self_heal(
+    hass, profile_entry_factory
+) -> None:
+    """A rebuilt system entry must generate a token, not disable auth silently."""
+    # Post-refactor profile that does not persist the shared bearer token.
+    profile_entry_factory(data={CONF_PROFILE_NAME: "Kitchen"})
+
+    async_init = AsyncMock(
+        side_effect=lambda domain, context, data: _mock_system_entry_init(hass, data)
+    )
+    with patch.object(hass.config_entries.flow, "async_init", async_init):
+        system_entry = await ensure_system_entry(hass)
+
+    token = system_entry.data[CONF_MCP_BEARER_TOKEN]
+    # A high-entropy token was generated instead of the empty (auth-off) default.
+    assert isinstance(token, str)
+    assert len(token) >= 20
 
 
 @pytest.mark.asyncio
