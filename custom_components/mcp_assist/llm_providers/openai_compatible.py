@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .base import LLMProvider
+
+# A "-pro" segment either ends the id (o3-pro) or precedes a snapshot date
+# (o3-pro-2025-06-10); both are Responses-API-only.
+_PRO_SEGMENT = re.compile(r"-pro(-|$)")
 
 
 class OpenAICompatibleProvider(LLMProvider):
@@ -71,4 +76,33 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _uses_completion_token_limit(self) -> bool:
         """Return whether the model expects max_completion_tokens."""
-        return self.model_name.startswith(("gpt-5", "o1"))
+        return self.is_reasoning_model(self.model_name)
+
+    @staticmethod
+    def is_reasoning_model(model_name: str) -> bool:
+        """Return whether a model is an OpenAI reasoning model.
+
+        Reasoning models (the o-series ``o1``/``o3``/``o4``… and the GPT-5
+        family) require ``max_completion_tokens`` instead of ``max_tokens`` and
+        reject a non-default ``temperature``, so both are 400 errors otherwise.
+        A provider prefix such as ``openai/o3-mini`` (OpenRouter-style) is
+        stripped before matching.
+        """
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        if name.startswith("gpt-5"):
+            return True
+        # o-series reasoning models are "o" followed by a digit: o1, o3, o4-mini…
+        return len(name) >= 2 and name[0] == "o" and name[1].isdigit()
+
+    @staticmethod
+    def is_responses_only_model(model_name: str) -> bool:
+        """Return whether a model is only served by OpenAI's Responses API.
+
+        The deep-research variants and the o-series ``*-pro`` models — including
+        dated snapshots such as ``o3-pro-2025-06-10`` — are not available on the
+        chat/completions endpoint this transport calls, so they must not be
+        offered for selection even though they otherwise look like reasoning
+        models.
+        """
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        return "deep-research" in name or bool(_PRO_SEGMENT.search(name))
