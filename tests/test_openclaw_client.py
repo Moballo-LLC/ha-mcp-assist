@@ -115,7 +115,7 @@ async def test_receive_loop_end_fails_inflight_waiters(error: Exception | None) 
     run = _AgentRun("run-1")
     client._agent_runs["run-1"] = run
 
-    await client._receive_loop()
+    await client._receive_loop(client._ws)
 
     assert client._connected is False
     assert isinstance(pending.exception(), OpenClawConnectionError)
@@ -123,6 +123,73 @@ async def test_receive_loop_end_fails_inflight_waiters(error: Exception | None) 
     assert run.status == "error"
     assert client._pending_requests == {}
     assert client._agent_runs == {}
+
+
+@pytest.mark.asyncio
+async def test_stale_receive_loop_does_not_touch_new_connection() -> None:
+    """A stale loop from a replaced socket must not disconnect the new one."""
+    client = _make_client()
+    new_ws = object()
+    client._connected = True
+    client._ws = new_ws
+
+    new_pending = asyncio.get_running_loop().create_future()
+    client._pending_requests["new-req"] = new_pending
+    new_run = _AgentRun("new-run")
+    client._agent_runs["new-run"] = new_run
+
+    # The old loop (bound to a since-replaced socket) finally exits.
+    await client._receive_loop(_DyingWs(RuntimeError("old socket died")))
+
+    # The live connection and its in-flight work are untouched.
+    assert client._connected is True
+    assert client._ws is new_ws
+    assert not new_pending.done()
+    assert not new_run.complete_event.is_set()
+    assert "new-req" in client._pending_requests
+    assert "new-run" in client._agent_runs
+
+
+@pytest.mark.asyncio
+async def test_reconnect_tears_down_stale_socket_and_tasks() -> None:
+    """Reconnecting must cancel the previous receive loop and close its socket."""
+    client = _make_client()
+
+    closed = False
+
+    class _OldWs:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            await asyncio.sleep(3600)  # block like a live socket until cancelled
+
+        async def close(self):
+            nonlocal closed
+            closed = True
+
+    old_ws = _OldWs()
+    client._ws = old_ws
+    client._connected = False  # keepalive failure left the socket behind
+    old_receive = asyncio.create_task(client._receive_loop(old_ws))
+    client._receive_task = old_receive
+    await asyncio.sleep(0)  # let the loop start blocking on the old socket
+
+    connected_ws = object()
+
+    async def fake_connect_locked() -> None:
+        # Mirror the real method: tear down the previous connection first.
+        await client._teardown_connection("Reconnecting to OpenClaw Gateway")
+        client._ws = connected_ws
+        client._connected = True
+
+    client._connect_locked = fake_connect_locked
+    await client.connect()
+
+    assert closed is True
+    assert old_receive.cancelled() or old_receive.done()
+    assert client._ws is connected_ws
+    assert client._connected is True
 
 
 @pytest.mark.asyncio

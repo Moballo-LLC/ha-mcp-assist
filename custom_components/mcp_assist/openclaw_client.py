@@ -203,6 +203,12 @@ class OpenClawClient:
         """Connect and complete the handshake; caller holds the connect lock."""
         from websockets.asyncio.client import connect
 
+        # Tear down any previous connection first. A keepalive failure only
+        # flips _connected without closing the socket or cancelling the
+        # receive task, so without this a stale socket and receive loop would
+        # linger past the reconnect.
+        await self._teardown_connection("Reconnecting to OpenClaw Gateway")
+
         # Sanitize host — strip protocol prefixes and trailing slashes
         host = self._host.strip().rstrip("/")
         for prefix in ("https://", "http://", "wss://", "ws://"):
@@ -251,8 +257,9 @@ class OpenClawClient:
 
         self._connected = True
 
-        # Start background tasks
-        self._receive_task = asyncio.create_task(self._receive_loop())
+        # Start background tasks, binding the receive loop to this socket so a
+        # later reconnect can tell a stale loop apart from the live one.
+        self._receive_task = asyncio.create_task(self._receive_loop(self._ws))
         self._keepalive_task = asyncio.create_task(self._keepalive_loop())
 
         _LOGGER.info("✅ Connected to OpenClaw Gateway")
@@ -328,26 +335,39 @@ class OpenClawClient:
     async def disconnect(self) -> None:
         """Disconnect from the OpenClaw Gateway."""
         _LOGGER.info("Disconnecting from OpenClaw Gateway")
+        await self._teardown_connection("Disconnected")
+
+    async def _teardown_connection(self, reason: str) -> None:
+        """Cancel background tasks, close the socket, and fail in-flight work.
+
+        Detaches the current socket/tasks first so a cancelled receive loop
+        sees it no longer owns ``self._ws`` and skips its own cleanup, leaving
+        this method as the single place that fails in-flight work.
+        """
         self._connected = False
+        ws = self._ws
+        keepalive_task = self._keepalive_task
+        receive_task = self._receive_task
+        self._ws = None
+        self._keepalive_task = None
+        self._receive_task = None
 
-        # Cancel background tasks
-        if self._keepalive_task and not self._keepalive_task.done():
-            self._keepalive_task.cancel()
+        current = asyncio.current_task()
+        for task in (keepalive_task, receive_task):
+            if task and task is not current and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        self._fail_inflight(reason)
+
+        if ws is not None:
             try:
-                await self._keepalive_task
-            except asyncio.CancelledError:
+                await ws.close()
+            except Exception:
                 pass
-
-        if self._receive_task and not self._receive_task.done():
-            self._receive_task.cancel()
-            try:
-                await self._receive_task
-            except asyncio.CancelledError:
-                pass
-
-        self._fail_inflight("Disconnected")
-
-        await self._close_ws()
 
     def _fail_inflight(self, reason: str) -> None:
         """Fail pending requests and complete active runs with an error."""
@@ -465,10 +485,10 @@ class OpenClawClient:
 
         return run.summary or run.full_text
 
-    async def _receive_loop(self) -> None:
+    async def _receive_loop(self, ws) -> None:
         """Background task to receive and dispatch WebSocket messages."""
         try:
-            async for raw in self._ws:
+            async for raw in ws:
                 try:
                     msg = json.loads(raw)
                     await self._handle_message(msg)
@@ -481,10 +501,12 @@ class OpenClawClient:
         except Exception as err:
             _LOGGER.warning("WebSocket receive loop ended: %s", err)
         finally:
-            # Fail waiters immediately (on both graceful close and errors)
-            # instead of leaving them to hit their full timeouts.
-            self._connected = False
-            self._fail_inflight("Connection to OpenClaw Gateway lost")
+            # Only tear down shared state if this loop still owns the active
+            # socket. A stale loop whose socket was already replaced by a
+            # reconnect must not disconnect or fail the new connection.
+            if self._ws is ws:
+                self._connected = False
+                self._fail_inflight("Connection to OpenClaw Gateway lost")
 
     async def _handle_message(self, msg: Dict[str, Any]) -> None:
         """Handle an incoming WebSocket message."""
