@@ -556,7 +556,7 @@ def test_openai_filter_model_ids_keeps_reasoning_models() -> None:
 def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
     """Responses-API-only o-series models must not appear in the chat dropdown."""
     filtered = OpenAIProvider.filter_model_ids(
-        ["gpt-4o", "o3", "o3-mini", "o1-pro", "o3-pro", "o3-deep-research", "o4-mini-deep-research"],
+        ["gpt-4o", "o3", "o3-mini", "o1-pro", "o3-pro", "o3-pro-2025-06-10", "o3-deep-research", "o4-mini-deep-research"],
         base_url=OPENAI_BASE_URL,
     )
 
@@ -564,9 +564,10 @@ def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
     assert "o3" in filtered
     assert "o3-mini" in filtered
     assert "gpt-4o" in filtered
-    # Responses-only / deep-research variants are excluded.
+    # Responses-only / deep-research variants (incl. dated snapshots) are excluded.
     assert "o1-pro" not in filtered
     assert "o3-pro" not in filtered
+    assert "o3-pro-2025-06-10" not in filtered
     assert "o3-deep-research" not in filtered
     assert "o4-mini-deep-research" not in filtered
 
@@ -579,9 +580,15 @@ def test_is_responses_only_model_classification() -> None:
     assert is_responses_only("o3-deep-research")
     assert is_responses_only("o4-mini-deep-research")
     assert is_responses_only("openai/o3-pro")
+    # Dated snapshot IDs must also be caught.
+    assert is_responses_only("o3-pro-2025-06-10")
+    assert is_responses_only("o1-pro-2025-03-19")
+    assert is_responses_only("o3-deep-research-2025-06-26")
     assert not is_responses_only("o3")
     assert not is_responses_only("o3-mini")
     assert not is_responses_only("gpt-4o")
+    # "pro" must be a segment, not any substring.
+    assert not is_responses_only("gpt-4-proxy")
 
 
 def test_openai_provider_applies_prompt_cache_key_and_stream_usage() -> None:
