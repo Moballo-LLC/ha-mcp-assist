@@ -225,3 +225,63 @@ def test_early_agent_event_buffer_is_bounded() -> None:
         client._handle_agent_event({"runId": "run-hot", "output": "x"})
 
     assert len(client._early_agent_events["run-hot"]) == client._MAX_EARLY_EVENTS_PER_RUN
+
+
+@pytest.mark.asyncio
+async def test_buffered_completion_survives_connection_loss_and_replays() -> None:
+    """A completion buffered before run registration must survive a socket close.
+
+    Sequence: send_message registers the ack future and sends; the receive loop
+    delivers the ack (resolving the future) and the completion event (buffered,
+    since the run isn't registered yet), then the socket closes. The buffered
+    completion must be preserved so send_message can replay it instead of
+    waiting out the full agent timeout.
+    """
+    client = _make_client()
+    client._connected = True
+    ws = _DyingWs(None)  # yields nothing, then a graceful close
+    client._ws = ws
+
+    ack_future = asyncio.get_running_loop().create_future()
+    client._pending_requests["req-1"] = ack_future
+
+    await client._handle_message(
+        {"type": "res", "id": "req-1", "ok": True, "payload": {"runId": "run-1"}}
+    )
+    client._handle_agent_event({"runId": "run-1", "status": "ok", "summary": "done"})
+    assert "run-1" in client._early_agent_events
+
+    # Socket closes; connection-loss cleanup runs on the owning loop.
+    await client._receive_loop(ws)
+
+    # The ack was delivered (not failed) and the completion is still buffered.
+    assert ack_future.done() and ack_future.exception() is None
+    assert "run-1" in client._early_agent_events
+
+    # send_message now registers the run and replays the buffered events.
+    run = _AgentRun("run-1")
+    client._agent_runs["run-1"] = run
+    for payload in client._early_agent_events.pop("run-1", []):
+        client._apply_agent_event(run, payload)
+
+    assert run.complete_event.is_set()
+    assert run.status == "ok"
+    assert run.summary == "done"
+
+
+@pytest.mark.asyncio
+async def test_connection_loss_does_not_overwrite_completed_run() -> None:
+    """A run that already completed ok must not be flipped to error on close."""
+    client = _make_client()
+    client._connected = True
+    ws = _DyingWs(RuntimeError("socket died"))
+    client._ws = ws
+
+    run = _AgentRun("run-1")
+    run.set_complete("ok", "done")
+    client._agent_runs["run-1"] = run
+
+    await client._receive_loop(ws)
+
+    assert run.status == "ok"
+    assert run.summary == "done"

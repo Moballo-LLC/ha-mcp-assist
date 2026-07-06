@@ -369,17 +369,28 @@ class OpenClawClient:
             except Exception:
                 pass
 
-    def _fail_inflight(self, reason: str) -> None:
-        """Fail pending requests and complete active runs with an error."""
+    def _fail_inflight(self, reason: str, *, clear_early_events: bool = True) -> None:
+        """Fail pending requests and complete active runs with an error.
+
+        ``clear_early_events`` is False for connection-loss cleanup from the
+        receive loop: a completion may have arrived and been buffered for a run
+        that ``send_message`` has not registered yet, and dropping it would make
+        the caller wait out its full timeout despite having the answer. Runs
+        that already completed are left untouched so an ok result is not
+        overwritten with an error.
+        """
         for future in self._pending_requests.values():
             if not future.done():
                 future.set_exception(OpenClawConnectionError(reason))
         self._pending_requests.clear()
 
         for run in self._agent_runs.values():
-            run.set_complete("error", reason)
+            if not run.complete_event.is_set():
+                run.set_complete("error", reason)
         self._agent_runs.clear()
-        self._early_agent_events.clear()
+
+        if clear_early_events:
+            self._early_agent_events.clear()
 
     async def _close_ws(self) -> None:
         """Close the WebSocket connection."""
@@ -506,7 +517,13 @@ class OpenClawClient:
             # reconnect must not disconnect or fail the new connection.
             if self._ws is ws:
                 self._connected = False
-                self._fail_inflight("Connection to OpenClaw Gateway lost")
+                # Preserve buffered early events: a completion may have arrived
+                # for a run that send_message has not registered yet, and it
+                # still needs to replay it.
+                self._fail_inflight(
+                    "Connection to OpenClaw Gateway lost",
+                    clear_early_events=False,
+                )
 
     async def _handle_message(self, msg: Dict[str, Any]) -> None:
         """Handle an incoming WebSocket message."""
