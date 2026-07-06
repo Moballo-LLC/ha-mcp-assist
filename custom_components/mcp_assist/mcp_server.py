@@ -1809,6 +1809,21 @@ class MCPServer(
                     try:
                         data = json.loads(msg.data)
 
+                        if not isinstance(data, dict):
+                            await ws.send_str(
+                                json.dumps(
+                                    {
+                                        "jsonrpc": "2.0",
+                                        "error": {
+                                            "code": -32600,
+                                            "message": "Invalid Request: expected a JSON-RPC 2.0 object",
+                                        },
+                                        "id": None,
+                                    }
+                                )
+                            )
+                            continue
+
                         # Check if it's a notification (no id field)
                         if "id" not in data:
                             await self.process_mcp_notification(data)

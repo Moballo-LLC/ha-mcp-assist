@@ -13,7 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
-from aiohttp import ClientSession, WSCloseCode
+from aiohttp import ClientSession, WSCloseCode, WSMsgType
 import yarl
 from homeassistant.components.weather import WeatherEntityFeature
 from homeassistant.exceptions import HomeAssistantError
@@ -3150,6 +3150,31 @@ class _FakeJsonRequest:
         return self._body
 
 
+class _FakeWebSocketResponse:
+    """Minimal websocket stub for handler-loop tests."""
+
+    def __init__(self, messages: list[object]) -> None:
+        self._messages = messages
+        self.sent: list[str] = []
+
+    async def prepare(self, request: object) -> None:
+        return None
+
+    def __aiter__(self) -> "_FakeWebSocketResponse":
+        return self
+
+    async def __anext__(self) -> object:
+        if not self._messages:
+            raise StopAsyncIteration
+        return self._messages.pop(0)
+
+    async def send_str(self, data: str) -> None:
+        self.sent.append(data)
+
+    def exception(self) -> Exception | None:
+        return None
+
+
 @pytest.mark.asyncio
 async def test_handle_mcp_request_rejects_non_object_body(
     hass, profile_entry_factory, system_entry_factory
@@ -3165,6 +3190,40 @@ async def test_handle_mcp_request_rejects_non_object_body(
     assert response.status == 400
     payload = json.loads(response.text)
     assert payload["error"]["code"] == -32600
+
+
+@pytest.mark.asyncio
+async def test_handle_websocket_rejects_non_object_json_rpc_body(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """WebSocket JSON-RPC arrays/scalars should be client errors, not server faults."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    fake_ws = _FakeWebSocketResponse(
+        [SimpleNamespace(type=WSMsgType.TEXT, data='[{"jsonrpc":"2.0","id":1}]')]
+    )
+    monkeypatch.setattr(
+        mcp_server_module.web,
+        "WebSocketResponse",
+        lambda: fake_ws,
+    )
+
+    returned_ws = await server.handle_websocket(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+
+    assert returned_ws is fake_ws
+    assert fake_ws.sent
+    payload = json.loads(fake_ws.sent[0])
+    assert payload == {
+        "jsonrpc": "2.0",
+        "error": {
+            "code": -32600,
+            "message": "Invalid Request: expected a JSON-RPC 2.0 object",
+        },
+        "id": None,
+    }
+    assert fake_ws not in server._websocket_clients
 
 
 @pytest.mark.asyncio
