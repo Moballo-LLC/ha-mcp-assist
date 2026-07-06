@@ -773,30 +773,87 @@ async def _async_release_mcp_server(hass: HomeAssistant) -> None:
     Shared by the normal unload path and the failed-setup cleanup path so a
     setup that raises after incrementing the refcount cannot leak a reference
     and pin the MCP server (and its port) for the lifetime of Home Assistant.
+
+    The decrement and teardown run under the same ``server_init_lock`` used to
+    create the server, so a concurrent profile setup cannot observe a
+    half-released state and try to bind a replacement to the port before
+    ``stop()`` has finished releasing it.
     """
     if "mcp_refcount" not in hass.data[DOMAIN]:
         return
 
-    hass.data[DOMAIN]["mcp_refcount"] -= 1
-    refcount = hass.data[DOMAIN]["mcp_refcount"]
-    _LOGGER.debug("MCP server refcount after release: %d", refcount)
+    lock = hass.data[DOMAIN].setdefault("server_init_lock", asyncio.Lock())
+    async with lock:
+        # Re-check under the lock: a concurrent release may have already run.
+        if "mcp_refcount" not in hass.data[DOMAIN]:
+            return
 
-    # Only stop MCP server and index manager when the last reference is gone
-    if refcount <= 0:
-        _LOGGER.info("Last profile removed - stopping shared MCP server and index manager")
-        mcp_server = hass.data[DOMAIN].pop("shared_mcp_server", None)
-        if mcp_server:
-            await mcp_server.stop()
-        index_manager = hass.data[DOMAIN].pop("index_manager", None)
-        async_stop_index_manager = getattr(index_manager, "async_stop", None)
-        if callable(async_stop_index_manager):
-            await async_stop_index_manager()
-        hass.data[DOMAIN].pop("mcp_port", None)
-        hass.data[DOMAIN].pop("mcp_refcount", None)
-        hass.data[DOMAIN].pop("chat_log_manager", None)
-        await _async_unregister_services(hass)
-    else:
-        _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
+        hass.data[DOMAIN]["mcp_refcount"] -= 1
+        refcount = hass.data[DOMAIN]["mcp_refcount"]
+        _LOGGER.debug("MCP server refcount after release: %d", refcount)
+
+        # Only stop MCP server and index manager when the last reference is gone
+        if refcount <= 0:
+            _LOGGER.info("Last profile removed - stopping shared MCP server and index manager")
+            mcp_server = hass.data[DOMAIN].pop("shared_mcp_server", None)
+            if mcp_server:
+                await mcp_server.stop()
+            index_manager = hass.data[DOMAIN].pop("index_manager", None)
+            async_stop_index_manager = getattr(index_manager, "async_stop", None)
+            if callable(async_stop_index_manager):
+                await async_stop_index_manager()
+            hass.data[DOMAIN].pop("mcp_port", None)
+            hass.data[DOMAIN].pop("mcp_refcount", None)
+            hass.data[DOMAIN].pop("chat_log_manager", None)
+            await _async_unregister_services(hass)
+        else:
+            _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
+            _rebind_shared_server_entry(hass)
+
+
+def _rebind_shared_server_entry(hass: HomeAssistant) -> None:
+    """Point the shared server at a live profile if its owner was removed.
+
+    The shared ``MCPServer`` (and its ``CustomToolsLoader``) is created bound
+    to whichever profile started it. If that profile is later removed — a
+    failed setup releasing its reference, or an unload of the owning profile
+    while another still references the server — the server would keep reading
+    config from the removed entry. Rebind it to a surviving set-up profile.
+    """
+    domain_data = hass.data.get(DOMAIN, {})
+    server = domain_data.get("shared_mcp_server")
+    if server is None:
+        return
+
+    current = getattr(server, "entry", None)
+    if current is not None and current.entry_id in domain_data:
+        return  # still bound to a set-up profile
+
+    replacement = next(
+        (
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.unique_id != SYSTEM_ENTRY_UNIQUE_ID and entry.entry_id in domain_data
+        ),
+        None,
+    )
+    if replacement is None:
+        return
+
+    server.entry = replacement
+    tools = getattr(server, "tools", None)
+    if tools is not None and getattr(tools, "entry", None) is not None:
+        tools.entry = replacement
+
+    # allowed_ips is derived from the profile's provider URL and was computed
+    # for the removed owner; refresh IP/auth state so the surviving profile's
+    # host is allowed (and the removed owner's is not) without a restart.
+    for refresh in ("_refresh_allowed_ips_from_settings", "_refresh_mcp_auth_from_settings"):
+        method = getattr(server, refresh, None)
+        if callable(method):
+            method()
+
+    _LOGGER.debug("Rebound shared MCP server to surviving profile %s", replacement.entry_id)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

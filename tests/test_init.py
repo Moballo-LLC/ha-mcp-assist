@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
@@ -11,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mcp_assist import (
     _migrate_brave_search_tool_name,
     _async_apply_shared_mcp_settings,
+    _async_release_mcp_server,
     async_setup_entry,
     async_unload_entry,
     ensure_system_entry,
@@ -478,3 +480,80 @@ async def test_failed_second_setup_keeps_server_for_first_profile(
     mcp_server.stop.assert_not_called()
     assert hass.data[DOMAIN]["shared_mcp_server"] is mcp_server
     assert entry_two.entry_id not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_release_mcp_server_waits_for_setup_lock(hass) -> None:
+    """Releasing the shared server must serialize with in-progress setup.
+
+    While another profile holds server_init_lock (e.g. mid-startup), the
+    release must not pop/stop the server underneath it, so a concurrent setup
+    can never bind a replacement to the port before stop() completes.
+    """
+    hass.data.setdefault(DOMAIN, {})
+    lock = asyncio.Lock()
+    hass.data[DOMAIN]["server_init_lock"] = lock
+    hass.data[DOMAIN]["mcp_refcount"] = 1
+    mcp_server = SimpleNamespace(stop=AsyncMock())
+    index_manager = SimpleNamespace(async_stop=AsyncMock())
+    hass.data[DOMAIN]["shared_mcp_server"] = mcp_server
+    hass.data[DOMAIN]["index_manager"] = index_manager
+    hass.data[DOMAIN]["mcp_port"] = 8090
+
+    await lock.acquire()  # simulate a concurrent setup holding the lock
+    release_task = asyncio.create_task(_async_release_mcp_server(hass))
+    await asyncio.sleep(0)
+
+    # Blocked on the lock: nothing torn down yet.
+    assert hass.data[DOMAIN]["mcp_refcount"] == 1
+    assert hass.data[DOMAIN]["shared_mcp_server"] is mcp_server
+    mcp_server.stop.assert_not_called()
+
+    lock.release()  # the other setup finishes and frees the lock
+    await release_task
+
+    # Now the teardown ran to completion under the lock.
+    mcp_server.stop.assert_awaited_once()
+    assert "shared_mcp_server" not in hass.data[DOMAIN]
+    assert "mcp_refcount" not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_release_rebinds_server_when_owner_entry_removed(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """If the server's owning profile is gone, release rebinds it to a survivor."""
+    system_entry_factory()
+    owner = profile_entry_factory(
+        title="Ollama - Owner", unique_id=f"{DOMAIN}_owner", data={CONF_PROFILE_NAME: "Owner"}
+    )
+    survivor = profile_entry_factory(
+        title="Ollama - Survivor", unique_id=f"{DOMAIN}_survivor", data={CONF_PROFILE_NAME: "Survivor"}
+    )
+
+    # Server created by (bound to) the owner; two references held.
+    tools = SimpleNamespace(entry=owner)
+    mcp_server = SimpleNamespace(
+        entry=owner,
+        tools=tools,
+        stop=AsyncMock(),
+        _refresh_allowed_ips_from_settings=Mock(),
+        _refresh_mcp_auth_from_settings=Mock(),
+    )
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["server_init_lock"] = asyncio.Lock()
+    hass.data[DOMAIN]["shared_mcp_server"] = mcp_server
+    hass.data[DOMAIN]["mcp_refcount"] = 2
+    hass.data[DOMAIN][survivor.entry_id] = {"profile_name": "Survivor"}
+    # The owner's setup failed: its per-entry data was already removed.
+
+    await _async_release_mcp_server(hass)
+
+    # Server stays up (survivor still references it) and is rebound off the owner.
+    assert hass.data[DOMAIN]["mcp_refcount"] == 1
+    mcp_server.stop.assert_not_called()
+    assert mcp_server.entry is survivor
+    assert mcp_server.tools.entry is survivor
+    # IP/auth state is refreshed so the survivor's host is allowed post-rebind.
+    mcp_server._refresh_allowed_ips_from_settings.assert_called_once()
+    mcp_server._refresh_mcp_auth_from_settings.assert_called_once()
