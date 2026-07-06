@@ -133,3 +133,35 @@ async def test_first_index_skips_deferred_gap_fill_when_disabled() -> None:
 
     assert manager._initial_gap_fill_scheduled is False
     assert manager._refresh_task is None
+
+
+@pytest.mark.asyncio
+async def test_debounce_resets_quiet_window_on_events_during_wait(monkeypatch) -> None:
+    """A burst of registry events must coalesce into a single refresh."""
+    manager = IndexManager(_fake_hass())
+    refresh_calls = 0
+
+    async def _fake_refresh() -> None:
+        nonlocal refresh_calls
+        refresh_calls += 1
+
+    manager.refresh_index = _fake_refresh
+
+    sleep_count = 0
+
+    async def _fake_sleep(_delay: float) -> None:
+        nonlocal sleep_count
+        sleep_count += 1
+        if sleep_count == 1:
+            # A registry event lands mid-wait; the window must restart.
+            manager._schedule_refresh()
+
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.index_manager.asyncio.sleep", _fake_sleep
+    )
+
+    manager._schedule_refresh()
+    await manager._refresh_task
+
+    assert refresh_calls == 1  # one rebuild, not one per event
+    assert sleep_count == 2  # the quiet window was reset exactly once

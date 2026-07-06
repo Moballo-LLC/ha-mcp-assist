@@ -158,11 +158,21 @@ class IndexManager:
             self._refresh_task = asyncio.create_task(self._debounced_refresh_loop())
 
     async def _debounced_refresh_loop(self) -> None:
-        """Debounce then refresh, repeating while further changes are pending."""
+        """Refresh once the registry has been quiet for the debounce window.
+
+        A change that arrives *during the wait* restarts the quiet window, so
+        a burst of registry events (common for one HA change) coalesces into a
+        single rebuild rather than refreshing mid-burst. A change that arrives
+        *during generation* is recorded and handled by the next loop iteration,
+        so an in-flight refresh is never interrupted.
+        """
         try:
             while self._refresh_pending:
                 self._refresh_pending = False
                 await asyncio.sleep(self._refresh_debounce_seconds)
+                if self._refresh_pending:
+                    # More changes landed during the wait — reset the window.
+                    continue
                 await self.refresh_index()
         except asyncio.CancelledError:
             _LOGGER.debug("Index refresh loop cancelled")
