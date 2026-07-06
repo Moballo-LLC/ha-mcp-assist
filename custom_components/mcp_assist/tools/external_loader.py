@@ -149,7 +149,11 @@ class ExternalCustomToolLoader:
                     raise ValueError(
                         f"Manifest id {manifest.tool_id!r} conflicts with an existing tool package"
                     )
-                tool = self._instantiate_tool(tool_dir, manifest)
+                # Importing the entrypoint runs the package's top-level code and
+                # reads from disk, so keep it off the event loop.
+                tool = await self.hass.async_add_executor_job(
+                    self._instantiate_tool, tool_dir, manifest
+                )
                 settings_schema = self._normalize_settings_schema(
                     manifest,
                     tool.get_settings_schema(),
