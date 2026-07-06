@@ -560,6 +560,20 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
             for spec in built_in_specs:
                 shared_settings[spec.shared_setting_key] = spec.shared_default
 
+        # Self-heal must not silently disable MCP auth. Profiles no longer
+        # persist shared settings, so a rebuilt system entry resolves the
+        # bearer token to empty (auth off). Generate a fresh secure token
+        # instead — failing secure — and tell the user to re-sync clients.
+        if not str(shared_settings.get(CONF_MCP_BEARER_TOKEN) or "").strip():
+            from .config_flow import generate_mcp_bearer_token
+
+            shared_settings[CONF_MCP_BEARER_TOKEN] = generate_mcp_bearer_token()
+            _LOGGER.warning(
+                "Rebuilt Shared MCP Server Settings had no bearer token; generated "
+                "a new one to keep authentication enabled. Update external MCP "
+                "clients with the new token under Settings -> Devices & Services."
+            )
+
         # Create system entry with extracted/default settings
         await hass.config_entries.flow.async_init(
             DOMAIN,
