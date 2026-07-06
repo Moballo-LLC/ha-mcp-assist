@@ -220,6 +220,61 @@ def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
     assert offset == 1
 
 
+def test_ensure_stream_tool_call_slot_keeps_indexless_calls_distinct() -> None:
+    """Ollama-style tool calls without an index must not collapse onto slot 0."""
+    Entity = MCPAssistConversationEntity
+    current_tool_calls: list = []
+    offset = None
+
+    # Two complete tool calls delivered in one delta, neither carrying "index".
+    ollama_delta = [
+        {"function": {"name": "turn_off", "arguments": {"entity": "light.kitchen"}}},
+        {"function": {"name": "turn_off", "arguments": {"entity": "light.living_room"}}},
+    ]
+    for tc in ollama_delta:
+        idx, offset = Entity._ensure_stream_tool_call_slot(tc, current_tool_calls, offset)
+        current_tool_calls[idx]["function"] = tc["function"]
+
+    assert len(current_tool_calls) == 2
+    assert [c["function"]["arguments"]["entity"] for c in current_tool_calls] == [
+        "light.kitchen",
+        "light.living_room",
+    ]
+
+
+def test_ensure_stream_tool_call_slot_backfills_sparse_indexes() -> None:
+    """A sparse OpenAI-style index (0 then 2) must backfill instead of raising."""
+    Entity = MCPAssistConversationEntity
+    current_tool_calls: list = []
+    offset = None
+
+    for tc in [
+        {"index": 0, "function": {"name": "a"}},
+        {"index": 2, "function": {"name": "c"}},
+    ]:
+        idx, offset = Entity._ensure_stream_tool_call_slot(tc, current_tool_calls, offset)
+        current_tool_calls[idx]["function"] = tc["function"]
+
+    assert len(current_tool_calls) == 3
+    assert current_tool_calls[0]["function"]["name"] == "a"
+    assert current_tool_calls[1] == {}  # gap placeholder, dropped by _compact
+    assert current_tool_calls[2]["function"]["name"] == "c"
+
+
+def test_ensure_stream_tool_call_slot_preserves_indexed_streaming() -> None:
+    """Indexed deltas for the same call must keep accumulating into one slot."""
+    Entity = MCPAssistConversationEntity
+    current_tool_calls: list = []
+    offset = None
+
+    # OpenAI streams one call as multiple fragments sharing index 0.
+    for tc in [{"index": 0}, {"index": 0}, {"index": 0}]:
+        idx, offset = Entity._ensure_stream_tool_call_slot(tc, current_tool_calls, offset)
+
+    assert len(current_tool_calls) == 1
+    assert idx == 0
+
+
 def test_toolless_check_preamble_detects_supported_non_english_phrases(
     hass, profile_entry_factory
 ) -> None:

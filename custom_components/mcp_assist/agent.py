@@ -1533,6 +1533,34 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return max(0, index - stream_index_offset), stream_index_offset
 
+    @classmethod
+    def _ensure_stream_tool_call_slot(
+        cls,
+        tc: Dict[str, Any],
+        current_tool_calls: List[Dict[str, Any]],
+        stream_index_offset: int | None,
+    ) -> tuple[int, int | None]:
+        """Resolve a streamed tool call's slot, growing the buffer to fit.
+
+        Providers such as Ollama emit complete tool calls with no per-call
+        ``index``; each is a distinct call and must get its own slot instead
+        of collapsing onto index 0. Providers that supply an ``index``
+        (OpenAI-style deltas) keep the offset-normalized index, and any gap
+        left by a sparse index is backfilled so indexing never raises.
+        """
+        raw_index = tc.get("index")
+        if raw_index is None:
+            idx = len(current_tool_calls)
+        else:
+            idx, stream_index_offset = cls._normalize_stream_tool_call_index(
+                raw_index, stream_index_offset
+            )
+
+        while idx >= len(current_tool_calls):
+            current_tool_calls.append({})
+
+        return idx, stream_index_offset
+
     @staticmethod
     def _compact_streamed_tool_calls(
         tool_calls: List[Dict[str, Any]]
@@ -4078,15 +4106,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                                     has_tool_calls = True
                                     for tc in delta["tool_calls"]:
                                         idx, stream_tool_index_offset = (
-                                            self._normalize_stream_tool_call_index(
-                                                tc.get("index", 0),
+                                            self._ensure_stream_tool_call_slot(
+                                                tc,
+                                                current_tool_calls,
                                                 stream_tool_index_offset,
                                             )
                                         )
-
-                                        # Initialize tool call if new
-                                        if idx >= len(current_tool_calls):
-                                            current_tool_calls.append({})
 
                                         if "id" in tc:
                                             tool_ids[idx] = tc["id"]
