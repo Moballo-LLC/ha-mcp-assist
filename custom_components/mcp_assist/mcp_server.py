@@ -1872,6 +1872,23 @@ class MCPServer(
         request_id = None
         try:
             data = await request.json()
+
+            # A JSON-RPC 2.0 request must be an object. A batch array or scalar
+            # is a client error (-32600), not a server fault (previously this
+            # raised AttributeError on data.get(...) and returned HTTP 500).
+            if not isinstance(data, dict):
+                return web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32600,
+                            "message": "Invalid Request: expected a JSON-RPC 2.0 object",
+                        },
+                        "id": None,
+                    },
+                    status=400,
+                )
+
             request_id = data.get("id")
 
             # Validate JSON-RPC 2.0 format
@@ -2512,8 +2529,11 @@ class MCPServer(
             )
 
         if not self._is_tool_enabled(tool_name):
-            raise ValueError(
-                f"Tool '{tool_name}' is disabled in shared MCP settings."
+            # A disabled tool is a tool-level error (isError result), not a
+            # JSON-RPC internal error (-32603), matching the unknown-tool path.
+            return self._build_text_tool_result(
+                f"Tool '{tool_name}' is disabled in shared MCP settings.",
+                is_error=True,
             )
 
         if tool_name == "discover_entities":

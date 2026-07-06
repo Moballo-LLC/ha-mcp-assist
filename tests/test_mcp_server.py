@@ -1361,12 +1361,16 @@ async def test_handle_tools_list_invalidates_cache_when_custom_tool_surface_chan
 async def test_handle_tool_call_rejects_disabled_tools(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
-    """Disabled tools should fail closed even if called directly."""
+    """Disabled tools should fail closed with a tool error, not a raised exception."""
     system_entry_factory(data={CONF_ENABLE_DEVICE_TOOLS: False})
     server = MCPServer(hass, 8099, profile_entry_factory())
 
-    with pytest.raises(ValueError, match="disabled"):
-        await server.handle_tool_call({"name": "discover_devices", "arguments": {}})
+    result = await server.handle_tool_call(
+        {"name": "discover_devices", "arguments": {}}
+    )
+
+    assert result["isError"] is True
+    assert "disabled" in result["content"][0]["text"]
 
 
 @pytest.mark.asyncio
@@ -3131,6 +3135,36 @@ async def test_fetch_http_image_url_uses_validated_absolute_request_url(
             {"allow_redirects": False},
         )
     ]
+
+
+class _FakeJsonRequest:
+    """Minimal request stub whose json() returns a preset body."""
+
+    def __init__(self, body: object) -> None:
+        self.remote = "127.0.0.1"
+        self.headers: dict[str, str] = {}
+        self.query: dict[str, str] = {}
+        self._body = body
+
+    async def json(self) -> object:
+        return self._body
+
+
+@pytest.mark.asyncio
+async def test_handle_mcp_request_rejects_non_object_body(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A JSON-RPC batch array/scalar is a client error (-32600), not a 500."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    response = await server.handle_mcp_request(
+        _FakeJsonRequest([{"jsonrpc": "2.0", "method": "tools/list", "id": 1}])
+    )
+
+    assert response.status == 400
+    payload = json.loads(response.text)
+    assert payload["error"]["code"] == -32600
 
 
 @pytest.mark.asyncio
