@@ -1542,19 +1542,31 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> tuple[int, int | None]:
         """Resolve a streamed tool call's slot, growing the buffer to fit.
 
-        Providers such as Ollama emit complete tool calls with no per-call
-        ``index``; each is a distinct call and must get its own slot instead
-        of collapsing onto index 0. Providers that supply an ``index``
-        (OpenAI-style deltas) keep the offset-normalized index, and any gap
-        left by a sparse index is backfilled so indexing never raises.
+        Providers that supply an ``index`` (OpenAI-style deltas) keep the
+        offset-normalized index, and any gap left by a sparse index is
+        backfilled so indexing never raises.
+
+        Some providers omit ``index`` entirely, in two different shapes:
+        Ollama sends each *complete* tool call as its own fragment (carrying a
+        name), while some OpenAI-compatible servers stream a *single* call as
+        argument fragments where only the first carries the id/name. So an
+        index-less fragment starts a new slot only when it carries an ``id`` or
+        a function ``name``; a name-less fragment continues the current call,
+        instead of either collapsing distinct calls onto one slot or splitting
+        one call's arguments across several slots.
         """
         raw_index = tc.get("index")
-        if raw_index is None:
-            idx = len(current_tool_calls)
-        else:
+        if raw_index is not None:
             idx, stream_index_offset = cls._normalize_stream_tool_call_index(
                 raw_index, stream_index_offset
             )
+        else:
+            function = tc.get("function") or {}
+            starts_new_call = bool(tc.get("id") or function.get("name"))
+            if starts_new_call or not current_tool_calls:
+                idx = len(current_tool_calls)
+            else:
+                idx = len(current_tool_calls) - 1
 
         while idx >= len(current_tool_calls):
             current_tool_calls.append({})

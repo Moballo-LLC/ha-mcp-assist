@@ -242,6 +242,31 @@ def test_ensure_stream_tool_call_slot_keeps_indexless_calls_distinct() -> None:
     ]
 
 
+def test_ensure_stream_tool_call_slot_keeps_indexless_fragments_of_one_call() -> None:
+    """Index-less argument fragments for a single call must stay in one slot.
+
+    Some OpenAI-compatible servers omit index and stream one call as an
+    id/name fragment followed by argument-only fragments; those continuation
+    fragments must not each get a fresh slot.
+    """
+    Entity = MCPAssistConversationEntity
+    current_tool_calls: list = []
+    offset = None
+
+    fragments = [
+        {"id": "call-1", "function": {"name": "perform_action", "arguments": ""}},
+        {"function": {"arguments": '{"entity":'}},
+        {"function": {"arguments": ' "light.kitchen"}'}},
+    ]
+    slots = []
+    for tc in fragments:
+        idx, offset = Entity._ensure_stream_tool_call_slot(tc, current_tool_calls, offset)
+        slots.append(idx)
+
+    assert slots == [0, 0, 0]
+    assert len(current_tool_calls) == 1
+
+
 def test_ensure_stream_tool_call_slot_backfills_sparse_indexes() -> None:
     """A sparse OpenAI-style index (0 then 2) must backfill instead of raising."""
     Entity = MCPAssistConversationEntity
