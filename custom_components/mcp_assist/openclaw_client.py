@@ -9,6 +9,7 @@ import ssl
 import time
 import uuid
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
@@ -192,6 +193,25 @@ class OpenClawClient:
         """Return whether the client is connected."""
         return self._connected and self._ws is not None
 
+    def _sanitized_host(self) -> str:
+        """Return the host with any protocol prefix and trailing slash removed."""
+        host = self._host.strip().rstrip("/")
+        for prefix in ("https://", "http://", "wss://", "ws://"):
+            if host.lower().startswith(prefix):
+                return host[len(prefix):]
+        return host
+
+    def _build_ws_url(self) -> str:
+        """Build the gateway websocket URL with the token percent-encoded.
+
+        The token is also sent in the Authorization/X-OpenClaw-Token headers,
+        but it is kept in the query string for gateway compatibility. Encoding
+        it avoids a malformed URL (or a silently wrong token) when the token
+        contains characters such as ``&``, ``#``, ``/`` or spaces.
+        """
+        scheme = "wss" if self._use_ssl else "ws"
+        return f"{scheme}://{self._sanitized_host()}:{self._port}/?token={quote(self._token, safe='')}"
+
     async def connect(self) -> None:
         """Connect to the OpenClaw Gateway and complete handshake."""
         async with self._connect_lock:
@@ -213,15 +233,8 @@ class OpenClawClient:
             "Reconnecting to OpenClaw Gateway", clear_early_events=False
         )
 
-        # Sanitize host — strip protocol prefixes and trailing slashes
-        host = self._host.strip().rstrip("/")
-        for prefix in ("https://", "http://", "wss://", "ws://"):
-            if host.lower().startswith(prefix):
-                host = host[len(prefix):]
-                break
-
         scheme = "wss" if self._use_ssl else "ws"
-        url = f"{scheme}://{host}:{self._port}/?token={self._token}"
+        url = self._build_ws_url()
         headers = {
             "Authorization": f"Bearer {self._token}",
             "X-OpenClaw-Token": self._token,
@@ -487,6 +500,14 @@ class OpenClawClient:
         self._agent_runs[run_id] = run
         for payload in self._early_agent_events.pop(run_id, []):
             self._apply_agent_event(run, payload)
+
+        # If the socket dropped between the ack resolving and now, no receive
+        # loop is left to complete this run — fail fast instead of waiting the
+        # full timeout. A completion that already arrived was replayed above,
+        # so only bail when the run is still pending.
+        if not run.complete_event.is_set() and not self.is_connected:
+            self._agent_runs.pop(run_id, None)
+            raise OpenClawConnectionError("Connection to OpenClaw Gateway lost")
 
         try:
             await asyncio.wait_for(run.complete_event.wait(), timeout=self._timeout)

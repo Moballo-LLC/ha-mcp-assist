@@ -603,6 +603,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "server_init_lock" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["server_init_lock"] = asyncio.Lock()
 
+    incremented = False
     try:
         # Use lock to prevent race condition when multiple profiles load simultaneously
         async with hass.data[DOMAIN]["server_init_lock"]:
@@ -647,6 +648,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Increment reference count
             hass.data[DOMAIN]["mcp_refcount"] += 1
+            incremented = True
             _LOGGER.debug("MCP server refcount: %d", hass.data[DOMAIN]["mcp_refcount"])
 
         # Store metadata (per entry)
@@ -713,6 +715,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     except Exception as err:
+        # HA never unloads an entry that failed setup, so release everything
+        # acquired above or retries leak references and keep the port bound.
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id, None) or {}
+        openclaw_client = entry_data.get("openclaw_client")
+        if openclaw_client:
+            with suppress(Exception):
+                await openclaw_client.disconnect()
+        if incremented:
+            await _async_release_mcp_server(hass)
         _LOGGER.error("Failed to setup MCP Assist profile '%s': %s", profile_name, err)
         raise ConfigEntryNotReady(f"Setup failed: {err}") from err
 
@@ -751,29 +762,41 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].pop(entry.entry_id, None)
 
     # Decrement MCP server reference count
-    if "mcp_refcount" in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["mcp_refcount"] -= 1
-        refcount = hass.data[DOMAIN]["mcp_refcount"]
-        _LOGGER.debug("MCP server refcount after unload: %d", refcount)
-
-        # Only stop MCP server and index manager when last profile is removed
-        if refcount <= 0:
-            _LOGGER.info("Last profile removed - stopping shared MCP server and index manager")
-            mcp_server = hass.data[DOMAIN].pop("shared_mcp_server", None)
-            if mcp_server:
-                await mcp_server.stop()
-            index_manager = hass.data[DOMAIN].pop("index_manager", None)
-            async_stop_index_manager = getattr(index_manager, "async_stop", None)
-            if callable(async_stop_index_manager):
-                await async_stop_index_manager()
-            hass.data[DOMAIN].pop("mcp_port", None)
-            hass.data[DOMAIN].pop("mcp_refcount", None)
-            hass.data[DOMAIN].pop("chat_log_manager", None)
-            await _async_unregister_services(hass)
-        else:
-            _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
+    await _async_release_mcp_server(hass)
 
     return True
+
+
+async def _async_release_mcp_server(hass: HomeAssistant) -> None:
+    """Drop one MCP server reference, stopping shared runtime at zero.
+
+    Shared by the normal unload path and the failed-setup cleanup path so a
+    setup that raises after incrementing the refcount cannot leak a reference
+    and pin the MCP server (and its port) for the lifetime of Home Assistant.
+    """
+    if "mcp_refcount" not in hass.data[DOMAIN]:
+        return
+
+    hass.data[DOMAIN]["mcp_refcount"] -= 1
+    refcount = hass.data[DOMAIN]["mcp_refcount"]
+    _LOGGER.debug("MCP server refcount after release: %d", refcount)
+
+    # Only stop MCP server and index manager when the last reference is gone
+    if refcount <= 0:
+        _LOGGER.info("Last profile removed - stopping shared MCP server and index manager")
+        mcp_server = hass.data[DOMAIN].pop("shared_mcp_server", None)
+        if mcp_server:
+            await mcp_server.stop()
+        index_manager = hass.data[DOMAIN].pop("index_manager", None)
+        async_stop_index_manager = getattr(index_manager, "async_stop", None)
+        if callable(async_stop_index_manager):
+            await async_stop_index_manager()
+        hass.data[DOMAIN].pop("mcp_port", None)
+        hass.data[DOMAIN].pop("mcp_refcount", None)
+        hass.data[DOMAIN].pop("chat_log_manager", None)
+        await _async_unregister_services(hass)
+    else:
+        _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

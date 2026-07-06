@@ -321,3 +321,64 @@ async def test_disconnect_clears_buffered_events() -> None:
     await client.disconnect()
 
     assert client._early_agent_events == {}
+
+
+def test_build_ws_url_percent_encodes_token() -> None:
+    """Tokens with URL metacharacters must be percent-encoded in the query."""
+    client = OpenClawClient(
+        host="wss://gateway.example/",
+        port=443,
+        token="a&b/c #d",
+        use_ssl=True,
+        device_auth=SimpleNamespace(),
+    )
+
+    url = client._build_ws_url()
+
+    assert url == "wss://gateway.example:443/?token=a%26b%2Fc%20%23d"
+    # The raw, unencoded token must not appear in the URL.
+    assert "a&b/c #d" not in url
+
+
+def test_build_ws_url_strips_scheme_prefix_and_selects_ws() -> None:
+    """Host protocol prefixes are stripped and ws is used without SSL."""
+    client = OpenClawClient(
+        host="http://10.0.0.5",
+        port=18789,
+        token="plain",
+        use_ssl=False,
+        device_auth=SimpleNamespace(),
+    )
+
+    assert client._build_ws_url() == "ws://10.0.0.5:18789/?token=plain"
+
+
+class _AckThenDropWs:
+    """Fake websocket that acks the agent request, then drops the connection."""
+
+    def __init__(self, client: OpenClawClient) -> None:
+        self._client = client
+
+    async def send(self, raw: str) -> None:
+        msg = json.loads(raw)
+        if msg.get("method") != "agent":
+            return
+        # Ack resolves the pending future...
+        await self._client._handle_message(
+            {"type": "res", "id": msg["id"], "ok": True, "payload": {"runId": "run-x"}}
+        )
+        # ...then the socket drops before any completion event arrives.
+        self._client._connected = False
+
+
+@pytest.mark.asyncio
+async def test_send_message_fails_fast_when_socket_dropped_after_ack() -> None:
+    """A run registered after the socket died must fail fast, not hang for the timeout."""
+    client = _make_client()
+    client._connected = True
+    client._ws = _AckThenDropWs(client)
+
+    with pytest.raises(OpenClawConnectionError):
+        await asyncio.wait_for(client.send_message("hi", "main"), timeout=5)
+
+    assert client._agent_runs == {}
