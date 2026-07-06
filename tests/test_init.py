@@ -415,3 +415,66 @@ async def test_async_setup_registers_reload_service_and_last_unload_removes_it(
         )
         assert not hass.services.has_service(DOMAIN, SERVICE_GET_CHAT_LOGS)
         assert not hass.services.has_service(DOMAIN, SERVICE_CLEAR_CHAT_LOGS)
+
+
+@pytest.mark.asyncio
+async def test_failed_setup_releases_shared_server(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A setup that fails after refcount increment must release the shared server."""
+    system_entry_factory()
+    entry = profile_entry_factory()
+    index_manager = SimpleNamespace(start=AsyncMock(), async_stop=AsyncMock())
+    mcp_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+    with (
+        patch("custom_components.mcp_assist.IndexManager", return_value=index_manager),
+        patch("custom_components.mcp_assist.MCPServer", return_value=mcp_server),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            AsyncMock(side_effect=RuntimeError("platform boom")),
+        ),
+    ):
+        with pytest.raises(Exception):
+            await async_setup_entry(hass, entry)
+
+    # The single reference taken during setup must have been released, so the
+    # shared server is stopped and the port is freed for the next attempt.
+    mcp_server.stop.assert_awaited_once()
+    index_manager.async_stop.assert_awaited_once()
+    assert "shared_mcp_server" not in hass.data[DOMAIN]
+    assert "mcp_refcount" not in hass.data[DOMAIN]
+    assert entry.entry_id not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_failed_second_setup_keeps_server_for_first_profile(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """One profile's failed setup must not tear down the server used by another."""
+    system_entry_factory()
+    entry_one = profile_entry_factory(
+        title="Ollama - One", unique_id=f"{DOMAIN}_one", data={CONF_PROFILE_NAME: "One"}
+    )
+    entry_two = profile_entry_factory(
+        title="Ollama - Two", unique_id=f"{DOMAIN}_two", data={CONF_PROFILE_NAME: "Two"}
+    )
+    index_manager = SimpleNamespace(start=AsyncMock(), async_stop=AsyncMock())
+    mcp_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+    forward = AsyncMock(side_effect=[True, RuntimeError("platform boom")])
+    with (
+        patch("custom_components.mcp_assist.IndexManager", return_value=index_manager),
+        patch("custom_components.mcp_assist.MCPServer", return_value=mcp_server),
+        patch.object(hass.config_entries, "async_forward_entry_setups", forward),
+    ):
+        assert await async_setup_entry(hass, entry_one) is True
+        with pytest.raises(Exception):
+            await async_setup_entry(hass, entry_two)
+
+    # Refcount is back to 1 (only entry_one) and the server stays up.
+    assert hass.data[DOMAIN]["mcp_refcount"] == 1
+    mcp_server.stop.assert_not_called()
+    assert hass.data[DOMAIN]["shared_mcp_server"] is mcp_server
+    assert entry_two.entry_id not in hass.data[DOMAIN]
