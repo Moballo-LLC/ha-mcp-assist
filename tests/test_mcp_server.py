@@ -1361,12 +1361,16 @@ async def test_handle_tools_list_invalidates_cache_when_custom_tool_surface_chan
 async def test_handle_tool_call_rejects_disabled_tools(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
-    """Disabled tools should fail closed even if called directly."""
+    """Disabled tools should fail closed with a tool error, not a raised exception."""
     system_entry_factory(data={CONF_ENABLE_DEVICE_TOOLS: False})
     server = MCPServer(hass, 8099, profile_entry_factory())
 
-    with pytest.raises(ValueError, match="disabled"):
-        await server.handle_tool_call({"name": "discover_devices", "arguments": {}})
+    result = await server.handle_tool_call(
+        {"name": "discover_devices", "arguments": {}}
+    )
+
+    assert result["isError"] is True
+    assert "disabled" in result["content"][0]["text"]
 
 
 @pytest.mark.asyncio
@@ -2719,6 +2723,34 @@ async def test_tool_get_image_returns_image_block_from_local_file(
 
 
 @pytest.mark.asyncio
+async def test_tool_get_image_offloads_local_read_to_executor(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
+) -> None:
+    """Local image resolve+read must run in an executor, not on the event loop."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    image_path = tmp_path / "pic.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsample")
+    monkeypatch.setattr(
+        hass.config, "path", lambda *parts: str(tmp_path.joinpath(*parts))
+    )
+
+    executor_calls: list[str] = []
+    original = hass.async_add_executor_job
+
+    async def _track(func, *args):
+        executor_calls.append(getattr(func, "__name__", repr(func)))
+        return await original(func, *args)
+
+    monkeypatch.setattr(hass, "async_add_executor_job", _track)
+
+    result = await server.tool_get_image({"image_path": "pic.png"})
+
+    assert result["isError"] is False
+    assert "_load_local_image" in executor_calls
+
+
+@pytest.mark.asyncio
 async def test_tool_get_image_accepts_absolute_path_inside_config_root(
     hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
 ) -> None:
@@ -3103,3 +3135,88 @@ async def test_fetch_http_image_url_uses_validated_absolute_request_url(
             {"allow_redirects": False},
         )
     ]
+
+
+class _FakeJsonRequest:
+    """Minimal request stub whose json() returns a preset body."""
+
+    def __init__(self, body: object) -> None:
+        self.remote = "127.0.0.1"
+        self.headers: dict[str, str] = {}
+        self.query: dict[str, str] = {}
+        self._body = body
+
+    async def json(self) -> object:
+        return self._body
+
+
+@pytest.mark.asyncio
+async def test_handle_mcp_request_rejects_non_object_body(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A JSON-RPC batch array/scalar is a client error (-32600), not a 500."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    response = await server.handle_mcp_request(
+        _FakeJsonRequest([{"jsonrpc": "2.0", "method": "tools/list", "id": 1}])
+    )
+
+    assert response.status == 400
+    payload = json.loads(response.text)
+    assert payload["error"]["code"] == -32600
+
+
+@pytest.mark.asyncio
+async def test_run_script_blocked_when_not_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """run_script must refuse a script that is not exposed to conversation."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: False
+    )
+
+    result = await server.tool_run_script({"script_id": "unlock_all_doors"})
+
+    assert "not exposed" in result["content"][0]["text"]
+    async_call_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_script_runs_when_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An exposed script should still execute normally."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: True
+    )
+
+    result = await server.tool_run_script({"script_id": "good_morning"})
+
+    async_call_mock.assert_awaited_once()
+    assert async_call_mock.await_args.kwargs["service"] == "good_morning"
+    assert "completed successfully" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_run_automation_blocked_when_not_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """run_automation must refuse an automation not exposed to conversation."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: False
+    )
+
+    result = await server.tool_run_automation({"automation_id": "secret_routine"})
+
+    assert "not exposed" in result["content"][0]["text"]
+    async_call_mock.assert_not_awaited()

@@ -1872,6 +1872,23 @@ class MCPServer(
         request_id = None
         try:
             data = await request.json()
+
+            # A JSON-RPC 2.0 request must be an object. A batch array or scalar
+            # is a client error (-32600), not a server fault (previously this
+            # raised AttributeError on data.get(...) and returned HTTP 500).
+            if not isinstance(data, dict):
+                return web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32600,
+                            "message": "Invalid Request: expected a JSON-RPC 2.0 object",
+                        },
+                        "id": None,
+                    },
+                    status=400,
+                )
+
             request_id = data.get("id")
 
             # Validate JSON-RPC 2.0 format
@@ -2512,8 +2529,11 @@ class MCPServer(
             )
 
         if not self._is_tool_enabled(tool_name):
-            raise ValueError(
-                f"Tool '{tool_name}' is disabled in shared MCP settings."
+            # A disabled tool is a tool-level error (isError result), not a
+            # JSON-RPC internal error (-32603), matching the unknown-tool path.
+            return self._build_text_tool_result(
+                f"Tool '{tool_name}' is disabled in shared MCP settings.",
+                is_error=True,
             )
 
         if tool_name == "discover_entities":
@@ -2755,8 +2775,9 @@ class MCPServer(
                 },
             )
 
-        local_path = self._resolve_local_image_path(field_value)
-        image_bytes, mime_type = self._read_local_image_path(local_path)
+        local_path, image_bytes, mime_type = await self.hass.async_add_executor_job(
+            self._load_local_image, field_value
+        )
         return (
             image_bytes,
             mime_type,
@@ -2816,8 +2837,10 @@ class MCPServer(
             return self._parse_data_url_image(reference)
         if reference.startswith("/"):
             if reference.startswith("/local/") or reference.startswith("/media/local/"):
-                local_path = self._resolve_local_image_path(reference)
-                return self._read_local_image_path(local_path)
+                _, image_bytes, mime_type = await self.hass.async_add_executor_job(
+                    self._load_local_image, reference
+                )
+                return image_bytes, mime_type
             return await self._fetch_http_image_url(reference)
         if reference.startswith(("http://", "https://")):
             return await self._fetch_http_image_url(reference)
@@ -2826,8 +2849,10 @@ class MCPServer(
                 "Only data URLs, Home Assistant-local URLs, local image paths, and http(s) image URLs are supported."
             )
 
-        local_path = self._resolve_local_image_path(reference)
-        return self._read_local_image_path(local_path)
+        _, image_bytes, mime_type = await self.hass.async_add_executor_job(
+            self._load_local_image, reference
+        )
+        return image_bytes, mime_type
 
     async def _fetch_http_image_url(self, reference: str) -> tuple[bytes, str]:
         """Fetch an image from an allowed HTTP(S) URL, validating redirects."""
@@ -3167,6 +3192,16 @@ class MCPServer(
         image_bytes = path.read_bytes()
         mime_type = mimetypes.guess_type(path.name)[0]
         return self._normalize_image_payload(image_bytes, mime_type, str(path))
+
+    def _load_local_image(self, reference: str) -> tuple[Path, bytes, str]:
+        """Resolve and read a local image. Blocking — run in an executor.
+
+        Path resolution (stat) and reading up to _MAX_INLINE_IMAGE_BYTES from
+        disk must not run on the event loop.
+        """
+        local_path = self._resolve_local_image_path(reference)
+        image_bytes, mime_type = self._read_local_image_path(local_path)
+        return local_path, image_bytes, mime_type
 
     def _normalize_image_payload(
         self,
@@ -4492,6 +4527,42 @@ class MCPServer(
             ]
         }
 
+    def _conversation_exposure_error(
+        self, entity_id: str, tool: str
+    ) -> Dict[str, Any] | None:
+        """Return an error result if the entity is not exposed to conversation.
+
+        run_script/run_automation actuate entities directly, so they must honor
+        the same conversation-exposure boundary that perform_action enforces via
+        resolve_target — otherwise a non-exposed privileged script/automation
+        could be run despite the operator limiting what the assistant may touch.
+        """
+        if async_should_expose(self.hass, "conversation", entity_id):
+            return None
+
+        _LOGGER.warning(
+            "Blocked %s: %s is not exposed to conversation",
+            tool,
+            _sanitize_log_value(entity_id),
+        )
+        self.publish_progress(
+            "tool_complete",
+            f"Blocked: {entity_id} is not exposed to the assistant",
+            tool=tool,
+            success=False,
+        )
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        f"❌ Error: {entity_id} is not exposed to the assistant. "
+                        "Expose it under Settings → Voice assistants to allow this."
+                    ),
+                }
+            ]
+        }
+
     async def tool_run_script(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Home Assistant script and return its response variables."""
         script_id = args.get("script_id")
@@ -4501,6 +4572,10 @@ class MCPServer(
         # Extract script name (remove script. prefix if present)
         script_name = script_id.replace("script.", "")
         full_script_id = f"script.{script_name}"
+
+        exposure_error = self._conversation_exposure_error(full_script_id, "run_script")
+        if exposure_error is not None:
+            return exposure_error
 
         _LOGGER.info(
             "📜 Running script: %s (variable_count=%d, variable_bytes=%d)",
@@ -4578,6 +4653,10 @@ class MCPServer(
         # Normalize automation_id (add automation. prefix if missing)
         if not automation_id.startswith("automation."):
             automation_id = f"automation.{automation_id}"
+
+        exposure_error = self._conversation_exposure_error(automation_id, "run_automation")
+        if exposure_error is not None:
+            return exposure_error
 
         _LOGGER.info(
             "🤖 Triggering automation: %s (variable_count=%d, variable_bytes=%d, skip_conditions=%s)",

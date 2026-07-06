@@ -88,6 +88,15 @@ class IndexManager:
         self._refresh_debounce_seconds = 60
         self._gap_filling_in_progress = False  # Re-entrancy guard for gap-filling
         self._first_index_generated = False  # Skip gap-filling on first index (startup)
+        # Serializes generation so concurrent lazy get_index() calls and the
+        # debounced refresh don't run duplicate (paid) index builds.
+        self._generate_lock = asyncio.Lock()
+        # Coalesce flag: registry events set this instead of cancelling an
+        # in-flight generation, so sustained churn can't starve the index.
+        self._refresh_pending = False
+        # One-shot follow-up so gap-filling (skipped on the first index) runs
+        # once even on a stable system with no further registry changes.
+        self._initial_gap_fill_scheduled = False
 
     async def start(self) -> None:
         """Start index manager and set up event listeners."""
@@ -137,24 +146,46 @@ class IndexManager:
         self._refresh_task = None
 
     def _schedule_refresh(self) -> None:
-        """Schedule index refresh with debouncing."""
-        # Cancel pending refresh if exists
-        if self._refresh_task and not self._refresh_task.done():
-            self._refresh_task.cancel()
+        """Request a debounced index refresh, coalescing rapid registry events.
 
-        # Schedule new refresh after debounce period
-        self._refresh_task = asyncio.create_task(self._delayed_refresh())
+        Sets a pending flag and starts the debounce loop if it isn't already
+        running. A change that arrives while a refresh is in flight is recorded
+        and handled after it completes, rather than cancelling it mid-generation
+        (which, under sustained churn, would starve the index of updates).
+        """
+        self._refresh_pending = True
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = asyncio.create_task(self._debounced_refresh_loop())
 
-    async def _delayed_refresh(self) -> None:
-        """Refresh index after debounce delay."""
+    async def _debounced_refresh_loop(self) -> None:
+        """Refresh once the registry has been quiet for the debounce window.
+
+        A change that arrives *during the wait* restarts the quiet window, so
+        a burst of registry events (common for one HA change) coalesces into a
+        single rebuild rather than refreshing mid-burst. A change that arrives
+        *during generation* is recorded and handled by the next loop iteration,
+        so an in-flight refresh is never interrupted.
+        """
         try:
-            await asyncio.sleep(self._refresh_debounce_seconds)
-            await self.refresh_index()
+            while self._refresh_pending:
+                self._refresh_pending = False
+                await asyncio.sleep(self._refresh_debounce_seconds)
+                if self._refresh_pending:
+                    # More changes landed during the wait — reset the window.
+                    continue
+                await self.refresh_index()
         except asyncio.CancelledError:
-            _LOGGER.debug("Index refresh cancelled (newer change detected)")
+            _LOGGER.debug("Index refresh loop cancelled")
+            raise
 
     async def refresh_index(self) -> None:
-        """Generate fresh index from current system state."""
+        """Generate a fresh index from current system state."""
+        async with self._generate_lock:
+            await self._generate_and_store_index()
+        await self._maybe_schedule_initial_gap_fill()
+
+    async def _generate_and_store_index(self) -> None:
+        """Build the index and store it. Caller holds the generate lock."""
         start_time = datetime.now()
         _LOGGER.info("Generating system structure index...")
 
@@ -178,10 +209,30 @@ class IndexManager:
         except Exception as err:
             _LOGGER.error("Failed to generate index: %s", err, exc_info=True)
 
+    async def _maybe_schedule_initial_gap_fill(self) -> None:
+        """After the first index, schedule one refresh so gap-filling can run.
+
+        The first generation skips gap-filling (the LLM may not be ready at
+        startup). Without a follow-up, a stable system with no registry churn
+        would never populate inferred types. Schedule exactly one deferred
+        refresh, and only when gap-filling is actually enabled.
+        """
+        if self._initial_gap_fill_scheduled or not self._first_index_generated:
+            return
+        if not await self._is_gap_filling_enabled():
+            return
+        self._initial_gap_fill_scheduled = True
+        _LOGGER.debug("Scheduling one deferred refresh to run initial gap-filling")
+        self._schedule_refresh()
+
     async def get_index(self) -> Dict[str, Any]:
         """Get the current index, generating if needed."""
         if self._index is None:
-            await self.refresh_index()
+            async with self._generate_lock:
+                # Re-check under the lock: another caller may have generated it.
+                if self._index is None:
+                    await self._generate_and_store_index()
+            await self._maybe_schedule_initial_gap_fill()
 
         return self._index or {}
 

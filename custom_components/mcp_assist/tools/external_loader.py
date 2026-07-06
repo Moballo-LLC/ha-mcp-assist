@@ -149,7 +149,14 @@ class ExternalCustomToolLoader:
                     raise ValueError(
                         f"Manifest id {manifest.tool_id!r} conflicts with an existing tool package"
                     )
-                tool = self._instantiate_tool(tool_dir, manifest)
+                # Importing the entrypoint runs the package's top-level code and
+                # reads from disk, so keep that off the event loop — but
+                # construct the tool back on the loop, since a package __init__
+                # may touch hass registries/states or create loop-bound objects.
+                tool_class = await self.hass.async_add_executor_job(
+                    self._import_tool_class, tool_dir, manifest
+                )
+                tool = tool_class(self.hass, manifest, tool_dir)
                 settings_schema = self._normalize_settings_schema(
                     manifest,
                     tool.get_settings_schema(),
@@ -303,12 +310,16 @@ class ExternalCustomToolLoader:
             prompt_append_file=prompt_append_file,
         )
 
-    def _instantiate_tool(
+    def _import_tool_class(
         self,
         tool_dir: Path,
         manifest: MCPAssistCustomToolManifest,
-    ) -> MCPAssistExternalTool:
-        """Import and instantiate a tool class from a package entrypoint."""
+    ) -> type[MCPAssistExternalTool]:
+        """Import a tool class from a package entrypoint.
+
+        Only the blocking import/file reads happen here (safe to run in an
+        executor); the caller constructs the instance on the event loop.
+        """
         module_name, class_name = manifest.entrypoint.split(":", 1)
         module_name = module_name.strip()
         class_name = class_name.strip()
@@ -345,7 +356,7 @@ class ExternalCustomToolLoader:
                 f"{class_name!r} must subclass MCPAssistExternalTool"
             )
 
-        return tool_class(self.hass, manifest, tool_dir)
+        return tool_class
 
     def _resolve_module_path(self, tool_dir: Path, module_name: str) -> Path:
         """Resolve an entrypoint module inside the tool package directory."""
