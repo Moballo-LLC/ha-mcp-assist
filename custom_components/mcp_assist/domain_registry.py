@@ -730,36 +730,78 @@ DOMAIN_REGISTRY = {
     },
 }
 
-# Common action aliases that map to standard services
+# Domain-specific action aliases, resolved before the generic aliases below so
+# that e.g. media_player "stop" maps to media_stop instead of turn_off.
+DOMAIN_ACTION_ALIASES = {
+    "media_player": {
+        "stop": "media_stop",
+        "play": "media_play",
+        "pause": "media_pause",
+        "next": "media_next_track",
+        "previous": "media_previous_track",
+        "mute": "volume_mute",
+    },
+    "cover": {
+        "open": "open_cover",
+        "close": "close_cover",
+        "raise": "open_cover",
+        "lift": "open_cover",
+        "lower": "close_cover",
+        "drop": "close_cover",
+        "stop": "stop_cover",
+    },
+    "valve": {
+        "open": "open_valve",
+        "close": "close_valve",
+        "stop": "stop_valve",
+    },
+    "lock": {
+        "secure": "lock",
+        "unsecure": "unlock",
+    },
+    "vacuum": {
+        "clean": "start",
+        "dock": "return_to_base",
+        "home": "return_to_base",
+    },
+    "lawn_mower": {
+        "start": "start_mowing",
+        "home": "dock",
+    },
+    "timer": {
+        "stop": "cancel",
+    },
+    "climate": {
+        "heat": "set_hvac_mode",
+        "cool": "set_hvac_mode",
+    },
+    "calendar": {
+        "create": "create_event",
+        "add": "create_event",
+        "new": "create_event",
+        "schedule": "create_event",
+    },
+    "todo": {
+        "create": "add_item",
+        "add": "add_item",
+        "new": "add_item",
+        "delete": "remove_item",
+        "remove": "remove_item",
+        "clear_completed": "remove_completed_items",
+        "remove_completed": "remove_completed_items",
+        "cleanup": "remove_completed_items",
+    },
+}
+
+# Generic aliases applied to any domain, but only when the mapped service is
+# actually available for that domain.
 ACTION_ALIASES = {
-    # Common aliases for turn_on/turn_off
     "activate": "turn_on",
     "deactivate": "turn_off",
     "enable": "turn_on",
     "disable": "turn_off",
     "start": "turn_on",
     "stop": "turn_off",
-    # Lock-specific aliases
-    "secure": "lock",
-    "unsecure": "unlock",
-    # Cover-specific aliases
-    "open": "open_cover",
-    "close": "close_cover",
-    "raise": "open_cover",
-    "lower": "close_cover",
-    # Media player aliases
-    "play": "media_play",
-    "pause": "media_pause",
-    "next": "media_next_track",
-    "previous": "media_previous_track",
-    "mute": "volume_mute",
-    # Climate aliases
-    "heat": "set_hvac_mode",
-    "cool": "set_hvac_mode",
-    # Vacuum aliases
-    "clean": "start",
-    "dock": "return_to_base",
-    "home": "return_to_base",
 }
 
 
@@ -806,39 +848,19 @@ def map_action_to_service(domain: str, action: str) -> str:
     """
     # First check if it's already a valid service name
     domain_info = get_domain_info(domain)
-    if domain_info and action in domain_info.get("services", []):
+    services = domain_info.get("services", []) if domain_info else []
+    if action in services:
         return action
 
-    # Check common aliases
-    if action in ACTION_ALIASES:
-        return ACTION_ALIASES[action]
+    domain_alias = DOMAIN_ACTION_ALIASES.get(domain, {}).get(action)
+    if domain_alias and domain_alias in services:
+        return domain_alias
 
-    # Domain-specific mappings
-    if domain == "cover":
-        if action in ["raise", "lift"]:
-            return "open_cover"
-        elif action in ["lower", "drop"]:
-            return "close_cover"
-    elif domain == "calendar":
-        if action in ["create", "add", "new", "schedule"]:
-            return "create_event"
-    elif domain == "lock":
-        if action == "secure":
-            return "lock"
-        elif action == "unsecure":
-            return "unlock"
-    elif domain == "todo":
-        if action in ["create", "add", "new"]:
-            return "add_item"
-        if action in ["delete", "remove"]:
-            return "remove_item"
-        if action in ["clear_completed", "remove_completed", "cleanup"]:
-            return "remove_completed_items"
-    elif domain == "vacuum":
-        if action == "clean":
-            return "start"
-        elif action in ["dock", "home"]:
-            return "return_to_base"
+    # Generic aliases only apply when the mapped service exists for the domain;
+    # unknown domains keep the generic mapping as a best-effort fallback.
+    generic_alias = ACTION_ALIASES.get(action)
+    if generic_alias and (generic_alias in services or not domain_info):
+        return generic_alias
 
     # Default: return the action as-is
     return action
