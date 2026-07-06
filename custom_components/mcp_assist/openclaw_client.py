@@ -182,7 +182,10 @@ class OpenClawClient:
         self._receive_task: Optional[asyncio.Task] = None
         self._pending_requests: Dict[str, asyncio.Future] = {}
         self._agent_runs: Dict[str, "_AgentRun"] = {}
+        # Agent events that arrived before send_message registered the run.
+        self._early_agent_events: Dict[str, list] = {}
         self._event_handlers: Dict[str, list] = {}
+        self._connect_lock = asyncio.Lock()
 
     @property
     def is_connected(self) -> bool:
@@ -191,6 +194,13 @@ class OpenClawClient:
 
     async def connect(self) -> None:
         """Connect to the OpenClaw Gateway and complete handshake."""
+        async with self._connect_lock:
+            if self.is_connected:
+                return
+            await self._connect_locked()
+
+    async def _connect_locked(self) -> None:
+        """Connect and complete the handshake; caller holds the connect lock."""
         from websockets.asyncio.client import connect
 
         # Sanitize host — strip protocol prefixes and trailing slashes
@@ -335,18 +345,21 @@ class OpenClawClient:
             except asyncio.CancelledError:
                 pass
 
-        # Fail pending requests
-        for future in self._pending_requests.values():
-            if not future.done():
-                future.set_exception(OpenClawConnectionError("Disconnected"))
-        self._pending_requests.clear()
-
-        # Complete active runs
-        for run in self._agent_runs.values():
-            run.set_complete("error", "Disconnected")
-        self._agent_runs.clear()
+        self._fail_inflight("Disconnected")
 
         await self._close_ws()
+
+    def _fail_inflight(self, reason: str) -> None:
+        """Fail pending requests and complete active runs with an error."""
+        for future in self._pending_requests.values():
+            if not future.done():
+                future.set_exception(OpenClawConnectionError(reason))
+        self._pending_requests.clear()
+
+        for run in self._agent_runs.values():
+            run.set_complete("error", reason)
+        self._agent_runs.clear()
+        self._early_agent_events.clear()
 
     async def _close_ws(self) -> None:
         """Close the WebSocket connection."""
@@ -390,24 +403,29 @@ class OpenClawClient:
             + text
         )
 
-        # Send agent request
-        await self._ws.send(json.dumps({
-            "type": "req",
-            "id": request_id,
-            "method": "agent",
-            "params": {
-                "message": voice_message,
-                "sessionKey": session_key,
-                "idempotencyKey": idempotency_key,
-            },
-        }))
+        # Register the response future before sending so a fast acknowledgment
+        # processed during the send await cannot be dropped.
+        future = asyncio.get_running_loop().create_future()
+        self._pending_requests[request_id] = future
+
+        try:
+            await self._ws.send(json.dumps({
+                "type": "req",
+                "id": request_id,
+                "method": "agent",
+                "params": {
+                    "message": voice_message,
+                    "sessionKey": session_key,
+                    "idempotencyKey": idempotency_key,
+                },
+            }))
+        except Exception as err:
+            self._pending_requests.pop(request_id, None)
+            raise OpenClawConnectionError(f"Failed to send agent request: {err}") from err
 
         _LOGGER.debug("Sent agent request: %s", request_id[:8])
 
         # Wait for the initial response (contains runId)
-        future = asyncio.get_event_loop().create_future()
-        self._pending_requests[request_id] = future
-
         try:
             resp = await asyncio.wait_for(future, timeout=10.0)
         except asyncio.TimeoutError:
@@ -422,9 +440,11 @@ class OpenClawClient:
         if not run_id:
             raise OpenClawError("No runId in agent response")
 
-        # Track this run and wait for completion
+        # Track this run, replaying any events that beat the registration.
         run = _AgentRun(run_id)
         self._agent_runs[run_id] = run
+        for payload in self._early_agent_events.pop(run_id, []):
+            self._apply_agent_event(run, payload)
 
         try:
             await asyncio.wait_for(run.complete_event.wait(), timeout=self._timeout)
@@ -457,10 +477,14 @@ class OpenClawClient:
                 except Exception as err:
                     _LOGGER.debug("Error handling message: %s", err)
         except asyncio.CancelledError:
-            return
+            raise
         except Exception as err:
             _LOGGER.warning("WebSocket receive loop ended: %s", err)
+        finally:
+            # Fail waiters immediately (on both graceful close and errors)
+            # instead of leaving them to hit their full timeouts.
             self._connected = False
+            self._fail_inflight("Connection to OpenClaw Gateway lost")
 
     async def _handle_message(self, msg: Dict[str, Any]) -> None:
         """Handle an incoming WebSocket message."""
@@ -485,6 +509,10 @@ class OpenClawClient:
             except Exception:
                 pass
 
+    # Bounds for events buffered before their run is registered.
+    _MAX_EARLY_EVENT_RUNS = 8
+    _MAX_EARLY_EVENTS_PER_RUN = 32
+
     def _handle_agent_event(self, payload: Dict[str, Any]) -> None:
         """Handle an agent event (streaming output or completion)."""
         run_id = payload.get("runId")
@@ -493,13 +521,27 @@ class OpenClawClient:
 
         run = self._agent_runs.get(run_id)
         if not run:
-            _LOGGER.debug("Agent event for unknown run %s, keys: %s", run_id[:8], list(payload.keys()))
+            # The acknowledgment and first events can be processed back to
+            # back, before send_message registers the run. Buffer them so
+            # send_message can replay them instead of dropping completions.
+            _LOGGER.debug(
+                "Buffering agent event for unregistered run %s, keys: %s",
+                run_id[:8], list(payload.keys()),
+            )
+            events = self._early_agent_events.setdefault(run_id, [])
+            events.append(payload)
+            del events[:-self._MAX_EARLY_EVENTS_PER_RUN]
+            while len(self._early_agent_events) > self._MAX_EARLY_EVENT_RUNS:
+                self._early_agent_events.pop(next(iter(self._early_agent_events)))
             return
 
-        # Log all agent events for debugging
+        self._apply_agent_event(run, payload)
+
+    def _apply_agent_event(self, run: "_AgentRun", payload: Dict[str, Any]) -> None:
+        """Apply a single agent event to its run."""
         _LOGGER.debug(
             "Agent event: run=%s keys=%s output_len=%s status=%s phase=%s",
-            run_id[:8],
+            run.run_id[:8],
             list(payload.keys()),
             len(payload.get("output", "")) if payload.get("output") else 0,
             payload.get("status"),
