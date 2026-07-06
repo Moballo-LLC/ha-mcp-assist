@@ -3103,3 +3103,58 @@ async def test_fetch_http_image_url_uses_validated_absolute_request_url(
             {"allow_redirects": False},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_script_blocked_when_not_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """run_script must refuse a script that is not exposed to conversation."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: False
+    )
+
+    result = await server.tool_run_script({"script_id": "unlock_all_doors"})
+
+    assert "not exposed" in result["content"][0]["text"]
+    async_call_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_script_runs_when_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An exposed script should still execute normally."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: True
+    )
+
+    result = await server.tool_run_script({"script_id": "good_morning"})
+
+    async_call_mock.assert_awaited_once()
+    assert async_call_mock.await_args.kwargs["service"] == "good_morning"
+    assert "completed successfully" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_run_automation_blocked_when_not_exposed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """run_automation must refuse an automation not exposed to conversation."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    async_call_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(type(hass.services), "async_call", async_call_mock)
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args, **kwargs: False
+    )
+
+    result = await server.tool_run_automation({"automation_id": "secret_routine"})
+
+    assert "not exposed" in result["content"][0]["text"]
+    async_call_mock.assert_not_awaited()
