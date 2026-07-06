@@ -234,3 +234,35 @@ async def test_get_entity_details_includes_script_fields(hass) -> None:
         "message": {"description": "Announcement text"},
         "urgent": {},
     }
+
+
+@pytest.mark.asyncio
+async def test_discovery_handles_regex_metacharacters_in_names(hass) -> None:
+    """Model-supplied names with regex metacharacters must not crash discovery."""
+    discovery = SmartDiscovery(hass)
+    hass.states.async_set("light.kitchen", "on")
+    hass.states.async_set("input_text.room_alex", "kitchen")
+
+    # Previously raised re.error (unbalanced parenthesis) from the pattern checks.
+    assert discovery._is_likely_person_name("alex (phone") is False
+
+    with patch(
+        "custom_components.mcp_assist.discovery.async_should_expose",
+        return_value=True,
+    ):
+        person_page = await discovery._discover_person_entities_page("alex (phone", limit=5)
+        pet_page = await discovery._discover_pet_entities_page("rex [cat", limit=5)
+
+    assert person_page["items"] == []
+    assert pet_page["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_area_discovery_with_empty_area_list_returns_page(hass) -> None:
+    """The defensive empty-list branch must return a page dict, not a bare list."""
+    discovery = SmartDiscovery(hass)
+
+    page = await discovery._discover_area_entities_page([], None, None, None, 5, 0)
+
+    assert page["items"] == []
+    assert page["total_found"] == 0

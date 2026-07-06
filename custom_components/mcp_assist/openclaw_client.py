@@ -9,6 +9,7 @@ import ssl
 import time
 import uuid
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
@@ -189,19 +190,31 @@ class OpenClawClient:
         """Return whether the client is connected."""
         return self._connected and self._ws is not None
 
+    def _sanitized_host(self) -> str:
+        """Return the host with any protocol prefix and trailing slash removed."""
+        host = self._host.strip().rstrip("/")
+        for prefix in ("https://", "http://", "wss://", "ws://"):
+            if host.lower().startswith(prefix):
+                return host[len(prefix):]
+        return host
+
+    def _build_ws_url(self) -> str:
+        """Build the gateway websocket URL with the token percent-encoded.
+
+        The token is also sent in the Authorization/X-OpenClaw-Token headers,
+        but it is kept in the query string for gateway compatibility. Encoding
+        it avoids a malformed URL (or a silently wrong token) when the token
+        contains characters such as ``&``, ``#``, ``/`` or spaces.
+        """
+        scheme = "wss" if self._use_ssl else "ws"
+        return f"{scheme}://{self._sanitized_host()}:{self._port}/?token={quote(self._token, safe='')}"
+
     async def connect(self) -> None:
         """Connect to the OpenClaw Gateway and complete handshake."""
         from websockets.asyncio.client import connect
 
-        # Sanitize host — strip protocol prefixes and trailing slashes
-        host = self._host.strip().rstrip("/")
-        for prefix in ("https://", "http://", "wss://", "ws://"):
-            if host.lower().startswith(prefix):
-                host = host[len(prefix):]
-                break
-
         scheme = "wss" if self._use_ssl else "ws"
-        url = f"{scheme}://{host}:{self._port}/?token={self._token}"
+        url = self._build_ws_url()
         headers = {
             "Authorization": f"Bearer {self._token}",
             "X-OpenClaw-Token": self._token,
