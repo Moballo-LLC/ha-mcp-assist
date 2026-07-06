@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from homeassistant.util import dt as dt_util
 
 from custom_components.mcp_assist.conversation_history import ConversationHistory
 
@@ -39,8 +41,34 @@ def test_cleanup_limits_turns_and_removes_old_entries() -> None:
 
     assert [turn["user"] for turn in history.get_history("abc")] == ["two", "three"]
 
-    history._conversations["abc"][0]["timestamp"] = datetime.now() - timedelta(hours=2)
+    history._conversations["abc"][0]["timestamp"] = dt_util.utcnow() - timedelta(hours=2)
     assert [turn["user"] for turn in history.get_history("abc")] == ["three"]
+
+
+def test_add_turn_prunes_abandoned_expired_conversations() -> None:
+    """Abandoned conversations must be swept, not just the one being written."""
+    history = ConversationHistory(max_history_age_hours=1)
+    history.add_turn("old", "hello", "hi")
+    # The 'old' conversation is never touched again, but ages out.
+    history._conversations["old"][0]["timestamp"] = dt_util.utcnow() - timedelta(hours=2)
+
+    # A turn on a *different* conversation must trigger the global sweep.
+    history.add_turn("new", "status", "ok")
+
+    assert "old" not in history._conversations
+    assert "new" in history._conversations
+
+
+def test_add_turn_caps_total_conversation_count() -> None:
+    """The number of retained conversations must stay bounded."""
+    history = ConversationHistory(max_conversations=3)
+
+    for index in range(6):
+        history.add_turn(f"conv-{index}", "hi", "hello")
+
+    assert len(history._conversations) == 3
+    # The most recently active conversations are kept.
+    assert set(history._conversations) == {"conv-3", "conv-4", "conv-5"}
 
 
 def test_get_stats_reports_counts_and_timestamps() -> None:
