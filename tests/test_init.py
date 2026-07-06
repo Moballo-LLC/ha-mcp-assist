@@ -516,3 +516,35 @@ async def test_release_mcp_server_waits_for_setup_lock(hass) -> None:
     mcp_server.stop.assert_awaited_once()
     assert "shared_mcp_server" not in hass.data[DOMAIN]
     assert "mcp_refcount" not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_release_rebinds_server_when_owner_entry_removed(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """If the server's owning profile is gone, release rebinds it to a survivor."""
+    system_entry_factory()
+    owner = profile_entry_factory(
+        title="Ollama - Owner", unique_id=f"{DOMAIN}_owner", data={CONF_PROFILE_NAME: "Owner"}
+    )
+    survivor = profile_entry_factory(
+        title="Ollama - Survivor", unique_id=f"{DOMAIN}_survivor", data={CONF_PROFILE_NAME: "Survivor"}
+    )
+
+    # Server created by (bound to) the owner; two references held.
+    tools = SimpleNamespace(entry=owner)
+    mcp_server = SimpleNamespace(entry=owner, tools=tools, stop=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["server_init_lock"] = asyncio.Lock()
+    hass.data[DOMAIN]["shared_mcp_server"] = mcp_server
+    hass.data[DOMAIN]["mcp_refcount"] = 2
+    hass.data[DOMAIN][survivor.entry_id] = {"profile_name": "Survivor"}
+    # The owner's setup failed: its per-entry data was already removed.
+
+    await _async_release_mcp_server(hass)
+
+    # Server stays up (survivor still references it) and is rebound off the owner.
+    assert hass.data[DOMAIN]["mcp_refcount"] == 1
+    mcp_server.stop.assert_not_called()
+    assert mcp_server.entry is survivor
+    assert mcp_server.tools.entry is survivor

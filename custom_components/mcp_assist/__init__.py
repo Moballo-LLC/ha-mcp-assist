@@ -808,6 +808,43 @@ async def _async_release_mcp_server(hass: HomeAssistant) -> None:
             await _async_unregister_services(hass)
         else:
             _LOGGER.info("Shared MCP server still in use by %d profile(s)", refcount)
+            _rebind_shared_server_entry(hass)
+
+
+def _rebind_shared_server_entry(hass: HomeAssistant) -> None:
+    """Point the shared server at a live profile if its owner was removed.
+
+    The shared ``MCPServer`` (and its ``CustomToolsLoader``) is created bound
+    to whichever profile started it. If that profile is later removed — a
+    failed setup releasing its reference, or an unload of the owning profile
+    while another still references the server — the server would keep reading
+    config from the removed entry. Rebind it to a surviving set-up profile.
+    """
+    domain_data = hass.data.get(DOMAIN, {})
+    server = domain_data.get("shared_mcp_server")
+    if server is None:
+        return
+
+    current = getattr(server, "entry", None)
+    if current is not None and current.entry_id in domain_data:
+        return  # still bound to a set-up profile
+
+    replacement = next(
+        (
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.unique_id != SYSTEM_ENTRY_UNIQUE_ID and entry.entry_id in domain_data
+        ),
+        None,
+    )
+    if replacement is None:
+        return
+
+    server.entry = replacement
+    tools = getattr(server, "tools", None)
+    if tools is not None and getattr(tools, "entry", None) is not None:
+        tools.entry = replacement
+    _LOGGER.debug("Rebound shared MCP server to surviving profile %s", replacement.entry_id)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
