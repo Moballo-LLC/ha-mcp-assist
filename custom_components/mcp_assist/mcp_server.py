@@ -4512,6 +4512,42 @@ class MCPServer(
             ]
         }
 
+    def _conversation_exposure_error(
+        self, entity_id: str, tool: str
+    ) -> Dict[str, Any] | None:
+        """Return an error result if the entity is not exposed to conversation.
+
+        run_script/run_automation actuate entities directly, so they must honor
+        the same conversation-exposure boundary that perform_action enforces via
+        resolve_target — otherwise a non-exposed privileged script/automation
+        could be run despite the operator limiting what the assistant may touch.
+        """
+        if async_should_expose(self.hass, "conversation", entity_id):
+            return None
+
+        _LOGGER.warning(
+            "Blocked %s: %s is not exposed to conversation",
+            tool,
+            _sanitize_log_value(entity_id),
+        )
+        self.publish_progress(
+            "tool_complete",
+            f"Blocked: {entity_id} is not exposed to the assistant",
+            tool=tool,
+            success=False,
+        )
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        f"❌ Error: {entity_id} is not exposed to the assistant. "
+                        "Expose it under Settings → Voice assistants to allow this."
+                    ),
+                }
+            ]
+        }
+
     async def tool_run_script(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a Home Assistant script and return its response variables."""
         script_id = args.get("script_id")
@@ -4521,6 +4557,10 @@ class MCPServer(
         # Extract script name (remove script. prefix if present)
         script_name = script_id.replace("script.", "")
         full_script_id = f"script.{script_name}"
+
+        exposure_error = self._conversation_exposure_error(full_script_id, "run_script")
+        if exposure_error is not None:
+            return exposure_error
 
         _LOGGER.info(
             "📜 Running script: %s (variable_count=%d, variable_bytes=%d)",
@@ -4598,6 +4638,10 @@ class MCPServer(
         # Normalize automation_id (add automation. prefix if missing)
         if not automation_id.startswith("automation."):
             automation_id = f"automation.{automation_id}"
+
+        exposure_error = self._conversation_exposure_error(automation_id, "run_automation")
+        if exposure_error is not None:
+            return exposure_error
 
         _LOGGER.info(
             "🤖 Triggering automation: %s (variable_count=%d, variable_bytes=%d, skip_conditions=%s)",

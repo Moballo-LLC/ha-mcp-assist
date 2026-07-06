@@ -489,6 +489,108 @@ def test_openai_provider_uses_completion_tokens_for_gpt5() -> None:
     assert "temperature" not in payload
 
 
+@pytest.mark.parametrize("model_name", ["o3", "o3-mini", "o4-mini", "o1-preview"])
+def test_openai_provider_uses_completion_tokens_for_o_series(model_name: str) -> None:
+    """o3/o4-series reasoning models must use max_completion_tokens, no temperature."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, model_name=model_name, max_tokens=200)
+    )
+
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Hello"}],
+        stream=False,
+    )
+
+    assert payload["max_completion_tokens"] == 200
+    assert "max_tokens" not in payload
+    assert "temperature" not in payload
+
+
+@pytest.mark.parametrize("model_name", ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-3.5-turbo"])
+def test_openai_provider_keeps_standard_params_for_chat_models(model_name: str) -> None:
+    """Non-reasoning chat models keep max_tokens and temperature."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, model_name=model_name, max_tokens=200, temperature=0.4)
+    )
+
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Hello"}],
+        stream=False,
+    )
+
+    assert payload["max_tokens"] == 200
+    assert payload["temperature"] == 0.4
+    assert "max_completion_tokens" not in payload
+
+
+def test_is_reasoning_model_classification() -> None:
+    """The reasoning-model heuristic should match the o-series and GPT-5 only."""
+    is_reasoning = OpenAIProvider.is_reasoning_model
+    assert is_reasoning("o1")
+    assert is_reasoning("o3-mini")
+    assert is_reasoning("o4-mini")
+    assert is_reasoning("gpt-5")
+    assert is_reasoning("openai/o3-mini")  # OpenRouter-style prefix
+    assert not is_reasoning("gpt-4o")
+    assert not is_reasoning("gpt-4o-mini")
+    assert not is_reasoning("omni-model")  # "o" not followed by a digit
+    assert not is_reasoning("llama-3.1-8b")
+    assert not is_reasoning("")
+
+
+def test_openai_filter_model_ids_keeps_reasoning_models() -> None:
+    """The official OpenAI model list should include o-series reasoning models."""
+    filtered = OpenAIProvider.filter_model_ids(
+        ["gpt-4o", "o3-mini", "o1", "whisper-1", "text-embedding-3-large", "o4-mini"],
+        base_url=OPENAI_BASE_URL,
+    )
+
+    assert "o3-mini" in filtered
+    assert "o1" in filtered
+    assert "o4-mini" in filtered
+    assert "gpt-4o" in filtered
+    assert "whisper-1" not in filtered
+    assert "text-embedding-3-large" not in filtered
+
+
+def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
+    """Responses-API-only o-series models must not appear in the chat dropdown."""
+    filtered = OpenAIProvider.filter_model_ids(
+        ["gpt-4o", "o3", "o3-mini", "o1-pro", "o3-pro", "o3-pro-2025-06-10", "o3-deep-research", "o4-mini-deep-research"],
+        base_url=OPENAI_BASE_URL,
+    )
+
+    # Chat-completions reasoning models stay.
+    assert "o3" in filtered
+    assert "o3-mini" in filtered
+    assert "gpt-4o" in filtered
+    # Responses-only / deep-research variants (incl. dated snapshots) are excluded.
+    assert "o1-pro" not in filtered
+    assert "o3-pro" not in filtered
+    assert "o3-pro-2025-06-10" not in filtered
+    assert "o3-deep-research" not in filtered
+    assert "o4-mini-deep-research" not in filtered
+
+
+def test_is_responses_only_model_classification() -> None:
+    """Only deep-research and o-series *-pro models are Responses-only."""
+    is_responses_only = OpenAIProvider.is_responses_only_model
+    assert is_responses_only("o3-pro")
+    assert is_responses_only("o1-pro")
+    assert is_responses_only("o3-deep-research")
+    assert is_responses_only("o4-mini-deep-research")
+    assert is_responses_only("openai/o3-pro")
+    # Dated snapshot IDs must also be caught.
+    assert is_responses_only("o3-pro-2025-06-10")
+    assert is_responses_only("o1-pro-2025-03-19")
+    assert is_responses_only("o3-deep-research-2025-06-26")
+    assert not is_responses_only("o3")
+    assert not is_responses_only("o3-mini")
+    assert not is_responses_only("gpt-4o")
+    # "pro" must be a segment, not any substring.
+    assert not is_responses_only("gpt-4-proxy")
+
+
 def test_openai_provider_applies_prompt_cache_key_and_stream_usage() -> None:
     """Official OpenAI requests should opt into cache routing and stream usage."""
     provider = OpenAIProvider(
