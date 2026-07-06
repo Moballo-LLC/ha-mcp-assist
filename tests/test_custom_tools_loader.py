@@ -455,8 +455,9 @@ async def test_builtin_tool_packages_use_executor_for_manifest_reads(
     assert "_discover_package_dirs" in executor_calls
     assert "_load_manifest_from_disk" in executor_calls
     # Importing the package entrypoint runs its top-level code + disk reads,
-    # so it must also be dispatched off the event loop.
-    assert "_instantiate_tool" in executor_calls
+    # so the import must be dispatched off the event loop (construction stays
+    # on the loop).
+    assert "_import_tool_class" in executor_calls
 
 
 @pytest.mark.asyncio
