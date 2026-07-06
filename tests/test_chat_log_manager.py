@@ -165,3 +165,23 @@ async def test_chat_log_manager_clear_saves_immediately(hass, monkeypatch) -> No
     assert result["deleted_count"] == 1
     assert immediate_saves and immediate_saves[0] == {"entries": []}
     assert delayed_saves == []
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_shutdown_flushes_pending_save(hass, monkeypatch) -> None:
+    """Shutdown must flush the current state synchronously before being dropped."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+    await manager.async_record({"created_at": "1", "conversation_id": "keep"})
+
+    immediate_saves: list[dict] = []
+
+    async def _immediate(data):
+        immediate_saves.append(data)
+
+    monkeypatch.setattr(manager._store, "async_save", _immediate)
+
+    await manager.async_shutdown()
+
+    assert immediate_saves
+    assert len(immediate_saves[-1]["entries"]) == 1

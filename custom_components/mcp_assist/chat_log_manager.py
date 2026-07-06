@@ -41,6 +41,19 @@ class ChatLogManager:
         async with self._lock:
             await self._ensure_loaded_locked()
 
+    async def async_shutdown(self) -> None:
+        """Flush any pending debounced save before this manager is dropped.
+
+        On an integration reload/unload the manager is discarded while a
+        delayed save may still be scheduled. Without flushing, a new manager
+        reloads the stale file and the old delayed callback can later overwrite
+        it — losing recent logs or resurrecting cleared ones. Writing now also
+        cancels the pending delayed save inside the Store.
+        """
+        async with self._lock:
+            if self._loaded:
+                await self._store.async_save(self._data_to_save())
+
     async def async_record(
         self,
         record: dict[str, Any],

@@ -478,3 +478,33 @@ async def test_failed_second_setup_keeps_server_for_first_profile(
     mcp_server.stop.assert_not_called()
     assert hass.data[DOMAIN]["shared_mcp_server"] is mcp_server
     assert entry_two.entry_id not in hass.data[DOMAIN]
+
+
+@pytest.mark.asyncio
+async def test_last_unload_flushes_chat_log_manager(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """The final unload must flush the chat log manager before dropping it."""
+    system_entry_factory()
+    entry = profile_entry_factory()
+    index_manager = SimpleNamespace(start=AsyncMock(), async_stop=AsyncMock())
+    mcp_server = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+    with (
+        patch("custom_components.mcp_assist.IndexManager", return_value=index_manager),
+        patch("custom_components.mcp_assist.MCPServer", return_value=mcp_server),
+        patch.object(
+            hass.config_entries, "async_forward_entry_setups", AsyncMock(return_value=True)
+        ),
+        patch.object(
+            hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)
+        ),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+        chat_shutdown = AsyncMock()
+        hass.data[DOMAIN]["chat_log_manager"].async_shutdown = chat_shutdown
+
+        assert await async_unload_entry(hass, entry) is True
+
+    chat_shutdown.assert_awaited_once()
+    assert "chat_log_manager" not in hass.data[DOMAIN]
