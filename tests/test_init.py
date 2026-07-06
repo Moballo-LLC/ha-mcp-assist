@@ -533,7 +533,13 @@ async def test_release_rebinds_server_when_owner_entry_removed(
 
     # Server created by (bound to) the owner; two references held.
     tools = SimpleNamespace(entry=owner)
-    mcp_server = SimpleNamespace(entry=owner, tools=tools, stop=AsyncMock())
+    mcp_server = SimpleNamespace(
+        entry=owner,
+        tools=tools,
+        stop=AsyncMock(),
+        _refresh_allowed_ips_from_settings=Mock(),
+        _refresh_mcp_auth_from_settings=Mock(),
+    )
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["server_init_lock"] = asyncio.Lock()
     hass.data[DOMAIN]["shared_mcp_server"] = mcp_server
@@ -548,3 +554,6 @@ async def test_release_rebinds_server_when_owner_entry_removed(
     mcp_server.stop.assert_not_called()
     assert mcp_server.entry is survivor
     assert mcp_server.tools.entry is survivor
+    # IP/auth state is refreshed so the survivor's host is allowed post-rebind.
+    mcp_server._refresh_allowed_ips_from_settings.assert_called_once()
+    mcp_server._refresh_mcp_auth_from_settings.assert_called_once()

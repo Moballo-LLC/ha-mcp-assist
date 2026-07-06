@@ -844,6 +844,15 @@ def _rebind_shared_server_entry(hass: HomeAssistant) -> None:
     tools = getattr(server, "tools", None)
     if tools is not None and getattr(tools, "entry", None) is not None:
         tools.entry = replacement
+
+    # allowed_ips is derived from the profile's provider URL and was computed
+    # for the removed owner; refresh IP/auth state so the surviving profile's
+    # host is allowed (and the removed owner's is not) without a restart.
+    for refresh in ("_refresh_allowed_ips_from_settings", "_refresh_mcp_auth_from_settings"):
+        method = getattr(server, refresh, None)
+        if callable(method):
+            method()
+
     _LOGGER.debug("Rebound shared MCP server to surviving profile %s", replacement.entry_id)
 
 
