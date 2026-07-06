@@ -2719,6 +2719,34 @@ async def test_tool_get_image_returns_image_block_from_local_file(
 
 
 @pytest.mark.asyncio
+async def test_tool_get_image_offloads_local_read_to_executor(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
+) -> None:
+    """Local image resolve+read must run in an executor, not on the event loop."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    image_path = tmp_path / "pic.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsample")
+    monkeypatch.setattr(
+        hass.config, "path", lambda *parts: str(tmp_path.joinpath(*parts))
+    )
+
+    executor_calls: list[str] = []
+    original = hass.async_add_executor_job
+
+    async def _track(func, *args):
+        executor_calls.append(getattr(func, "__name__", repr(func)))
+        return await original(func, *args)
+
+    monkeypatch.setattr(hass, "async_add_executor_job", _track)
+
+    result = await server.tool_get_image({"image_path": "pic.png"})
+
+    assert result["isError"] is False
+    assert "_load_local_image" in executor_calls
+
+
+@pytest.mark.asyncio
 async def test_tool_get_image_accepts_absolute_path_inside_config_root(
     hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
 ) -> None:

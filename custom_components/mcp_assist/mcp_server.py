@@ -2755,8 +2755,9 @@ class MCPServer(
                 },
             )
 
-        local_path = self._resolve_local_image_path(field_value)
-        image_bytes, mime_type = self._read_local_image_path(local_path)
+        local_path, image_bytes, mime_type = await self.hass.async_add_executor_job(
+            self._load_local_image, field_value
+        )
         return (
             image_bytes,
             mime_type,
@@ -2816,8 +2817,10 @@ class MCPServer(
             return self._parse_data_url_image(reference)
         if reference.startswith("/"):
             if reference.startswith("/local/") or reference.startswith("/media/local/"):
-                local_path = self._resolve_local_image_path(reference)
-                return self._read_local_image_path(local_path)
+                _, image_bytes, mime_type = await self.hass.async_add_executor_job(
+                    self._load_local_image, reference
+                )
+                return image_bytes, mime_type
             return await self._fetch_http_image_url(reference)
         if reference.startswith(("http://", "https://")):
             return await self._fetch_http_image_url(reference)
@@ -2826,8 +2829,10 @@ class MCPServer(
                 "Only data URLs, Home Assistant-local URLs, local image paths, and http(s) image URLs are supported."
             )
 
-        local_path = self._resolve_local_image_path(reference)
-        return self._read_local_image_path(local_path)
+        _, image_bytes, mime_type = await self.hass.async_add_executor_job(
+            self._load_local_image, reference
+        )
+        return image_bytes, mime_type
 
     async def _fetch_http_image_url(self, reference: str) -> tuple[bytes, str]:
         """Fetch an image from an allowed HTTP(S) URL, validating redirects."""
@@ -3167,6 +3172,16 @@ class MCPServer(
         image_bytes = path.read_bytes()
         mime_type = mimetypes.guess_type(path.name)[0]
         return self._normalize_image_payload(image_bytes, mime_type, str(path))
+
+    def _load_local_image(self, reference: str) -> tuple[Path, bytes, str]:
+        """Resolve and read a local image. Blocking — run in an executor.
+
+        Path resolution (stat) and reading up to _MAX_INLINE_IMAGE_BYTES from
+        disk must not run on the event loop.
+        """
+        local_path = self._resolve_local_image_path(reference)
+        image_bytes, mime_type = self._read_local_image_path(local_path)
+        return local_path, image_bytes, mime_type
 
     def _normalize_image_payload(
         self,
