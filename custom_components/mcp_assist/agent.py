@@ -1533,6 +1533,46 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return max(0, index - stream_index_offset), stream_index_offset
 
+    @classmethod
+    def _ensure_stream_tool_call_slot(
+        cls,
+        tc: Dict[str, Any],
+        current_tool_calls: List[Dict[str, Any]],
+        stream_index_offset: int | None,
+    ) -> tuple[int, int | None]:
+        """Resolve a streamed tool call's slot, growing the buffer to fit.
+
+        Providers that supply an ``index`` (OpenAI-style deltas) keep the
+        offset-normalized index, and any gap left by a sparse index is
+        backfilled so indexing never raises.
+
+        Some providers omit ``index`` entirely, in two different shapes:
+        Ollama sends each *complete* tool call as its own fragment (carrying a
+        name), while some OpenAI-compatible servers stream a *single* call as
+        argument fragments where only the first carries the id/name. So an
+        index-less fragment starts a new slot only when it carries an ``id`` or
+        a function ``name``; a name-less fragment continues the current call,
+        instead of either collapsing distinct calls onto one slot or splitting
+        one call's arguments across several slots.
+        """
+        raw_index = tc.get("index")
+        if raw_index is not None:
+            idx, stream_index_offset = cls._normalize_stream_tool_call_index(
+                raw_index, stream_index_offset
+            )
+        else:
+            function = tc.get("function") or {}
+            starts_new_call = bool(tc.get("id") or function.get("name"))
+            if starts_new_call or not current_tool_calls:
+                idx = len(current_tool_calls)
+            else:
+                idx = len(current_tool_calls) - 1
+
+        while idx >= len(current_tool_calls):
+            current_tool_calls.append({})
+
+        return idx, stream_index_offset
+
     @staticmethod
     def _compact_streamed_tool_calls(
         tool_calls: List[Dict[str, Any]]
@@ -4078,15 +4118,12 @@ class MCPAssistConversationEntity(ConversationEntity):
                                     has_tool_calls = True
                                     for tc in delta["tool_calls"]:
                                         idx, stream_tool_index_offset = (
-                                            self._normalize_stream_tool_call_index(
-                                                tc.get("index", 0),
+                                            self._ensure_stream_tool_call_slot(
+                                                tc,
+                                                current_tool_calls,
                                                 stream_tool_index_offset,
                                             )
                                         )
-
-                                        # Initialize tool call if new
-                                        if idx >= len(current_tool_calls):
-                                            current_tool_calls.append({})
 
                                         if "id" in tc:
                                             tool_ids[idx] = tc["id"]
