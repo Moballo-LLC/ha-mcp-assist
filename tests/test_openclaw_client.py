@@ -285,3 +285,39 @@ async def test_connection_loss_does_not_overwrite_completed_run() -> None:
 
     assert run.status == "ok"
     assert run.summary == "done"
+
+
+@pytest.mark.asyncio
+async def test_reconnect_teardown_preserves_buffered_events() -> None:
+    """Reconnecting must not erase a completion buffered for a pending request."""
+    client = _make_client()
+    client._early_agent_events["run-1"] = [
+        {"runId": "run-1", "status": "ok", "summary": "done"}
+    ]
+
+    connected_ws = object()
+
+    async def fake_connect_locked() -> None:
+        # Mirror the real reconnect: preserve buffered events across teardown.
+        await client._teardown_connection(
+            "Reconnecting to OpenClaw Gateway", clear_early_events=False
+        )
+        client._ws = connected_ws
+        client._connected = True
+
+    client._connect_locked = fake_connect_locked
+    await client.connect()
+
+    # The buffered completion for the in-flight request survived the reconnect.
+    assert "run-1" in client._early_agent_events
+
+
+@pytest.mark.asyncio
+async def test_disconnect_clears_buffered_events() -> None:
+    """An explicit disconnect should still clear buffered events."""
+    client = _make_client()
+    client._early_agent_events["run-1"] = [{"runId": "run-1", "status": "ok"}]
+
+    await client.disconnect()
+
+    assert client._early_agent_events == {}

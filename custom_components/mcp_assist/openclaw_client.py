@@ -206,8 +206,12 @@ class OpenClawClient:
         # Tear down any previous connection first. A keepalive failure only
         # flips _connected without closing the socket or cancelling the
         # receive task, so without this a stale socket and receive loop would
-        # linger past the reconnect.
-        await self._teardown_connection("Reconnecting to OpenClaw Gateway")
+        # linger past the reconnect. Preserve buffered early events so a
+        # concurrent request still waiting to replay its completion is not
+        # stranded by this teardown.
+        await self._teardown_connection(
+            "Reconnecting to OpenClaw Gateway", clear_early_events=False
+        )
 
         # Sanitize host — strip protocol prefixes and trailing slashes
         host = self._host.strip().rstrip("/")
@@ -337,12 +341,19 @@ class OpenClawClient:
         _LOGGER.info("Disconnecting from OpenClaw Gateway")
         await self._teardown_connection("Disconnected")
 
-    async def _teardown_connection(self, reason: str) -> None:
+    async def _teardown_connection(
+        self, reason: str, *, clear_early_events: bool = True
+    ) -> None:
         """Cancel background tasks, close the socket, and fail in-flight work.
 
         Detaches the current socket/tasks first so a cancelled receive loop
         sees it no longer owns ``self._ws`` and skips its own cleanup, leaving
         this method as the single place that fails in-flight work.
+
+        ``clear_early_events`` is False when tearing down before a reconnect:
+        a completion may already be buffered for a request whose ``send_message``
+        is between its resolved ack and registering the run, and clearing it
+        would make that caller wait out its full timeout despite the answer.
         """
         self._connected = False
         ws = self._ws
@@ -361,7 +372,7 @@ class OpenClawClient:
                 except asyncio.CancelledError:
                     pass
 
-        self._fail_inflight(reason)
+        self._fail_inflight(reason, clear_early_events=clear_early_events)
 
         if ws is not None:
             try:
