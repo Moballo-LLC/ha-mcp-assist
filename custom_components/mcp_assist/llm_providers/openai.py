@@ -85,5 +85,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
             f"{OPENAI_BASE_URL.rstrip('/')}/v1",
         }
         if base_url.rstrip("/") in official_base_urls:
-            model_ids = [model_id for model_id in model_ids if model_id.startswith("gpt-")]
+            model_ids = [
+                model_id
+                for model_id in model_ids
+                if model_id.startswith("gpt-") or cls.is_reasoning_model(model_id)
+            ]
         return sorted((model_id for model_id in model_ids if model_id), reverse=True)
