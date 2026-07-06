@@ -88,3 +88,15 @@ class OpenAICompatibleProvider(LLMProvider):
             return True
         # o-series reasoning models are "o" followed by a digit: o1, o3, o4-mini…
         return len(name) >= 2 and name[0] == "o" and name[1].isdigit()
+
+    @staticmethod
+    def is_responses_only_model(model_name: str) -> bool:
+        """Return whether a model is only served by OpenAI's Responses API.
+
+        The deep-research variants and the o-series ``*-pro`` models are not
+        available on the chat/completions endpoint this transport calls, so
+        they must not be offered for selection even though they otherwise look
+        like reasoning models.
+        """
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        return "deep-research" in name or name.endswith("-pro")

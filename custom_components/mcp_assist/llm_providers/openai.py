@@ -88,6 +88,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
             model_ids = [
                 model_id
                 for model_id in model_ids
-                if model_id.startswith("gpt-") or cls.is_reasoning_model(model_id)
+                if (model_id.startswith("gpt-") or cls.is_reasoning_model(model_id))
+                and not cls.is_responses_only_model(model_id)
             ]
         return sorted((model_id for model_id in model_ids if model_id), reverse=True)
