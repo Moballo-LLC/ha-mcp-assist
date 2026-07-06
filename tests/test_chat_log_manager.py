@@ -79,3 +79,62 @@ async def test_chat_log_manager_bounds_large_values(hass) -> None:
     )
 
     assert stored["assistant_text"].endswith("[truncated 1000 chars]")
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_uses_delayed_save(hass, monkeypatch) -> None:
+    """Recording should debounce writes via async_delay_save, not async_save."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    delay_calls: list[float] = []
+    immediate_calls: list[object] = []
+    monkeypatch.setattr(
+        manager._store,
+        "async_delay_save",
+        lambda data_func, delay=0: delay_calls.append(delay),
+    )
+
+    async def _fail_immediate(_data):
+        immediate_calls.append(_data)
+
+    monkeypatch.setattr(manager._store, "async_save", _fail_immediate)
+
+    await manager.async_record({"created_at": "1", "conversation_id": "one"})
+
+    assert delay_calls and delay_calls[0] > 0
+    assert immediate_calls == []
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_handles_circular_references(hass) -> None:
+    """A self-referential record must not blow the stack when normalized."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    payload: dict = {"created_at": "1", "conversation_id": "loop"}
+    payload["self"] = payload  # cycle
+
+    # Must not raise RecursionError; the cycle is replaced with a marker.
+    stored = await manager.async_record(payload)
+
+    assert "[circular reference]" in str(stored)
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_bounds_deep_nesting(hass) -> None:
+    """Deeply nested structures must be truncated, not recursed without limit."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    deep: dict = {}
+    cursor = deep
+    for _ in range(50):
+        cursor["child"] = {}
+        cursor = cursor["child"]
+
+    stored = await manager.async_record({"created_at": "1", "data": deep})
+
+    # Walk down and confirm a max-depth marker appears rather than 50 levels.
+    text = str(stored)
+    assert "max depth" in text
