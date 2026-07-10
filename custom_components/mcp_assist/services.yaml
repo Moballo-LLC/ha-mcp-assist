@@ -28,6 +28,27 @@ get_chat_logs:
       description: Only return logs for this Home Assistant conversation ID.
       selector:
         text:
+    compact:
+      name: Compact response
+      description: Return tool-call metadata without arguments, raw results, or model-facing tool content. Ignored when Projection is set.
+      default: false
+      selector:
+        boolean:
+    projection:
+      name: Projection
+      description: Choose whether each tool includes both result forms, only raw results, only model-facing content, or metadata only.
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Full
+              value: full
+            - label: Compact
+              value: compact
+            - label: Raw results
+              value: raw
+            - label: Model-facing content
+              value: model
 
 clear_chat_logs:
   name: Clear chat logs
