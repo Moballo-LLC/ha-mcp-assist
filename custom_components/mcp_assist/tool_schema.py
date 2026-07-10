@@ -784,6 +784,10 @@ def score_adaptive_tool_match(
     preferred_routing_text, inline_negative_routing_text = (
         _split_negative_routing_text(_routing_hint_text(tool, "preferred_when"))
     )
+    avoid_routing_text = _routing_hint_text(tool, "avoid_when")
+    avoid_routing_positive_text, avoid_routing_negative_text = (
+        _split_negative_routing_text(avoid_routing_text)
+    )
     routing_text = " ".join(
         part
         for part in (
@@ -794,7 +798,7 @@ def score_adaptive_tool_match(
     )
     negative_routing_clauses = (
         inline_negative_routing_text,
-        _routing_hint_text(tool, "avoid_when"),
+        avoid_routing_negative_text or avoid_routing_positive_text,
     )
     negative_keyword_text = _routing_hint_text(tool, "negative_keywords")
     name_terms = _adaptive_text_terms(name)

@@ -1869,9 +1869,15 @@ def test_adaptive_tool_scoring_ignores_negative_routing_boilerplate() -> None:
         "inputSchema": {"type": "object", "properties": {}},
     }
 
-    assert score_adaptive_tool_match(status_tool, "I need sample status") > 0
-    assert score_adaptive_tool_match(status_tool, "camera status") > 0
-    assert score_adaptive_tool_match(status_tool, "camera recognition") == 0
+    for avoid_hint in (
+        "The request needs camera recognition.",
+        "Do not use for camera recognition.",
+        "Not for camera recognition.",
+    ):
+        status_tool["routingHints"]["avoid_when"] = avoid_hint
+        assert score_adaptive_tool_match(status_tool, "I need sample status") > 0
+        assert score_adaptive_tool_match(status_tool, "camera status") > 0
+        assert score_adaptive_tool_match(status_tool, "camera recognition") == 0
 
 
 def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
