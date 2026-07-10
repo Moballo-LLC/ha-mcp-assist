@@ -16,6 +16,18 @@ _STORAGE_KEY = f"{DOMAIN}_chat_logs"
 _MAX_STRING_CHARS = 12000
 _MAX_COLLECTION_ITEMS = 100
 _MAX_DEPTH = 8
+CHAT_LOG_PROJECTION_FULL = "full"
+CHAT_LOG_PROJECTION_COMPACT = "compact"
+CHAT_LOG_PROJECTION_RAW = "raw"
+CHAT_LOG_PROJECTION_MODEL = "model"
+CHAT_LOG_PROJECTIONS = frozenset(
+    {
+        CHAT_LOG_PROJECTION_FULL,
+        CHAT_LOG_PROJECTION_COMPACT,
+        CHAT_LOG_PROJECTION_RAW,
+        CHAT_LOG_PROJECTION_MODEL,
+    }
+)
 # Debounce persistence: chat logs are written once per conversation turn and
 # the whole (multi-MB) file is rewritten each time, so coalesce rapid writes.
 _SAVE_DELAY_SECONDS = 15
@@ -81,8 +93,10 @@ class ChatLogManager:
         limit: int | None = None,
         profile_entry_id: str | None = None,
         conversation_id: str | None = None,
+        projection: str = CHAT_LOG_PROJECTION_FULL,
     ) -> list[dict[str, Any]]:
         """Return matching logs newest first."""
+        normalized_projection = self.normalize_projection(projection)
         async with self._lock:
             await self._ensure_loaded_locked()
             entries = list(reversed(self._entries))
@@ -102,7 +116,78 @@ class ChatLogManager:
         if limit is not None:
             entries = entries[: self._positive_int(limit, default=len(entries))]
 
-        return [dict(entry) for entry in entries]
+        return [
+            self._project_entry(entry, normalized_projection)
+            for entry in entries
+        ]
+
+    @staticmethod
+    def normalize_projection(value: Any) -> str:
+        """Return a supported chat-log response projection."""
+        projection = str(value or CHAT_LOG_PROJECTION_FULL).strip().casefold()
+        if projection not in CHAT_LOG_PROJECTIONS:
+            choices = ", ".join(sorted(CHAT_LOG_PROJECTIONS))
+            raise ValueError(f"projection must be one of: {choices}")
+        return projection
+
+    @classmethod
+    def _project_entry(
+        cls,
+        entry: dict[str, Any],
+        projection: str,
+    ) -> dict[str, Any]:
+        """Return one response-only view without mutating stored records."""
+        projected = dict(entry)
+        tools = entry.get("tools")
+        if not isinstance(tools, list):
+            return projected
+
+        projected_tools: list[Any] = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                projected_tools.append(tool)
+                continue
+
+            projected_tool = dict(tool)
+            if projection == CHAT_LOG_PROJECTION_RAW:
+                projected_tool.pop("llm_content", None)
+            elif projection == CHAT_LOG_PROJECTION_MODEL:
+                projected_tool.pop("result", None)
+            elif projection == CHAT_LOG_PROJECTION_COMPACT:
+                projected_tool = cls._compact_tool_entry(projected_tool)
+            projected_tools.append(projected_tool)
+
+        projected["tools"] = projected_tools
+        return projected
+
+    @staticmethod
+    def _compact_tool_entry(tool: dict[str, Any]) -> dict[str, Any]:
+        """Return tool-call metadata without raw or model-facing payloads."""
+        compact = {
+            key: tool[key]
+            for key in (
+                "id",
+                "name",
+                "started_at",
+                "completed_at",
+                "error",
+            )
+            if key in tool
+        }
+        arguments = tool.get("arguments")
+        if isinstance(arguments, dict):
+            compact["argument_keys"] = sorted(str(key) for key in arguments)
+        result = tool.get("result")
+        result_is_error = isinstance(result, dict) and (
+            bool(result.get("isError")) or "error" in result
+        )
+        if "error" in tool or result_is_error:
+            compact["status"] = "error"
+        elif "completed_at" in tool:
+            compact["status"] = "ok"
+        else:
+            compact["status"] = "in_progress"
+        return compact
 
     async def async_clear(
         self,

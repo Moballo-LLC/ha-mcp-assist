@@ -86,7 +86,28 @@ data:
   conversation_id: "abc123"
 ```
 
-The service returns a response payload with `count` and `logs`.
+The service returns a response payload with `count`, `projection`, and `logs`.
+The default `full` projection preserves the original response shape, including
+both raw MCP results and the compact content sent back to the model.
+
+For a smaller metadata-only response:
+
+```yaml
+service: mcp_assist.get_chat_logs
+data:
+  limit: 10
+  compact: true
+```
+
+`compact: true` is a shortcut for `projection: compact`. You can set
+`projection` explicitly to one of:
+
+- `full`: raw results and model-facing content
+- `raw`: raw results without duplicated model-facing content
+- `model`: model-facing content without raw results
+- `compact`: tool names, timing, status, and argument keys without arguments or results
+
+When both are set, `projection` takes precedence over `compact`.
 
 ## Clear Logs
 
