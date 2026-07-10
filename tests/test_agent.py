@@ -1855,6 +1855,23 @@ def test_adaptive_tool_scoring_keeps_value_exclusions_on_matching_tool() -> None
     ) == [weather_tool]
 
 
+def test_adaptive_tool_scoring_ignores_negative_routing_boilerplate() -> None:
+    """Generic avoid_when prose should not become a hard negative keyword."""
+    status_tool = {
+        "name": "sample_tool_status",
+        "description": "Return sample package status.",
+        "routingHints": {
+            "keywords": ["sample", "status"],
+            "avoid_when": "The request needs camera recognition.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(status_tool, "I need sample status") > 0
+    assert score_adaptive_tool_match(status_tool, "camera status") > 0
+    assert score_adaptive_tool_match(status_tool, "camera recognition") == 0
+
+
 def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
     """The verb avoid should stay positive unless it introduces an exclusion."""
     energy_tool = {

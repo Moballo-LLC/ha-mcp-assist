@@ -211,6 +211,38 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     r"avoid\s+(?:for|when)|except\s+(?:for|when))\b",
     flags=re.IGNORECASE,
 )
+ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS = frozenset(
+    {
+        "ask",
+        "asking",
+        "asks",
+        "avoid",
+        "for",
+        "need",
+        "needed",
+        "needs",
+        "request",
+        "requests",
+        "require",
+        "requires",
+        "requiring",
+        "that",
+        "the",
+        "this",
+        "tool",
+        "tools",
+        "use",
+        "user",
+        "users",
+        "uses",
+        "using",
+        "want",
+        "wanted",
+        "wants",
+        "when",
+        "with",
+    }
+)
 ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     # Weather and forecasts
     "météo": ("weather", "forecast"),
@@ -757,23 +789,31 @@ def score_adaptive_tool_match(
         )
         if part
     )
-    negative_routing_text = " ".join(
-        part
-        for part in (
-            inline_negative_routing_text,
-            _routing_hint_text(tool, "avoid_when", "negative_keywords"),
-        )
-        if part
+    negative_routing_clauses = (
+        inline_negative_routing_text,
+        _routing_hint_text(tool, "avoid_when"),
     )
+    negative_keyword_text = _routing_hint_text(tool, "negative_keywords")
     name_terms = _adaptive_text_terms(name)
     keyword_terms = _adaptive_text_terms(keyword_text)
     routing_terms = _adaptive_text_terms(routing_text)
-    negative_routing_terms = _adaptive_text_terms(negative_routing_text)
+    negative_routing_clause_terms = [
+        _adaptive_text_terms(clause) - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
+        for clause in negative_routing_clauses
+        if clause
+    ]
+    negative_keyword_terms = _adaptive_text_terms(negative_keyword_text)
     llm_description_terms = _adaptive_text_terms(llm_description)
     description_terms = _adaptive_text_terms(description)
     query_exclusion_terms = name_terms | keyword_terms
 
-    if set(terms) & negative_routing_terms:
+    term_set = set(terms)
+    if term_set & negative_keyword_terms:
+        return 0
+    if any(
+        clause_terms and clause_terms <= term_set
+        for clause_terms in negative_routing_clause_terms
+    ):
         return 0
     if negative_query_terms & query_exclusion_terms:
         return 0
