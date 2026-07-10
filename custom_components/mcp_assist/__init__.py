@@ -13,7 +13,7 @@ from .tools.builtin_catalog import (
     get_builtin_shared_setting_value,
     load_builtin_tool_toggle_specs,
 )
-from .chat_log_manager import ChatLogManager
+from .chat_log_manager import CHAT_LOG_PROJECTION_COMPACT, ChatLogManager
 from .const import (
     DOMAIN,
     SYSTEM_ENTRY_UNIQUE_ID,
@@ -189,13 +189,19 @@ async def _async_get_chat_log_manager(hass: HomeAssistant) -> ChatLogManager:
 async def _async_handle_get_chat_logs(call: ServiceCall) -> dict:
     """Return persisted chat logs for review."""
     manager = await _async_get_chat_log_manager(call.hass)
+    requested_projection = call.data.get("projection")
+    if requested_projection is None and call.data.get("compact"):
+        requested_projection = CHAT_LOG_PROJECTION_COMPACT
+    projection = manager.normalize_projection(requested_projection)
     logs = await manager.async_list(
         limit=call.data.get("limit"),
         profile_entry_id=call.data.get("profile_entry_id"),
         conversation_id=call.data.get("conversation_id"),
+        projection=projection,
     )
     return {
         "count": len(logs),
+        "projection": projection,
         "logs": logs,
     }
 

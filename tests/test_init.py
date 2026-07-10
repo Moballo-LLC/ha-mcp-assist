@@ -403,19 +403,36 @@ async def test_async_setup_registers_reload_service_and_last_unload_removes_it(
                 "conversation_id": "conv-1",
                 "user_text": "status",
                 "assistant_text": "All good.",
-                "tools": [],
+                "tools": [
+                    {
+                        "id": "call-1",
+                        "name": "sample_status",
+                        "completed_at": "2026-06-01T00:00:01+00:00",
+                        "arguments": {"include_details": True},
+                        "result": {"content": [{"type": "text", "text": "raw"}]},
+                        "llm_content": "model-facing",
+                    }
+                ],
             }
         )
         logs_response = await hass.services.async_call(
             DOMAIN,
             SERVICE_GET_CHAT_LOGS,
-            {"profile_entry_id": entry.entry_id},
+            {"profile_entry_id": entry.entry_id, "compact": True},
             blocking=True,
             return_response=True,
         )
 
         assert logs_response["count"] == 1
+        assert logs_response["projection"] == "compact"
         assert logs_response["logs"][0]["conversation_id"] == "conv-1"
+        assert logs_response["logs"][0]["tools"][0] == {
+            "id": "call-1",
+            "name": "sample_status",
+            "completed_at": "2026-06-01T00:00:01+00:00",
+            "argument_keys": ["include_details"],
+            "status": "ok",
+        }
 
         clear_response = await hass.services.async_call(
             DOMAIN,

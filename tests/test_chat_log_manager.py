@@ -48,6 +48,61 @@ async def test_chat_log_manager_records_lists_and_filters(hass) -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_log_manager_projects_duplicate_tool_content(hass) -> None:
+    """Response projections should omit payloads without mutating storage."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+    await manager.async_record(
+        {
+            "created_at": "2026-06-01T00:00:00+00:00",
+            "conversation_id": "conv-a",
+            "user_text": "check the light",
+            "assistant_text": "The light is on.",
+            "tools": [
+                {
+                    "id": "call-1",
+                    "name": "get_entity_details",
+                    "started_at": "2026-06-01T00:00:01+00:00",
+                    "completed_at": "2026-06-01T00:00:02+00:00",
+                    "arguments": {"entity_id": "light.kitchen"},
+                    "raw_arguments": '{"entity_id":"light.kitchen"}',
+                    "result": {
+                        "content": [{"type": "text", "text": "raw result"}]
+                    },
+                    "llm_content": "model-facing result",
+                }
+            ],
+        }
+    )
+
+    raw_tool = (await manager.async_list(projection="raw"))[0]["tools"][0]
+    model_tool = (await manager.async_list(projection="model"))[0]["tools"][0]
+    compact_tool = (await manager.async_list(projection="compact"))[0]["tools"][0]
+    full_tool = (await manager.async_list())[0]["tools"][0]
+
+    assert "result" in raw_tool
+    assert "llm_content" not in raw_tool
+    assert "result" not in model_tool
+    assert model_tool["llm_content"] == "model-facing result"
+    assert compact_tool == {
+        "id": "call-1",
+        "name": "get_entity_details",
+        "started_at": "2026-06-01T00:00:01+00:00",
+        "completed_at": "2026-06-01T00:00:02+00:00",
+        "argument_keys": ["entity_id"],
+        "status": "ok",
+    }
+    assert "result" in full_tool
+    assert "llm_content" in full_tool
+
+
+def test_chat_log_manager_rejects_unknown_projection() -> None:
+    """Unknown projections should not fall back to an unexpectedly large view."""
+    with pytest.raises(ValueError, match="projection must be one of"):
+        ChatLogManager.normalize_projection("everything")
+
+
+@pytest.mark.asyncio
 async def test_chat_log_manager_prunes_and_clears(hass) -> None:
     """Chat log storage should stay bounded and be clearable."""
     manager = ChatLogManager(hass)
