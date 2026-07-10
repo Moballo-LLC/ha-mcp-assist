@@ -4594,13 +4594,19 @@ class MCPAssistConversationEntity(ConversationEntity):
         iteration: int,
     ) -> ProviderHttpResponse:
         """POST a provider HTTP request with bounded retry for transport timeouts."""
-        for attempt in range(1, PROVIDER_HTTP_TIMEOUT_ATTEMPTS + 1):
+        headers = self._provider_request_headers(provider)
+        max_attempts = (
+            1
+            if "X-Session-Id" in headers
+            else PROVIDER_HTTP_TIMEOUT_ATTEMPTS
+        )
+        for attempt in range(1, max_attempts + 1):
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(
                         provider.chat_url(),
-                        headers=self._provider_request_headers(provider),
+                        headers=headers,
                         json=clean_payload,
                     ) as response:
                         if response.status != 200:
@@ -4614,7 +4620,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                             data=await response.json(),
                         )
             except asyncio.TimeoutError as err:
-                if attempt < PROVIDER_HTTP_TIMEOUT_ATTEMPTS:
+                if attempt < max_attempts:
                     _LOGGER.warning(
                         (
                             "%s HTTP transport timed out after %ss on "
@@ -4638,7 +4644,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             provider_name=self._get_server_display_name(),
             timeout_seconds=self.timeout,
             transport="HTTP",
-            attempts=PROVIDER_HTTP_TIMEOUT_ATTEMPTS,
+            attempts=max_attempts,
             iteration=iteration + 1,
         )
 

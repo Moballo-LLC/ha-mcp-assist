@@ -3078,6 +3078,56 @@ async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
 
 
 @pytest.mark.asyncio
+async def test_provider_http_does_not_retry_stateful_session_timeout(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """A timed-out stateful request should not duplicate the provider turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_TIMEOUT: 1},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+
+    class _TimeoutSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with (
+            caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name),
+            pytest.raises(agent_module.ProviderResponseTimeoutError) as err,
+        ):
+            await agent._request_provider_http_response(
+                agent._get_llm_provider(),
+                {"messages": []},
+                iteration=0,
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert err.value.attempts == 1
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    assert "retrying once" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_tool_budget_final_timeout_logs_detail_and_returns_fallback(
     hass, profile_entry_factory, monkeypatch, caplog
 ) -> None:
