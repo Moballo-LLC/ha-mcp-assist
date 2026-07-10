@@ -4116,7 +4116,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             current_tool_calls = []
             stream_tool_index_offset = None
             stream_metadata = None
-            request_reached_provider = False
+            request_dispatched = False
+            request_rejected = False
 
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -4131,11 +4132,14 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
                         _LOGGER.debug(f"🔧 Using model: {self.model_name}")
 
-                    # Use clean_payload instead of payload
-                    async with session.post(
+                    # Once a stateful request is dispatched, a transport failure may
+                    # happen after the provider has recorded the turn. An explicit
+                    # non-success response is a safe rejection and can still fall back.
+                    request_context = session.post(
                         url, headers=headers, json=clean_payload
-                    ) as response:
-                        request_reached_provider = True
+                    )
+                    request_dispatched = True
+                    async with request_context as response:
                         _LOGGER.info(
                             f"🔌 Connection established, status: {response.status}"
                         )
@@ -4146,6 +4150,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                             )
 
                         if response.status != 200:
+                            request_rejected = True
                             try:
                                 error_data = await response.json()
                                 error_text = json.dumps(error_data, indent=2)
@@ -4382,11 +4387,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                     stream_error,
                 )
                 if iteration == 0:
-                    if request_reached_provider and session_scoped:
+                    if request_dispatched and not request_rejected and session_scoped:
                         raise StatefulStreamingRequestError(
-                            "Stateful streaming failed after the provider accepted the request"
+                            "Stateful streaming failed after the request was dispatched"
                         ) from stream_error
-                    # First iteration failed before acceptance, try fallback
+                    # An unscoped or explicitly rejected request can safely fall back.
                     raise stream_error
                 else:
                     # Later iteration failed, return what we have

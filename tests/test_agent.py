@@ -3571,6 +3571,102 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
 
 
 @pytest.mark.asyncio
+async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A dispatched stateful request must not replay after a pre-header timeout."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _PreHeaderTimeout:
+        async def __aenter__(self):
+            raise asyncio.TimeoutError
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    class _TimeoutSession:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def post(self, url: str, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _PreHeaderTimeout()
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_rejection_can_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An explicit streaming rejection can safely use the HTTP transport."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(
+            [_FakeStreamingResponse(status=500, text="streaming unsupported")],
+            posts,
+        )
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_empty_streaming_response_falls_back_without_warning(
     hass, profile_entry_factory, monkeypatch, caplog
 ) -> None:
