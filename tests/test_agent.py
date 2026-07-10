@@ -40,6 +40,7 @@ from custom_components.mcp_assist.const import (
     CONF_MODEL_NAME,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
+    CONF_STATEFUL_SESSION_ID,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT,
@@ -96,12 +97,6 @@ def _tool(name: str) -> dict[str, object]:
         "description": name,
         "inputSchema": {"type": "object", "properties": {}},
     }
-
-
-def _enable_stateful_session_provider(agent, monkeypatch) -> None:
-    """Mark the profile's provider protocol as honoring session identity."""
-    provider_class = type(agent._get_llm_provider())
-    monkeypatch.setattr(provider_class, "uses_stateful_session_id", True)
 
 
 def test_provider_log_snippet_redacts_and_truncates_details() -> None:
@@ -2946,21 +2941,13 @@ async def test_call_llm_http_retries_provider_timeout_once(
 
     monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
 
-    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
-    try:
-        with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
-            result = await agent._call_llm_http(
-                [{"role": "user", "content": "Are there any lights on upstairs?"}]
-            )
-    finally:
-        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+        result = await agent._call_llm_http(
+            [{"role": "user", "content": "Are there any lights on upstairs?"}]
+        )
 
     assert result == "Recovered."
     assert len(posts) == 2
-    assert all(
-        post["headers"]["X-Session-Id"] == "assist-conversation-123"
-        for post in posts
-    )
     assert "HTTP transport timed out after 1s" in caplog.text
 
 
@@ -2973,7 +2960,8 @@ async def test_provider_http_request_sends_assist_conversation_session_id(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
     posts: list[dict] = []
@@ -3021,7 +3009,8 @@ async def test_streaming_probe_does_not_join_assist_conversation_session(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
     posts: list[dict] = []
@@ -3051,7 +3040,12 @@ async def test_assist_handler_scopes_generated_conversation_id_to_request(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
     """The ChatLog conversation ID should be scoped and cleared by the handler."""
-    entry = profile_entry_factory(options={CONF_CHAT_LOG_MODE: False})
+    entry = profile_entry_factory(
+        options={
+            CONF_CHAT_LOG_MODE: False,
+            CONF_STATEFUL_SESSION_ID: True,
+        }
+    )
     agent = MCPAssistConversationEntity(hass, entry)
     captured_headers: dict[str, str] = {}
 
@@ -3145,10 +3139,12 @@ async def test_provider_http_does_not_retry_stateful_session_timeout(
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
         },
-        options={CONF_TIMEOUT: 1},
+        options={
+            CONF_TIMEOUT: 1,
+            CONF_STATEFUL_SESSION_ID: True,
+        },
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     posts: list[dict] = []
 
     class _TimeoutSession:
@@ -3551,10 +3547,10 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
@@ -3593,10 +3589,10 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
 
 
 @pytest.mark.asyncio
-async def test_session_header_keeps_stream_fallback_without_stateful_capability(
+async def test_stream_fallback_remains_available_without_stateful_capability(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
-    """Session identity alone should not disable ordinary stream recovery."""
+    """Ordinary endpoints should retain stream recovery without session state."""
     entry = profile_entry_factory(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
@@ -3636,7 +3632,7 @@ async def test_session_header_keeps_stream_fallback_without_stateful_capability(
 
     assert result == "Recovered over HTTP."
     assert len(posts) == 1
-    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    assert "X-Session-Id" not in posts[0]["headers"]
     http_mock.assert_awaited_once()
 
 
@@ -3649,10 +3645,10 @@ async def test_later_stateful_stream_failure_does_not_send_a_final_request(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(
         agent,
@@ -3755,10 +3751,10 @@ async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
@@ -3811,10 +3807,10 @@ async def test_stateful_stream_connector_failure_can_fall_back_to_http(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
@@ -3873,10 +3869,10 @@ async def test_stateful_stream_rejection_can_fall_back_to_http(
         data={
             CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
             CONF_MODEL_NAME: "qwen-tool-model",
-        }
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)

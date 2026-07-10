@@ -11,7 +11,12 @@ from typing import Any
 
 import aiohttp
 
-from ..const import CONF_API_KEY, CONF_LMSTUDIO_URL
+from ..const import (
+    CONF_API_KEY,
+    CONF_LMSTUDIO_URL,
+    CONF_STATEFUL_SESSION_ID,
+    DEFAULT_STATEFUL_SESSION_ID,
+)
 from ..provider_runtime import (
     build_provider_auth_headers,
 )
@@ -34,6 +39,7 @@ class ProviderSettings:
     display_name: str
     is_remote_service: bool
     prompt_cache_key: str | None = None
+    uses_stateful_session_id: bool = DEFAULT_STATEFUL_SESSION_ID
 
 
 @dataclass(frozen=True)
@@ -153,8 +159,7 @@ class LLMProvider:
 
     transport_name = "openai_chat"
     supports_streaming = True
-    # Opt in only when the provider endpoint contract honors X-Session-Id as state.
-    uses_stateful_session_id = False
+    supports_stateful_session_id_option = True
     provider_type = ""
     provider_display_name = ""
     default_base_url: str | None = None
@@ -172,6 +177,21 @@ class LLMProvider:
     def __init__(self, settings: ProviderSettings) -> None:
         """Initialize the provider transport."""
         self.settings = settings
+
+    @classmethod
+    def config_provider_options_fields(cls) -> tuple[ProviderConfigField, ...]:
+        """Return provider fields plus the optional stateful endpoint contract."""
+        if not cls.supports_stateful_session_id_option:
+            return cls.provider_options_fields
+        return (
+            ProviderConfigField(
+                CONF_STATEFUL_SESSION_ID,
+                default=DEFAULT_STATEFUL_SESSION_ID,
+                required=False,
+                kind="boolean",
+            ),
+            *cls.provider_options_fields,
+        )
 
     @classmethod
     def options_from_entry(cls, entry: Any) -> dict[str, Any]:
@@ -327,6 +347,11 @@ class LLMProvider:
     def is_remote_service(self) -> bool:
         """Return whether the provider is a hosted remote service."""
         return self.settings.is_remote_service
+
+    @property
+    def uses_stateful_session_id(self) -> bool:
+        """Return whether this endpoint treats X-Session-Id as session state."""
+        return self.settings.uses_stateful_session_id
 
     def headers(self) -> dict[str, str]:
         """Return provider request headers."""

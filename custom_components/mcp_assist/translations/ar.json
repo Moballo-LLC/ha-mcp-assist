@@ -99,7 +99,8 @@
           "chat_log_mode": "وضع سجل الدردشة",
           "ollama_keep_alive": "ابق Ollama نشطا",
           "ollama_num_ctx": "نافذة سياق Ollama",
-          "openclaw_session_key": "مفتاح الجلسة"
+          "openclaw_session_key": "مفتاح الجلسة",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "ابق Ollama نشطا",
               "ollama_num_ctx": "نافذة سياق Ollama",
-              "openclaw_session_key": "مفتاح الجلسة"
+              "openclaw_session_key": "مفتاح الجلسة",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "كم من الوقت يجب أن يحتفظ Ollama بالنموذج المحدد محملاً في الذاكرة.",
               "ollama_num_ctx": "تجاوز حجم نافذة السياق الذي تم تمريره إلى Ollama. استخدم 0 للحفاظ على النموذج الافتراضي.",
-              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها."
+              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "ميناء البوابة",
           "openclaw_token": "رمز البوابة",
           "openclaw_use_ssl": "استخدم SSL/TLS",
-          "openclaw_session_key": "مفتاح الجلسة"
+          "openclaw_session_key": "مفتاح الجلسة",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "نموذج LLM الذي يجب أن يستخدمه ملف التعريف هذا.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "ابق Ollama نشطا",
               "ollama_num_ctx": "نافذة سياق Ollama",
-              "openclaw_session_key": "مفتاح الجلسة"
+              "openclaw_session_key": "مفتاح الجلسة",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "كم من الوقت يجب أن يحتفظ Ollama بالنموذج المحدد محملاً في الذاكرة.",
               "ollama_num_ctx": "تجاوز حجم نافذة السياق الذي تم تمريره إلى Ollama. استخدم 0 للحفاظ على النموذج الافتراضي.",
-              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها."
+              "openclaw_session_key": "اسم جلسة OpenClaw المراد إرسال الرسائل إليها.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

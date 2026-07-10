@@ -99,7 +99,8 @@
           "ollama_keep_alive": "Ollama Keep Alive",
           "ollama_num_ctx": "Ollama Context Window",
           "clean_responses": "Clean Responses for Voice Output",
-          "openclaw_session_key": "Session Key"
+          "openclaw_session_key": "Session Key",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Ollama Keep Alive",
               "ollama_num_ctx": "Ollama Context Window",
-              "openclaw_session_key": "Session Key"
+              "openclaw_session_key": "Session Key",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Override the context window size passed to Ollama. Use 0 to keep the model default.",
-              "openclaw_session_key": "Name of the OpenClaw session to send messages to."
+              "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway Port",
           "openclaw_token": "Gateway Token",
           "openclaw_use_ssl": "Use SSL/TLS",
-          "openclaw_session_key": "Session Key"
+          "openclaw_session_key": "Session Key",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "The LLM model this profile should use.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Ollama Keep Alive",
               "ollama_num_ctx": "Ollama Context Window",
-              "openclaw_session_key": "Session Key"
+              "openclaw_session_key": "Session Key",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Override the context window size passed to Ollama. Use 0 to keep the model default.",
-              "openclaw_session_key": "Name of the OpenClaw session to send messages to."
+              "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

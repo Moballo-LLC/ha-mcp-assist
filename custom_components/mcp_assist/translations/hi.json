@@ -99,7 +99,8 @@
           "chat_log_mode": "चैट लॉग मोड",
           "ollama_keep_alive": "Ollama जीवित रखें",
           "ollama_num_ctx": "Ollama संदर्भ विंडो",
-          "openclaw_session_key": "सत्र कुंजी"
+          "openclaw_session_key": "सत्र कुंजी",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Ollama जीवित रखें",
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
-              "openclaw_session_key": "सत्र कुंजी"
+              "openclaw_session_key": "सत्र कुंजी",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
-              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।"
+              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "गेटवे पोर्ट",
           "openclaw_token": "गेटवे टोकन",
           "openclaw_use_ssl": "SSL/TLS का प्रयोग करें",
-          "openclaw_session_key": "सत्र कुंजी"
+          "openclaw_session_key": "सत्र कुंजी",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Ollama जीवित रखें",
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
-              "openclaw_session_key": "सत्र कुंजी"
+              "openclaw_session_key": "सत्र कुंजी",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
-              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।"
+              "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

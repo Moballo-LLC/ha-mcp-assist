@@ -99,7 +99,8 @@
           "chat_log_mode": "Chat Log Mode",
           "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
           "ollama_num_ctx": "Ollama Context Window",
-          "openclaw_session_key": "Susi ng Sesyon"
+          "openclaw_session_key": "Susi ng Sesyon",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
               "ollama_num_ctx": "Ollama Context Window",
-              "openclaw_session_key": "Susi ng Sesyon"
+              "openclaw_session_key": "Susi ng Sesyon",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
-              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe."
+              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway Port",
           "openclaw_token": "Gateway Token",
           "openclaw_use_ssl": "Gamitin ang SSL/TLS",
-          "openclaw_session_key": "Susi ng Sesyon"
+          "openclaw_session_key": "Susi ng Sesyon",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
               "ollama_num_ctx": "Ollama Context Window",
-              "openclaw_session_key": "Susi ng Sesyon"
+              "openclaw_session_key": "Susi ng Sesyon",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
-              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe."
+              "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

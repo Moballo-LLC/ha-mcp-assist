@@ -99,7 +99,8 @@
           "chat_log_mode": "Režim protokolu chatu",
           "ollama_keep_alive": "Udrzovat Ollama aktivni",
           "ollama_num_ctx": "Kontextove okno Ollama",
-          "openclaw_session_key": "Klíč relace"
+          "openclaw_session_key": "Klíč relace",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Udrzovat Ollama aktivni",
               "ollama_num_ctx": "Kontextove okno Ollama",
-              "openclaw_session_key": "Klíč relace"
+              "openclaw_session_key": "Klíč relace",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
-              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy."
+              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Port brány",
           "openclaw_token": "Token brány",
           "openclaw_use_ssl": "Použijte SSL/TLS",
-          "openclaw_session_key": "Klíč relace"
+          "openclaw_session_key": "Klíč relace",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "Model LLM by tento profil měl používat.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Udrzovat Ollama aktivni",
               "ollama_num_ctx": "Kontextove okno Ollama",
-              "openclaw_session_key": "Klíč relace"
+              "openclaw_session_key": "Klíč relace",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
-              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy."
+              "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

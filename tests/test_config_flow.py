@@ -107,6 +107,7 @@ from custom_components.mcp_assist.const import (
     CONF_SEARCH_PROVIDER,
     CONF_SEARXNG_URL,
     CONF_SERVER_TYPE,
+    CONF_STATEFUL_SESSION_ID,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TEMPERATURE,
@@ -1209,6 +1210,7 @@ def test_provider_section_translations_cover_provider_specific_fields() -> None:
         CONF_OLLAMA_KEEP_ALIVE,
         CONF_OLLAMA_NUM_CTX,
         CONF_OPENCLAW_SESSION_KEY,
+        CONF_STATEFUL_SESSION_ID,
     }
 
     for root, step in (("config", "advanced"), ("options", "init")):
@@ -1286,6 +1288,7 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
     assert _section_field_names(provider_section) == {
         CONF_OLLAMA_NUM_CTX,
         CONF_OLLAMA_KEEP_ALIVE,
+        CONF_STATEFUL_SESSION_ID,
     }
     assert CONF_OLLAMA_NUM_CTX not in _section_field_names(advanced_section)
     assert CONF_OLLAMA_KEEP_ALIVE not in _section_field_names(advanced_section)

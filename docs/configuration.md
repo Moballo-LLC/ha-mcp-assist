@@ -16,6 +16,7 @@ Profile settings are independent per conversation agent.
 | Profile Name | The Home Assistant conversation agent name |
 | Server Type | The provider or local server family |
 | Server URL / API Key | How MCP Assist reaches the provider |
+| Stateful Session Header | Opt-in `X-Session-Id` continuity for endpoints that honor it as server-side session state |
 | Model Name | Which model the profile uses |
 | System Prompt | General assistant behavior |
 | Technical Instructions | Tool-use rules and Home Assistant-specific guidance |
@@ -45,6 +46,12 @@ For LM Studio, llama.cpp, Ollama, and vLLM, configure the server URL.
 If Home Assistant runs in a container, `localhost` means the Home Assistant
 container, not necessarily the host machine. Use a reachable host IP or Docker
 network name when needed.
+
+Enable **Stateful Session Header** only for a gateway or provider endpoint whose
+contract says it uses `X-Session-Id` as server-side conversation state. MCP
+Assist then sends the Home Assistant conversation ID on real model requests and
+avoids ambiguous retries that could duplicate a turn. Leave it disabled for
+ordinary provider endpoints; streaming probes never join the Assist session.
 
 OpenClaw uses gateway settings instead of the generic server URL field. Configure
 the gateway host, port, bearer token, and SSL setting from your OpenClaw gateway.

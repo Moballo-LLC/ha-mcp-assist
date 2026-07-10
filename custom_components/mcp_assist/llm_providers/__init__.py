@@ -25,6 +25,8 @@ from .openrouter import OpenRouterProvider
 from .vllm import VLLMProvider
 from ..provider_runtime import resolve_provider_runtime_config
 from ..const import (
+    CONF_STATEFUL_SESSION_ID,
+    DEFAULT_STATEFUL_SESSION_ID,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
     SERVER_TYPE_LLAMACPP,
@@ -75,6 +77,8 @@ def build_provider_settings(
     """Build current provider settings from a conversation profile entry."""
     runtime_config = resolve_provider_runtime_config(entry)
     provider_class = get_llm_provider_class(runtime_config.server_type)
+    data = getattr(entry, "data", {}) or {}
+    options = getattr(entry, "options", {}) or {}
     return ProviderSettings(
         server_type=runtime_config.server_type,
         model_name=runtime_config.model_name,
@@ -87,6 +91,12 @@ def build_provider_settings(
         display_name=runtime_config.display_name,
         is_remote_service=runtime_config.is_remote_service,
         prompt_cache_key=prompt_cache_key,
+        uses_stateful_session_id=bool(
+            options.get(
+                CONF_STATEFUL_SESSION_ID,
+                data.get(CONF_STATEFUL_SESSION_ID, DEFAULT_STATEFUL_SESSION_ID),
+            )
+        ),
     )
 
 

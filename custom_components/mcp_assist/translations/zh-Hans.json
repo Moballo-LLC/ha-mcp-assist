@@ -99,7 +99,8 @@
           "chat_log_mode": "聊天记录模式",
           "ollama_keep_alive": "保持Ollama活跃",
           "ollama_num_ctx": "Ollama上下文窗口",
-          "openclaw_session_key": "会话密钥"
+          "openclaw_session_key": "会话密钥",
+          "stateful_session_id": "Stateful Session Header"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "保持Ollama活跃",
               "ollama_num_ctx": "Ollama上下文窗口",
-              "openclaw_session_key": "会话密钥"
+              "openclaw_session_key": "会话密钥",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
-              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。"
+              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "网关端口",
           "openclaw_token": "网关令牌",
           "openclaw_use_ssl": "使用SSL/TLS",
-          "openclaw_session_key": "会话密钥"
+          "openclaw_session_key": "会话密钥",
+          "stateful_session_id": "Stateful Session Header"
         },
         "data_description": {
           "model_name": "此配置文件应使用的 LLM 型号。",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "保持Ollama活跃",
               "ollama_num_ctx": "Ollama上下文窗口",
-              "openclaw_session_key": "会话密钥"
+              "openclaw_session_key": "会话密钥",
+              "stateful_session_id": "Stateful Session Header"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
-              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。"
+              "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
+              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
             }
           },
           "advanced_settings": {

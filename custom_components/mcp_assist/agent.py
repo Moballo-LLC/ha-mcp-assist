@@ -599,7 +599,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         headers = dict(provider.headers())
         conversation_id = str(_REQUEST_CONVERSATION_ID.get() or "").strip()
         if (
-            conversation_id
+            provider.uses_stateful_session_id
+            and conversation_id
             and "\r" not in conversation_id
             and "\n" not in conversation_id
         ):
