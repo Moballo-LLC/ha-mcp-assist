@@ -1836,6 +1836,25 @@ def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:
     assert matches == [indoor_presence_tool]
 
 
+def test_adaptive_tool_scoring_keeps_value_exclusions_on_matching_tool() -> None:
+    """Negated parameter values should not hide the positively matched tool."""
+    weather_tool = {
+        "name": "get_weather_forecast",
+        "description": "Get weather forecasts for today or tomorrow.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    query = "Weather today, but not tomorrow"
+
+    assert score_adaptive_tool_match(weather_tool, query) > 0
+    assert match_adaptive_tool_definitions(
+        [weather_tool],
+        query=query,
+        limit=1,
+    ) == [weather_tool]
+
+
 def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
     """The verb avoid should stay positive unless it introduces an exclusion."""
     energy_tool = {

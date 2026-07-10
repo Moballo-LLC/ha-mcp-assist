@@ -771,17 +771,11 @@ def score_adaptive_tool_match(
     negative_routing_terms = _adaptive_text_terms(negative_routing_text)
     llm_description_terms = _adaptive_text_terms(llm_description)
     description_terms = _adaptive_text_terms(description)
-    positive_tool_terms = (
-        name_terms
-        | keyword_terms
-        | routing_terms
-        | llm_description_terms
-        | description_terms
-    )
+    query_exclusion_terms = name_terms | keyword_terms
 
     if set(terms) & negative_routing_terms:
         return 0
-    if negative_query_terms & positive_tool_terms:
+    if negative_query_terms & query_exclusion_terms:
         return 0
 
     score = 0
