@@ -207,7 +207,7 @@ ADAPTIVE_BARE_DOMAIN_INTENT_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
-    r"\b(?:but\s+not|do\s+not\s+use(?:\s+for)?|not\s+(?:for|when)|"
+    r"\b(?:but\s+not|do\s+not\s+use\s+(?:for|when)|not\s+(?:for|when)|"
     r"avoid\s+(?:for|when)|except\s+(?:for|when))\b",
     flags=re.IGNORECASE,
 )

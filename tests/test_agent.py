@@ -71,6 +71,7 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    build_tool_routing_summary,
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
     score_adaptive_tool_match,
@@ -1902,6 +1903,26 @@ def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
         query=query,
         limit=1,
     ) == [energy_tool]
+
+    unused_entity_tool = {
+        "name": "find_unused_entities",
+        "description": "Find unused entity references in automations.",
+        "routingHints": {
+            "preferred_when": "Find automations that do not use an entity."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    unused_query = "Find automations that do not use an entity"
+
+    assert score_adaptive_tool_match(unused_entity_tool, unused_query) > 0
+    assert match_adaptive_tool_definitions(
+        [unused_entity_tool],
+        query=unused_query,
+        limit=1,
+    ) == [unused_entity_tool]
+    routing_summary = build_tool_routing_summary(unused_entity_tool["routingHints"])
+    assert "Use for: Find automations that do not use an entity." in routing_summary
+    assert "Avoid for:" not in routing_summary
 
 
 def test_adaptive_tool_scoring_keeps_exception_intents_positive() -> None:
