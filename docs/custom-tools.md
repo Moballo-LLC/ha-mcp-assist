@@ -335,13 +335,19 @@ To keep the initial prompt small, external tools can add lightweight routing hin
     "description": "Return package status.",
     "inputSchema": {"type": "object", "properties": {}},
     "keywords": ["status", "health", "custom"],
+    "negative_keywords": ["camera", "recognition"],
     "example_queries": ["What's the custom system status?"],
     "preferred_when": "Use when the user asks about this package's state.",
+    "avoid_when": "The request needs camera recognition.",
     "returns": "A short status summary.",
 }
 ```
 
 You can also place the same fields under a nested `routing` object. MCP Assist normalizes these hints into `routingHints` and uses them when converting MCP tools into compact LLM tool descriptions.
+
+Use `negative_keywords` or `avoid_when` to keep nearby but unsupported intents
+from selecting a tool. A compact `preferred_when` sentence can also include a
+negative clause, such as `Indoor presence, but not outside recognition`.
 
 ## Prompt Guidance
 

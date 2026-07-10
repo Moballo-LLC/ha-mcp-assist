@@ -99,7 +99,8 @@
           "chat_log_mode": "Sohbet Günlüğü Modu",
           "ollama_keep_alive": "Ollama'yi Aktif Tut",
           "ollama_num_ctx": "Ollama Baglam Penceresi",
-          "openclaw_session_key": "Oturum Anahtarı"
+          "openclaw_session_key": "Oturum Anahtarı",
+          "stateful_session_id": "Durum bilgili oturum üst bilgisi"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Ollama'yi Aktif Tut",
               "ollama_num_ctx": "Ollama Baglam Penceresi",
-              "openclaw_session_key": "Oturum Anahtarı"
+              "openclaw_session_key": "Oturum Anahtarı",
+              "stateful_session_id": "Durum bilgili oturum üst bilgisi"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
               "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
-              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı."
+              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
+              "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Ağ Geçidi Bağlantı Noktası",
           "openclaw_token": "Ağ Geçidi Jetonu",
           "openclaw_use_ssl": "SSL/TLS'i kullanın",
-          "openclaw_session_key": "Oturum Anahtarı"
+          "openclaw_session_key": "Oturum Anahtarı",
+          "stateful_session_id": "Durum bilgili oturum üst bilgisi"
         },
         "data_description": {
           "model_name": "Bu profilin kullanması gereken LLM modeli.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Ollama'yi Aktif Tut",
               "ollama_num_ctx": "Ollama Baglam Penceresi",
-              "openclaw_session_key": "Oturum Anahtarı"
+              "openclaw_session_key": "Oturum Anahtarı",
+              "stateful_session_id": "Durum bilgili oturum üst bilgisi"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
               "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
-              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı."
+              "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
+              "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin."
             }
           },
           "advanced_settings": {

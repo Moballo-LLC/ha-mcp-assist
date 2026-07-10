@@ -99,7 +99,8 @@
           "chat_log_mode": "Chatlogmodus",
           "ollama_keep_alive": "Ollama actief houden",
           "ollama_num_ctx": "Ollama contextvenster",
-          "openclaw_session_key": "Sessiesleutel"
+          "openclaw_session_key": "Sessiesleutel",
+          "stateful_session_id": "Statushoudende sessieheader"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Ollama actief houden",
               "ollama_num_ctx": "Ollama contextvenster",
-              "openclaw_session_key": "Sessiesleutel"
+              "openclaw_session_key": "Sessiesleutel",
+              "stateful_session_id": "Statushoudende sessieheader"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
-              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden."
+              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
+              "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway-poort",
           "openclaw_token": "Gatewaytoken",
           "openclaw_use_ssl": "Gebruik SSL/TLS",
-          "openclaw_session_key": "Sessiesleutel"
+          "openclaw_session_key": "Sessiesleutel",
+          "stateful_session_id": "Statushoudende sessieheader"
         },
         "data_description": {
           "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Ollama actief houden",
               "ollama_num_ctx": "Ollama contextvenster",
-              "openclaw_session_key": "Sessiesleutel"
+              "openclaw_session_key": "Sessiesleutel",
+              "stateful_session_id": "Statushoudende sessieheader"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
-              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden."
+              "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
+              "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde."
             }
           },
           "advanced_settings": {

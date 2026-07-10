@@ -466,9 +466,24 @@ class ExternalCustomToolLoader:
             max_items=4,
             max_len=100,
         )
+        negative_keywords = self._normalize_string_list(
+            routing.get(
+                "negative_keywords",
+                tool_definition.get("negative_keywords"),
+            ),
+            max_items=8,
+            max_len=40,
+        )
         preferred_when = self._compact_text(
             str(
                 routing.get("preferred_when", tool_definition.get("preferred_when"))
+                or ""
+            ),
+            max_len=180,
+        )
+        avoid_when = self._compact_text(
+            str(
+                routing.get("avoid_when", tool_definition.get("avoid_when"))
                 or ""
             ),
             max_len=180,
@@ -483,8 +498,12 @@ class ExternalCustomToolLoader:
             hints["keywords"] = keywords
         if example_queries:
             hints["example_queries"] = example_queries
+        if negative_keywords:
+            hints["negative_keywords"] = negative_keywords
         if preferred_when:
             hints["preferred_when"] = preferred_when
+        if avoid_when:
+            hints["avoid_when"] = avoid_when
         if returns:
             hints["returns"] = returns
 

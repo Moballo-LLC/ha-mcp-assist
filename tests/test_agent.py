@@ -40,6 +40,7 @@ from custom_components.mcp_assist.const import (
     CONF_MODEL_NAME,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
+    CONF_STATEFUL_SESSION_ID,
     CONF_SYSTEM_PROMPT,
     CONF_SYSTEM_PROMPT_MODE,
     CONF_TECHNICAL_PROMPT,
@@ -70,6 +71,7 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    build_tool_routing_summary,
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
     score_adaptive_tool_match,
@@ -1589,6 +1591,102 @@ async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A short continuation should keep the immediately prior optional schema."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    tools = [
+        _tool("discover_entities"),
+        weather_tool,
+        _tool("search"),
+        _tool("read_url"),
+    ]
+    history = [
+        {
+            "user": "What is the weather today?",
+            "assistant": "It is sunny.",
+            "actions": [
+                {"type": "mcp_tool", "tool": "search", "status": "ok"},
+                {"type": "mcp_tool", "tool": "read_url", "status": "ok"},
+                {
+                    "type": "mcp_tool",
+                    "tool": "get_weather_forecast",
+                    "status": "ok",
+                },
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "What about tomorrow?",
+            history=history,
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert loaded_names == {"get_weather_forecast", "read_url"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_does_not_retain_schema_for_unrelated_follow_up(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An unrelated next request should not inherit the previous optional schema."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    history = [
+        {
+            "user": "What is the weather today?",
+            "assistant": "It is sunny.",
+            "actions": [
+                {
+                    "type": "mcp_tool",
+                    "tool": "get_weather_forecast",
+                    "status": "ok",
+                }
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "Play some music",
+            history=history,
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert loaded_names == set()
+
+
+@pytest.mark.asyncio
 async def test_adaptive_preloads_optional_tool_from_localized_query(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -1706,6 +1804,146 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:
+    """Negative clauses should not become positive adaptive match terms."""
+    indoor_presence_tool = {
+        "name": "indoor_presence",
+        "description": "Summarize indoor occupancy sensors.",
+        "routingHints": {
+            "preferred_when": "Indoor presence, but not outside recognition.",
+            "negative_keywords": ["camera"],
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    outside_recognition_tool = {
+        "name": "outside_recognition",
+        "description": "Recognize people outside using a camera.",
+        "routingHints": {
+            "preferred_when": "Outside person recognition and camera questions."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(indoor_presence_tool, "indoor presence") > 0
+    assert score_adaptive_tool_match(indoor_presence_tool, "outside recognition") == 0
+    assert score_adaptive_tool_match(indoor_presence_tool, "camera recognition") == 0
+    matches = match_adaptive_tool_definitions(
+        [indoor_presence_tool, outside_recognition_tool],
+        query="Indoor presence, but not outside recognition",
+        limit=2,
+    )
+
+    assert matches == [indoor_presence_tool]
+
+
+def test_adaptive_tool_scoring_keeps_value_exclusions_on_matching_tool() -> None:
+    """Negated parameter values should not hide the positively matched tool."""
+    weather_tool = {
+        "name": "get_weather_forecast",
+        "description": "Get weather forecasts for today or tomorrow.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    for query in (
+        "Weather today, but not tomorrow",
+        "Weather today, but not forecast for tomorrow",
+    ):
+        assert score_adaptive_tool_match(weather_tool, query) > 0
+        assert match_adaptive_tool_definitions(
+            [weather_tool],
+            query=query,
+            limit=1,
+        ) == [weather_tool]
+
+
+def test_adaptive_tool_scoring_ignores_negative_routing_boilerplate() -> None:
+    """Generic avoid_when prose should not become a hard negative keyword."""
+    status_tool = {
+        "name": "sample_tool_status",
+        "description": "Return sample package status.",
+        "routingHints": {
+            "keywords": ["sample", "status"],
+            "avoid_when": "The request needs camera recognition.",
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    for avoid_hint in (
+        "The request needs camera recognition.",
+        "Do not use for camera recognition.",
+        "Not for camera recognition.",
+    ):
+        status_tool["routingHints"]["avoid_when"] = avoid_hint
+        assert score_adaptive_tool_match(status_tool, "I need sample status") > 0
+        assert score_adaptive_tool_match(status_tool, "camera status") > 0
+        assert score_adaptive_tool_match(status_tool, "camera recognition") == 0
+
+
+def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
+    """The verb avoid should stay positive unless it introduces an exclusion."""
+    energy_tool = {
+        "name": "energy_advisor",
+        "description": "Suggest ways to reduce household energy waste.",
+        "routingHints": {
+            "preferred_when": (
+                "Use when the user asks how to avoid wasting energy."
+            )
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    query = "How can I avoid wasting energy?"
+
+    assert score_adaptive_tool_match(energy_tool, query) > 0
+    assert match_adaptive_tool_definitions(
+        [energy_tool],
+        query=query,
+        limit=1,
+    ) == [energy_tool]
+
+    unused_entity_tool = {
+        "name": "find_unused_entities",
+        "description": "Find unused entity references in automations.",
+        "routingHints": {
+            "preferred_when": "Find automations that do not use an entity."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    unused_query = "Find automations that do not use an entity"
+
+    assert score_adaptive_tool_match(unused_entity_tool, unused_query) > 0
+    assert match_adaptive_tool_definitions(
+        [unused_entity_tool],
+        query=unused_query,
+        limit=1,
+    ) == [unused_entity_tool]
+    routing_summary = build_tool_routing_summary(unused_entity_tool["routingHints"])
+    assert "Use for: Find automations that do not use an entity." in routing_summary
+    assert "Avoid for:" not in routing_summary
+
+
+def test_adaptive_tool_scoring_keeps_exception_intents_positive() -> None:
+    """The word except should stay positive unless it introduces an exclusion."""
+    exception_tool = {
+        "name": "python_exception_help",
+        "description": "Explain Python exceptions and handlers.",
+        "routingHints": {
+            "preferred_when": "Use for questions about Python except blocks."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    query = "How do Python except blocks work?"
+
+    assert score_adaptive_tool_match(exception_tool, query) > 0
+    assert match_adaptive_tool_definitions(
+        [exception_tool],
+        query=query,
+        limit=1,
+    ) == [exception_tool]
 
 
 def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None:
@@ -2184,7 +2422,10 @@ def test_convert_mcp_tools_to_llm_tools_appends_routing_hints(
             "inputSchema": {"type": "object", "properties": {}},
             "routingHints": {
                 "keywords": ["status", "custom"],
-                "preferred_when": "Use when the user asks for custom package health.",
+                "preferred_when": (
+                    "Use when the user asks for custom package health, "
+                    "but not camera recognition."
+                ),
                 "returns": "A short status summary.",
                 "example_queries": ["What's the custom status?"],
             },
@@ -2196,6 +2437,7 @@ def test_convert_mcp_tools_to_llm_tools_appends_routing_hints(
 
     assert "Return custom status" in description
     assert "Use for: Use when the user asks for custom package health" in description
+    assert "Avoid for: camera recognition" in description
     assert "Keywords:" not in description
     assert "Example:" not in description
 
@@ -2731,6 +2973,135 @@ async def test_call_llm_http_retries_provider_timeout_once(
 
 
 @pytest.mark.asyncio
+async def test_provider_http_request_sends_assist_conversation_session_id(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Provider requests should carry request-scoped cross-turn identity."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _FakeAnthropicResponse(
+                {"message": {"role": "assistant", "content": "Done."}}
+            )
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        response = await agent._request_provider_http_response(
+            agent._get_llm_provider(),
+            {"messages": []},
+            iteration=0,
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert response.status == 200
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    assert "X-Session-Id" not in agent._provider_request_headers(
+        agent._get_llm_provider()
+    )
+
+
+@pytest.mark.asyncio
+async def test_streaming_probe_does_not_join_assist_conversation_session(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """The synthetic streaming probe should not pollute provider session state."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+    response = _FakeStreamingResponse(["probe response\n"])
+    response.headers = {}
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        assert agent._provider_request_headers(agent._get_llm_provider())[
+            "X-Session-Id"
+        ] == "assist-conversation-123"
+        available = await agent._test_streaming_basic()
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert available is True
+    assert "X-Session-Id" not in posts[0]["headers"]
+
+
+@pytest.mark.asyncio
+async def test_assist_handler_scopes_generated_conversation_id_to_request(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """The ChatLog conversation ID should be scoped and cleared by the handler."""
+    entry = profile_entry_factory(
+        options={
+            CONF_CHAT_LOG_MODE: False,
+            CONF_STATEFUL_SESSION_ID: True,
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured_headers: dict[str, str] = {}
+
+    async def _handle_inner(user_input, conversation_id):
+        del user_input
+        assert conversation_id == "generated-conversation-id"
+        captured_headers.update(
+            agent._provider_request_headers(agent._get_llm_provider())
+        )
+        return "done"
+
+    monkeypatch.setattr(agent, "_async_handle_message_inner", _handle_inner)
+    user_input = ConversationInput(
+        text="Continue",
+        context=Context(),
+        conversation_id=None,
+        device_id=None,
+        satellite_id=None,
+        language="en",
+        agent_id="test-agent",
+    )
+
+    result = await agent._async_handle_message(
+        user_input,
+        SimpleNamespace(conversation_id="generated-conversation-id"),
+    )
+
+    assert result == "done"
+    assert captured_headers["X-Session-Id"] == "generated-conversation-id"
+    assert "X-Session-Id" not in agent._provider_request_headers(
+        agent._get_llm_provider()
+    )
+
+
+@pytest.mark.asyncio
 async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -2777,6 +3148,59 @@ async def test_call_llm_http_raises_provider_timeout_after_retry_exhausted(
     assert err.value.transport == "HTTP"
     assert err.value.attempts == 2
     assert len(posts) == 2
+
+
+@pytest.mark.asyncio
+async def test_provider_http_does_not_retry_stateful_session_timeout(
+    hass, profile_entry_factory, monkeypatch, caplog
+) -> None:
+    """A timed-out stateful request should not duplicate the provider turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={
+            CONF_TIMEOUT: 1,
+            CONF_STATEFUL_SESSION_ID: True,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+
+    class _TimeoutSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with (
+            caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name),
+            pytest.raises(agent_module.ProviderResponseTimeoutError) as err,
+        ):
+            await agent._request_provider_http_response(
+                agent._get_llm_provider(),
+                {"messages": []},
+                iteration=0,
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert err.value.attempts == 1
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    assert "retrying once" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -3133,6 +3557,370 @@ async def test_ollama_streaming_invalid_tool_error_finishes_without_tools(
     )
     assert "Streaming failed with status 500" not in caplog.text
     assert "Streaming iteration 2 failed" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_failure_does_not_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An accepted stateful stream should not replay the turn over HTTP."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("stream dropped after acceptance")
+
+    response = _FakeStreamingResponse()
+    response.content = _FailingContent()
+    response.headers = {}
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_fallback_remains_available_without_stateful_capability(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Ordinary endpoints should retain stream recovery without session state."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("stream dropped")
+
+    response = _FakeStreamingResponse()
+    response.content = _FailingContent()
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert "X-Session-Id" not in posts[0]["headers"]
+    http_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_later_stateful_stream_failure_does_not_send_a_final_request(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A failed post-tool stateful stream must not replay the provider turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_execute_tool_calls",
+        AsyncMock(
+            return_value=[
+                {
+                    "role": "tool",
+                    "tool_name": "discover_entities",
+                    "content": "No upstairs lights are on.",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    final_mock = AsyncMock(return_value="unexpected final request")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    monkeypatch.setattr(agent, "_call_llm_final_response_without_tools", final_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("post-tool stream dropped")
+
+    failed_response = _FakeStreamingResponse()
+    failed_response.content = _FailingContent()
+    responses = [
+        _FakeStreamingResponse(
+            [
+                json.dumps(
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "discover_entities",
+                                        "arguments": {"domain": "light", "state": "on"},
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ),
+                json.dumps({"done": True}),
+            ]
+        ),
+        failed_response,
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 2
+    assert all(
+        post["headers"]["X-Session-Id"] == "assist-conversation-123"
+        for post in posts
+    )
+    http_mock.assert_not_awaited()
+    final_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A dispatched stateful request must not replay after a pre-header timeout."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _PreHeaderTimeout:
+        async def __aenter__(self):
+            raise asyncio.TimeoutError
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    class _TimeoutSession:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def post(self, url: str, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _PreHeaderTimeout()
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _TimeoutSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_connector_failure_can_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A connection failure before provider acceptance remains recoverable."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+    connector_error = agent_module.aiohttp.ClientConnectorError(
+        SimpleNamespace(ssl=False, host="example.invalid", port=443),
+        OSError("connect failed"),
+    )
+
+    class _ConnectionFailure:
+        async def __aenter__(self):
+            raise connector_error
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    class _ConnectionFailureSession:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def post(self, url: str, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _ConnectionFailure()
+
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession", _ConnectionFailureSession
+    )
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_rejection_can_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An explicit streaming rejection can safely use the HTTP transport."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        },
+        options={CONF_STATEFUL_SESSION_ID: True},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(
+            [_FakeStreamingResponse(status=500, text="streaming unsupported")],
+            posts,
+        )
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -99,7 +99,8 @@
           "chat_log_mode": "Chat-lokitila",
           "ollama_keep_alive": "Pida Ollama aktiivisena",
           "ollama_num_ctx": "Ollaman konteksti-ikkuna",
-          "openclaw_session_key": "Istuntoavain"
+          "openclaw_session_key": "Istuntoavain",
+          "stateful_session_id": "Tilallisen istunnon otsake"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Pida Ollama aktiivisena",
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
-              "openclaw_session_key": "Istuntoavain"
+              "openclaw_session_key": "Istuntoavain",
+              "stateful_session_id": "Tilallisen istunnon otsake"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
-              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään."
+              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
+              "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway-portti",
           "openclaw_token": "Gateway Token",
           "openclaw_use_ssl": "Käytä SSL/TLS",
-          "openclaw_session_key": "Istuntoavain"
+          "openclaw_session_key": "Istuntoavain",
+          "stateful_session_id": "Tilallisen istunnon otsake"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Pida Ollama aktiivisena",
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
-              "openclaw_session_key": "Istuntoavain"
+              "openclaw_session_key": "Istuntoavain",
+              "stateful_session_id": "Tilallisen istunnon otsake"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
-              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään."
+              "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
+              "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana."
             }
           },
           "advanced_settings": {

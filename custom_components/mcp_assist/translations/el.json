@@ -99,7 +99,8 @@
           "chat_log_mode": "Λειτουργία καταγραφής συνομιλίας",
           "ollama_keep_alive": "Διατηρηση Ollama ενεργου",
           "ollama_num_ctx": "Παραθυρο πλαισιου Ollama",
-          "openclaw_session_key": "Κλειδί συνεδρίας"
+          "openclaw_session_key": "Κλειδί συνεδρίας",
+          "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Διατηρηση Ollama ενεργου",
               "ollama_num_ctx": "Παραθυρο πλαισιου Ollama",
-              "openclaw_session_key": "Κλειδί συνεδρίας"
+              "openclaw_session_key": "Κλειδί συνεδρίας",
+              "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
               "ollama_num_ctx": "Παράκαμψη του μεγέθους παραθύρου περιβάλλοντος που μεταβιβάστηκε στο Ollama. Χρησιμοποιήστε το 0 για να διατηρήσετε το προεπιλεγμένο μοντέλο.",
-              "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων."
+              "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων.",
+              "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway Port",
           "openclaw_token": "Token Gateway",
           "openclaw_use_ssl": "Χρησιμοποιήστε το SSL/TLS",
-          "openclaw_session_key": "Κλειδί συνεδρίας"
+          "openclaw_session_key": "Κλειδί συνεδρίας",
+          "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση"
         },
         "data_description": {
           "model_name": "Το μοντέλο LLM θα πρέπει να χρησιμοποιεί αυτό το προφίλ.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Διατηρηση Ollama ενεργου",
               "ollama_num_ctx": "Παραθυρο πλαισιου Ollama",
-              "openclaw_session_key": "Κλειδί συνεδρίας"
+              "openclaw_session_key": "Κλειδί συνεδρίας",
+              "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
               "ollama_num_ctx": "Παράκαμψη του μεγέθους παραθύρου περιβάλλοντος που μεταβιβάστηκε στο Ollama. Χρησιμοποιήστε το 0 για να διατηρήσετε το προεπιλεγμένο μοντέλο.",
-              "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων."
+              "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων.",
+              "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή."
             }
           },
           "advanced_settings": {

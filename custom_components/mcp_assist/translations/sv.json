@@ -99,7 +99,8 @@
           "chat_log_mode": "Chattloggläge",
           "ollama_keep_alive": "Hall Ollama aktiv",
           "ollama_num_ctx": "Ollama kontextfonster",
-          "openclaw_session_key": "Sessionsnyckel"
+          "openclaw_session_key": "Sessionsnyckel",
+          "stateful_session_id": "Tillståndsbevarande sessionsrubrik"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Hall Ollama aktiv",
               "ollama_num_ctx": "Ollama kontextfonster",
-              "openclaw_session_key": "Sessionsnyckel"
+              "openclaw_session_key": "Sessionsnyckel",
+              "stateful_session_id": "Tillståndsbevarande sessionsrubrik"
             },
             "data_description": {
               "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
               "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
-              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till."
+              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till.",
+              "stateful_session_id": "Skicka Assist-konversationens ID som X-Session-Id och förhindra tvetydiga återförsök. Aktivera endast när den här slutpunkten använder headern som sessionstillstånd på serversidan."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Gateway-port",
           "openclaw_token": "Gateway Token",
           "openclaw_use_ssl": "Använd SSL/TLS",
-          "openclaw_session_key": "Sessionsnyckel"
+          "openclaw_session_key": "Sessionsnyckel",
+          "stateful_session_id": "Tillståndsbevarande sessionsrubrik"
         },
         "data_description": {
           "model_name": "LLM-modellen som denna profil ska använda.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Hall Ollama aktiv",
               "ollama_num_ctx": "Ollama kontextfonster",
-              "openclaw_session_key": "Sessionsnyckel"
+              "openclaw_session_key": "Sessionsnyckel",
+              "stateful_session_id": "Tillståndsbevarande sessionsrubrik"
             },
             "data_description": {
               "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
               "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
-              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till."
+              "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till.",
+              "stateful_session_id": "Skicka Assist-konversationens ID som X-Session-Id och förhindra tvetydiga återförsök. Aktivera endast när den här slutpunkten använder headern som sessionstillstånd på serversidan."
             }
           },
           "advanced_settings": {

@@ -1634,7 +1634,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(PROVIDER_SECTION_KEY): _build_provider_section(
                     _build_provider_field_schema_items(
-                        provider_class.provider_options_fields
+                        provider_class.config_provider_options_fields()
                     )
                 ),
             }
@@ -1694,7 +1694,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
 
             provider_schema_items = _build_provider_field_schema_items(
-                provider_class.provider_options_fields
+                provider_class.config_provider_options_fields()
             )
             if provider_schema_items:
                 advanced_schema_dict[vol.Required(PROVIDER_SECTION_KEY)] = (
@@ -2263,7 +2263,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 )
             )
             provider_schema_items = _build_provider_field_schema_items(
-                provider_class.provider_options_fields,
+                provider_class.config_provider_options_fields(),
                 current_values,
                 options,
                 data,
@@ -2469,7 +2469,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 ): bool,
             }
             provider_schema_items = _build_provider_field_schema_items(
-                provider_class.provider_options_fields,
+                provider_class.config_provider_options_fields(),
                 current_values,
                 options,
                 data,

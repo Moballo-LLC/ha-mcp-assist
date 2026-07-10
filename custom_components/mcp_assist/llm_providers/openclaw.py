@@ -29,6 +29,7 @@ class OpenClawProvider(LLMProvider):
     provider_type = SERVER_TYPE_OPENCLAW
     provider_display_name = "OpenClaw"
     supports_streaming = False
+    supports_stateful_session_id_option = False
     uses_config_model_step = False
     default_config_model_name = "main"
     default_config_system_prompt = ""

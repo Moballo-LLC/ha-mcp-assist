@@ -99,7 +99,8 @@
           "chat_log_mode": "Modo de registro de bate-papo",
           "ollama_keep_alive": "Manter Ollama ativo",
           "ollama_num_ctx": "Janela de contexto Ollama",
-          "openclaw_session_key": "Chave da sessão"
+          "openclaw_session_key": "Chave da sessão",
+          "stateful_session_id": "Cabeçalho de sessão com estado"
         },
         "sections": {
           "conversation": {
@@ -150,12 +151,14 @@
             "data": {
               "ollama_keep_alive": "Manter Ollama ativo",
               "ollama_num_ctx": "Janela de contexto Ollama",
-              "openclaw_session_key": "Chave da sessão"
+              "openclaw_session_key": "Chave da sessão",
+              "stateful_session_id": "Cabeçalho de sessão com estado"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
               "ollama_num_ctx": "Substitua o tamanho da janela de contexto passado para Ollama. Use 0 para manter o modelo padrão.",
-              "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens."
+              "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
+              "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor."
             }
           },
           "tools": {
@@ -378,7 +381,8 @@
           "openclaw_port": "Porta de entrada",
           "openclaw_token": "Token de Gateway",
           "openclaw_use_ssl": "Usar SSL/TLS",
-          "openclaw_session_key": "Chave da sessão"
+          "openclaw_session_key": "Chave da sessão",
+          "stateful_session_id": "Cabeçalho de sessão com estado"
         },
         "data_description": {
           "model_name": "O modelo LLM que este perfil deve usar.",
@@ -463,12 +467,14 @@
             "data": {
               "ollama_keep_alive": "Manter Ollama ativo",
               "ollama_num_ctx": "Janela de contexto Ollama",
-              "openclaw_session_key": "Chave da sessão"
+              "openclaw_session_key": "Chave da sessão",
+              "stateful_session_id": "Cabeçalho de sessão com estado"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
               "ollama_num_ctx": "Substitua o tamanho da janela de contexto passado para Ollama. Use 0 para manter o modelo padrão.",
-              "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens."
+              "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
+              "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor."
             }
           },
           "advanced_settings": {

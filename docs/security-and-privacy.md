@@ -89,6 +89,13 @@ Cloud providers require API keys. Treat those keys as secrets:
 - Rotate keys if they were pasted into logs, issues, or screenshots.
 - Review provider billing and quota settings.
 
+Profiles with **Stateful Session Header** enabled include the Home Assistant
+conversation ID in the `X-Session-Id` header on real model requests. This gives
+compatible gateways and providers a stable cross-turn session identity. Enable
+it only when the configured endpoint honors that header as server-side session
+state. Treat the opaque ID as provider-visible metadata; it does not contain
+prompt or entity content.
+
 Official OpenAI profiles send a hashed `prompt_cache_key` to improve provider
 prompt-cache routing. The key is derived from profile/provider metadata and does
 not include prompts, entity names, user text, or tool results. OpenAI still
