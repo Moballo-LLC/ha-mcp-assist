@@ -206,6 +206,11 @@ ADAPTIVE_BARE_DOMAIN_INTENT_RE = re.compile(
     r"(?::\d{2,5})?(?:/[^\s]*)?",
     flags=re.IGNORECASE,
 )
+ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
+    r"\b(?:but\s+not|do\s+not\s+use(?:\s+for)?|not\s+(?:for|when)|"
+    r"avoid(?:\s+for|\s+when)?|except(?:\s+for)?)\b",
+    flags=re.IGNORECASE,
+)
 ADAPTIVE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
     # Weather and forecasts
     "météo": ("weather", "forecast"),
@@ -469,36 +474,64 @@ def compact_schema_for_llm(
     return compacted
 
 
+def _split_negative_routing_text(text: Any) -> tuple[str, str]:
+    """Split a compact routing sentence into positive and negative clauses."""
+    normalized = " ".join(str(text or "").split()).strip()
+    match = ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE.search(normalized)
+    if match is None:
+        return normalized, ""
+    positive = normalized[: match.start()].strip(" ,;:-")
+    negative = normalized[match.end() :].strip(" ,;:-")
+    return positive, negative
+
+
 def build_tool_routing_summary(routing_hints: Any) -> str:
     """Build a compact description suffix from optional routing hints."""
     if not isinstance(routing_hints, dict):
         return ""
 
-    preferred_when = str(routing_hints.get("preferred_when") or "").strip()
+    preferred_when, inline_avoid_when = _split_negative_routing_text(
+        routing_hints.get("preferred_when")
+    )
+    summary_parts: list[str] = []
     if preferred_when:
         compact_preferred = compact_text(preferred_when, max_len=90)
         if compact_preferred:
-            return f"Use for: {compact_preferred}"
+            summary_parts.append(f"Use for: {compact_preferred}")
 
     example_queries = routing_hints.get("example_queries")
-    if isinstance(example_queries, list):
+    if not summary_parts and isinstance(example_queries, list):
         cleaned_examples = [
             str(item).strip() for item in example_queries if str(item).strip()
         ][:1]
         if cleaned_examples:
             compact_example = compact_text(cleaned_examples[0], max_len=80)
             if compact_example:
-                return f"Example: {compact_example}"
+                summary_parts.append(f"Example: {compact_example}")
 
     keywords = routing_hints.get("keywords")
-    if isinstance(keywords, list):
+    if not summary_parts and isinstance(keywords, list):
         cleaned_keywords = [
             str(item).strip() for item in keywords if str(item).strip()
         ][:3]
         if cleaned_keywords:
-            return f"Keywords: {', '.join(cleaned_keywords)}"
+            summary_parts.append(f"Keywords: {', '.join(cleaned_keywords)}")
 
-    return ""
+    avoid_parts = [
+        inline_avoid_when,
+        str(routing_hints.get("avoid_when") or "").strip(),
+    ]
+    negative_keywords = routing_hints.get("negative_keywords")
+    if isinstance(negative_keywords, list):
+        avoid_parts.extend(str(item).strip() for item in negative_keywords[:3])
+    compact_avoid = compact_text(
+        ", ".join(part for part in avoid_parts if part),
+        max_len=80,
+    )
+    if compact_avoid:
+        summary_parts.append(f"Avoid for: {compact_avoid}")
+
+    return " | ".join(summary_parts)
 
 
 def tool_definition_name(tool: dict[str, Any]) -> str:
@@ -701,7 +734,9 @@ def score_adaptive_tool_match(
 ) -> int:
     """Score how well a raw tool definition matches an adaptive query."""
     normalized_query = " ".join(str(query or "").split()).casefold()
-    terms = normalize_adaptive_query_terms(normalized_query)
+    positive_query, negative_query = _split_negative_routing_text(normalized_query)
+    terms = normalize_adaptive_query_terms(positive_query)
+    negative_query_terms = set(normalize_adaptive_query_terms(negative_query))
     if not normalized_query and not terms:
         return 0
 
@@ -711,15 +746,46 @@ def score_adaptive_tool_match(
     ).casefold()
     description = str(tool.get("description") or "").casefold()
     keyword_text = _routing_hint_text(tool, "keywords")
-    routing_text = _routing_hint_text(tool, "preferred_when", "example_queries")
+    preferred_routing_text, inline_negative_routing_text = (
+        _split_negative_routing_text(_routing_hint_text(tool, "preferred_when"))
+    )
+    routing_text = " ".join(
+        part
+        for part in (
+            preferred_routing_text,
+            _routing_hint_text(tool, "example_queries"),
+        )
+        if part
+    )
+    negative_routing_text = " ".join(
+        part
+        for part in (
+            inline_negative_routing_text,
+            _routing_hint_text(tool, "avoid_when", "negative_keywords"),
+        )
+        if part
+    )
     name_terms = _adaptive_text_terms(name)
     keyword_terms = _adaptive_text_terms(keyword_text)
     routing_terms = _adaptive_text_terms(routing_text)
+    negative_routing_terms = _adaptive_text_terms(negative_routing_text)
     llm_description_terms = _adaptive_text_terms(llm_description)
     description_terms = _adaptive_text_terms(description)
+    positive_tool_terms = (
+        name_terms
+        | keyword_terms
+        | routing_terms
+        | llm_description_terms
+        | description_terms
+    )
+
+    if set(terms) & negative_routing_terms:
+        return 0
+    if negative_query_terms & positive_tool_terms:
+        return 0
 
     score = 0
-    if normalized_query and normalized_query == name:
+    if positive_query and positive_query == name:
         score += 100
     if terms and all(term in name_terms for term in terms):
         score += 40
@@ -745,13 +811,13 @@ def score_adaptive_tool_match(
             matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
-        entity_domains = _adaptive_entity_reference_domains(normalized_query)
+        entity_domains = _adaptive_entity_reference_domains(positive_query)
         entity_reference_terms = (
-            _adaptive_entity_reference_terms(normalized_query)
+            _adaptive_entity_reference_terms(positive_query)
             | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
         )
         outside_entity_reference_terms = _adaptive_text_terms(
-            _strip_adaptive_entity_references(normalized_query)
+            _strip_adaptive_entity_references(positive_query)
         )
         if (
             matched_terms

@@ -89,6 +89,11 @@ Cloud providers require API keys. Treat those keys as secrets:
 - Rotate keys if they were pasted into logs, issues, or screenshots.
 - Review provider billing and quota settings.
 
+Model requests made during an Assist conversation include the Home Assistant
+conversation ID in the `X-Session-Id` header. This gives compatible local
+gateways and providers a stable cross-turn session identity. Treat that opaque
+ID as provider-visible metadata; it does not contain prompt or entity content.
+
 Official OpenAI profiles send a hashed `prompt_cache_key` to improve provider
 prompt-cache routing. The key is derived from profile/provider metadata and does
 not include prompts, entity names, user text, or tool results. OpenAI still

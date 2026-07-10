@@ -1589,6 +1589,102 @@ async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A short continuation should keep the immediately prior optional schema."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    tools = [
+        _tool("discover_entities"),
+        weather_tool,
+        _tool("search"),
+        _tool("read_url"),
+    ]
+    history = [
+        {
+            "user": "What is the weather today?",
+            "assistant": "It is sunny.",
+            "actions": [
+                {"type": "mcp_tool", "tool": "search", "status": "ok"},
+                {"type": "mcp_tool", "tool": "read_url", "status": "ok"},
+                {
+                    "type": "mcp_tool",
+                    "tool": "get_weather_forecast",
+                    "status": "ok",
+                },
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "What about tomorrow?",
+            history=history,
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert loaded_names == {"get_weather_forecast", "read_url"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_does_not_retain_schema_for_unrelated_follow_up(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An unrelated next request should not inherit the previous optional schema."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tool = {
+        **_tool("get_weather_forecast"),
+        "llmDescription": "Get weather forecast data.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    history = [
+        {
+            "user": "What is the weather today?",
+            "assistant": "It is sunny.",
+            "actions": [
+                {
+                    "type": "mcp_tool",
+                    "tool": "get_weather_forecast",
+                    "status": "ok",
+                }
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), weather_tool]),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        await agent._prepare_adaptive_tools_for_request(
+            "Play some music",
+            history=history,
+        )
+        loaded_names = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get()
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert loaded_names == set()
+
+
+@pytest.mark.asyncio
 async def test_adaptive_preloads_optional_tool_from_localized_query(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -1706,6 +1802,38 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:
+    """Negative clauses should not become positive adaptive match terms."""
+    indoor_presence_tool = {
+        "name": "indoor_presence",
+        "description": "Summarize indoor occupancy sensors.",
+        "routingHints": {
+            "preferred_when": "Indoor presence, but not outside recognition.",
+            "negative_keywords": ["camera"],
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+    outside_recognition_tool = {
+        "name": "outside_recognition",
+        "description": "Recognize people outside using a camera.",
+        "routingHints": {
+            "preferred_when": "Outside person recognition and camera questions."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    assert score_adaptive_tool_match(indoor_presence_tool, "indoor presence") > 0
+    assert score_adaptive_tool_match(indoor_presence_tool, "outside recognition") == 0
+    assert score_adaptive_tool_match(indoor_presence_tool, "camera recognition") == 0
+    matches = match_adaptive_tool_definitions(
+        [indoor_presence_tool, outside_recognition_tool],
+        query="Indoor presence, but not outside recognition",
+        limit=2,
+    )
+
+    assert matches == [indoor_presence_tool]
 
 
 def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None:
@@ -2184,7 +2312,10 @@ def test_convert_mcp_tools_to_llm_tools_appends_routing_hints(
             "inputSchema": {"type": "object", "properties": {}},
             "routingHints": {
                 "keywords": ["status", "custom"],
-                "preferred_when": "Use when the user asks for custom package health.",
+                "preferred_when": (
+                    "Use when the user asks for custom package health, "
+                    "but not camera recognition."
+                ),
                 "returns": "A short status summary.",
                 "example_queries": ["What's the custom status?"],
             },
@@ -2196,6 +2327,7 @@ def test_convert_mcp_tools_to_llm_tools_appends_routing_hints(
 
     assert "Return custom status" in description
     assert "Use for: Use when the user asks for custom package health" in description
+    assert "Avoid for: camera recognition" in description
     assert "Keywords:" not in description
     assert "Example:" not in description
 
@@ -2728,6 +2860,94 @@ async def test_call_llm_http_retries_provider_timeout_once(
     assert result == "Recovered."
     assert len(posts) == 2
     assert "HTTP transport timed out after 1s" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_provider_http_request_sends_assist_conversation_session_id(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Provider requests should carry request-scoped cross-turn identity."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+
+    class _FakeSession:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _FakeAnthropicResponse(
+                {"message": {"role": "assistant", "content": "Done."}}
+            )
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        response = await agent._request_provider_http_response(
+            agent._get_llm_provider(),
+            {"messages": []},
+            iteration=0,
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert response.status == 200
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    assert "X-Session-Id" not in agent._provider_request_headers(
+        agent._get_llm_provider()
+    )
+
+
+@pytest.mark.asyncio
+async def test_assist_handler_scopes_generated_conversation_id_to_request(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """The ChatLog conversation ID should be scoped and cleared by the handler."""
+    entry = profile_entry_factory(options={CONF_CHAT_LOG_MODE: False})
+    agent = MCPAssistConversationEntity(hass, entry)
+    captured_headers: dict[str, str] = {}
+
+    async def _handle_inner(user_input, conversation_id):
+        del user_input
+        assert conversation_id == "generated-conversation-id"
+        captured_headers.update(
+            agent._provider_request_headers(agent._get_llm_provider())
+        )
+        return "done"
+
+    monkeypatch.setattr(agent, "_async_handle_message_inner", _handle_inner)
+    user_input = ConversationInput(
+        text="Continue",
+        context=Context(),
+        conversation_id=None,
+        device_id=None,
+        satellite_id=None,
+        language="en",
+        agent_id="test-agent",
+    )
+
+    result = await agent._async_handle_message(
+        user_input,
+        SimpleNamespace(conversation_id="generated-conversation-id"),
+    )
+
+    assert result == "done"
+    assert captured_headers["X-Session-Id"] == "generated-conversation-id"
+    assert "X-Session-Id" not in agent._provider_request_headers(
+        agent._get_llm_provider()
+    )
 
 
 @pytest.mark.asyncio

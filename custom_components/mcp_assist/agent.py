@@ -48,6 +48,7 @@ from .tool_schema import (
     convert_mcp_tools_to_llm_tools,
     json_size_bytes,
     match_adaptive_tool_definitions,
+    normalize_adaptive_query_terms,
     score_adaptive_tool_match,
     tool_definition_name,
 )
@@ -156,6 +157,28 @@ class EmptyStreamingResponseError(RecoverableStreamingFallbackError):
 # Tool schemas are invalidated by settings and custom-tool signatures; this TTL is
 # just a safety refresh, not the primary change detector.
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
+ADAPTIVE_RETAINED_SCHEMA_LIMIT = 2
+ADAPTIVE_FOLLOW_UP_MAX_WORDS = 8
+ADAPTIVE_FOLLOW_UP_PREFIXES = (
+    "and ",
+    "also ",
+    "how about ",
+    "what about ",
+    "what if ",
+    "then ",
+)
+ADAPTIVE_FOLLOW_UP_REFERENCE_TERMS = frozenset(
+    {
+        "again",
+        "it",
+        "same",
+        "that",
+        "them",
+        "there",
+        "these",
+        "those",
+    }
+)
 MAX_TOOL_RESULT_CHARS = 8000
 MAX_TOOL_RESULT_LINES = 120
 TOOL_BUDGET_FINAL_TOOL_RESULT_CHARS = 2000
@@ -325,6 +348,9 @@ TOOLLESS_RESPONSE_PREFIXES = tuple(
 )
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
+)
+_REQUEST_CONVERSATION_ID: ContextVar[str | None] = ContextVar(
+    "mcp_assist_request_conversation_id", default=None
 )
 _ADAPTIVE_LOADED_TOOL_NAMES: ContextVar[set[str] | frozenset[str] | None] = ContextVar(
     "mcp_assist_adaptive_loaded_tool_names", default=None
@@ -563,6 +589,18 @@ class MCPAssistConversationEntity(ConversationEntity):
         if headers := self._mcp_request_headers():
             kwargs["headers"] = headers
         return kwargs
+
+    def _provider_request_headers(self, provider: LLMProvider) -> dict[str, str]:
+        """Build model-provider headers with request-scoped Assist identity."""
+        headers = dict(provider.headers())
+        conversation_id = str(_REQUEST_CONVERSATION_ID.get() or "").strip()
+        if (
+            conversation_id
+            and "\r" not in conversation_id
+            and "\n" not in conversation_id
+        ):
+            headers["X-Session-Id"] = conversation_id
+        return headers
 
     def _is_optional_tool_family_enabled(self, family: str) -> bool:
         """Return whether an optional tool family is enabled for this profile."""
@@ -1887,13 +1925,16 @@ class MCPAssistConversationEntity(ConversationEntity):
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
             user_input
         )
+        conversation_id = chat_log_instance.conversation_id
+        conversation_id_token: Token[str | None] = _REQUEST_CONVERSATION_ID.set(
+            conversation_id
+        )
         adaptive_loaded_tools_token: Token[set[str] | frozenset[str] | None] = (
             _ADAPTIVE_LOADED_TOOL_NAMES.set(set())
         )
         tool_history_token: Token[list[dict[str, Any]] | None] = (
             _REQUEST_TOOL_HISTORY_SUMMARIES.set([])
         )
-        conversation_id = chat_log_instance.conversation_id
         persistent_chat_log = (
             self._build_persistent_chat_log_record(user_input, conversation_id)
             if self.chat_log_mode
@@ -1912,6 +1953,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
             _ADAPTIVE_LOADED_TOOL_NAMES.reset(adaptive_loaded_tools_token)
             _REQUEST_TOOL_HISTORY_SUMMARIES.reset(tool_history_token)
+            _REQUEST_CONVERSATION_ID.reset(conversation_id_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
 
@@ -1952,7 +1994,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                 )
 
             adaptive_started_at = time.monotonic() if metrics_enabled else 0.0
-            await self._prepare_adaptive_tools_for_request(user_input.text)
+            await self._prepare_adaptive_tools_for_request(
+                user_input.text,
+                history=history,
+            )
             adaptive_ms = (
                 (time.monotonic() - adaptive_started_at) * 1000
                 if metrics_enabled
@@ -1977,8 +2022,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                     adaptive_ms,
                     (time.monotonic() - setup_started_at) * 1000,
                 )
-
-            self._current_conversation_id = conversation_id
 
             if self.debug_mode:
                 _LOGGER.info(f"📨 Messages built: {len(messages)} messages")
@@ -2939,20 +2982,102 @@ class MCPAssistConversationEntity(ConversationEntity):
         scored.sort(key=lambda item: (-item[0], item[1]))
         return frozenset(name for _score, name in scored[:limit])
 
-    async def _prepare_adaptive_tools_for_request(self, user_text: str) -> None:
+    @staticmethod
+    def _is_bounded_adaptive_follow_up(user_text: str) -> bool:
+        """Return whether a short utterance explicitly refers to prior context."""
+        normalized = " ".join(str(user_text or "").split()).casefold()
+        words = re.findall(r"\w+", normalized, flags=re.UNICODE)
+        if not words or len(words) > ADAPTIVE_FOLLOW_UP_MAX_WORDS:
+            return False
+        if normalized.startswith(ADAPTIVE_FOLLOW_UP_PREFIXES):
+            return True
+        return bool(set(words) & ADAPTIVE_FOLLOW_UP_REFERENCE_TERMS)
+
+    def _select_retained_adaptive_tool_names(
+        self,
+        tools: List[Dict[str, Any]],
+        user_text: str,
+        history: List[Dict[str, Any]],
+    ) -> frozenset[str]:
+        """Retain recently used optional schemas for a same-topic follow-up."""
+        if not history:
+            return frozenset()
+
+        previous_turn = history[-1]
+        actions = previous_turn.get("actions")
+        if not isinstance(actions, list):
+            return frozenset()
+
+        available_tools = {
+            self._tool_definition_name(tool): tool
+            for tool in tools
+            if self._tool_definition_name(tool)
+        }
+        candidate_names: list[str] = []
+        for action in reversed(actions):
+            if not isinstance(action, dict) or action.get("type") != "mcp_tool":
+                continue
+            tool_name = str(action.get("tool") or "")
+            if (
+                not tool_name
+                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in ADAPTIVE_META_TOOL_NAMES
+                or tool_name not in available_tools
+                or tool_name in candidate_names
+            ):
+                continue
+            candidate_names.append(tool_name)
+            if len(candidate_names) >= ADAPTIVE_RETAINED_SCHEMA_LIMIT:
+                break
+
+        if not candidate_names:
+            return frozenset()
+
+        previous_user_text = str(previous_turn.get("user") or "")
+        current_terms = set(normalize_adaptive_query_terms(user_text))
+        previous_terms = set(normalize_adaptive_query_terms(previous_user_text))
+        same_topic = bool(current_terms & previous_terms)
+        if not same_topic:
+            same_topic = any(
+                score_adaptive_tool_match(
+                    available_tools[name],
+                    user_text,
+                    base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+                )
+                > 0
+                for name in candidate_names
+            )
+        if not same_topic:
+            same_topic = self._is_bounded_adaptive_follow_up(user_text)
+
+        return frozenset(candidate_names if same_topic else ())
+
+    async def _prepare_adaptive_tools_for_request(
+        self,
+        user_text: str,
+        *,
+        history: List[Dict[str, Any]] | None = None,
+    ) -> None:
         """Preload obvious adaptive schemas before the first model turn."""
         if not self.adaptive_context_mode:
             return
 
         tools = await self._get_profile_mcp_tools() or []
+        retained_names = self._select_retained_adaptive_tool_names(
+            tools,
+            user_text,
+            history or [],
+        )
         preload_names = self._select_initial_adaptive_tool_names(tools, user_text)
-        if not preload_names:
+        selected_names = retained_names | preload_names
+        if not selected_names:
             return
 
-        _adaptive_loaded_tool_names().update(preload_names)
+        _adaptive_loaded_tool_names().update(selected_names)
         _LOGGER.debug(
-            "Adaptive context preloaded tool schemas: %s",
-            ", ".join(sorted(preload_names)),
+            "Adaptive context prepared tool schemas: retained=%s matched=%s",
+            ", ".join(sorted(retained_names)) or "none",
+            ", ".join(sorted(preload_names)) or "none",
         )
 
     @staticmethod
@@ -3853,7 +3978,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
                     provider.chat_url(),
-                    headers=provider.headers(),
+                    headers=self._provider_request_headers(provider),
                     json=clean_payload,
                 ) as response:
                     _LOGGER.info(
@@ -3990,7 +4115,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     url = provider.chat_url()
-                    headers = provider.headers()
+                    headers = self._provider_request_headers(provider)
 
                     _LOGGER.info(f"📡 Streaming to: {url}")
                     if self.debug_mode:
@@ -4474,7 +4599,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(
                         provider.chat_url(),
-                        headers=provider.headers(),
+                        headers=self._provider_request_headers(provider),
                         json=clean_payload,
                     ) as response:
                         if response.status != 200:

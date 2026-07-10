@@ -228,8 +228,10 @@ class SampleTool(MCPAssistExternalTool):
             "llmDescription": "Return sample status.",
             "inputSchema": {{"type": "object", "properties": {{}}}},
             "keywords": ["sample", "status"],
+            "negative_keywords": ["camera", "recognition"],
             "example_queries": ["What's the sample status?"],
             "preferred_when": "Use for sample package status questions.",
+            "avoid_when": "The request needs camera recognition.",
             "returns": "A short sample status string.",
         }}]
 
@@ -890,8 +892,15 @@ async def test_external_custom_tool_package_loads_and_handles_calls(
         if tool["name"] == "sample_tool_status"
     )
     assert tool_definition["routingHints"]["keywords"] == ["sample", "status"]
+    assert tool_definition["routingHints"]["negative_keywords"] == [
+        "camera",
+        "recognition",
+    ]
     assert tool_definition["routingHints"]["preferred_when"] == (
         "Use for sample package status questions."
+    )
+    assert tool_definition["routingHints"]["avoid_when"] == (
+        "The request needs camera recognition."
     )
     assert tool_definition["llmDescription"] == "Return sample status."
 
