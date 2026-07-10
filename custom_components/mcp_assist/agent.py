@@ -3976,9 +3976,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
+                # This synthetic probe must not join the active Assist session.
                 async with session.post(
                     provider.chat_url(),
-                    headers=self._provider_request_headers(provider),
+                    headers=provider.headers(),
                     json=clean_payload,
                 ) as response:
                     _LOGGER.info(

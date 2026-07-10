@@ -1836,6 +1836,50 @@ def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:
     assert matches == [indoor_presence_tool]
 
 
+def test_adaptive_tool_scoring_keeps_supported_avoid_intents_positive() -> None:
+    """The verb avoid should stay positive unless it introduces an exclusion."""
+    energy_tool = {
+        "name": "energy_advisor",
+        "description": "Suggest ways to reduce household energy waste.",
+        "routingHints": {
+            "preferred_when": (
+                "Use when the user asks how to avoid wasting energy."
+            )
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    query = "How can I avoid wasting energy?"
+
+    assert score_adaptive_tool_match(energy_tool, query) > 0
+    assert match_adaptive_tool_definitions(
+        [energy_tool],
+        query=query,
+        limit=1,
+    ) == [energy_tool]
+
+
+def test_adaptive_tool_scoring_keeps_exception_intents_positive() -> None:
+    """The word except should stay positive unless it introduces an exclusion."""
+    exception_tool = {
+        "name": "python_exception_help",
+        "description": "Explain Python exceptions and handlers.",
+        "routingHints": {
+            "preferred_when": "Use for questions about Python except blocks."
+        },
+        "inputSchema": {"type": "object", "properties": {}},
+    }
+
+    query = "How do Python except blocks work?"
+
+    assert score_adaptive_tool_match(exception_tool, query) > 0
+    assert match_adaptive_tool_definitions(
+        [exception_tool],
+        query=query,
+        limit=1,
+    ) == [exception_tool]
+
+
 def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None:
     """Present-tense open/close questions should still preload recorder analysis."""
     analyze_tool = next(
@@ -2908,6 +2952,40 @@ async def test_provider_http_request_sends_assist_conversation_session_id(
     assert "X-Session-Id" not in agent._provider_request_headers(
         agent._get_llm_provider()
     )
+
+
+@pytest.mark.asyncio
+async def test_streaming_probe_does_not_join_assist_conversation_session(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """The synthetic streaming probe should not pollute provider session state."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    posts: list[dict] = []
+    response = _FakeStreamingResponse(["probe response\n"])
+    response.headers = {}
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        assert agent._provider_request_headers(agent._get_llm_provider())[
+            "X-Session-Id"
+        ] == "assist-conversation-123"
+        available = await agent._test_streaming_basic()
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert available is True
+    assert "X-Session-Id" not in posts[0]["headers"]
 
 
 @pytest.mark.asyncio
