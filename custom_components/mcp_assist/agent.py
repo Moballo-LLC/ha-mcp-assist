@@ -154,6 +154,10 @@ class RecoverableStreamingFallbackError(Exception):
 class EmptyStreamingResponseError(RecoverableStreamingFallbackError):
     """Raised when streaming completes without content or tool calls."""
 
+
+class StatefulStreamingRequestError(Exception):
+    """Raised when a stateful streaming request may already be provider-visible."""
+
 # Tool schemas are invalidated by settings and custom-tool signatures; this TTL is
 # just a safety refresh, not the primary change detector.
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
@@ -4034,6 +4038,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
+        session_scoped = "X-Session-Id" in self._provider_request_headers(provider)
         conversation_messages = list(messages)
         tool_calls_used = 0
         toolless_retry_used = False
@@ -4111,6 +4116,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             current_tool_calls = []
             stream_tool_index_offset = None
             stream_metadata = None
+            request_reached_provider = False
 
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -4129,6 +4135,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     async with session.post(
                         url, headers=headers, json=clean_payload
                     ) as response:
+                        request_reached_provider = True
                         _LOGGER.info(
                             f"🔌 Connection established, status: {response.status}"
                         )
@@ -4375,7 +4382,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                     stream_error,
                 )
                 if iteration == 0:
-                    # First iteration failed, try fallback
+                    if request_reached_provider and session_scoped:
+                        raise StatefulStreamingRequestError(
+                            "Stateful streaming failed after the provider accepted the request"
+                        ) from stream_error
+                    # First iteration failed before acceptance, try fallback
                     raise stream_error
                 else:
                     # Later iteration failed, return what we have
@@ -4543,6 +4554,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                     # No content and no tools, might need another iteration
                     empty_stream_responses += 1
                     if empty_stream_responses == 1:
+                        if session_scoped:
+                            raise StatefulStreamingRequestError(
+                                "Stateful streaming returned an empty response"
+                            )
                         _LOGGER.debug("Empty response from streaming, retrying once")
                         continue
                     if self._has_tool_results(conversation_messages):
@@ -4576,6 +4591,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
+        except StatefulStreamingRequestError:
+            raise
         except RecoverableStreamingFallbackError as e:
             _LOGGER.debug("%s; using provider HTTP transport", e)
             return await self._call_llm_http(messages, provider=provider)

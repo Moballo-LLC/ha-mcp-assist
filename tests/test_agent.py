@@ -1845,14 +1845,16 @@ def test_adaptive_tool_scoring_keeps_value_exclusions_on_matching_tool() -> None
         "inputSchema": {"type": "object", "properties": {}},
     }
 
-    query = "Weather today, but not tomorrow"
-
-    assert score_adaptive_tool_match(weather_tool, query) > 0
-    assert match_adaptive_tool_definitions(
-        [weather_tool],
-        query=query,
-        limit=1,
-    ) == [weather_tool]
+    for query in (
+        "Weather today, but not tomorrow",
+        "Weather today, but not forecast for tomorrow",
+    ):
+        assert score_adaptive_tool_match(weather_tool, query) > 0
+        assert match_adaptive_tool_definitions(
+            [weather_tool],
+            query=query,
+            limit=1,
+        ) == [weather_tool]
 
 
 def test_adaptive_tool_scoring_ignores_negative_routing_boilerplate() -> None:
@@ -3517,6 +3519,55 @@ async def test_ollama_streaming_invalid_tool_error_finishes_without_tools(
     )
     assert "Streaming failed with status 500" not in caplog.text
     assert "Streaming iteration 2 failed" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_stateful_stream_failure_does_not_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An accepted stateful stream should not replay the turn over HTTP."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("stream dropped after acceptance")
+
+    response = _FakeStreamingResponse()
+    response.content = _FailingContent()
+    response.headers = {}
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

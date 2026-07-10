@@ -768,7 +768,10 @@ def score_adaptive_tool_match(
     normalized_query = " ".join(str(query or "").split()).casefold()
     positive_query, negative_query = _split_negative_routing_text(normalized_query)
     terms = normalize_adaptive_query_terms(positive_query)
-    negative_query_terms = set(normalize_adaptive_query_terms(negative_query))
+    negative_query_terms = (
+        set(normalize_adaptive_query_terms(negative_query))
+        - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
+    )
     if not normalized_query and not terms:
         return 0
 
@@ -815,7 +818,7 @@ def score_adaptive_tool_match(
         for clause_terms in negative_routing_clause_terms
     ):
         return 0
-    if negative_query_terms & query_exclusion_terms:
+    if negative_query_terms and negative_query_terms <= query_exclusion_terms:
         return 0
 
     score = 0
