@@ -4386,11 +4386,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                     iteration + 1,
                     stream_error,
                 )
+                if request_dispatched and not request_rejected and session_scoped:
+                    raise StatefulStreamingRequestError(
+                        "Stateful streaming failed after the request was dispatched"
+                    ) from stream_error
                 if iteration == 0:
-                    if request_dispatched and not request_rejected and session_scoped:
-                        raise StatefulStreamingRequestError(
-                            "Stateful streaming failed after the request was dispatched"
-                        ) from stream_error
                     # An unscoped or explicitly rejected request can safely fall back.
                     raise stream_error
                 else:

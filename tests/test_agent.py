@@ -3571,6 +3571,111 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
 
 
 @pytest.mark.asyncio
+async def test_later_stateful_stream_failure_does_not_send_a_final_request(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A failed post-tool stateful stream must not replay the provider turn."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_execute_tool_calls",
+        AsyncMock(
+            return_value=[
+                {
+                    "role": "tool",
+                    "tool_name": "discover_entities",
+                    "content": "No upstairs lights are on.",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="unexpected fallback")
+    final_mock = AsyncMock(return_value="unexpected final request")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    monkeypatch.setattr(agent, "_call_llm_final_response_without_tools", final_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("post-tool stream dropped")
+
+    failed_response = _FakeStreamingResponse()
+    failed_response.content = _FailingContent()
+    responses = [
+        _FakeStreamingResponse(
+            [
+                json.dumps(
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "discover_entities",
+                                        "arguments": {"domain": "light", "state": "on"},
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ),
+                json.dumps({"done": True}),
+            ]
+        ),
+        failed_response,
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with pytest.raises(agent_module.StatefulStreamingRequestError):
+            await agent._call_llm(
+                [{"role": "user", "content": "Are any lights on?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert len(posts) == 2
+    assert all(
+        post["headers"]["X-Session-Id"] == "assist-conversation-123"
+        for post in posts
+    )
+    http_mock.assert_not_awaited()
+    final_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
