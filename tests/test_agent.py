@@ -98,6 +98,12 @@ def _tool(name: str) -> dict[str, object]:
     }
 
 
+def _enable_stateful_session_provider(agent, monkeypatch) -> None:
+    """Mark the profile's provider protocol as honoring session identity."""
+    provider_class = type(agent._get_llm_provider())
+    monkeypatch.setattr(provider_class, "uses_stateful_session_id", True)
+
+
 def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     """Provider details written to logs should be compact and secret-safe."""
     snippet = agent_module._provider_log_snippet(
@@ -2940,13 +2946,21 @@ async def test_call_llm_http_retries_provider_timeout_once(
 
     monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _FakeSession)
 
-    with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
-        result = await agent._call_llm_http(
-            [{"role": "user", "content": "Are there any lights on upstairs?"}]
-        )
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        with caplog.at_level(logging.WARNING, logger=agent_module._LOGGER.name):
+            result = await agent._call_llm_http(
+                [{"role": "user", "content": "Are there any lights on upstairs?"}]
+            )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
 
     assert result == "Recovered."
     assert len(posts) == 2
+    assert all(
+        post["headers"]["X-Session-Id"] == "assist-conversation-123"
+        for post in posts
+    )
     assert "HTTP transport timed out after 1s" in caplog.text
 
 
@@ -3134,6 +3148,7 @@ async def test_provider_http_does_not_retry_stateful_session_timeout(
         options={CONF_TIMEOUT: 1},
     )
     agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
     posts: list[dict] = []
 
     class _TimeoutSession:
@@ -3539,6 +3554,7 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
         }
     )
     agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
@@ -3577,6 +3593,54 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
 
 
 @pytest.mark.asyncio
+async def test_session_header_keeps_stream_fallback_without_stateful_capability(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Session identity alone should not disable ordinary stream recovery."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+
+    class _FailingContent:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise RuntimeError("stream dropped")
+
+    response = _FakeStreamingResponse()
+    response.content = _FailingContent()
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession([response], posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_later_stateful_stream_failure_does_not_send_a_final_request(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -3588,6 +3652,7 @@ async def test_later_stateful_stream_failure_does_not_send_a_final_request(
         }
     )
     agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(
         agent,
@@ -3693,6 +3758,7 @@ async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
         }
     )
     agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
@@ -3737,6 +3803,68 @@ async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
 
 
 @pytest.mark.asyncio
+async def test_stateful_stream_connector_failure_can_fall_back_to_http(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A connection failure before provider acceptance remains recoverable."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+            CONF_MODEL_NAME: "qwen-tool-model",
+        }
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_mock = AsyncMock(return_value="Recovered over HTTP.")
+    monkeypatch.setattr(agent, "_call_llm_http", http_mock)
+    posts: list[dict] = []
+    connector_error = agent_module.aiohttp.ClientConnectorError(
+        SimpleNamespace(ssl=False, host="example.invalid", port=443),
+        OSError("connect failed"),
+    )
+
+    class _ConnectionFailure:
+        async def __aenter__(self):
+            raise connector_error
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    class _ConnectionFailureSession:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def post(self, url: str, **kwargs):
+            posts.append({"url": url, **kwargs})
+            return _ConnectionFailure()
+
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession", _ConnectionFailureSession
+    )
+    token = agent_module._REQUEST_CONVERSATION_ID.set("assist-conversation-123")
+    try:
+        result = await agent._call_llm(
+            [{"role": "user", "content": "Are any lights on?"}]
+        )
+    finally:
+        agent_module._REQUEST_CONVERSATION_ID.reset(token)
+
+    assert result == "Recovered over HTTP."
+    assert len(posts) == 1
+    assert posts[0]["headers"]["X-Session-Id"] == "assist-conversation-123"
+    http_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_stateful_stream_rejection_can_fall_back_to_http(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -3748,6 +3876,7 @@ async def test_stateful_stream_rejection_can_fall_back_to_http(
         }
     )
     agent = MCPAssistConversationEntity(hass, entry)
+    _enable_stateful_session_provider(agent, monkeypatch)
     agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)

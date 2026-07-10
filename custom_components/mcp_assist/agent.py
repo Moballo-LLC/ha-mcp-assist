@@ -4038,7 +4038,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
-        session_scoped = "X-Session-Id" in self._provider_request_headers(provider)
+        session_scoped = bool(
+            provider.uses_stateful_session_id
+            and "X-Session-Id" in self._provider_request_headers(provider)
+        )
         conversation_messages = list(messages)
         tool_calls_used = 0
         toolless_retry_used = False
@@ -4386,7 +4389,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                     iteration + 1,
                     stream_error,
                 )
-                if request_dispatched and not request_rejected and session_scoped:
+                preconnect_failure = isinstance(
+                    stream_error, aiohttp.ClientConnectorError
+                )
+                if (
+                    request_dispatched
+                    and not request_rejected
+                    and session_scoped
+                    and not preconnect_failure
+                ):
                     raise StatefulStreamingRequestError(
                         "Stateful streaming failed after the request was dispatched"
                     ) from stream_error
@@ -4619,7 +4630,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         headers = self._provider_request_headers(provider)
         max_attempts = (
             1
-            if "X-Session-Id" in headers
+            if provider.uses_stateful_session_id and "X-Session-Id" in headers
             else PROVIDER_HTTP_TIMEOUT_ATTEMPTS
         )
         for attempt in range(1, max_attempts + 1):

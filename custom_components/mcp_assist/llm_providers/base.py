@@ -153,6 +153,8 @@ class LLMProvider:
 
     transport_name = "openai_chat"
     supports_streaming = True
+    # Opt in only when the provider endpoint contract honors X-Session-Id as state.
+    uses_stateful_session_id = False
     provider_type = ""
     provider_display_name = ""
     default_base_url: str | None = None
