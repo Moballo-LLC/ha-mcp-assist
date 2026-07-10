@@ -100,7 +100,7 @@
           "ollama_keep_alive": "Поддерживать Ollama активным",
           "ollama_num_ctx": "Контекстное окно Ollama",
           "openclaw_session_key": "Сеансовый ключ",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "Заголовок сеанса с состоянием"
         },
         "sections": {
           "conversation": {
@@ -152,13 +152,13 @@
               "ollama_keep_alive": "Поддерживать Ollama активным",
               "ollama_num_ctx": "Контекстное окно Ollama",
               "openclaw_session_key": "Сеансовый ключ",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "Заголовок сеанса с состоянием"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
               "ollama_num_ctx": "Переопределить размер контекстного окна, переданный в Ollama. Используйте 0, чтобы сохранить модель по умолчанию.",
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера."
             }
           },
           "tools": {
@@ -382,7 +382,7 @@
           "openclaw_token": "Токен шлюза",
           "openclaw_use_ssl": "Используйте SSL/TLS",
           "openclaw_session_key": "Сеансовый ключ",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "Заголовок сеанса с состоянием"
         },
         "data_description": {
           "model_name": "Модель LLM, которую следует использовать в этом профиле.",
@@ -468,13 +468,13 @@
               "ollama_keep_alive": "Поддерживать Ollama активным",
               "ollama_num_ctx": "Контекстное окно Ollama",
               "openclaw_session_key": "Сеансовый ключ",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "Заголовок сеанса с состоянием"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
               "ollama_num_ctx": "Переопределить размер контекстного окна, переданный в Ollama. Используйте 0, чтобы сохранить модель по умолчанию.",
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера."
             }
           },
           "advanced_settings": {

@@ -100,7 +100,7 @@
           "ollama_keep_alive": "Ollama 활성 유지",
           "ollama_num_ctx": "Ollama 컨텍스트 창",
           "openclaw_session_key": "세션 키",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "상태 유지 세션 헤더"
         },
         "sections": {
           "conversation": {
@@ -152,13 +152,13 @@
               "ollama_keep_alive": "Ollama 활성 유지",
               "ollama_num_ctx": "Ollama 컨텍스트 창",
               "openclaw_session_key": "세션 키",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "상태 유지 세션 헤더"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
               "ollama_num_ctx": "Ollama에 전달된 컨텍스트 창 크기를 재정의합니다. 모델 기본값을 유지하려면 0을 사용합니다.",
               "openclaw_session_key": "메시지를 보낼 OpenClaw 세션의 이름입니다.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요."
             }
           },
           "tools": {
@@ -382,7 +382,7 @@
           "openclaw_token": "게이트웨이 토큰",
           "openclaw_use_ssl": "SSL/TLS 사용",
           "openclaw_session_key": "세션 키",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "상태 유지 세션 헤더"
         },
         "data_description": {
           "model_name": "이 프로필이 사용해야 하는 LLM 모델입니다.",
@@ -468,13 +468,13 @@
               "ollama_keep_alive": "Ollama 활성 유지",
               "ollama_num_ctx": "Ollama 컨텍스트 창",
               "openclaw_session_key": "세션 키",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "상태 유지 세션 헤더"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
               "ollama_num_ctx": "Ollama에 전달된 컨텍스트 창 크기를 재정의합니다. 모델 기본값을 유지하려면 0을 사용합니다.",
               "openclaw_session_key": "메시지를 보낼 OpenClaw 세션의 이름입니다.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요."
             }
           },
           "advanced_settings": {

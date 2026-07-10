@@ -100,7 +100,7 @@
           "ollama_keep_alive": "Ollama am Leben halten",
           "ollama_num_ctx": "Ollama Kontextfenster",
           "openclaw_session_key": "Sitzungsschlüssel",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
         },
         "sections": {
           "conversation": {
@@ -152,13 +152,13 @@
               "ollama_keep_alive": "Ollama am Leben halten",
               "ollama_num_ctx": "Ollama Kontextfenster",
               "openclaw_session_key": "Sitzungsschlüssel",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
             },
             "data_description": {
               "ollama_keep_alive": "Wie lange soll Ollama das ausgewählte Modell im Speicher geladen halten?",
               "ollama_num_ctx": "Überschreiben Sie die an Ollama übergebene Kontextfenstergröße. Verwenden Sie 0, um den Modellstandard beizubehalten.",
               "openclaw_session_key": "Name der OpenClaw-Sitzung, an die Nachrichten gesendet werden sollen.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet."
             }
           },
           "tools": {
@@ -382,7 +382,7 @@
           "openclaw_token": "Gateway-Token",
           "openclaw_use_ssl": "Verwenden Sie SSL/TLS",
           "openclaw_session_key": "Sitzungsschlüssel",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
         },
         "data_description": {
           "model_name": "Das LLM-Modell, das dieses Profil verwenden sollte.",
@@ -468,13 +468,13 @@
               "ollama_keep_alive": "Ollama am Leben halten",
               "ollama_num_ctx": "Ollama Kontextfenster",
               "openclaw_session_key": "Sitzungsschlüssel",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
             },
             "data_description": {
               "ollama_keep_alive": "Wie lange soll Ollama das ausgewählte Modell im Speicher geladen halten?",
               "ollama_num_ctx": "Überschreiben Sie die an Ollama übergebene Kontextfenstergröße. Verwenden Sie 0, um den Modellstandard beizubehalten.",
               "openclaw_session_key": "Name der OpenClaw-Sitzung, an die Nachrichten gesendet werden sollen.",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet."
             }
           },
           "advanced_settings": {

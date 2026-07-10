@@ -100,7 +100,7 @@
           "ollama_keep_alive": "Ollamaを維持",
           "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
           "openclaw_session_key": "セッションキー",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "ステートフルセッションヘッダー"
         },
         "sections": {
           "conversation": {
@@ -152,13 +152,13 @@
               "ollama_keep_alive": "Ollamaを維持",
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "ステートフルセッションヘッダー"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。"
             }
           },
           "tools": {
@@ -382,7 +382,7 @@
           "openclaw_token": "ゲートウェイ トークン",
           "openclaw_use_ssl": "SSL/TLSを使用",
           "openclaw_session_key": "セッションキー",
-          "stateful_session_id": "Stateful Session Header"
+          "stateful_session_id": "ステートフルセッションヘッダー"
         },
         "data_description": {
           "model_name": "このプロファイルが使用する LLM モデル。",
@@ -468,13 +468,13 @@
               "ollama_keep_alive": "Ollamaを維持",
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
-              "stateful_session_id": "Stateful Session Header"
+              "stateful_session_id": "ステートフルセッションヘッダー"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
-              "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state."
+              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。"
             }
           },
           "advanced_settings": {
