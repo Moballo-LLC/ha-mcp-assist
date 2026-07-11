@@ -7,11 +7,13 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 from packaging.version import Version
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "custom_components" / "mcp_assist" / "manifest.json"
 HACS = ROOT / "hacs.json"
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
 RUNTIME_REQUIREMENTS = ROOT / "requirements_runtime.txt"
 
 
@@ -83,6 +85,20 @@ def test_runtime_requirements_do_not_raise_manifest_bounds() -> None:
             f"{runtime_requirement} adds caps, pins, or exclusions not present in "
             f"{manifest_requirement}"
         )
+
+
+def test_dependabot_excludes_runtime_compatibility_mirror() -> None:
+    """Routine version updates must not raise Home Assistant support floors."""
+
+    config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
+    pip_updates = [
+        update
+        for update in config["updates"]
+        if update["package-ecosystem"] == "pip" and update["directory"] == "/"
+    ]
+
+    assert len(pip_updates) == 1
+    assert RUNTIME_REQUIREMENTS.name in pip_updates[0].get("exclude-paths", [])
 
 
 def test_duckduckgo_runtime_uses_renamed_ddgs_package() -> None:

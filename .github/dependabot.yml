@@ -11,6 +11,8 @@ updates:
       semver-major-days: 30
       semver-minor-days: 7
       semver-patch-days: 3
+    exclude-paths:
+      - "requirements_runtime.txt"
     groups:
       ha-test-harness:
         applies-to: "version-updates"
