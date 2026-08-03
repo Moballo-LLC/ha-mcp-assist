@@ -139,10 +139,17 @@ async def test_hermes_handler_uses_server_managed_client_and_local_history_fallb
             CONF_SERVER_TYPE: SERVER_TYPE_HERMES,
             CONF_HERMES_URL: "http://hermes.example.invalid:8642",
         },
-        options={CONF_HERMES_SESSION_KEY: "homeassistant"},
+        options={
+            CONF_HERMES_SESSION_KEY: "homeassistant",
+            CONF_MAX_HISTORY: 2,
+        },
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    history = [{"user": "Earlier", "assistant": "Answer"}]
+    history = [
+        {"user": "Oldest", "assistant": "First answer"},
+        {"user": "Earlier", "assistant": "Second answer"},
+        {"user": "Recent", "assistant": "Latest answer"},
+    ]
     monkeypatch.setattr(agent.history, "get_history", lambda conversation_id: history)
     hermes_client = SimpleNamespace(
         send_message=AsyncMock(return_value="Hermes response")
@@ -166,7 +173,7 @@ async def test_hermes_handler_uses_server_managed_client_and_local_history_fallb
     hermes_client.send_message.assert_awaited_once_with(
         "Continue",
         "conversation-1",
-        history,
+        history[-2:],
     )
     build_response.assert_awaited_once_with(
         "Hermes response",

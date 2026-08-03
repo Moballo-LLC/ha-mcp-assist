@@ -2179,10 +2179,15 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> ConversationResult:
         """Handle a message through Hermes Agent's server-managed agent loop."""
         _LOGGER.info("📡 Sending to Hermes Agent API server")
+        history_limit = max(0, self.max_history)
+        if self.light_context_mode:
+            history_limit = min(history_limit, LIGHT_CONTEXT_MAX_HISTORY)
+        history = self.history.get_history(conversation_id)
+        history = history[-history_limit:] if history_limit else []
         response_text = await self._get_hermes_client().send_message(
             user_input.text,
             conversation_id,
-            self.history.get_history(conversation_id),
+            history,
         )
         _LOGGER.info(
             "✅ Hermes Agent response received, length: %d",
