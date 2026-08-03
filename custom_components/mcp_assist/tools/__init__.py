@@ -248,6 +248,13 @@ class CustomToolsLoader:
             self._refresh_tool_registry()
         return list(self._tool_definitions_cache)
 
+    def get_tool_definition(self, tool_name: str) -> dict[str, Any] | None:
+        """Return one registered custom-tool definition by name."""
+        if not self._tool_registry_ready:
+            self._refresh_tool_registry()
+        registry_entry = self._tool_registry.get(tool_name)
+        return registry_entry.definition if registry_entry else None
+
     async def handle_tool_call(
         self,
         tool_name: str,

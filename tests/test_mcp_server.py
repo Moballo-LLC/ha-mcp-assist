@@ -942,6 +942,63 @@ async def test_handle_tools_list_filters_disabled_tool_families(
 
 
 @pytest.mark.asyncio
+async def test_handle_tools_list_adds_explicit_effect_annotations(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """The MCP schema should expose effect hints and default unknown tools to high risk."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        get_tool_definitions=lambda: [
+            {
+                "name": "sample_read_status",
+                "description": "Read sample status",
+                "inputSchema": {"type": "object", "properties": {}},
+                "annotations": {"readOnlyHint": True},
+            },
+            {
+                "name": "sample_command",
+                "description": "Change sample state",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "sample_non_destructive_write",
+                "description": "Change non-sensitive sample state",
+                "inputSchema": {"type": "object", "properties": {}},
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                },
+            },
+        ]
+    )
+
+    result = await server.handle_tools_list()
+    tool_map = {tool["name"]: tool for tool in result["tools"]}
+
+    assert tool_map["discover_entities"]["annotations"] == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+    assert tool_map["perform_action"]["annotations"] == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+    }
+    assert tool_map["sample_read_status"]["annotations"] == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+    assert tool_map["sample_command"]["annotations"] == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+    }
+    assert tool_map["sample_non_destructive_write"]["annotations"] == {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+    }
+
+
+@pytest.mark.asyncio
 async def test_handle_tools_list_includes_music_assistant_package_tools(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
