@@ -68,8 +68,8 @@ for current pairing and device-signature behavior.
 - If API authentication is enabled, verify the API key. Authenticated mode is
   required for Hermes transcript-session headers and the stable memory key.
 - If a stored transcript expires, MCP Assist drops that session ID and retries
-  once with a fresh transcript. Persistent failures should be checked in the
-  Hermes API-server logs.
+  once with a fresh transcript seeded from local conversation history.
+  Persistent failures should be checked in the Hermes API-server logs.
 
 ### Ollama Request Exceeds Context Window
 

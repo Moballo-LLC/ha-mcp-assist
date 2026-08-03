@@ -134,10 +134,11 @@ class HermesClient:
     def _request_messages(
         self,
         text: str,
+        conversation_id: str,
         history: list[dict[str, Any]],
     ) -> list[dict[str, str]]:
         """Build the smallest safe transcript for the configured auth mode."""
-        if self._api_key:
+        if self._api_key and self._session_ids.get(conversation_id):
             return [{"role": "user", "content": text}]
 
         messages: list[dict[str, str]] = []
@@ -167,7 +168,7 @@ class HermesClient:
         )
         payload = {
             "model": self._model,
-            "messages": self._request_messages(text, history),
+            "messages": self._request_messages(text, conversation_id, history),
             "stream": stream,
         }
         return self.chat_url, headers, payload

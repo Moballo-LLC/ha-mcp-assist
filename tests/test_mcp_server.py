@@ -2236,6 +2236,51 @@ async def test_tool_perform_action_returns_response_capable_service_payload(
 
 
 @pytest.mark.asyncio
+async def test_tool_perform_action_bounds_response_preview(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Large service responses should not fill the model-visible tool content."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.resolve_target = AsyncMock(
+        return_value={"entity_id": ["media_player.example_player"]}
+    )
+    server._observe_action_outcome = AsyncMock(
+        return_value={
+            "status": "unverified",
+            "progress_phrase": "working",
+            "state_lines": [],
+        }
+    )
+    hass.states.async_set("media_player.example_player", "idle")
+    large_response = {"items": ["x" * 200 for _ in range(100)]}
+
+    async def catalog_service(call) -> dict[str, Any]:
+        return large_response
+
+    hass.services.async_register(
+        "media_player",
+        "browse_media",
+        catalog_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    result = await server.tool_perform_action(
+        {
+            "domain": "media_player",
+            "action": "browse_media",
+            "target": {},
+            "data": {},
+        }
+    )
+
+    response_text = result["content"][0]["text"]
+    assert result["response"] == large_response
+    assert "Response preview truncated" in response_text
+    assert len(response_text) < 6500
+
+
+@pytest.mark.asyncio
 async def test_fetch_entity_history_uses_recorder_executor(
     hass, profile_entry_factory, monkeypatch
 ) -> None:

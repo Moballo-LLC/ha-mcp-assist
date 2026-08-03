@@ -159,6 +159,7 @@ _SENSITIVE_LOG_FIELD_VALUE_RE = re.compile(
     r"(?:\s+\w+){0,3}\s*[:=]\s*[\"']?)[^\"'\s,;}]+([\"']?)"
 )
 _MAX_LOG_VALUE_CHARS = 500
+_MAX_ACTION_RESPONSE_PREVIEW_CHARS = 6000
 
 
 def _strip_non_json_serializable(value: Any) -> Any:
@@ -242,6 +243,20 @@ def _migrate_deprecated_light_color_temp(data: dict[str, Any]) -> str | None:
         "color_temp is deprecated and could not be converted. Use "
         "color_temp_kelvin instead, such as 2700, 4000, or 6500."
     )
+
+
+def _format_action_response_preview(value: Any) -> str:
+    """Return a bounded JSON preview for model-visible action content."""
+    text = json.dumps(value, indent=2, ensure_ascii=False)
+    if len(text) <= _MAX_ACTION_RESPONSE_PREVIEW_CHARS:
+        return text
+
+    suffix = (
+        "\n... [Response preview truncated. Full structured data is available "
+        "in the response field.]"
+    )
+    available = max(0, _MAX_ACTION_RESPONSE_PREVIEW_CHARS - len(suffix))
+    return text[:available].rstrip() + suffix
 
 
 def _json_size_bytes(value: Any) -> int:
@@ -4388,7 +4403,7 @@ class MCPServer(
                 serialized_response = self._serialize_service_response_value(response)
                 result_text += (
                     "\n\nResponse:\n"
-                    + json.dumps(serialized_response, indent=2, ensure_ascii=False)
+                    + _format_action_response_preview(serialized_response)
                 )
 
             if "entity_id" in resolved_target:

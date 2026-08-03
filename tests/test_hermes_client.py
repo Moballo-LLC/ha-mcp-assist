@@ -81,6 +81,26 @@ def test_unauthenticated_request_replays_local_history_without_session_headers()
     ]
 
 
+def test_authenticated_request_replays_history_without_transcript_session() -> None:
+    """A replacement authenticated session should retain local conversation context."""
+    client = _make_client()
+
+    _, headers, payload = client.build_request(
+        "What changed?",
+        "conversation-1",
+        [{"user": "Earlier question", "assistant": "Earlier answer"}],
+        stream=True,
+        idempotency_key="request-1",
+    )
+
+    assert "X-Hermes-Session-Id" not in headers
+    assert payload["messages"] == [
+        {"role": "user", "content": "Earlier question"},
+        {"role": "assistant", "content": "Earlier answer"},
+        {"role": "user", "content": "What changed?"},
+    ]
+
+
 def test_chat_url_does_not_duplicate_version_prefix() -> None:
     """A configured /v1 URL should still produce one version segment."""
     client = HermesClient(

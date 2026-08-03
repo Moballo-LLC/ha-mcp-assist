@@ -126,7 +126,8 @@ separate trust boundary:
 
 Hermes requests can cause tools to run on the Hermes host before a response is
 returned. When an API key is configured, MCP Assist also sends the stable memory
-session key and the current transcript session ID. Without API authentication,
+session key and the current transcript session ID. It replays bounded local
+history when a transcript session must be replaced. Without API authentication,
 it omits those session headers and sends local conversation history instead.
 
 ## Web Search, Reference Tools, and Maps
