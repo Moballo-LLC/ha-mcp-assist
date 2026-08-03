@@ -29,6 +29,8 @@ from custom_components.mcp_assist.const import (
     CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS,
     CONF_ENABLE_UNIT_CONVERSION_TOOLS,
     CONF_ENABLE_WEB_SEARCH,
+    CONF_HERMES_SESSION_KEY,
+    CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_CLEAN_RESPONSES,
     CONF_ENABLE_DEVICE_TOOLS,
@@ -67,6 +69,7 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_ANTHROPIC,
+    SERVER_TYPE_HERMES,
 )
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
@@ -124,6 +127,52 @@ def test_provider_log_snippet_redacts_and_truncates_details() -> None:
     assert 'api_key":"[redacted]' in snippet
     assert 'Authorization":"[redacted]' in snippet
     assert "truncated" in snippet
+
+
+@pytest.mark.asyncio
+async def test_hermes_handler_uses_server_managed_client_and_local_history_fallback(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Hermes conversations should bypass the normal MCP tool loop."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_HERMES,
+            CONF_HERMES_URL: "http://hermes.example.invalid:8642",
+        },
+        options={CONF_HERMES_SESSION_KEY: "homeassistant"},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    history = [{"user": "Earlier", "assistant": "Answer"}]
+    monkeypatch.setattr(agent.history, "get_history", lambda conversation_id: history)
+    hermes_client = SimpleNamespace(
+        send_message=AsyncMock(return_value="Hermes response")
+    )
+    agent._hermes_client = hermes_client
+    build_response = AsyncMock(return_value="conversation-result")
+    monkeypatch.setattr(agent, "_build_response_result", build_response)
+    user_input = ConversationInput(
+        text="Continue",
+        context=Context(),
+        conversation_id="conversation-1",
+        device_id=None,
+        satellite_id=None,
+        language="en",
+        agent_id=entry.entry_id,
+    )
+
+    result = await agent._handle_hermes_message(user_input, "conversation-1")
+
+    assert result == "conversation-result"
+    hermes_client.send_message.assert_awaited_once_with(
+        "Continue",
+        "conversation-1",
+        history,
+    )
+    build_response.assert_awaited_once_with(
+        "Hermes response",
+        user_input,
+        "conversation-1",
+    )
 
 
 class _FakeAnthropicResponse:

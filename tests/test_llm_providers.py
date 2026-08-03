@@ -8,6 +8,8 @@ import pytest
 
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
+    CONF_HERMES_SESSION_KEY,
+    CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
@@ -18,6 +20,8 @@ from custom_components.mcp_assist.const import (
     CONF_OPENCLAW_USE_SSL,
     DEFAULT_LLAMACPP_URL,
     DEFAULT_LMSTUDIO_URL,
+    DEFAULT_HERMES_SESSION_KEY,
+    DEFAULT_HERMES_URL,
     DEFAULT_OLLAMA_KEEP_ALIVE,
     DEFAULT_OLLAMA_NUM_CTX,
     DEFAULT_OLLAMA_URL,
@@ -30,6 +34,7 @@ from custom_components.mcp_assist.const import (
     OPENROUTER_BASE_URL,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
@@ -44,6 +49,7 @@ from custom_components.mcp_assist.llm_providers import ollama as ollama_module
 from custom_components.mcp_assist.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
+    HermesProvider,
     LLMProvider,
     LlamaCppProvider,
     LMStudioProvider,
@@ -68,6 +74,7 @@ PROVIDER_CLASSES: tuple[tuple[str, type[LLMProvider]], ...] = (
     (SERVER_TYPE_ANTHROPIC, AnthropicProvider),
     (SERVER_TYPE_OPENROUTER, OpenRouterProvider),
     (SERVER_TYPE_OPENCLAW, OpenClawProvider),
+    (SERVER_TYPE_HERMES, HermesProvider),
     (SERVER_TYPE_VLLM, VLLMProvider),
 )
 
@@ -253,6 +260,27 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             None,
             None,
             False,
+            False,
+        ),
+        (
+            SERVER_TYPE_HERMES,
+            HermesProvider,
+            "Hermes Agent (experimental)",
+            (
+                (CONF_HERMES_URL, DEFAULT_HERMES_URL, "text", True),
+                (CONF_API_KEY, None, "password", False),
+            ),
+            (
+                (
+                    CONF_HERMES_SESSION_KEY,
+                    DEFAULT_HERMES_SESSION_KEY,
+                    "text",
+                    False,
+                ),
+            ),
+            DEFAULT_HERMES_URL,
+            "cannot_connect",
+            True,
             False,
         ),
         (
@@ -471,6 +499,17 @@ def test_openclaw_provider_rejects_http_payload_path() -> None:
 
     with pytest.raises(RuntimeError, match="bypass"):
         provider.build_payload([{"role": "user", "content": "Hello"}])
+
+
+def test_hermes_provider_rejects_client_tool_loop_payload_path() -> None:
+    """Hermes should use its dedicated server-managed agent client."""
+    provider = HermesProvider(_settings(SERVER_TYPE_HERMES))
+
+    with pytest.raises(RuntimeError, match="bypass"):
+        provider.build_payload([{"role": "user", "content": "Hello"}])
+
+    assert provider.manages_agent_loop is True
+    assert provider.uses_config_prompt_fields is False
 
 
 def test_openai_provider_uses_completion_tokens_for_gpt5() -> None:

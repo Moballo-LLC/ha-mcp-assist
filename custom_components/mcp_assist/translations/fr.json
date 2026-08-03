@@ -24,7 +24,8 @@
           "openclaw_host": "Hôte de passerelle",
           "openclaw_port": "Port de passerelle",
           "openclaw_token": "Jeton de passerelle",
-          "openclaw_use_ssl": "Utiliser SSL/TLS"
+          "openclaw_use_ssl": "Utiliser SSL/TLS",
+          "hermes_url": "URL du serveur Hermes"
         },
         "data_description": {
           "lmstudio_url": "URL de base pour le serveur local ou OpenAI-compatible utilisé par ce profil.",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Maintenir Ollama actif",
           "ollama_num_ctx": "Fenetre de contexte Ollama",
           "openclaw_session_key": "Clé de session",
-          "stateful_session_id": "En-tête de session avec état"
+          "stateful_session_id": "En-tête de session avec état",
+          "hermes_session_key": "Clé de session mémoire"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Maintenir Ollama actif",
               "ollama_num_ctx": "Fenetre de contexte Ollama",
               "openclaw_session_key": "Clé de session",
-              "stateful_session_id": "En-tête de session avec état"
+              "stateful_session_id": "En-tête de session avec état",
+              "hermes_session_key": "Clé de session mémoire"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
               "ollama_num_ctx": "Remplacez la taille de la fenêtre contextuelle transmise à Ollama. Utilisez 0 pour conserver la valeur par défaut du modèle.",
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
-              "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur."
+              "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
+              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil."
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "Jeton de passerelle",
           "openclaw_use_ssl": "Utiliser SSL/TLS",
           "openclaw_session_key": "Clé de session",
-          "stateful_session_id": "En-tête de session avec état"
+          "stateful_session_id": "En-tête de session avec état",
+          "hermes_url": "URL du serveur Hermes",
+          "hermes_session_key": "Clé de session mémoire"
         },
         "data_description": {
           "model_name": "Modèle LLM que ce profil doit utiliser.",
           "system_prompt": "Pré-rempli avec l'invite système actuelle en vigueur. Modifiez-le pour personnaliser ce profil. Si elle reste inchangée, l'intégration continue d'utiliser l'invite intégrée du code.",
           "technical_prompt": "Prérempli avec les instructions techniques actuelles en vigueur. Modifiez-les pour personnaliser ce profil. Si elle reste inchangée, l'intégration continue d'utiliser l'invite intégrée du code.",
-          "context_mode": "Standard envoie le contexte complet de l’outil de profil. Light conserve une fenêtre d'historique plus petite et annonce les outils de base Home Assistant pour les petits modèles locaux."
+          "context_mode": "Standard envoie le contexte complet de l’outil de profil. Light conserve une fenêtre d'historique plus petite et annonce les outils de base Home Assistant pour les petits modèles locaux.",
+          "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil."
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "Hôte de passerelle",
               "openclaw_port": "Port de passerelle",
               "openclaw_token": "Jeton de passerelle",
-              "openclaw_use_ssl": "Utiliser SSL/TLS"
+              "openclaw_use_ssl": "Utiliser SSL/TLS",
+              "hermes_url": "URL du serveur Hermes"
             },
             "data_description": {
               "lmstudio_url": "URL de base pour le serveur local ou OpenAI-compatible utilisé par ce profil.",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Maintenir Ollama actif",
               "ollama_num_ctx": "Fenetre de contexte Ollama",
               "openclaw_session_key": "Clé de session",
-              "stateful_session_id": "En-tête de session avec état"
+              "stateful_session_id": "En-tête de session avec état",
+              "hermes_session_key": "Clé de session mémoire"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
               "ollama_num_ctx": "Remplacez la taille de la fenêtre contextuelle transmise à Ollama. Utilisez 0 pour conserver la valeur par défaut du modèle.",
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
-              "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur."
+              "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
+              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil."
             }
           },
           "advanced_settings": {

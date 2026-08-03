@@ -21,6 +21,12 @@ control.
 | `list_domains` | List entity domains available to the assistant |
 | `set_conversation_state` | Track whether the assistant expects a follow-up |
 
+`perform_action` requests structured response data automatically when Home
+Assistant marks a service as response-capable, and includes that data in the
+tool result. For lights, legacy `color_temp` values are migrated to
+`color_temp_kelvin`: values from 100 through 1000 are treated as mireds, while
+larger values are treated as Kelvin supplied under the old key.
+
 ## Device Tools
 
 Device tools help when the user refers to a physical device instead of a single

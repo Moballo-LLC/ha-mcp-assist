@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 import voluptuous as vol
 import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType, section
@@ -71,6 +72,8 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_GOOGLE_MAPS_API_KEY,
+    CONF_HERMES_SESSION_KEY,
+    CONF_HERMES_URL,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -116,6 +119,7 @@ from custom_components.mcp_assist.const import (
     CONF_TIMEOUT,
     DEFAULT_MEMORY_DEFAULT_TTL_DAYS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
+    DEFAULT_HERMES_URL,
     DEFAULT_OLLAMA_URL,
     DEFAULT_TECHNICAL_PROMPT,
     OPENAI_BASE_URL,
@@ -124,6 +128,7 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENCLAW,
+    SERVER_TYPE_HERMES,
     TOOL_FAMILY_PROFILE_SETTINGS,
     TOOL_FAMILY_SHARED_SETTINGS,
 )
@@ -291,8 +296,11 @@ def test_normalize_prompt_inputs_marks_nonblank_prompts_as_custom() -> None:
     assert normalized[CONF_TECHNICAL_PROMPT_MODE] == PROMPT_MODE_CUSTOM
 
 
-def test_normalize_prompt_inputs_for_openclaw_forces_default_system_prompt() -> None:
-    """OpenClaw should always ignore custom system prompts."""
+@pytest.mark.parametrize("server_type", [SERVER_TYPE_OPENCLAW, SERVER_TYPE_HERMES])
+def test_normalize_prompt_inputs_for_server_managed_agents_drops_prompts(
+    server_type: str,
+) -> None:
+    """Server-managed agents should ignore local prompt overrides."""
     normalized = _normalize_prompt_inputs(
         {
             CONF_SYSTEM_PROMPT_MODE: PROMPT_MODE_CUSTOM,
@@ -300,13 +308,14 @@ def test_normalize_prompt_inputs_for_openclaw_forces_default_system_prompt() -> 
             CONF_TECHNICAL_PROMPT_MODE: PROMPT_MODE_CUSTOM,
             CONF_TECHNICAL_PROMPT: "keep this one",
         },
-        server_type=SERVER_TYPE_OPENCLAW,
+        server_type=server_type,
         default_system_prompt="builtin system",
     )
 
     assert normalized[CONF_SYSTEM_PROMPT_MODE] == PROMPT_MODE_DEFAULT
+    assert normalized[CONF_TECHNICAL_PROMPT_MODE] == PROMPT_MODE_DEFAULT
     assert CONF_SYSTEM_PROMPT not in normalized
-    assert normalized[CONF_TECHNICAL_PROMPT] == "keep this one"
+    assert CONF_TECHNICAL_PROMPT not in normalized
 
 
 def test_normalize_prompt_inputs_treats_builtin_prompt_text_as_default() -> None:
@@ -435,6 +444,36 @@ async def test_server_step_uses_provider_specific_connection_fields(hass) -> Non
 
     assert set(openai_markers) == {CONF_LMSTUDIO_URL, CONF_API_KEY}
     assert openai_markers[CONF_LMSTUDIO_URL].default() == OPENAI_BASE_URL
+
+    hermes_flow = MCPAssistConfigFlow()
+    hermes_flow.hass = hass
+    hermes_flow.context = {"source": "user"}
+    hermes_flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_HERMES}
+
+    hermes_result = await hermes_flow.async_step_server()
+    hermes_markers = _schema_marker_by_field(hermes_result["data_schema"])
+
+    assert set(hermes_markers) == {CONF_HERMES_URL, CONF_API_KEY}
+    assert hermes_markers[CONF_HERMES_URL].default() == DEFAULT_HERMES_URL
+
+
+async def test_hermes_model_step_hides_local_prompt_fields(hass) -> None:
+    """Hermes should select a model without exposing unused local prompts."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+    flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_HERMES}
+    flow.step2_data = {CONF_HERMES_URL: DEFAULT_HERMES_URL, CONF_API_KEY: ""}
+
+    with patch(
+        "custom_components.mcp_assist.llm_providers.hermes.HermesProvider.fetch_models",
+        AsyncMock(return_value=["hermes-agent"]),
+    ):
+        result = await flow.async_step_model()
+
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    assert MODEL_SECTION_KEY in top_level_keys
+    assert PROMPTS_SECTION_KEY not in top_level_keys
 
 
 async def test_model_step_prompt_overrides_are_optional(hass) -> None:
@@ -1207,6 +1246,7 @@ def test_provider_section_translations_cover_provider_specific_fields() -> None:
     )
 
     expected_provider_fields = {
+        CONF_HERMES_SESSION_KEY,
         CONF_OLLAMA_KEEP_ALIVE,
         CONF_OLLAMA_NUM_CTX,
         CONF_OPENCLAW_SESSION_KEY,
@@ -1457,3 +1497,38 @@ async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_s
     assert isinstance(provider_section, section)
     assert _section_field_names(provider_section) == {CONF_OPENCLAW_SESSION_KEY}
     assert CONF_OPENCLAW_SESSION_KEY not in _section_field_names(advanced_section)
+
+
+async def test_options_step_for_hermes_keeps_model_and_hides_client_tool_loop_fields(
+    hass, profile_entry_factory
+) -> None:
+    """Hermes options should expose its model and session without local prompts."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(
+        title="Hermes Agent - Test Profile",
+        unique_id="mcp_assist_hermes_test_profile",
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_HERMES,
+            CONF_HERMES_URL: DEFAULT_HERMES_URL,
+        },
+    )
+    flow.handler = entry.entry_id
+
+    with patch(
+        "custom_components.mcp_assist.llm_providers.hermes.HermesProvider.fetch_models",
+        AsyncMock(return_value=["hermes-agent"]),
+    ):
+        result = await flow.async_step_init()
+
+    top_level_keys = set(_schema_marker_by_field(result["data_schema"]))
+    connection_section = _schema_section(result["data_schema"], CONNECTION_SECTION_KEY)
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    advanced_section = _schema_section(result["data_schema"], ADVANCED_SECTION_KEY)
+
+    assert MODEL_SECTION_KEY in top_level_keys
+    assert PROMPTS_SECTION_KEY not in top_level_keys
+    assert _section_field_names(connection_section) == {CONF_HERMES_URL, CONF_API_KEY}
+    assert _section_field_names(provider_section) == {CONF_HERMES_SESSION_KEY}
+    assert CONF_TEMPERATURE not in _section_field_names(advanced_section)
+    assert CONF_MAX_ITERATIONS not in _section_field_names(advanced_section)

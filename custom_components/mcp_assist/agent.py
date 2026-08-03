@@ -61,6 +61,13 @@ from .llm_providers import (
     parse_tool_arguments,
     stringify_tool_arguments,
 )
+from .hermes_client import (
+    HermesAuthError,
+    HermesBusyError,
+    HermesClient,
+    HermesConnectionError,
+    HermesSessionError,
+)
 from .localization import get_language_instruction
 from .const import (
     DOMAIN,
@@ -133,6 +140,7 @@ from .const import (
     ASSIST_BRIDGE_TECHNICAL_INSTRUCTIONS,
     LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS,
     MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_OPENCLAW,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
     TOOL_FAMILY_LLM_API_BRIDGE,
@@ -141,6 +149,8 @@ from .const import (
     get_optional_tool_family,
     CONF_OPENCLAW_SESSION_KEY,
     DEFAULT_OPENCLAW_SESSION_KEY,
+    CONF_HERMES_SESSION_KEY,
+    DEFAULT_HERMES_SESSION_KEY,
 )
 from .conversation_history import ConversationHistory
 
@@ -508,6 +518,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         self._cached_profile_mcp_tools: list[dict[str, Any]] | None = None
         self._cached_profile_mcp_tools_key: tuple[Any, ...] | None = None
         self._cached_profile_mcp_tools_fetched_at = 0.0
+        self._hermes_client: HermesClient | None = None
 
         # Entity attributes
         profile_name = entry.data.get("profile_name", "MCP Assist")
@@ -1389,6 +1400,24 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _get_friendly_error_message(self, error: Exception) -> str:
         """Convert technical errors to user-friendly TTS messages."""
+        if isinstance(error, HermesBusyError):
+            return "Hermes Agent is busy handling another request. Try again shortly."
+        if isinstance(error, HermesAuthError):
+            return (
+                "Hermes Agent rejected the configured API key. Check the profile "
+                "connection settings."
+            )
+        if isinstance(error, HermesConnectionError):
+            return (
+                "Hermes Agent did not complete the request. Check that its API "
+                "server is running and reachable."
+            )
+        if isinstance(error, HermesSessionError):
+            return (
+                "Hermes Agent rejected the conversation session. Start a new "
+                "conversation or check the API server logs."
+            )
+
         error_str = str(error).lower()
         error_full = str(error)  # Keep original case for extracting details
         provider = self._get_llm_provider()
@@ -1973,6 +2002,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             if self.server_type == SERVER_TYPE_OPENCLAW:
                 return await self._handle_openclaw_message(user_input, conversation_id)
 
+            # Hermes runs its own prompt, memory, and tool loop on its API server.
+            if self.server_type == SERVER_TYPE_HERMES:
+                return await self._handle_hermes_message(user_input, conversation_id)
+
             # Get conversation history
             metrics_enabled = _LOGGER.isEnabledFor(logging.DEBUG)
             setup_started_at = time.monotonic() if metrics_enabled else 0.0
@@ -2112,6 +2145,53 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return await self._build_response_result(
             response_text, user_input, conversation_id
+        )
+
+    @property
+    def hermes_session_key(self) -> str:
+        """Return the stable Hermes long-term-memory scope for this profile."""
+        return str(
+            self._get_profile_setting(
+                CONF_HERMES_SESSION_KEY,
+                DEFAULT_HERMES_SESSION_KEY,
+            )
+            or ""
+        )
+
+    def _get_hermes_client(self) -> HermesClient:
+        """Return the profile-scoped Hermes API client."""
+        if self._hermes_client is None:
+            runtime_config = resolve_provider_runtime_config(self.entry)
+            self._hermes_client = HermesClient(
+                base_url=runtime_config.base_url,
+                api_key=runtime_config.api_key,
+                session_key=self.hermes_session_key,
+                model=runtime_config.model_name,
+                timeout=runtime_config.timeout,
+                debug=self.debug_mode,
+            )
+        return self._hermes_client
+
+    async def _handle_hermes_message(
+        self,
+        user_input: ConversationInput,
+        conversation_id: str,
+    ) -> ConversationResult:
+        """Handle a message through Hermes Agent's server-managed agent loop."""
+        _LOGGER.info("📡 Sending to Hermes Agent API server")
+        response_text = await self._get_hermes_client().send_message(
+            user_input.text,
+            conversation_id,
+            self.history.get_history(conversation_id),
+        )
+        _LOGGER.info(
+            "✅ Hermes Agent response received, length: %d",
+            len(response_text),
+        )
+        return await self._build_response_result(
+            response_text,
+            user_input,
+            conversation_id,
         )
 
     async def _build_response_result(

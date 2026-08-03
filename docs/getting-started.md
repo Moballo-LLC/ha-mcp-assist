@@ -8,7 +8,8 @@ profile, and testing that the model can use MCP tools.
 - Home Assistant 2024.1+
 - Python 3.11+
 - One supported model provider:
-  - Local or self-hosted: LM Studio, llama.cpp, Ollama, OpenClaw, or vLLM
+  - Local or self-hosted: LM Studio, llama.cpp, Ollama, OpenClaw, the
+    experimental Hermes Agent integration, or vLLM
   - Cloud: OpenAI, Google Gemini, Anthropic Claude, or OpenRouter
 - A model that supports tool/function calling well enough for your intended
   workflows
@@ -64,6 +65,7 @@ Supported server types include:
 - Anthropic Claude
 - OpenRouter
 - OpenClaw
+- Hermes Agent (experimental)
 - vLLM
 
 ### Step 2: Provider Connection
@@ -80,6 +82,12 @@ For local or OpenAI-compatible servers other than OpenClaw, enter the server URL
 For OpenClaw, enter the gateway host, port, bearer token, and SSL setting shown
 by your OpenClaw gateway. The default gateway port is `18789`.
 
+For Hermes Agent, enter the API-server URL, normally
+`http://localhost:8642`, and its API key if authentication is enabled. The
+stable **Memory Session Key** scopes Hermes long-term memory for this profile.
+Hermes runs its own prompts and tools on the API-server host, so configure any
+Home Assistant/MCP tools and permissions there.
+
 For cloud providers, enter the provider API key.
 
 ### Step 3: Model and Prompts
@@ -87,6 +95,9 @@ For cloud providers, enter the provider API key.
 - **Model Name**: Select an auto-loaded model or enter a model name manually.
 - **System Prompt**: Review or customize the general assistant behavior.
 - **Technical Instructions**: Review or customize tool-use behavior.
+
+OpenClaw and Hermes Agent manage their prompts and tool loop on their own
+servers, so MCP Assist hides prompt fields that would not be sent to them.
 
 If you leave the prompt text effectively unchanged, MCP Assist continues using
 the built-in prompt from the integration code. That lets future releases improve

@@ -16,6 +16,7 @@ from .base import (
     stringify_tool_arguments,
 )
 from .gemini import GeminiProvider
+from .hermes import HermesProvider
 from .llamacpp import LlamaCppProvider
 from .lmstudio import LMStudioProvider
 from .ollama import OllamaProvider
@@ -29,6 +30,7 @@ from ..const import (
     DEFAULT_STATEFUL_SESSION_ID,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
@@ -50,6 +52,7 @@ def _provider_classes() -> dict[str, type[LLMProvider]]:
         SERVER_TYPE_ANTHROPIC: AnthropicProvider,
         SERVER_TYPE_OPENROUTER: OpenRouterProvider,
         SERVER_TYPE_OPENCLAW: OpenClawProvider,
+        SERVER_TYPE_HERMES: HermesProvider,
         SERVER_TYPE_VLLM: VLLMProvider,
     }
 
@@ -109,6 +112,7 @@ def create_llm_provider(settings: ProviderSettings) -> LLMProvider:
 __all__ = [
     "AnthropicProvider",
     "GeminiProvider",
+    "HermesProvider",
     "LLMProvider",
     "LlamaCppProvider",
     "LMStudioProvider",

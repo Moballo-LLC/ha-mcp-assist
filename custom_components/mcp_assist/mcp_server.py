@@ -27,7 +27,7 @@ from voluptuous_openapi import convert
 import yarl
 
 from homeassistant.components import conversation
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, HomeAssistant, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     area_registry as ar,
@@ -211,6 +211,37 @@ def _sanitize_log_value(value: Any) -> str:
     if len(text) <= _MAX_LOG_VALUE_CHARS:
         return text
     return f"{text[:_MAX_LOG_VALUE_CHARS].rstrip()}... [truncated {len(text) - _MAX_LOG_VALUE_CHARS} chars]"
+
+
+def _migrate_deprecated_light_color_temp(data: dict[str, Any]) -> str | None:
+    """Convert legacy light ``color_temp`` values to ``color_temp_kelvin``.
+
+    Returns an error message when the legacy value cannot be interpreted.
+    An explicitly supplied Kelvin value wins when both keys are present.
+    """
+    if "color_temp" not in data:
+        return None
+
+    raw_value = data.pop("color_temp")
+    if "color_temp_kelvin" in data:
+        return None
+
+    try:
+        numeric = float(raw_value)
+    except (TypeError, ValueError):
+        numeric = math.nan
+
+    if math.isfinite(numeric) and 100 <= numeric <= 1000:
+        data["color_temp_kelvin"] = round(1_000_000 / numeric)
+        return None
+    if math.isfinite(numeric) and numeric > 1000:
+        data["color_temp_kelvin"] = round(numeric)
+        return None
+
+    return (
+        "color_temp is deprecated and could not be converted. Use "
+        "color_temp_kelvin instead, such as 2700, 4000, or 6500."
+    )
 
 
 def _json_size_bytes(value: Any) -> int:
@@ -4299,25 +4330,16 @@ class MCPServer(
             _LOGGER.error("%s", _sanitize_log_value(error_msg))
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
-        # Reject deprecated color_temp parameter
+        # Home Assistant removed light.color_temp in favor of Kelvin. Convert
+        # the common legacy mired form so an older model/tool client does not
+        # need another request round-trip.
         if domain == "light" and "color_temp" in data:
-            _LOGGER.warning(
-                "❌ Rejecting deprecated color_temp parameter: %s",
-                _sanitize_log_value(data.get("color_temp")),
-            )
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            "❌ Error: color_temp is deprecated. Use "
-                            "color_temp_kelvin instead. Examples: 2700 (warm white), "
-                            "4000 (neutral white), 6500 (cool white). Lower Kelvin "
-                            "values = warmer light, higher Kelvin values = cooler light."
-                        ),
-                    }
-                ]
-            }
+            color_temp_error = _migrate_deprecated_light_color_temp(data)
+            if color_temp_error:
+                return {
+                    "content": [{"type": "text", "text": f"❌ Error: {color_temp_error}"}]
+                }
+            _LOGGER.debug("Converted deprecated light color_temp parameter")
 
         valid_params, validation_msg = validate_service_parameters(
             domain, service, data
@@ -4329,13 +4351,23 @@ class MCPServer(
             # Prepare service data
             service_data = {**resolved_target, **data}
 
+            # Response-only services such as weather.get_forecasts require
+            # return_response=True; optional response services benefit from it.
+            try:
+                response_support = self.hass.services.supports_response(domain, service)
+            except (HomeAssistantError, KeyError):
+                # Preserve the eventual service-call error for unavailable
+                # services instead of failing during response introspection.
+                response_support = SupportsResponse.NONE
+            wants_response = response_support is not SupportsResponse.NONE
+
             # Call the Home Assistant service with the validated service name
-            await self.hass.services.async_call(
+            response = await self.hass.services.async_call(
                 domain=domain,
                 service=service,  # Use the mapped service name
                 service_data=service_data,
                 blocking=True,  # Wait for completion
-                return_response=False,
+                return_response=wants_response,
             )
 
             # Notify completion
@@ -4350,6 +4382,14 @@ class MCPServer(
             result_text = f"✅ Successfully executed {domain}.{service}"
             if service != action:
                 result_text += f" (mapped from '{action}')"
+
+            serialized_response = None
+            if wants_response and response is not None:
+                serialized_response = self._serialize_service_response_value(response)
+                result_text += (
+                    "\n\nResponse:\n"
+                    + json.dumps(serialized_response, indent=2, ensure_ascii=False)
+                )
 
             if "entity_id" in resolved_target:
                 entity_ids = resolved_target["entity_id"]
@@ -4385,7 +4425,10 @@ class MCPServer(
                         f"\n\n{heading}\n" + "\n".join(action_observation["state_lines"])
                     )
 
-            return {"content": [{"type": "text", "text": result_text}]}
+            result = {"content": [{"type": "text", "text": result_text}]}
+            if serialized_response is not None:
+                result["response"] = serialized_response
+            return result
 
         except Exception as err:
             error_msg = f"Service call failed: {err}"

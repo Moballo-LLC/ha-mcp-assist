@@ -31,6 +31,8 @@ class OpenClawProvider(LLMProvider):
     supports_streaming = False
     supports_stateful_session_id_option = False
     uses_config_model_step = False
+    uses_config_prompt_fields = False
+    manages_agent_loop = True
     default_config_model_name = "main"
     default_config_system_prompt = ""
     default_config_technical_prompt = ""

@@ -8,12 +8,15 @@ from typing import Any
 from .const import (
     ANTHROPIC_BASE_URL,
     CONF_API_KEY,
+    CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_SERVER_TYPE,
     CONF_TIMEOUT,
     DEFAULT_API_KEY,
+    DEFAULT_HERMES_MODEL,
     DEFAULT_LLAMACPP_URL,
+    DEFAULT_HERMES_URL,
     DEFAULT_LMSTUDIO_URL,
     DEFAULT_MODEL_NAME,
     DEFAULT_OLLAMA_URL,
@@ -25,6 +28,7 @@ from .const import (
     OPENROUTER_BASE_URL,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
@@ -57,6 +61,7 @@ PROVIDER_DISPLAY_NAMES = {
     SERVER_TYPE_ANTHROPIC: "Claude",
     SERVER_TYPE_OPENROUTER: "OpenRouter",
     SERVER_TYPE_OPENCLAW: "OpenClaw",
+    SERVER_TYPE_HERMES: "Hermes Agent (experimental)",
     SERVER_TYPE_VLLM: "vLLM",
 }
 REMOTE_PROVIDER_TYPES = frozenset(
@@ -78,16 +83,18 @@ def _get_entry_value(entry: Any, key: str, default: Any) -> Any:
     return default if value is None else value
 
 
-def _get_configured_base_url(entry: Any) -> str | None:
+def _get_configured_base_url(
+    entry: Any, key: str = CONF_LMSTUDIO_URL
+) -> str | None:
     """Return the explicitly configured provider URL, if one is set."""
     if entry is None:
         return None
 
     for source in (entry.options, entry.data):
-        if CONF_LMSTUDIO_URL not in source:
+        if key not in source:
             continue
 
-        value = source.get(CONF_LMSTUDIO_URL)
+        value = source.get(key)
         if value is None:
             continue
 
@@ -102,9 +109,12 @@ def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
     """Resolve the current provider/runtime settings for a profile entry."""
     server_type = str(_get_entry_value(entry, CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE))
     model_name = str(_get_entry_value(entry, CONF_MODEL_NAME, DEFAULT_MODEL_NAME))
+    if server_type == SERVER_TYPE_HERMES and model_name in {"", DEFAULT_MODEL_NAME}:
+        model_name = DEFAULT_HERMES_MODEL
     api_key = str(_get_entry_value(entry, CONF_API_KEY, DEFAULT_API_KEY) or "")
     timeout = int(_get_entry_value(entry, CONF_TIMEOUT, DEFAULT_TIMEOUT) or DEFAULT_TIMEOUT)
     configured_url = _get_configured_base_url(entry)
+    configured_hermes_url = _get_configured_base_url(entry, CONF_HERMES_URL)
 
     if server_type == SERVER_TYPE_OPENAI:
         base_url = configured_url or OPENAI_BASE_URL
@@ -120,6 +130,8 @@ def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
         base_url = configured_url or DEFAULT_OLLAMA_URL
     elif server_type == SERVER_TYPE_LLAMACPP:
         base_url = configured_url or DEFAULT_LLAMACPP_URL
+    elif server_type == SERVER_TYPE_HERMES:
+        base_url = configured_hermes_url or DEFAULT_HERMES_URL
     else:
         base_url = configured_url or DEFAULT_LMSTUDIO_URL
 
@@ -158,5 +170,12 @@ def build_provider_auth_headers(server_type: str, api_key: str) -> dict[str, str
             "HTTP-Referer": "https://github.com/Moballo-LLC/ha-mcp-assist",
             "X-Title": "MCP Assist for Home Assistant",
         }
+
+    if server_type == SERVER_TYPE_HERMES:
+        return (
+            {"Authorization": f"Bearer {normalized_key}"}
+            if normalized_key
+            else {}
+        )
 
     return {}

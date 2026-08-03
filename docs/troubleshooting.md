@@ -44,6 +44,33 @@ For cloud providers:
 - Check account quota, billing, and rate limits.
 - Check network connectivity from Home Assistant.
 
+### OpenClaw Pairing Has No Pending Request
+
+MCP Assist waits for the mandatory protocol-4 `connect.challenge` before it
+sends device identity. Start a connection attempt, then approve the pending
+device from the OpenClaw CLI or Control UI. If no request appears:
+
+- Confirm Home Assistant can reach the gateway WebSocket endpoint.
+- Confirm the host, port, token, and TLS setting match the gateway.
+- Check that the gateway emits a challenge with a valid timestamp.
+- Review gateway logs for `DEVICE_AUTH_*` diagnostics or protocol mismatch.
+
+See the [OpenClaw gateway protocol](https://github.com/openclaw/openclaw/blob/main/docs/gateway/protocol.md)
+for current pairing and device-signature behavior.
+
+### Hermes Agent Connection or Session Fails
+
+- Confirm the Hermes API server is listening on the configured URL; the common
+  default is `http://localhost:8642`.
+- If Home Assistant runs in a container, make sure that URL is reachable from
+  the container rather than only from the host.
+- Confirm the selected model appears from the server's `/v1/models` endpoint.
+- If API authentication is enabled, verify the API key. Authenticated mode is
+  required for Hermes transcript-session headers and the stable memory key.
+- If a stored transcript expires, MCP Assist drops that session ID and retries
+  once with a fresh transcript. Persistent failures should be checked in the
+  Hermes API-server logs.
+
 ### Ollama Request Exceeds Context Window
 
 If Ollama returns an error like `request (...) tokens exceed`, the prompt,

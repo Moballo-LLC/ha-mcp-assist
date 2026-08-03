@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from types import SimpleNamespace
 
 import pytest
 
 from custom_components.mcp_assist.openclaw_client import (
+    DEVICE_ROLE,
+    DEVICE_SCOPES,
+    MIN_PROTOCOL_VERSION,
+    PROTOCOL_VERSION,
     OpenClawClient,
     OpenClawConnectionError,
+    OpenClawDeviceAuth,
     _AgentRun,
 )
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 def test_openclaw_client_uses_configured_locale() -> None:
@@ -58,11 +65,13 @@ class _ImmediateAckWs:
 
     def __init__(self, client: OpenClawClient) -> None:
         self._client = client
+        self.agent_request: dict | None = None
 
     async def send(self, raw: str) -> None:
         msg = json.loads(raw)
         if msg.get("method") != "agent":
             return
+        self.agent_request = msg
         # Simulate the receive loop processing the acknowledgment and the
         # completion event back to back, before send_message resumes.
         await self._client._handle_message(
@@ -78,13 +87,124 @@ async def test_send_message_survives_ack_and_completion_during_send() -> None:
     """An ack/completion processed during the send await must not be dropped."""
     client = _make_client()
     client._connected = True
-    client._ws = _ImmediateAckWs(client)
+    websocket = _ImmediateAckWs(client)
+    client._ws = websocket
 
-    result = await asyncio.wait_for(client.send_message("hi", "main"), timeout=5)
+    message = "Keep **this** formatting and emoji ✅"
+    result = await asyncio.wait_for(client.send_message(message, "main"), timeout=5)
 
     assert result == "All done"
+    assert websocket.agent_request["params"]["message"] == message
     assert client._agent_runs == {}
     assert client._early_agent_events == {}
+
+
+def test_device_auth_signs_protocol_v4_challenge_with_v3_payload() -> None:
+    """Protocol 4 device auth should bind all v3 client identity fields."""
+    auth = OpenClawDeviceAuth.__new__(OpenClawDeviceAuth)
+    auth._private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    auth._device_id = "device-123"
+    auth._public_key_b64 = "public-key"
+
+    device = auth.build_device_dict(
+        "nonce-123",
+        "token-123",
+        signed_at_ms=1_754_321_000_123,
+    )
+
+    signature = device["signature"]
+    signature += "=" * (-len(signature) % 4)
+    expected_payload = (
+        "v3|device-123|gateway-client|backend|"
+        f"{DEVICE_ROLE}|{','.join(DEVICE_SCOPES)}|1754321000123|"
+        "token-123|nonce-123|python|"
+    )
+    auth._private_key.public_key().verify(
+        base64.urlsafe_b64decode(signature),
+        expected_payload.encode(),
+    )
+    assert device["signedAt"] == 1_754_321_000_123
+
+
+class _HandshakeWs:
+    """Fake protocol-4 gateway handshake transport."""
+
+    def __init__(self) -> None:
+        self.sent: dict | None = None
+        self._messages = [
+            json.dumps(
+                {
+                    "type": "event",
+                    "event": "connect.challenge",
+                    "payload": {"nonce": "nonce-123", "ts": 1_754_321_000_123},
+                }
+            )
+        ]
+
+    async def send(self, raw: str) -> None:
+        self.sent = json.loads(raw)
+        self._messages.extend(
+            [
+                json.dumps({"type": "event", "event": "presence", "payload": {}}),
+                json.dumps(
+                    {"type": "res", "id": self.sent["id"], "ok": True}
+                ),
+            ]
+        )
+
+    async def recv(self) -> str:
+        return self._messages.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_handshake_uses_protocol_four_challenge_and_ignores_stray_events() -> None:
+    """Handshake should sign the challenge timestamp and await its own response."""
+    signed: dict[str, object] = {}
+
+    def build_device_dict(
+        nonce: str,
+        token: str,
+        *,
+        signed_at_ms: int,
+    ) -> dict[str, object]:
+        signed.update(
+            nonce=nonce,
+            token=token,
+            signed_at_ms=signed_at_ms,
+        )
+        return {"id": "device-123"}
+
+    client = _make_client()
+    websocket = _HandshakeWs()
+    client._ws = websocket
+    client._device_auth = SimpleNamespace(build_device_dict=build_device_dict)
+
+    await client._handshake()
+
+    assert websocket.sent["method"] == "connect"
+    assert websocket.sent["params"]["minProtocol"] == MIN_PROTOCOL_VERSION
+    assert websocket.sent["params"]["maxProtocol"] == PROTOCOL_VERSION
+    assert websocket.sent["params"]["device"] == {"id": "device-123"}
+    assert signed == {
+        "nonce": "nonce-123",
+        "token": "test-token",
+        "signed_at_ms": 1_754_321_000_123,
+    }
+
+
+@pytest.mark.asyncio
+async def test_handshake_rejects_missing_protocol_four_challenge() -> None:
+    """A missing mandatory challenge must fail instead of attempting legacy auth."""
+
+    class NoChallengeWs:
+        async def recv(self) -> str:
+            raise asyncio.TimeoutError
+
+    client = _make_client()
+    client._ws = NoChallengeWs()
+
+    with pytest.raises(OpenClawConnectionError, match="connect.challenge"):
+        await client._handshake()
 
 
 class _DyingWs:

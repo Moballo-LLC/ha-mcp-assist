@@ -169,6 +169,8 @@ class LLMProvider:
     model_fetch_timeout = 10
     model_fetch_delay = 0.0
     uses_config_model_step = True
+    uses_config_prompt_fields = True
+    manages_agent_loop = False
     default_temperature: float | None = None
     default_config_model_name = ""
     default_config_system_prompt = ""

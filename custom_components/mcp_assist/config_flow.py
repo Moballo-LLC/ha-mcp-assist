@@ -395,6 +395,7 @@ def _normalize_prompt_inputs(
 ) -> dict[str, Any]:
     """Normalize prompt override inputs before storing."""
     normalized = dict(user_input)
+    provider_class = get_llm_provider_class(server_type)
 
     def _normalize_prompt(prompt_key: str, mode_key: str, default_prompt: str) -> None:
         raw_value = normalized.get(prompt_key, "")
@@ -406,15 +407,18 @@ def _normalize_prompt_inputs(
             normalized[prompt_key] = text
             normalized[mode_key] = PROMPT_MODE_CUSTOM
 
-    if server_type == SERVER_TYPE_OPENCLAW:
+    if not provider_class.uses_config_prompt_fields:
         normalized[CONF_SYSTEM_PROMPT_MODE] = PROMPT_MODE_DEFAULT
+        normalized[CONF_TECHNICAL_PROMPT_MODE] = PROMPT_MODE_DEFAULT
         normalized.pop(CONF_SYSTEM_PROMPT, None)
-    else:
-        _normalize_prompt(
-            CONF_SYSTEM_PROMPT,
-            CONF_SYSTEM_PROMPT_MODE,
-            default_system_prompt,
-        )
+        normalized.pop(CONF_TECHNICAL_PROMPT, None)
+        return normalized
+
+    _normalize_prompt(
+        CONF_SYSTEM_PROMPT,
+        CONF_SYSTEM_PROMPT_MODE,
+        default_system_prompt,
+    )
 
     _normalize_prompt(
         CONF_TECHNICAL_PROMPT,
@@ -1345,7 +1349,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = provider_class.model_fetch_error
 
         # Build dynamic schema based on whether models were fetched
-        current_model = current_values.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)
+        current_model = current_values.get(
+            CONF_MODEL_NAME,
+            provider_class.default_config_model_name or DEFAULT_MODEL_NAME,
+        )
         if models:
             # Show dropdown with available models (custom_value allows free text input)
             _LOGGER.info("Showing model dropdown with %d models", len(models))
@@ -1375,12 +1382,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         schema_dict: dict[Any, Any] = {
-            vol.Required(MODEL_SECTION_KEY): _build_model_section(current_model, model_field),
-            vol.Required(PROMPTS_SECTION_KEY): _build_prompt_section(
-                system_prompt_value=system_prompt_suggestion,
-                technical_prompt_value=technical_prompt_suggestion,
+            vol.Required(MODEL_SECTION_KEY): _build_model_section(
+                current_model, model_field
             ),
         }
+        if provider_class.uses_config_prompt_fields:
+            schema_dict[vol.Required(PROMPTS_SECTION_KEY)] = _build_prompt_section(
+                system_prompt_value=system_prompt_suggestion,
+                technical_prompt_value=technical_prompt_suggestion,
+            )
 
         model_schema = vol.Schema(schema_dict)
 
@@ -1389,7 +1399,16 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=model_schema,
             errors=errors,
             description_placeholders={
-                "server_info": "Select a model. The prompt fields are prefilled with the current effective prompts so you can review, copy, or edit them directly. If you leave a prompt unchanged, the integration keeps using the built-in version from code. Models are automatically loaded from your server."
+                "server_info": (
+                    "Select the model exposed by the server. This provider manages "
+                    "its own prompts and tools."
+                    if not provider_class.uses_config_prompt_fields
+                    else "Select a model. The prompt fields are prefilled with the "
+                    "current effective prompts so you can review, copy, or edit "
+                    "them directly. If you leave a prompt unchanged, the integration "
+                    "keeps using the built-in version from code. Models are "
+                    "automatically loaded from your server."
+                )
             },
         )
 
@@ -1414,8 +1433,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             user_input = _apply_profile_tool_disables(user_input, built_in_specs)
 
-            # For OpenClaw, set defaults for LLM-specific fields (not shown in UI)
-            if not provider_class.uses_config_model_step:
+            # Server-managed agents hide client-side generation/tool-loop settings.
+            if provider_class.manages_agent_loop:
                 user_input[CONF_TEMPERATURE] = DEFAULT_TEMPERATURE
                 user_input[CONF_MAX_TOKENS] = DEFAULT_MAX_TOKENS
                 user_input[CONF_MAX_HISTORY] = DEFAULT_MAX_HISTORY
@@ -1589,7 +1608,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         # Build schema based on server type
-        if not provider_class.uses_config_model_step:
+        if provider_class.manages_agent_loop:
             advanced_schema_dict = {
                 vol.Required(CONVERSATION_SECTION_KEY): _build_conversation_section(
                     {
@@ -1711,14 +1730,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         advanced_schema = vol.Schema(advanced_schema_dict)
 
         # Set description based on server type
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if provider_class.manages_agent_loop:
+            provider_name = provider_class.config_display_name()
             description_placeholders = {
                 "advanced_info": (
-                    "OpenClaw manages model selection, token limits, history, and "
-                    "tool execution on the gateway. Only conversation, timeout, "
-                    "session, and profile-level tool settings are shown here. The "
-                    "Tools section still lets this profile disable specific shared "
-                    "MCP tool families."
+                    f"{provider_name} manages token limits, history, prompts, and "
+                    "tool execution on its server. Only conversation, timeout, "
+                    "session, and connection behavior is relevant here. Profile "
+                    "tool toggles do not restrict tools configured on the "
+                    "provider's server."
                 )
             }
         else:
@@ -2094,13 +2114,19 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     user_input[CONF_RESPONSE_MODE] = user_input[CONF_FOLLOW_UP_MODE]
                     del user_input[CONF_FOLLOW_UP_MODE]
 
-                # For OpenClaw, ensure model name and empty system prompt are set
+                # Server-managed agents keep their prompts on the provider.
                 server_type = self.config_entry.data.get(
                     CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE
                 )
-                if server_type == SERVER_TYPE_OPENCLAW:
-                    if CONF_MODEL_NAME not in user_input:
-                        user_input[CONF_MODEL_NAME] = "main"
+                provider_class = get_llm_provider_class(server_type)
+                if provider_class.manages_agent_loop:
+                    if (
+                        not provider_class.uses_config_model_step
+                        and CONF_MODEL_NAME not in user_input
+                    ):
+                        user_input[CONF_MODEL_NAME] = (
+                            provider_class.default_config_model_name
+                        )
                     user_input[CONF_SYSTEM_PROMPT] = ""
                     user_input[CONF_TECHNICAL_PROMPT] = ""
                     user_input[CONF_SYSTEM_PROMPT_MODE] = PROMPT_MODE_DEFAULT
@@ -2196,7 +2222,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 current_model, model_selector
             )
 
-        if provider_class.uses_config_model_step:
+        if provider_class.uses_config_prompt_fields:
             schema_dict[vol.Required(PROMPTS_SECTION_KEY)] = _build_prompt_section(
                 include_system_prompt=True,
                 system_prompt_value=system_prompt_suggestion,
@@ -2205,7 +2231,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
         provider_schema_items: dict[Any, Any] = {}
 
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if provider_class.manages_agent_loop:
             schema_dict[vol.Required(CONVERSATION_SECTION_KEY)] = (
                 _build_conversation_section(
                     {
@@ -2492,14 +2518,15 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         options_schema = vol.Schema(schema_dict)
 
         # Set description based on server type
-        if server_type == SERVER_TYPE_OPENCLAW:
+        if provider_class.manages_agent_loop:
+            provider_name = provider_class.config_display_name()
             description_placeholders = {
                 "server_info": (
-                    "OpenClaw manages the model and system prompt on the gateway. "
+                    f"{provider_name} manages its prompts and tool loop on the server. "
                     "Use the connection, conversation, provider, and advanced "
                     "sections here to control how this Home Assistant profile "
-                    "connects and follows up. The Tools section can still disable "
-                    "specific shared MCP tool families for this profile."
+                    "connects and follows up. Profile tool toggles do not restrict "
+                    "tools configured on the provider's server."
                 )
             }
         else:

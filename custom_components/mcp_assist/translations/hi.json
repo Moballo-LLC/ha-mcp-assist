@@ -24,7 +24,8 @@
           "openclaw_host": "गेटवे होस्ट",
           "openclaw_port": "गेटवे पोर्ट",
           "openclaw_token": "गेटवे टोकन",
-          "openclaw_use_ssl": "SSL/TLS का प्रयोग करें"
+          "openclaw_use_ssl": "SSL/TLS का प्रयोग करें",
+          "hermes_url": "Hermes सर्वर URL"
         },
         "data_description": {
           "lmstudio_url": "इस प्रोफ़ाइल द्वारा उपयोग किए गए स्थानीय या OpenAI-compatible सर्वर के लिए आधार URL।",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Ollama जीवित रखें",
           "ollama_num_ctx": "Ollama संदर्भ विंडो",
           "openclaw_session_key": "सत्र कुंजी",
-          "stateful_session_id": "स्टेटफ़ुल सत्र हेडर"
+          "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
+          "hermes_session_key": "मेमोरी सत्र कुंजी"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Ollama जीवित रखें",
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
               "openclaw_session_key": "सत्र कुंजी",
-              "stateful_session_id": "स्टेटफ़ुल सत्र हेडर"
+              "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
+              "hermes_session_key": "मेमोरी सत्र कुंजी"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
               "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
-              "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।"
+              "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।",
+              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।"
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "गेटवे टोकन",
           "openclaw_use_ssl": "SSL/TLS का प्रयोग करें",
           "openclaw_session_key": "सत्र कुंजी",
-          "stateful_session_id": "स्टेटफ़ुल सत्र हेडर"
+          "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
+          "hermes_url": "Hermes सर्वर URL",
+          "hermes_session_key": "मेमोरी सत्र कुंजी"
         },
         "data_description": {
           "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।",
           "system_prompt": "वर्तमान प्रभावी सिस्टम प्रॉम्प्ट से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए इसे संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
           "technical_prompt": "मौजूदा प्रभावी तकनीकी निर्देशों से पहले से भरा हुआ। इस प्रोफ़ाइल को अनुकूलित करने के लिए उन्हें संपादित करें। यदि अपरिवर्तित छोड़ दिया जाए, तो एकीकरण कोड से अंतर्निहित प्रॉम्प्ट का उपयोग करता रहता है।",
-          "context_mode": "मानक पूर्ण प्रोफ़ाइल टूल संदर्भ भेजता है। लाइट एक छोटी इतिहास विंडो रखता है और छोटे स्थानीय मॉडलों के लिए मुख्य Home Assistant टूल का विज्ञापन करता है।"
+          "context_mode": "मानक पूर्ण प्रोफ़ाइल टूल संदर्भ भेजता है। लाइट एक छोटी इतिहास विंडो रखता है और छोटे स्थानीय मॉडलों के लिए मुख्य Home Assistant टूल का विज्ञापन करता है।",
+          "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।"
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "गेटवे होस्ट",
               "openclaw_port": "गेटवे पोर्ट",
               "openclaw_token": "गेटवे टोकन",
-              "openclaw_use_ssl": "SSL/TLS का प्रयोग करें"
+              "openclaw_use_ssl": "SSL/TLS का प्रयोग करें",
+              "hermes_url": "Hermes सर्वर URL"
             },
             "data_description": {
               "lmstudio_url": "इस प्रोफ़ाइल द्वारा उपयोग किए गए स्थानीय या OpenAI-compatible सर्वर के लिए आधार URL।",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Ollama जीवित रखें",
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
               "openclaw_session_key": "सत्र कुंजी",
-              "stateful_session_id": "स्टेटफ़ुल सत्र हेडर"
+              "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
+              "hermes_session_key": "मेमोरी सत्र कुंजी"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
               "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
-              "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।"
+              "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।",
+              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।"
             }
           },
           "advanced_settings": {

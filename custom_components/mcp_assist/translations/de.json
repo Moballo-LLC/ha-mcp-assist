@@ -24,7 +24,8 @@
           "openclaw_host": "Gateway-Host",
           "openclaw_port": "Gateway-Port",
           "openclaw_token": "Gateway-Token",
-          "openclaw_use_ssl": "Verwenden Sie SSL/TLS"
+          "openclaw_use_ssl": "Verwenden Sie SSL/TLS",
+          "hermes_url": "Hermes-Server-URL"
         },
         "data_description": {
           "lmstudio_url": "Der Basis-URL für den lokalen oder OpenAI-compatible-Server, der von diesem Profil verwendet wird.",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Ollama am Leben halten",
           "ollama_num_ctx": "Ollama Kontextfenster",
           "openclaw_session_key": "Sitzungsschlüssel",
-          "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
+          "stateful_session_id": "Header für zustandsbehaftete Sitzungen",
+          "hermes_session_key": "Speicher-Sitzungsschlüssel"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Ollama am Leben halten",
               "ollama_num_ctx": "Ollama Kontextfenster",
               "openclaw_session_key": "Sitzungsschlüssel",
-              "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
+              "stateful_session_id": "Header für zustandsbehaftete Sitzungen",
+              "hermes_session_key": "Speicher-Sitzungsschlüssel"
             },
             "data_description": {
               "ollama_keep_alive": "Wie lange soll Ollama das ausgewählte Modell im Speicher geladen halten?",
               "ollama_num_ctx": "Überschreiben Sie die an Ollama übergebene Kontextfenstergröße. Verwenden Sie 0, um den Modellstandard beizubehalten.",
               "openclaw_session_key": "Name der OpenClaw-Sitzung, an die Nachrichten gesendet werden sollen.",
-              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet."
+              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet.",
+              "hermes_session_key": "Stabiler Schlüssel, der das Langzeitgedächtnis von Hermes für dieses Profil abgrenzt."
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "Gateway-Token",
           "openclaw_use_ssl": "Verwenden Sie SSL/TLS",
           "openclaw_session_key": "Sitzungsschlüssel",
-          "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
+          "stateful_session_id": "Header für zustandsbehaftete Sitzungen",
+          "hermes_url": "Hermes-Server-URL",
+          "hermes_session_key": "Speicher-Sitzungsschlüssel"
         },
         "data_description": {
           "model_name": "Das LLM-Modell, das dieses Profil verwenden sollte.",
           "system_prompt": "Vorab mit der aktuell wirksamen Systemaufforderung gefüllt. Bearbeiten Sie es, um dieses Profil anzupassen. Wenn sie unverändert bleibt, verwendet die Integration weiterhin die integrierte Eingabeaufforderung aus dem Code.",
           "technical_prompt": "Vorbefüllt mit den aktuell gültigen technischen Anweisungen. Bearbeiten Sie sie, um dieses Profil anzupassen. Wenn sie unverändert bleibt, verwendet die Integration weiterhin die integrierte Eingabeaufforderung aus dem Code.",
-          "context_mode": "Standard sendet den vollständigen Profil-Tool-Kontext. Light behält ein kleineres Verlaufsfenster bei und bewirbt Kern-Home Assistant-Tools für kleine lokale Modelle."
+          "context_mode": "Standard sendet den vollständigen Profil-Tool-Kontext. Light behält ein kleineres Verlaufsfenster bei und bewirbt Kern-Home Assistant-Tools für kleine lokale Modelle.",
+          "hermes_session_key": "Stabiler Schlüssel, der das Langzeitgedächtnis von Hermes für dieses Profil abgrenzt."
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "Gateway-Host",
               "openclaw_port": "Gateway-Port",
               "openclaw_token": "Gateway-Token",
-              "openclaw_use_ssl": "Verwenden Sie SSL/TLS"
+              "openclaw_use_ssl": "Verwenden Sie SSL/TLS",
+              "hermes_url": "Hermes-Server-URL"
             },
             "data_description": {
               "lmstudio_url": "Der Basis-URL für den lokalen oder OpenAI-compatible-Server, der von diesem Profil verwendet wird.",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Ollama am Leben halten",
               "ollama_num_ctx": "Ollama Kontextfenster",
               "openclaw_session_key": "Sitzungsschlüssel",
-              "stateful_session_id": "Header für zustandsbehaftete Sitzungen"
+              "stateful_session_id": "Header für zustandsbehaftete Sitzungen",
+              "hermes_session_key": "Speicher-Sitzungsschlüssel"
             },
             "data_description": {
               "ollama_keep_alive": "Wie lange soll Ollama das ausgewählte Modell im Speicher geladen halten?",
               "ollama_num_ctx": "Überschreiben Sie die an Ollama übergebene Kontextfenstergröße. Verwenden Sie 0, um den Modellstandard beizubehalten.",
               "openclaw_session_key": "Name der OpenClaw-Sitzung, an die Nachrichten gesendet werden sollen.",
-              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet."
+              "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet.",
+              "hermes_session_key": "Stabiler Schlüssel, der das Langzeitgedächtnis von Hermes für dieses Profil abgrenzt."
             }
           },
           "advanced_settings": {

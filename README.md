@@ -24,8 +24,8 @@ HA MCP Assist takes a different path:
   Assistant structure and use tools such as `get_index`, `discover_entities`,
   and `get_entity_details` to fetch the details they need.
 - **Better fit for local models**: local runtimes such as LM Studio, llama.cpp,
-  Ollama, OpenClaw, and vLLM can work with a more focused context instead of a
-  giant entity dump.
+  Ollama, OpenClaw, vLLM, and the experimental Hermes Agent integration can
+  work with a more focused context instead of a giant entity dump.
 - **Choice of providers**: use local models, OpenAI, Google Gemini, Anthropic
   Claude, OpenRouter, or multiple profiles for different jobs.
 - **Useful home workflows**: control exposed entities, run scripts and
@@ -93,6 +93,7 @@ request.
   - llama.cpp
   - Ollama
   - OpenClaw
+  - Hermes Agent (experimental)
   - vLLM
   - OpenAI
   - Google Gemini

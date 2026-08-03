@@ -24,7 +24,8 @@
           "openclaw_host": "Gateway Host",
           "openclaw_port": "Gateway Port",
           "openclaw_token": "Gateway Token",
-          "openclaw_use_ssl": "Gamitin ang SSL/TLS"
+          "openclaw_use_ssl": "Gamitin ang SSL/TLS",
+          "hermes_url": "URL ng Hermes Server"
         },
         "data_description": {
           "lmstudio_url": "Ang batayang URL para sa lokal o OpenAI-compatible server na ginagamit ng profile na ito.",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
           "ollama_num_ctx": "Ollama Context Window",
           "openclaw_session_key": "Susi ng Sesyon",
-          "stateful_session_id": "Header ng stateful na session"
+          "stateful_session_id": "Header ng stateful na session",
+          "hermes_session_key": "Session Key ng Memorya"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Susi ng Sesyon",
-              "stateful_session_id": "Header ng stateful na session"
+              "stateful_session_id": "Header ng stateful na session",
+              "hermes_session_key": "Session Key ng Memorya"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
-              "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session."
+              "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
+              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito."
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "Gateway Token",
           "openclaw_use_ssl": "Gamitin ang SSL/TLS",
           "openclaw_session_key": "Susi ng Sesyon",
-          "stateful_session_id": "Header ng stateful na session"
+          "stateful_session_id": "Header ng stateful na session",
+          "hermes_url": "URL ng Hermes Server",
+          "hermes_session_key": "Session Key ng Memorya"
         },
         "data_description": {
           "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
           "system_prompt": "Prefilled ng kasalukuyang epektibong prompt ng system. I-edit ito para i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
           "technical_prompt": "Prefilled ng kasalukuyang epektibong teknikal na tagubilin. I-edit ang mga ito upang i-customize ang profile na ito. Kung hindi nabago, ang pagsasama ay patuloy na gumagamit ng built-in na prompt mula sa code.",
-          "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo."
+          "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo.",
+          "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito."
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "Gateway Host",
               "openclaw_port": "Gateway Port",
               "openclaw_token": "Gateway Token",
-              "openclaw_use_ssl": "Gamitin ang SSL/TLS"
+              "openclaw_use_ssl": "Gamitin ang SSL/TLS",
+              "hermes_url": "URL ng Hermes Server"
             },
             "data_description": {
               "lmstudio_url": "Ang batayang URL para sa lokal o OpenAI-compatible server na ginagamit ng profile na ito.",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Panatilihing Aktibo ang Ollama",
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Susi ng Sesyon",
-              "stateful_session_id": "Header ng stateful na session"
+              "stateful_session_id": "Header ng stateful na session",
+              "hermes_session_key": "Session Key ng Memorya"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
-              "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session."
+              "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
+              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito."
             }
           },
           "advanced_settings": {

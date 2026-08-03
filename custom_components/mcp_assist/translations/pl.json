@@ -24,7 +24,8 @@
           "openclaw_host": "Host bramy",
           "openclaw_port": "Port Bramowy",
           "openclaw_token": "Token bramy",
-          "openclaw_use_ssl": "Użyj SSL/TLS"
+          "openclaw_use_ssl": "Użyj SSL/TLS",
+          "hermes_url": "Adres URL serwera Hermes"
         },
         "data_description": {
           "lmstudio_url": "Podstawowy URL dla serwera lokalnego lub OpenAI-compatible używany przez ten profil.",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Utrzymuj Ollama aktywne",
           "ollama_num_ctx": "Okno kontekstu Ollama",
           "openclaw_session_key": "Klucz sesji",
-          "stateful_session_id": "Nagłówek sesji ze stanem"
+          "stateful_session_id": "Nagłówek sesji ze stanem",
+          "hermes_session_key": "Klucz sesji pamięci"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Utrzymuj Ollama aktywne",
               "ollama_num_ctx": "Okno kontekstu Ollama",
               "openclaw_session_key": "Klucz sesji",
-              "stateful_session_id": "Nagłówek sesji ze stanem"
+              "stateful_session_id": "Nagłówek sesji ze stanem",
+              "hermes_session_key": "Klucz sesji pamięci"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
               "ollama_num_ctx": "Zastąp rozmiar okna kontekstowego przekazany do Ollama. Użyj 0, aby zachować domyślny model.",
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
-              "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera."
+              "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
+              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu."
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "Token bramy",
           "openclaw_use_ssl": "Użyj SSL/TLS",
           "openclaw_session_key": "Klucz sesji",
-          "stateful_session_id": "Nagłówek sesji ze stanem"
+          "stateful_session_id": "Nagłówek sesji ze stanem",
+          "hermes_url": "Adres URL serwera Hermes",
+          "hermes_session_key": "Klucz sesji pamięci"
         },
         "data_description": {
           "model_name": "Model LLM, którego powinien używać ten profil.",
           "system_prompt": "Wstępnie wypełniony bieżącym, skutecznym monitem systemowym. Edytuj go, aby dostosować ten profil. Jeśli pozostawi się to bez zmian, integracja będzie nadal korzystać z wbudowanego monitu z kodu.",
           "technical_prompt": "Wstępnie wypełnione aktualnymi, obowiązującymi instrukcjami technicznymi. Edytuj je, aby dostosować ten profil. Jeśli pozostawi się to bez zmian, integracja będzie nadal korzystać z wbudowanego monitu z kodu.",
-          "context_mode": "Standard wysyła kontekst narzędzia pełnego profilu. Light ma mniejsze okno historii i reklamuje podstawowe narzędzia Home Assistant dla małych modeli lokalnych."
+          "context_mode": "Standard wysyła kontekst narzędzia pełnego profilu. Light ma mniejsze okno historii i reklamuje podstawowe narzędzia Home Assistant dla małych modeli lokalnych.",
+          "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu."
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "Host bramy",
               "openclaw_port": "Port Bramowy",
               "openclaw_token": "Token bramy",
-              "openclaw_use_ssl": "Użyj SSL/TLS"
+              "openclaw_use_ssl": "Użyj SSL/TLS",
+              "hermes_url": "Adres URL serwera Hermes"
             },
             "data_description": {
               "lmstudio_url": "Podstawowy URL dla serwera lokalnego lub OpenAI-compatible używany przez ten profil.",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Utrzymuj Ollama aktywne",
               "ollama_num_ctx": "Okno kontekstu Ollama",
               "openclaw_session_key": "Klucz sesji",
-              "stateful_session_id": "Nagłówek sesji ze stanem"
+              "stateful_session_id": "Nagłówek sesji ze stanem",
+              "hermes_session_key": "Klucz sesji pamięci"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
               "ollama_num_ctx": "Zastąp rozmiar okna kontekstowego przekazany do Ollama. Użyj 0, aby zachować domyślny model.",
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
-              "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera."
+              "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
+              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu."
             }
           },
           "advanced_settings": {

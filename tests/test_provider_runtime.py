@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from custom_components.mcp_assist.const import (
+    CONF_API_KEY,
+    CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_SERVER_TYPE,
+    DEFAULT_HERMES_MODEL,
     DEFAULT_OLLAMA_URL,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENROUTER,
@@ -47,6 +51,27 @@ def test_resolve_provider_runtime_config_keeps_default_local_ollama_url(
     assert runtime_config.base_url == DEFAULT_OLLAMA_URL
 
 
+def test_resolve_provider_runtime_config_supports_local_hermes(
+    profile_entry_factory,
+) -> None:
+    """Hermes should use its dedicated URL and server-managed default model."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_HERMES,
+            CONF_HERMES_URL: "http://hermes.example.invalid:8642/v1/",
+            CONF_API_KEY: "hermes-key",
+        }
+    )
+
+    runtime_config = resolve_provider_runtime_config(entry)
+
+    assert runtime_config.server_type == SERVER_TYPE_HERMES
+    assert runtime_config.base_url == "http://hermes.example.invalid:8642/v1"
+    assert runtime_config.model_name == DEFAULT_HERMES_MODEL
+    assert runtime_config.api_key == "hermes-key"
+    assert runtime_config.is_remote_service is False
+
+
 def test_build_provider_auth_headers_supports_openrouter_and_local_profiles() -> None:
     """Shared auth header logic should match the cloud/local provider rules."""
     openrouter_headers = build_provider_auth_headers(
@@ -71,3 +96,13 @@ def test_build_provider_auth_headers_skips_placeholder_openai_keys() -> None:
 
     assert placeholder_headers == {}
     assert valid_headers == {"Authorization": "Bearer sk-live-value"}
+
+
+def test_build_provider_auth_headers_supports_optional_hermes_auth() -> None:
+    """Hermes should send bearer auth only when the profile configures it."""
+    assert build_provider_auth_headers(SERVER_TYPE_HERMES, "") == {}
+    assert build_provider_auth_headers(SERVER_TYPE_HERMES, "hermes-key") == {
+        "Authorization": "Bearer hermes-key"
+    }
+    DEFAULT_HERMES_MODEL,
+    SERVER_TYPE_HERMES,
