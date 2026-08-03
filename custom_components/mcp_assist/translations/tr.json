@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP Sunucu Portu",
           "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "mcp_bearer_token": "MCP Bearer belirteci"
+          "mcp_bearer_token": "MCP Bearer belirteci",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
           "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin."
+          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP Sunucu Portu",
               "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-              "mcp_bearer_token": "MCP Bearer belirteci"
+              "mcp_bearer_token": "MCP Bearer belirteci",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
               "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-              "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin."
+              "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP Sunucu Portu",
           "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-          "mcp_bearer_token": "MCP Bearer belirteci"
+          "mcp_bearer_token": "MCP Bearer belirteci",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
           "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin."
+          "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP Sunucu Portu",
               "allowed_ips": "Ek Izin Verilen IP'ler/Araliklar",
-              "mcp_bearer_token": "MCP Bearer belirteci"
+              "mcp_bearer_token": "MCP Bearer belirteci",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Paylaşılan MCP sunucusu tarafından kullanılan yerel bağlantı noktası.",
               "allowed_ips": "localhost'e ek olarak bağlanabilecek isteğe bağlı virgülle ayrılmış IP adresleri veya CIDR aralıkları.",
-              "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin."
+              "mcp_bearer_token": "Harici MCP istemcileri için gereken isteğe bağlı bearer belirteci. Yeni kurulumlar oluşturulmuş bir belirteç alır; bu alanı yalnızca bearer kimlik doğrulaması olmadan IP izin listesi kullanmak istiyorsanız temizleyin. Kaydederken yeni bir token oluşturmak için FFFF girin.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "Θυρα διακομιστη MCP",
           "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-          "mcp_bearer_token": "Διακριτικό Bearer MCP"
+          "mcp_bearer_token": "Διακριτικό Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
           "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση."
+          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "Θυρα διακομιστη MCP",
               "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-              "mcp_bearer_token": "Διακριτικό Bearer MCP"
+              "mcp_bearer_token": "Διακριτικό Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
               "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-              "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση."
+              "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "Θυρα διακομιστη MCP",
           "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-          "mcp_bearer_token": "Διακριτικό Bearer MCP"
+          "mcp_bearer_token": "Διακριτικό Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
           "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση."
+          "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "Θυρα διακομιστη MCP",
               "allowed_ips": "Επιπλεον επιτρεπομενες IP/Ευρη",
-              "mcp_bearer_token": "Διακριτικό Bearer MCP"
+              "mcp_bearer_token": "Διακριτικό Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Η τοπική θύρα που χρησιμοποιείται από τον κοινόχρηστο διακομιστή MCP.",
               "allowed_ips": "Προαιρετικές διευθύνσεις IP διαχωρισμένες με κόμματα ή εύρη CIDR που μπορεί να συνδεθούν επιπλέον του localhost.",
-              "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση."
+              "mcp_bearer_token": "Προαιρετικό bearer token που απαιτείται από εξωτερικούς πελάτες MCP. Οι νέες ρυθμίσεις λαμβάνουν ένα δημιουργημένο token· καθαρίστε αυτό το πεδίο μόνο αν θέλετε σκόπιμα λίστα επιτρεπόμενων IP χωρίς bearer auth. Πληκτρολογήστε FFFF για να δημιουργηθεί νέο token κατά την αποθήκευση.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

@@ -16,6 +16,7 @@ from ..music_assistant.music_assistant import (
     summarize_music_assistant_response,
 )
 from ....domain_registry import get_domain_info
+from ....secret_redaction import redact_exception
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -154,11 +155,11 @@ class ResponseServicesMixin:
             }
 
         _LOGGER.info(
-            "📖 Calling response service: %s.%s on %s with data %s",
+            "📖 Calling response service: %s.%s with target keys %s and data keys %s",
             domain,
             service,
-            target,
-            data,
+            sorted(str(key) for key in target),
+            sorted(str(key) for key in data),
         )
 
         service_description, validation_error = await self._get_response_service_info(
@@ -180,8 +181,11 @@ class ResponseServicesMixin:
                     service_description=service_description,
                 )
         except Exception as err:
-            error_msg = f"Failed to resolve target: {err}"
-            _LOGGER.error(error_msg)
+            error_msg = f"Failed to resolve target: {redact_exception(err)}"
+            _LOGGER.error(
+                "Failed to resolve response-service target (%s)",
+                type(err).__name__,
+            )
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
         prepared_data = self._prepare_response_service_data(
@@ -226,8 +230,11 @@ class ResponseServicesMixin:
             _LOGGER.error("❌ %s", error_msg)
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
         except Exception as err:
-            error_msg = f"Service-response call failed: {err}"
-            _LOGGER.exception("❌ %s", error_msg)
+            error_msg = f"Service-response call failed: {redact_exception(err)}"
+            _LOGGER.error(
+                "❌ Service-response call failed (%s)",
+                type(err).__name__,
+            )
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
         self.publish_progress(

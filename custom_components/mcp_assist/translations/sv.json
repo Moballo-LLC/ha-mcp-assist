@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Ytterligare tillatna IP/intervall",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
           "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost.",
-          "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar."
+          "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP-serverport",
               "allowed_ips": "Ytterligare tillatna IP/intervall",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
               "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost.",
-              "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar."
+              "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Ytterligare tillatna IP/intervall",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
           "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost.",
-          "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar."
+          "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP-serverport",
               "allowed_ips": "Ytterligare tillatna IP/intervall",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Den lokala porten som används av den delade MCP-servern.",
               "allowed_ips": "Valfria kommaseparerade IP-adresser eller CIDR-intervall som kan anslutas förutom localhost.",
-              "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar."
+              "mcp_bearer_token": "Valfri bearer-token som krävs av externa MCP-klienter. Nya konfigurationer får en genererad token; rensa bara det här fältet om du avsiktligt vill använda IP-tillåtelselista utan bearer-autentisering. Ange FFFF för att generera en ny token när du sparar.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

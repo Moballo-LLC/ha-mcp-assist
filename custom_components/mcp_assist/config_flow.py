@@ -68,6 +68,7 @@ from .const import (
     CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_MCP_BEARER_TOKEN,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -127,6 +128,7 @@ from .const import (
     DEFAULT_SEARXNG_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_MCP_BEARER_TOKEN,
+    DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
     DEFAULT_INCLUDE_CURRENT_USER,
     DEFAULT_INCLUDE_HOME_LOCATION,
     DEFAULT_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -980,6 +982,10 @@ def _build_shared_server_section(defaults: dict[str, Any]) -> section:
                     CONF_MCP_BEARER_TOKEN,
                     default=defaults[CONF_MCP_BEARER_TOKEN],
                 ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                vol.Optional(
+                    CONF_ALLOW_QUERY_TOKEN_AUTH,
+                    default=defaults[CONF_ALLOW_QUERY_TOKEN_AUTH],
+                ): bool,
             }
         ),
         {"collapsed": False},
@@ -1499,6 +1505,10 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_MCP_BEARER_TOKEN,
                                 DEFAULT_MCP_BEARER_TOKEN,
                             ),
+                            CONF_ALLOW_QUERY_TOKEN_AUTH: existing_entry.data.get(
+                                CONF_ALLOW_QUERY_TOKEN_AUTH,
+                                DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
+                            ),
                             CONF_INCLUDE_CURRENT_USER: existing_entry.data.get(
                                 CONF_INCLUDE_CURRENT_USER,
                                 DEFAULT_INCLUDE_CURRENT_USER,
@@ -1863,6 +1873,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
                 CONF_MCP_BEARER_TOKEN,
                 self._generated_mcp_bearer_token,
+            ),
+            CONF_ALLOW_QUERY_TOKEN_AUTH: _get_form_value(
+                current_values,
+                CONF_ALLOW_QUERY_TOKEN_AUTH,
+                DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
             ),
             CONF_SEARCH_PROVIDER: _get_form_value(
                 current_values,
@@ -2696,6 +2711,17 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     sys_data.get(
                         CONF_MCP_BEARER_TOKEN,
                         DEFAULT_MCP_BEARER_TOKEN,
+                    ),
+                ),
+            ),
+            CONF_ALLOW_QUERY_TOKEN_AUTH: _get_form_value(
+                current_values,
+                CONF_ALLOW_QUERY_TOKEN_AUTH,
+                sys_options.get(
+                    CONF_ALLOW_QUERY_TOKEN_AUTH,
+                    sys_data.get(
+                        CONF_ALLOW_QUERY_TOKEN_AUTH,
+                        DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
                     ),
                 ),
             ),

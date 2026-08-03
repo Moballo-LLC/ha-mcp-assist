@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import types
 from pathlib import Path
@@ -1317,7 +1318,7 @@ class TypedTool(MCPAssistExternalTool):
 
 @pytest.mark.asyncio
 async def test_external_custom_tool_runtime_errors_return_mcp_error_payload(
-    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path, caplog
 ) -> None:
     """Manifest-based tool failures should return MCP errors instead of bubbling."""
     package_dir = tmp_path / CUSTOM_TOOLS_DIRECTORY / "broken_tool"
@@ -1348,7 +1349,7 @@ class BrokenTool(MCPAssistExternalTool):
         }]
 
     async def handle_call(self, tool_name, arguments):
-        raise RuntimeError("tool execution failed")
+        raise RuntimeError("Authorization: Bearer not-a-real-secret-canary-12345")
 """,
         encoding="utf-8",
     )
@@ -1369,10 +1370,14 @@ class BrokenTool(MCPAssistExternalTool):
     loader = CustomToolsLoader(hass, profile_entry)
     await loader.initialize()
 
-    result = await loader.handle_tool_call("broken_tool_status", {})
+    with caplog.at_level(logging.ERROR, logger="custom_components.mcp_assist.tools"):
+        result = await loader.handle_tool_call("broken_tool_status", {})
 
     assert result["isError"] is True
-    assert result["content"][0]["text"] == "tool execution failed"
+    assert "not-a-real-secret-canary-12345" not in result["content"][0]["text"]
+    assert "not-a-real-secret-canary-12345" not in caplog.text
+    assert "[redacted]" in result["content"][0]["text"]
+    assert "RuntimeError" in caplog.text
 
 
 @pytest.mark.asyncio

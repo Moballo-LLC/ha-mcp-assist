@@ -45,6 +45,7 @@ from custom_components.mcp_assist.tools.packages.weather_forecast.weather import
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
     CONF_ALLOWED_IPS,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_MCP_BEARER_TOKEN,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_CALCULATOR_TOOLS,
@@ -67,6 +68,7 @@ from custom_components.mcp_assist.const import (
 from custom_components.mcp_assist.mcp_server import MCPServer
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
+SECRET_CANARY = "not-a-real-secret-canary-12345"
 
 
 class _EchoLLMTool(llm.Tool):
@@ -323,7 +325,7 @@ def test_server_bearer_auth_uses_shared_token(
             query={},
         )
     )
-    assert server._is_request_authenticated(
+    assert not server._is_request_authenticated(
         SimpleNamespace(headers={}, query={"access_token": "test-token-123456"})
     )
     assert not server._is_request_authenticated(
@@ -332,6 +334,208 @@ def test_server_bearer_auth_uses_shared_token(
             query={},
         )
     )
+
+
+def test_server_allows_query_token_auth_only_when_explicitly_enabled(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Legacy URL-token authentication must require an explicit compatibility opt-in."""
+    system_entry_factory(
+        data={
+            CONF_MCP_BEARER_TOKEN: "test-token-123456",
+            CONF_ALLOW_QUERY_TOKEN_AUTH: True,
+        }
+    )
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    assert server._is_request_authenticated(
+        SimpleNamespace(headers={}, query={"access_token": "test-token-123456"})
+    )
+
+
+@pytest.mark.asyncio
+async def test_mcp_results_are_redacted_before_serialization(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Nested secret canaries must not cross the JSON-RPC response boundary."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.handle_tool_call = AsyncMock(
+        return_value={
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"api_key={SECRET_CANARY}",
+                }
+            ],
+            "structuredContent": {
+                "headers": {"Authorization": f"Bearer {SECRET_CANARY}"},
+                "access_token": SECRET_CANARY,
+                "safe": "kept",
+                "signature": "detached-signature",
+                "token": "page-123456",
+                "instructions": "Press key: Enter",
+                "next_url": "https://example.com/items?token=page-123456",
+                "opaque": {"token": "0123456789abcdef0123456789abcdef"},
+            },
+        }
+    )
+
+    response = await server.process_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {"name": "external_status", "arguments": {}},
+            "id": "canary-result",
+        }
+    )
+    serialized = json.dumps(response)
+
+    assert SECRET_CANARY not in serialized
+    structured = response["result"]["structuredContent"]
+    assert structured["safe"] == "kept"
+    assert structured["signature"] == "detached-signature"
+    assert structured["token"] == "page-123456"
+    assert structured["instructions"] == "Press key: Enter"
+    assert structured["next_url"].endswith("?token=page-123456")
+    assert structured["opaque"]["token"] == "[redacted]"
+    assert "[redacted]" in serialized
+
+
+@pytest.mark.asyncio
+async def test_tools_list_preserves_credential_named_schema_properties(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Schema property names must not be rewritten as if they were result values."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    schema = {
+        "type": "object",
+        "properties": {
+            "password": {"type": "string"},
+            "token": {"type": "string"},
+        },
+    }
+    server.handle_tools_list = AsyncMock(
+        return_value={
+            "tools": [
+                {
+                    "name": "schema_tool",
+                    "inputSchema": schema,
+                }
+            ]
+        }
+    )
+
+    response = await server.process_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": "schema-list-1",
+        }
+    )
+
+    assert response["id"] == "schema-list-1"
+    assert response["result"]["tools"][0]["inputSchema"] == schema
+
+
+@pytest.mark.asyncio
+async def test_process_mcp_message_echoes_safe_id_exactly(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Safe JSON-RPC IDs must retain their exact value for client correlation."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.handle_initialize = AsyncMock(return_value={"ok": True})
+    request_id = "token=page-123456"
+
+    response = await server.process_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": request_id,
+        }
+    )
+
+    assert response["id"] == request_id
+    assert response["result"] == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_process_mcp_message_echoes_opaque_id_exactly(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Valid string IDs remain opaque even when their content looks sensitive."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.handle_tools_list = AsyncMock(return_value={"tools": []})
+    request_id = "api_key=build-123"
+
+    response = await server.process_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": request_id,
+        }
+    )
+
+    assert response == {
+        "jsonrpc": "2.0",
+        "result": {"tools": []},
+        "id": request_id,
+    }
+    server.handle_tools_list.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_mcp_exception_is_redacted_in_response_and_logs(
+    hass, profile_entry_factory, system_entry_factory, caplog
+) -> None:
+    """Exception canaries must not cross response or Home Assistant log boundaries."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.handle_tool_call = AsyncMock(
+        side_effect=RuntimeError(f"Authorization: Bearer {SECRET_CANARY}")
+    )
+
+    with caplog.at_level(logging.ERROR, logger=mcp_server_module._LOGGER.name):
+        response = await server.process_mcp_message(
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "external_status", "arguments": {}},
+                "id": "canary-error",
+            }
+        )
+
+    assert SECRET_CANARY not in json.dumps(response)
+    assert SECRET_CANARY not in caplog.text
+    assert "[redacted]" in json.dumps(response)
+
+
+@pytest.mark.asyncio
+async def test_external_diagnostics_are_redacted_before_serialization(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """External package diagnostics must not serialize credential canaries."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.tools = SimpleNamespace(
+        get_external_diagnostics=lambda: {
+            "enabled": True,
+            "load_errors": [
+                f"Failed https://user:{SECRET_CANARY}@example.com/package"
+            ],
+            "credentials": {"access_token": SECRET_CANARY},
+        }
+    )
+
+    response = await server.handle_external_tool_diagnostics(
+        SimpleNamespace(remote="127.0.0.1", headers={}, query={})
+    )
+
+    assert SECRET_CANARY not in response.text
+    assert "[redacted]" in response.text
 
 
 @pytest.mark.asyncio
@@ -3454,6 +3658,30 @@ async def test_handle_mcp_request_rejects_non_object_body(
     assert response.status == 400
     payload = json.loads(response.text)
     assert payload["error"]["code"] == -32600
+
+
+@pytest.mark.asyncio
+async def test_handle_mcp_request_omits_secret_id_in_invalid_request(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """An invalid JSON-RPC request must not echo a secret-bearing ID."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    response = await server.handle_mcp_request(
+        _FakeJsonRequest(
+            {
+                "jsonrpc": "1.0",
+                "method": "tools/list",
+                "id": f"api_key={SECRET_CANARY}",
+            }
+        )
+    )
+
+    assert response.status == 400
+    payload = json.loads(response.text)
+    assert SECRET_CANARY not in response.text
+    assert payload["id"] is None
 
 
 @pytest.mark.asyncio

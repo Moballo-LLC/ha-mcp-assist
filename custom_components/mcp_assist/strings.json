@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP Server Port",
           "allowed_ips": "Additional Allowed IPs/Ranges",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer Token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
           "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP Server Port",
               "allowed_ips": "Additional Allowed IPs/Ranges",
-              "mcp_bearer_token": "MCP Bearer Token"
+              "mcp_bearer_token": "MCP Bearer Token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "The local port used by the shared MCP server.",
               "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP Server Port",
           "allowed_ips": "Additional Allowed IPs/Ranges",
-          "mcp_bearer_token": "MCP Bearer Token"
+          "mcp_bearer_token": "MCP Bearer Token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "The local port used by the shared MCP server.",
           "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+          "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP Server Port",
               "allowed_ips": "Additional Allowed IPs/Ranges",
-              "mcp_bearer_token": "MCP Bearer Token"
+              "mcp_bearer_token": "MCP Bearer Token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "The local port used by the shared MCP server.",
               "allowed_ips": "Optional comma-separated IP addresses or CIDR ranges that may connect in addition to localhost.",
-              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving."
+              "mcp_bearer_token": "Optional bearer token required by external MCP clients. New setups get a generated token; clear this field only if you intentionally want IP allowlisting without bearer auth. Enter FFFF to generate a new token when saving.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

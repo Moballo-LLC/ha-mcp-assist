@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCPサーバーポート",
           "allowed_ips": "追加の許可IP/範囲",
-          "mcp_bearer_token": "MCP Bearer トークン"
+          "mcp_bearer_token": "MCP Bearer トークン",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
           "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。"
+          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCPサーバーポート",
               "allowed_ips": "追加の許可IP/範囲",
-              "mcp_bearer_token": "MCP Bearer トークン"
+              "mcp_bearer_token": "MCP Bearer トークン",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
               "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-              "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。"
+              "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCPサーバーポート",
           "allowed_ips": "追加の許可IP/範囲",
-          "mcp_bearer_token": "MCP Bearer トークン"
+          "mcp_bearer_token": "MCP Bearer トークン",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
           "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。"
+          "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCPサーバーポート",
               "allowed_ips": "追加の許可IP/範囲",
-              "mcp_bearer_token": "MCP Bearer トークン"
+              "mcp_bearer_token": "MCP Bearer トークン",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "共有 MCP サーバーによって使用されるローカル ポート。",
               "allowed_ips": "localhost に加えて接続できる、オプションのカンマ区切りの IP アドレスまたは CIDR 範囲。",
-              "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。"
+              "mcp_bearer_token": "外部 MCP クライアントに必要な任意の Bearer トークンです。新しい設定では生成済みトークンが入ります。Bearer 認証なしで IP 許可リストだけを意図的に使う場合にのみ、このフィールドを空にしてください。 保存時に新しいトークンを生成するには FFFF を入力してください。",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

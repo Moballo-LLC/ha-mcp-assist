@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from custom_components.mcp_assist.chat_log_manager import ChatLogManager
+
+
+CANARY = "not-a-real-secret-canary-12345"
 
 
 @pytest.mark.asyncio
@@ -78,7 +83,8 @@ async def test_chat_log_manager_projects_duplicate_tool_content(hass) -> None:
     raw_tool = (await manager.async_list(projection="raw"))[0]["tools"][0]
     model_tool = (await manager.async_list(projection="model"))[0]["tools"][0]
     compact_tool = (await manager.async_list(projection="compact"))[0]["tools"][0]
-    full_tool = (await manager.async_list())[0]["tools"][0]
+    full_tool = (await manager.async_list(projection="full"))[0]["tools"][0]
+    default_entry = (await manager.async_list())[0]
 
     assert "result" in raw_tool
     assert "llm_content" not in raw_tool
@@ -94,6 +100,113 @@ async def test_chat_log_manager_projects_duplicate_tool_content(hass) -> None:
     }
     assert "result" in full_tool
     assert "llm_content" in full_tool
+    assert "user_text" not in default_entry
+    assert "assistant_text" not in default_entry
+    assert "result" not in default_entry["tools"][0]
+    assert "llm_content" not in default_entry["tools"][0]
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_redacts_canary_before_storage_and_response(
+    hass, hass_storage
+) -> None:
+    """Credential canaries must not reach memory, service projections, or .storage."""
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    stored = await manager.async_record(
+        {
+            "created_at": "2026-06-01T00:00:00+00:00",
+            "user_text": f"Use https://user:{CANARY}@example.com/resource",
+            "assistant_text": f"Authorization: Bearer {CANARY}",
+            "error": f"request failed with api_key={CANARY}",
+            "tools": [
+                {
+                    "name": "external_status",
+                    "arguments": {"access_token": CANARY},
+                    "result": {
+                        "headers": {"Authorization": f"Bearer {CANARY}"},
+                        "url": f"https://example.com/token/{CANARY}",
+                    },
+                    "llm_content": f"provider returned token={CANARY}",
+                }
+            ],
+        }
+    )
+
+    full_response = await manager.async_list(projection="full")
+    await manager.async_shutdown()
+    storage_text = json.dumps(hass_storage)
+
+    assert CANARY not in json.dumps(stored)
+    assert CANARY not in json.dumps(full_response)
+    assert CANARY not in json.dumps(manager._entries)
+    assert CANARY not in storage_text
+    assert "[redacted]" in storage_text
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_rewrites_legacy_storage_without_canary(
+    hass, hass_storage
+) -> None:
+    """Loading legacy records must remove credentials from the durable store."""
+    hass_storage["mcp_assist_chat_logs"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mcp_assist_chat_logs",
+        "data": {
+            "entries": [
+                {
+                    "id": "legacy-canary",
+                    "created_at": "2026-06-01T00:00:00+00:00",
+                    "error": f"access_token={CANARY}",
+                    "tools": [],
+                }
+            ]
+        },
+    }
+
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    assert CANARY not in json.dumps(manager._entries)
+    assert CANARY not in json.dumps(hass_storage)
+    assert "[redacted]" in json.dumps(hass_storage)
+
+
+@pytest.mark.asyncio
+async def test_chat_log_manager_does_not_rewrite_ambiguous_legacy_text(
+    hass, hass_storage
+) -> None:
+    """Response-only heuristics must not irreversibly alter historical chat text."""
+    original_text = (
+        "Continue with token=OpaqueCursor-Ab12Cd34Ef56Gh78Ij90; Press key: Enter"
+    )
+    hass_storage["mcp_assist_chat_logs"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mcp_assist_chat_logs",
+        "data": {
+            "entries": [
+                {
+                    "id": "legacy-pagination",
+                    "created_at": "2026-06-01T00:00:00+00:00",
+                    "assistant_text": original_text,
+                    "tools": [],
+                }
+            ]
+        },
+    }
+
+    manager = ChatLogManager(hass)
+    await manager.async_initialize()
+
+    stored_entry = hass_storage["mcp_assist_chat_logs"]["data"]["entries"][0]
+    response_entry = (await manager.async_list(projection="full"))[0]
+    assert stored_entry["assistant_text"] == original_text
+    assert response_entry["assistant_text"] == (
+        "Continue with token=[redacted]; Press key: Enter"
+    )
 
 
 def test_chat_log_manager_rejects_unknown_projection() -> None:

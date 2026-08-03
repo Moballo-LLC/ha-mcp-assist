@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP 서버 포트",
           "allowed_ips": "추가 허용 IP/범위",
-          "mcp_bearer_token": "MCP Bearer 토큰"
+          "mcp_bearer_token": "MCP Bearer 토큰",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "공유 MCP 서버에서 사용하는 로컬 포트입니다.",
           "allowed_ips": "localhost 외에 연결할 수 있는 선택적 쉼표로 구분된 IP 주소 또는 CIDR 범위입니다.",
-          "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요."
+          "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP 서버 포트",
               "allowed_ips": "추가 허용 IP/범위",
-              "mcp_bearer_token": "MCP Bearer 토큰"
+              "mcp_bearer_token": "MCP Bearer 토큰",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "공유 MCP 서버에서 사용하는 로컬 포트입니다.",
               "allowed_ips": "localhost 외에 연결할 수 있는 선택적 쉼표로 구분된 IP 주소 또는 CIDR 범위입니다.",
-              "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요."
+              "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP 서버 포트",
           "allowed_ips": "추가 허용 IP/범위",
-          "mcp_bearer_token": "MCP Bearer 토큰"
+          "mcp_bearer_token": "MCP Bearer 토큰",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "공유 MCP 서버에서 사용하는 로컬 포트입니다.",
           "allowed_ips": "localhost 외에 연결할 수 있는 선택적 쉼표로 구분된 IP 주소 또는 CIDR 범위입니다.",
-          "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요."
+          "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP 서버 포트",
               "allowed_ips": "추가 허용 IP/범위",
-              "mcp_bearer_token": "MCP Bearer 토큰"
+              "mcp_bearer_token": "MCP Bearer 토큰",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "공유 MCP 서버에서 사용하는 로컬 포트입니다.",
               "allowed_ips": "localhost 외에 연결할 수 있는 선택적 쉼표로 구분된 IP 주소 또는 CIDR 범위입니다.",
-              "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요."
+              "mcp_bearer_token": "외부 MCP 클라이언트에 필요한 선택적 Bearer 토큰입니다. 새 설정에는 생성된 토큰이 제공됩니다. Bearer 인증 없이 IP 허용 목록만 의도적으로 사용하려는 경우에만 이 필드를 비우세요. 저장할 때 새 토큰을 생성하려면 FFFF를 입력하세요.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

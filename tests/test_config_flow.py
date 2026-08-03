@@ -60,6 +60,7 @@ from custom_components.mcp_assist.llm_providers.ollama import OllamaProvider
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
     CONF_ALLOWED_IPS,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_BRAVE_API_KEY,
     CONF_CHAT_LOG_MODE,
     CONF_CLEAN_RESPONSES,
@@ -809,6 +810,7 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
         CONF_MCP_PORT,
         CONF_ALLOWED_IPS,
         CONF_MCP_BEARER_TOKEN,
+        CONF_ALLOW_QUERY_TOKEN_AUTH,
     ]
     assert context_keys == {
         CONF_INCLUDE_CURRENT_USER,
@@ -1078,6 +1080,7 @@ async def test_options_mcp_step_applies_shared_settings_to_running_server(
             {
                 CONF_MCP_PORT: 8124,
                 CONF_ALLOWED_IPS: "192.168.1.25",
+                CONF_ALLOW_QUERY_TOKEN_AUTH: True,
                 _builtin_shared_key("search"): False,
                 CONF_SEARCH_PROVIDER: "none",
             }
@@ -1086,6 +1089,7 @@ async def test_options_mcp_step_applies_shared_settings_to_running_server(
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert system_entry.data[CONF_MCP_PORT] == 8124
     assert system_entry.data[CONF_ALLOWED_IPS] == "192.168.1.25"
+    assert system_entry.data[CONF_ALLOW_QUERY_TOKEN_AUTH] is True
     assert system_entry.data[CONF_MCP_BEARER_TOKEN] == "saved-token-123456"
     apply_mock.assert_awaited_once_with(hass)
 
@@ -1180,6 +1184,7 @@ def test_tool_translations_cover_all_declared_tool_fields() -> None:
     }
     expected_server_fields = {
         CONF_ALLOWED_IPS,
+        CONF_ALLOW_QUERY_TOKEN_AUTH,
         CONF_MCP_BEARER_TOKEN,
         CONF_MCP_PORT,
     }

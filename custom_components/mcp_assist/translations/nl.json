@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP-serverpoort",
           "allowed_ips": "Extra toegestane IPs/bereiken",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP-serverpoort",
               "allowed_ips": "Extra toegestane IPs/bereiken",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
               "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP-serverpoort",
           "allowed_ips": "Extra toegestane IPs/bereiken",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
           "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+          "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP-serverpoort",
               "allowed_ips": "Extra toegestane IPs/bereiken",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "De lokale poort die wordt gebruikt door de gedeelde MCP-server.",
               "allowed_ips": "Optionele, door komma's gescheiden IP-adressen of CIDR-bereiken die verbinding kunnen maken als aanvulling op localhost.",
-              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren."
+              "mcp_bearer_token": "Optioneel bearer-token dat vereist is voor externe MCP-clients. Nieuwe configuraties krijgen een gegenereerd token; wis dit veld alleen als je bewust IP-toelating zonder bearer-authenticatie wilt gebruiken. Voer FFFF in om bij het opslaan een nieuw token te genereren.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

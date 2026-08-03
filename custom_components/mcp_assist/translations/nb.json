@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Ekstra tillatte IP-er/omrader",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
           "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP-serverport",
               "allowed_ips": "Ekstra tillatte IP-er/omrader",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
               "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP-serverport",
           "allowed_ips": "Ekstra tillatte IP-er/omrader",
-          "mcp_bearer_token": "MCP Bearer-token"
+          "mcp_bearer_token": "MCP Bearer-token",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
           "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+          "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP-serverport",
               "allowed_ips": "Ekstra tillatte IP-er/omrader",
-              "mcp_bearer_token": "MCP Bearer-token"
+              "mcp_bearer_token": "MCP Bearer-token",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Den lokale porten som brukes av den delte MCP-serveren.",
               "allowed_ips": "Valgfri kommaseparerte IP-adresser eller CIDR-områder som kan kobles til i tillegg til localhost.",
-              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer."
+              "mcp_bearer_token": "Valgfri bearer-token som kreves av eksterne MCP-klienter. Nye oppsett får en generert token; tøm dette feltet bare hvis du med vilje vil bruke IP-tillatelsesliste uten bearer-autentisering. Skriv inn FFFF for å generere et nytt token når du lagrer.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

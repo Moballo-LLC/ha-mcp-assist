@@ -37,6 +37,7 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_profile,
 )
 from .provider_runtime import resolve_provider_runtime_config
+from .secret_redaction import redact_exception, redact_secrets, redact_secret_text
 from .tool_schema import (
     ADAPTIVE_META_TOOL_NAMES,
     ADAPTIVE_TOOL_CATALOG_NAME,
@@ -1464,8 +1465,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "conversation or check the API server logs."
             )
 
-        error_str = str(error).lower()
-        error_full = str(error)  # Keep original case for extracting details
+        error_full = redact_secret_text(error)
+        error_str = error_full.lower()
         provider = self._get_llm_provider()
 
         # Category A: Connection/Network Errors
@@ -1578,8 +1579,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tool_input = llm.ToolInput(
                     id=tc.get("id", str(uuid.uuid4())),
                     tool_name=tc.get("function", {}).get("name", "unknown"),
-                    tool_args=self._parse_tool_arguments(
-                        tc.get("function", {}).get("arguments")
+                    tool_args=redact_secrets(
+                        self._parse_tool_arguments(
+                            tc.get("function", {}).get("arguments")
+                        )
                     ),
                     external=True,  # MCP tools are executed externally, not by ChatLog
                 )
@@ -1595,8 +1598,11 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             if self.debug_mode:
                 _LOGGER.debug(f"📊 Recorded {len(tool_calls)} tool calls to ChatLog")
-        except Exception as e:
-            _LOGGER.error(f"Error recording tool calls to ChatLog: {e}")
+        except Exception as err:
+            _LOGGER.error(
+                "Error recording tool calls to ChatLog (%s)",
+                type(err).__name__,
+            )
 
     def _stringify_tool_arguments(self, arguments: Any) -> str:
         """Normalize tool arguments to a JSON string."""
@@ -1784,7 +1790,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 agent_id=self.entity_id,
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
-                tool_result=tool_result,
+                tool_result=redact_secrets(tool_result),
             )
             # Use callback method to add tool result
             self._current_chat_log.async_add_assistant_content_without_tools(
@@ -1793,8 +1799,11 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             if self.debug_mode:
                 _LOGGER.debug(f"📊 Recorded tool result for {tool_name} to ChatLog")
-        except Exception as e:
-            _LOGGER.error(f"Error recording tool result to ChatLog: {e}")
+        except Exception as err:
+            _LOGGER.error(
+                "Error recording tool result to ChatLog (%s)",
+                type(err).__name__,
+            )
 
     def _build_persistent_chat_log_record(
         self, user_input: ConversationInput, conversation_id: str
@@ -1847,9 +1856,12 @@ class MCPAssistConversationEntity(ConversationEntity):
             return
 
         try:
-            await manager.async_record(record)
+            await manager.async_record(redact_secrets(record))
         except Exception as err:
-            _LOGGER.error("Error persisting MCP Assist chat log: %s", err)
+            _LOGGER.error(
+                "Error persisting MCP Assist chat log (%s)",
+                type(err).__name__,
+            )
 
     def _start_persistent_tool_log(
         self,
@@ -2142,7 +2154,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                 err.attempts,
                 err.iteration,
             )
-            await self._finish_persistent_chat_log_record(error=str(err))
+            await self._finish_persistent_chat_log_record(
+                error=redact_exception(err)
+            )
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -2157,8 +2171,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
         except Exception as err:
-            _LOGGER.exception("Error processing conversation")
-            await self._finish_persistent_chat_log_record(error=str(err))
+            safe_error = redact_exception(err)
+            _LOGGER.error("Error processing conversation (%s)", type(err).__name__)
+            await self._finish_persistent_chat_log_record(error=safe_error)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -3453,14 +3468,21 @@ class MCPAssistConversationEntity(ConversationEntity):
                     )
 
                     if "result" in data:
-                        return self._normalize_mcp_tool_response(data["result"])
+                        return redact_secrets(
+                            self._normalize_mcp_tool_response(data["result"])
+                        )
                     if "error" in data:
-                        return {"error": data["error"]}
-                    return {"result": str(data.get("result", ""))}
+                        return redact_secrets({"error": data["error"]})
+                    return redact_secrets({"result": str(data.get("result", ""))})
 
-        except Exception as e:
-            _LOGGER.error(f"Error calling MCP tool {tool_name}: {e}")
-            return {"error": str(e)}
+        except Exception as err:
+            safe_error = redact_exception(err)
+            _LOGGER.error(
+                "Error calling MCP tool %s (%s)",
+                _provider_log_snippet(tool_name),
+                type(err).__name__,
+            )
+            return {"error": safe_error}
 
     def _normalize_mcp_tool_response(self, result: Any) -> Dict[str, Any]:
         """Normalize an MCP JSON-RPC tool result into one predictable shape."""
@@ -3728,6 +3750,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 result = await self._handle_adaptive_meta_tool(tool_name, arguments)
             else:
                 result = await self._call_mcp_tool(tool_name, arguments)
+            result = redact_secrets(result)
 
             # Format result for LLM consumption
             content = self._format_tool_result_for_llm(tool_name, result)
@@ -3756,15 +3779,20 @@ class MCPAssistConversationEntity(ConversationEntity):
                 content=content if content is not None else "",
             )
 
-        except Exception as e:
-            _LOGGER.error(f"Error executing tool {tool_name}: {e}")
-            self._finish_persistent_tool_log(tool_entry, error=str(e))
+        except Exception as err:
+            safe_error = redact_exception(err)
+            _LOGGER.error(
+                "Error executing tool %s (%s)",
+                _provider_log_snippet(tool_name),
+                type(err).__name__,
+            )
+            self._finish_persistent_tool_log(tool_entry, error=safe_error)
             self._record_tool_history_summary(
                 tool_name,
                 self._parse_tool_arguments(arguments_str),
-                error=str(e),
+                error=safe_error,
             )
-            error_content = json.dumps({"error": str(e)})
+            error_content = json.dumps({"error": safe_error})
             return self._get_llm_provider().build_tool_result_message(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,

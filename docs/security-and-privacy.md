@@ -70,10 +70,14 @@ External MCP clients should send it as:
 Authorization: Bearer <token>
 ```
 
-Clients that cannot set headers for SSE or WebSocket connections may pass
-`access_token=<token>` in the query string. Prefer the header when the client
-supports it, because URLs are easier to copy into logs or screenshots. Clearing
-the token disables bearer-token checks and falls back to IP allowlisting only.
+Query-string authentication is disabled on new installs because URLs are
+commonly captured in logs, history, screenshots, and proxy records. Upgrades
+from a version that always accepted `access_token=<token>` preserve that legacy
+behavior so existing clients are not disconnected without warning. Move those
+clients to the `Authorization` header, then disable **Allow Access Token in URL
+(Legacy)** in shared server settings. A legacy client that cannot set a header
+can use that setting as an explicit compatibility exception. Clearing the token
+disables bearer-token checks and falls back to IP allowlisting only.
 To rotate the token from shared server settings, enter `FFFF` in the token field
 and save; MCP Assist will replace it with a newly generated token.
 
@@ -217,7 +221,20 @@ provider payloads, raw tool arguments, or tool results.
 Chat Log Mode stores recent conversation records in Home Assistant storage. It
 can include user text, assistant replies, tool names, tool arguments, tool
 results, and errors. See [Debugging](debugging.md) for review and clear
-services.
+services. MCP Assist recursively redacts recognized credentials before writing
+new records, durably removes unambiguous credential patterns from loaded legacy
+records, and returns a metadata-only view unless a detailed projection is
+explicitly requested. Broader response-only heuristics do not overwrite
+ambiguous historical text.
+
+The same redaction boundary applies to MCP results, exception responses,
+diagnostics, progress events, and response-producing integration services. It
+covers sensitive mapping keys, authorization values, URL user information,
+sensitive query parameters, credential-bearing URL paths, and common opaque
+token formats. Generic `token` and `signature` fields remain usable for ordinary
+tool data; labeled text is redacted only when its value resembles a credential.
+Pattern-based redaction cannot recognize every arbitrary secret, so do not use
+it as a substitute for limiting exposure and reviewing output.
 
 Recommendations:
 

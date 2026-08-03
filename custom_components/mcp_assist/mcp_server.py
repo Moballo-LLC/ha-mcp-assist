@@ -61,6 +61,7 @@ from .const import (
     CONF_LMSTUDIO_URL,
     CONF_ALLOWED_IPS,
     CONF_MCP_BEARER_TOKEN,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_SEARCH_PROVIDER,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_ASSIST_BRIDGE,
@@ -79,6 +80,7 @@ from .const import (
     DEFAULT_LMSTUDIO_URL,
     DEFAULT_ALLOWED_IPS,
     DEFAULT_MCP_BEARER_TOKEN,
+    DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
     DEFAULT_SEARCH_PROVIDER,
     DEFAULT_ENABLE_ASSIST_BRIDGE,
     DEFAULT_ENABLE_LLM_API_BRIDGE,
@@ -98,6 +100,7 @@ from .const import (
     parse_llm_api_allowlist,
 )
 from .discovery import EntityDiscovery
+from .secret_redaction import redact_exception, redact_secrets
 from .domain_registry import (
     validate_domain_action,
     validate_service_parameters,
@@ -215,6 +218,14 @@ def _sanitize_log_value(value: Any) -> str:
     return f"{text[:_MAX_LOG_VALUE_CHARS].rstrip()}... [truncated {len(text) - _MAX_LOG_VALUE_CHARS} chars]"
 
 
+def _safe_json_rpc_id(value: Any) -> Any:
+    """Return an exact request ID unless it contains credential-like data."""
+    try:
+        return value if redact_secrets(value) == value else None
+    except Exception:
+        return None
+
+
 def _migrate_deprecated_light_color_temp(data: dict[str, Any]) -> str | None:
     """Convert legacy light ``color_temp`` values to ``color_temp_kelvin``.
 
@@ -315,6 +326,7 @@ class MCPServer(
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.allowed_ips: list[str] = []
         self._mcp_bearer_token = ""
+        self._allow_query_token_auth = DEFAULT_ALLOW_QUERY_TOKEN_AUTH
         self._refresh_allowed_ips_from_settings()
         self._refresh_mcp_auth_from_settings()
 
@@ -398,11 +410,23 @@ class MCPServer(
             DEFAULT_MCP_BEARER_TOKEN,
         )
         self._mcp_bearer_token = str(token or "").strip()
+        self._allow_query_token_auth = (
+            self._get_shared_setting(
+                CONF_ALLOW_QUERY_TOKEN_AUTH,
+                DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
+            )
+            is True
+        )
         if self._mcp_bearer_token:
             _LOGGER.info("MCP server bearer-token authentication is enabled")
         else:
             _LOGGER.info(
                 "MCP server bearer-token authentication is disabled; relying on IP allowlist only"
+            )
+        if self._allow_query_token_auth:
+            _LOGGER.warning(
+                "MCP access_token query authentication is enabled; request URLs may expose "
+                "the bearer token"
             )
 
     @property
@@ -869,8 +893,7 @@ class MCPServer(
 
         return False
 
-    @staticmethod
-    def _request_authorization_value(request: web.Request) -> str:
+    def _request_authorization_value(self, request: web.Request) -> str:
         """Return the bearer value supplied by an inbound request."""
         headers = getattr(request, "headers", {}) or {}
         authorization = ""
@@ -881,9 +904,10 @@ class MCPServer(
             if scheme.casefold() == "bearer" and value.strip():
                 return value.strip()
 
-        query = getattr(request, "query", {}) or {}
-        with suppress(Exception):
-            return str(query.get("access_token") or "").strip()
+        if self._allow_query_token_auth:
+            query = getattr(request, "query", {}) or {}
+            with suppress(Exception):
+                return str(query.get("access_token") or "").strip()
         return ""
 
     def _is_request_authenticated(self, request: web.Request) -> bool:
@@ -1023,7 +1047,7 @@ class MCPServer(
                 health_info["external_custom_tool_diagnostics"] = (
                     get_external_diagnostics()
                 )
-        return web.json_response(health_info)
+        return web.json_response(redact_secrets(health_info))
 
     async def handle_external_tool_diagnostics(
         self, request: web.Request
@@ -1062,7 +1086,7 @@ class MCPServer(
                 if callable(get_package_diagnostics):
                     diagnostics = get_package_diagnostics()
 
-        return web.json_response(diagnostics)
+        return web.json_response(redact_secrets(diagnostics))
 
     async def handle_prompt_overhead_diagnostics(
         self, request: web.Request
@@ -1138,7 +1162,7 @@ class MCPServer(
                 )
             )
 
-        return web.json_response(diagnostics)
+        return web.json_response(redact_secrets(diagnostics))
 
     def _select_adaptive_query_preloads(
         self,
@@ -1278,21 +1302,27 @@ class MCPServer(
         """Apply changed shared MCP settings without reloading every profile."""
         previous_allowed_ips = list(self.allowed_ips)
         previous_token = self._mcp_bearer_token
+        previous_query_token_auth = self._allow_query_token_auth
         diagnostics = await self.reload_external_custom_tools()
         try:
             self._refresh_allowed_ips_from_settings()
             self._refresh_mcp_auth_from_settings()
             await self._close_disallowed_websocket_clients()
             await self._close_disallowed_stream_clients()
-            if previous_token != self._mcp_bearer_token:
+            if (
+                previous_token != self._mcp_bearer_token
+                or previous_query_token_auth != self._allow_query_token_auth
+            ):
                 await self._close_clients_after_auth_change()
         except Exception:
             self.allowed_ips = previous_allowed_ips
             self._mcp_bearer_token = previous_token
+            self._allow_query_token_auth = previous_query_token_auth
             raise
         return {
             "allowed_ips": list(self.allowed_ips),
             "auth_required": self.bearer_auth_required,
+            "query_token_auth_allowed": self._allow_query_token_auth,
             "tool_diagnostics": diagnostics,
         }
 
@@ -1411,7 +1441,7 @@ class MCPServer(
                 msg = await queue.get()
                 if msg is None:
                     break
-                data = f"data: {json.dumps(msg)}\n\n"
+                data = f"data: {json.dumps(redact_secrets(msg))}\n\n"
                 await response.write(data.encode())
 
         except Exception as err:
@@ -1426,12 +1456,14 @@ class MCPServer(
         """Publish progress update to all progress SSE clients."""
         import time
 
-        msg = {
-            "type": event_type,
-            "message": message,
-            "timestamp": time.time(),
-            **kwargs,
-        }
+        msg = redact_secrets(
+            {
+                "type": event_type,
+                "message": message,
+                "timestamp": time.time(),
+                **kwargs,
+            }
+        )
 
         # Send to all progress clients
         for queue in list(self.progress_queues):
@@ -1885,15 +1917,21 @@ class MCPServer(
                             )
                         )
                     except Exception as err:
-                        _LOGGER.exception("Error processing MCP message")
+                        safe_error = redact_exception(err)
+                        _LOGGER.error(
+                            "Error processing MCP message (%s)",
+                            type(err).__name__,
+                        )
                         await ws.send_str(
                             json.dumps(
-                                {
-                                    "error": {
-                                        "code": -32000,
-                                        "message": f"Server error: {err}",
+                                redact_secrets(
+                                    {
+                                        "error": {
+                                            "code": -32000,
+                                            "message": f"Server error: {safe_error}",
+                                        }
                                     }
-                                }
+                                )
                             )
                         )
                 elif msg.type == WSMsgType.ERROR:
@@ -1905,8 +1943,8 @@ class MCPServer(
 
         except asyncio.CancelledError:
             pass
-        except Exception:
-            _LOGGER.exception("WebSocket handler error")
+        except Exception as err:
+            _LOGGER.error("WebSocket handler error (%s)", type(err).__name__)
         finally:
             self._websocket_clients.pop(ws, None)
             _LOGGER.info(
@@ -1951,7 +1989,7 @@ class MCPServer(
                     status=400,
                 )
 
-            request_id = data.get("id")
+            request_id = _safe_json_rpc_id(data.get("id"))
 
             # Validate JSON-RPC 2.0 format
             if "jsonrpc" not in data or data["jsonrpc"] != "2.0":
@@ -1994,9 +2032,8 @@ class MCPServer(
                 return web.Response(status=204)
             else:
                 _LOGGER.debug(
-                    "📋 MCP method: %s (id: %s)",
+                    "📋 MCP method: %s",
                     _sanitize_log_value(data.get("method")),
-                    _sanitize_log_value(request_id),
                 )
                 response = await self.process_mcp_message(data)
                 return web.json_response(response)
@@ -2011,15 +2048,19 @@ class MCPServer(
                 status=400,
             )
         except Exception as err:
-            _LOGGER.exception("Error processing MCP request")
-            return web.json_response(
+            safe_error = redact_exception(err)
+            _LOGGER.error("Error processing MCP request (%s)", type(err).__name__)
+            error_response = redact_secrets(
                 {
                     "jsonrpc": "2.0",
-                    "error": {"code": -32603, "message": f"Internal error: {str(err)}"},
-                    "id": request_id,
-                },
-                status=500,
+                    "error": {
+                        "code": -32603,
+                        "message": f"Internal error: {safe_error}",
+                    },
+                }
             )
+            error_response["id"] = request_id
+            return web.json_response(error_response, status=500)
 
     async def process_mcp_notification(self, data: Dict[str, Any]) -> None:
         """Process MCP notification (no response expected)."""
@@ -2047,10 +2088,10 @@ class MCPServer(
                     _sanitize_log_value(method),
                 )
         except Exception as err:
-            _LOGGER.exception(
-                "Error processing notification %s: %s",
+            _LOGGER.error(
+                "Error processing notification %s (%s)",
                 _sanitize_log_value(method),
-                _sanitize_log_value(err),
+                type(err).__name__,
             )
 
     async def broadcast_notification(
@@ -2068,7 +2109,7 @@ class MCPServer(
         if params:
             notification["params"] = params
 
-        data = f"data: {json.dumps(notification)}\n\n".encode()
+        data = f"data: {json.dumps(redact_secrets(notification))}\n\n".encode()
 
         # Send to all clients, removing dead ones
         dead_clients = []
@@ -2093,9 +2134,8 @@ class MCPServer(
         msg_id = data.get("id")
 
         _LOGGER.debug(
-            "Processing MCP method: %s (id: %s)",
+            "Processing MCP method: %s",
             _sanitize_log_value(method),
-            _sanitize_log_value(msg_id),
         )
 
         try:
@@ -2106,30 +2146,48 @@ class MCPServer(
             elif method == "tools/call":
                 result = await self.handle_tool_call(params)
             else:
-                return {
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
-                    "id": msg_id,
-                }
+                response = redact_secrets(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32601,
+                            "message": f"Method not found: {method}",
+                        },
+                    }
+                )
+                response["id"] = msg_id
+                return response
+
+            if method == "tools/call":
+                result = redact_secrets(result)
 
             # Always include jsonrpc and id in successful responses
-            response = {"jsonrpc": "2.0", "result": result, "id": msg_id}
+            response = {
+                "jsonrpc": "2.0",
+                "result": result,
+                "id": msg_id,
+            }
 
             return response
 
         except Exception as err:
-            _LOGGER.exception(
-                "Error in MCP method %s",
+            safe_error = redact_exception(err)
+            _LOGGER.error(
+                "Error in MCP method %s (%s)",
                 _sanitize_log_value(method),
+                type(err).__name__,
             )
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"Internal error in {method}: {str(err)}",
-                },
-                "id": msg_id,
-            }
+            response = redact_secrets(
+                {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32603,
+                        "message": f"Internal error in {method}: {safe_error}",
+                    },
+                }
+            )
+            response["id"] = msg_id
+            return response
 
     async def handle_initialize(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle MCP initialize request."""
@@ -2575,7 +2633,11 @@ class MCPServer(
         return {"tools": tools}
 
     async def handle_tool_call(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle tools/call request."""
+        """Handle a tool call and enforce redaction at the dispatcher boundary."""
+        return redact_secrets(await self._handle_tool_call(params))
+
+    async def _handle_tool_call(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Dispatch one tools/call request."""
         tool_name = str(params.get("name") or "").strip()
         arguments = params.get("arguments", {})
         context = params.get("context") or {}
@@ -4451,8 +4513,8 @@ class MCPServer(
             return result
 
         except Exception as err:
-            error_msg = f"Service call failed: {err}"
-            _LOGGER.exception("%s", _sanitize_log_value(error_msg))
+            error_msg = f"Service call failed: {redact_exception(err)}"
+            _LOGGER.error("Service call failed (%s)", type(err).__name__)
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     def _get_action_state_expectation(
@@ -4718,8 +4780,8 @@ class MCPServer(
             )
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
         except Exception as err:
-            error_msg = f"Script execution failed: {err}"
-            _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
+            error_msg = f"Script execution failed: {redact_exception(err)}"
+            _LOGGER.error("❌ Script execution failed (%s)", type(err).__name__)
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     async def tool_run_automation(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -4780,8 +4842,8 @@ class MCPServer(
             return {"content": [{"type": "text", "text": result_text}]}
 
         except Exception as err:
-            error_msg = f"Automation trigger failed: {err}"
-            _LOGGER.exception("❌ %s", _sanitize_log_value(error_msg))
+            error_msg = f"Automation trigger failed: {redact_exception(err)}"
+            _LOGGER.error("❌ Automation trigger failed (%s)", type(err).__name__)
             return {"content": [{"type": "text", "text": f"❌ Error: {error_msg}"}]}
 
     def _coerce_int_arg(
