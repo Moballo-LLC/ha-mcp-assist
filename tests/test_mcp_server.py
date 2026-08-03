@@ -945,7 +945,7 @@ async def test_handle_tools_list_filters_disabled_tool_families(
 async def test_handle_tools_list_adds_explicit_effect_annotations(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
-    """The MCP schema should expose effect hints and default unknown tools to write."""
+    """The MCP schema should expose effect hints and default unknown tools to high risk."""
     system_entry_factory()
     server = MCPServer(hass, 8099, profile_entry_factory())
     server.tools = SimpleNamespace(
@@ -960,6 +960,15 @@ async def test_handle_tools_list_adds_explicit_effect_annotations(
                 "name": "sample_command",
                 "description": "Change sample state",
                 "inputSchema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "sample_non_destructive_write",
+                "description": "Change non-sensitive sample state",
+                "inputSchema": {"type": "object", "properties": {}},
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                },
             },
         ]
     )
@@ -980,6 +989,10 @@ async def test_handle_tools_list_adds_explicit_effect_annotations(
         "destructiveHint": False,
     }
     assert tool_map["sample_command"]["annotations"] == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+    }
+    assert tool_map["sample_non_destructive_write"]["annotations"] == {
         "readOnlyHint": False,
         "destructiveHint": False,
     }

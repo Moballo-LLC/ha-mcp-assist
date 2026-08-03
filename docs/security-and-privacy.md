@@ -31,7 +31,7 @@ The **Control Home Assistant** profile setting determines whether a profile may
 perform write actions. Disable it for profiles that should only answer questions.
 MCP Assist removes write-capable tools from that profile's advertised schema and
 checks the same boundary again immediately before dispatch. Tools without effect
-metadata are treated as write-capable rather than assumed safe.
+metadata are treated as potentially destructive rather than assumed safe.
 
 OpenClaw and Hermes Agent own their tool loops on their servers. Configure
 Home Assistant tool permissions there; this local profile setting cannot narrow

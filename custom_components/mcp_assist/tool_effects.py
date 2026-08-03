@@ -98,12 +98,14 @@ def get_tool_effect(
         else None
     )
     if not isinstance(annotations, dict):
-        return ToolEffect.WRITE
+        return ToolEffect.HIGH_RISK
     if annotations.get("destructiveHint") is True:
         return ToolEffect.HIGH_RISK
     if annotations.get("readOnlyHint") is True:
         return ToolEffect.READ_ONLY
-    return ToolEffect.WRITE
+    if annotations.get("destructiveHint") is False:
+        return ToolEffect.WRITE
+    return ToolEffect.HIGH_RISK
 
 
 def annotate_tool_effect(tool_definition: dict[str, Any]) -> dict[str, Any]:
