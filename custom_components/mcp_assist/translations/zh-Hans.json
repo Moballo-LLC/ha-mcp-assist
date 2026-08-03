@@ -24,7 +24,8 @@
           "openclaw_host": "网关主机",
           "openclaw_port": "网关端口",
           "openclaw_token": "网关令牌",
-          "openclaw_use_ssl": "使用SSL/TLS"
+          "openclaw_use_ssl": "使用SSL/TLS",
+          "hermes_url": "Hermes服务器URL"
         },
         "data_description": {
           "lmstudio_url": "此配置文件使用的本地或 OpenAI-compatible 服务器的基础 URL。",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "保持Ollama活跃",
           "ollama_num_ctx": "Ollama上下文窗口",
           "openclaw_session_key": "会话密钥",
-          "stateful_session_id": "有状态会话标头"
+          "stateful_session_id": "有状态会话标头",
+          "hermes_session_key": "记忆会话密钥"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "保持Ollama活跃",
               "ollama_num_ctx": "Ollama上下文窗口",
               "openclaw_session_key": "会话密钥",
-              "stateful_session_id": "有状态会话标头"
+              "stateful_session_id": "有状态会话标头",
+              "hermes_session_key": "记忆会话密钥"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
-              "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。"
+              "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
+              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "网关令牌",
           "openclaw_use_ssl": "使用SSL/TLS",
           "openclaw_session_key": "会话密钥",
-          "stateful_session_id": "有状态会话标头"
+          "stateful_session_id": "有状态会话标头",
+          "hermes_url": "Hermes服务器URL",
+          "hermes_session_key": "记忆会话密钥"
         },
         "data_description": {
           "model_name": "此配置文件应使用的 LLM 型号。",
           "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
           "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
-          "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。"
+          "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。",
+          "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "网关主机",
               "openclaw_port": "网关端口",
               "openclaw_token": "网关令牌",
-              "openclaw_use_ssl": "使用SSL/TLS"
+              "openclaw_use_ssl": "使用SSL/TLS",
+              "hermes_url": "Hermes服务器URL"
             },
             "data_description": {
               "lmstudio_url": "此配置文件使用的本地或 OpenAI-compatible 服务器的基础 URL。",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "保持Ollama活跃",
               "ollama_num_ctx": "Ollama上下文窗口",
               "openclaw_session_key": "会话密钥",
-              "stateful_session_id": "有状态会话标头"
+              "stateful_session_id": "有状态会话标头",
+              "hermes_session_key": "记忆会话密钥"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
-              "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。"
+              "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
+              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
             }
           },
           "advanced_settings": {

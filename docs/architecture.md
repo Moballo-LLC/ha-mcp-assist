@@ -101,6 +101,12 @@ The MCP server itself is shared. Settings such as port, allowed IPs, web search
 provider, memory retention, external custom tools, and shared tool-family
 defaults apply to all profiles.
 
+OpenClaw and the experimental Hermes Agent integration are server-managed agent
+transports. They bypass MCP Assist's normal prompt construction and client-side
+tool loop because their gateway/API server owns prompts, memory, and tools. MCP
+Assist still applies its response cleanup and Home Assistant conversation
+handling after the server returns the final assistant text.
+
 See [Configuration](configuration.md#shared-vs-per-profile-tool-settings).
 
 ## Token Usage

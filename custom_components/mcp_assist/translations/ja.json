@@ -24,7 +24,8 @@
           "openclaw_host": "ゲートウェイ ホスト",
           "openclaw_port": "ゲートウェイ ポート",
           "openclaw_token": "ゲートウェイ トークン",
-          "openclaw_use_ssl": "SSL/TLSを使用"
+          "openclaw_use_ssl": "SSL/TLSを使用",
+          "hermes_url": "HermesサーバーURL"
         },
         "data_description": {
           "lmstudio_url": "このプロファイルで使用されるローカルまたは OpenAI-compatible サーバーのベース URL。",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Ollamaを維持",
           "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
           "openclaw_session_key": "セッションキー",
-          "stateful_session_id": "ステートフルセッションヘッダー"
+          "stateful_session_id": "ステートフルセッションヘッダー",
+          "hermes_session_key": "メモリセッションキー"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Ollamaを維持",
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
-              "stateful_session_id": "ステートフルセッションヘッダー"
+              "stateful_session_id": "ステートフルセッションヘッダー",
+              "hermes_session_key": "メモリセッションキー"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
-              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。"
+              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
+              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "ゲートウェイ トークン",
           "openclaw_use_ssl": "SSL/TLSを使用",
           "openclaw_session_key": "セッションキー",
-          "stateful_session_id": "ステートフルセッションヘッダー"
+          "stateful_session_id": "ステートフルセッションヘッダー",
+          "hermes_url": "HermesサーバーURL",
+          "hermes_session_key": "メモリセッションキー"
         },
         "data_description": {
           "model_name": "このプロファイルが使用する LLM モデル。",
           "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
           "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
-          "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。"
+          "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。",
+          "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "ゲートウェイ ホスト",
               "openclaw_port": "ゲートウェイ ポート",
               "openclaw_token": "ゲートウェイ トークン",
-              "openclaw_use_ssl": "SSL/TLSを使用"
+              "openclaw_use_ssl": "SSL/TLSを使用",
+              "hermes_url": "HermesサーバーURL"
             },
             "data_description": {
               "lmstudio_url": "このプロファイルで使用されるローカルまたは OpenAI-compatible サーバーのベース URL。",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Ollamaを維持",
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
-              "stateful_session_id": "ステートフルセッションヘッダー"
+              "stateful_session_id": "ステートフルセッションヘッダー",
+              "hermes_session_key": "メモリセッションキー"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
-              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。"
+              "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
+              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
             }
           },
           "advanced_settings": {

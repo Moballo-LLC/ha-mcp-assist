@@ -24,7 +24,8 @@
           "openclaw_host": "Hostitel brány",
           "openclaw_port": "Port brány",
           "openclaw_token": "Token brány",
-          "openclaw_use_ssl": "Použijte SSL/TLS"
+          "openclaw_use_ssl": "Použijte SSL/TLS",
+          "hermes_url": "URL serveru Hermes"
         },
         "data_description": {
           "lmstudio_url": "Základní URL pro místní server nebo server OpenAI-compatible používaný tímto profilem.",
@@ -100,7 +101,8 @@
           "ollama_keep_alive": "Udrzovat Ollama aktivni",
           "ollama_num_ctx": "Kontextove okno Ollama",
           "openclaw_session_key": "Klíč relace",
-          "stateful_session_id": "Hlavička stavové relace"
+          "stateful_session_id": "Hlavička stavové relace",
+          "hermes_session_key": "Klíč relace paměti"
         },
         "sections": {
           "conversation": {
@@ -152,13 +154,15 @@
               "ollama_keep_alive": "Udrzovat Ollama aktivni",
               "ollama_num_ctx": "Kontextove okno Ollama",
               "openclaw_session_key": "Klíč relace",
-              "stateful_session_id": "Hlavička stavové relace"
+              "stateful_session_id": "Hlavička stavové relace",
+              "hermes_session_key": "Klíč relace paměti"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
-              "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru."
+              "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
+              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil."
             }
           },
           "tools": {
@@ -382,13 +386,16 @@
           "openclaw_token": "Token brány",
           "openclaw_use_ssl": "Použijte SSL/TLS",
           "openclaw_session_key": "Klíč relace",
-          "stateful_session_id": "Hlavička stavové relace"
+          "stateful_session_id": "Hlavička stavové relace",
+          "hermes_url": "URL serveru Hermes",
+          "hermes_session_key": "Klíč relace paměti"
         },
         "data_description": {
           "model_name": "Model LLM by tento profil měl používat.",
           "system_prompt": "Předvyplněno aktuální výzvou systému. Upravte jej a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
           "technical_prompt": "Předvyplněno aktuálními platnými technickými pokyny. Upravte je a přizpůsobte si tento profil. Pokud zůstane nezměněn, bude integrace nadále používat vestavěnou výzvu z kódu.",
-          "context_mode": "Standard odešle úplný kontext nástroje profilu. Light udržuje menší okno historie a inzeruje základní nástroje Home Assistant pro malé místní modely."
+          "context_mode": "Standard odešle úplný kontext nástroje profilu. Light udržuje menší okno historie a inzeruje základní nástroje Home Assistant pro malé místní modely.",
+          "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil."
         },
         "sections": {
           "profile": {
@@ -410,7 +417,8 @@
               "openclaw_host": "Hostitel brány",
               "openclaw_port": "Port brány",
               "openclaw_token": "Token brány",
-              "openclaw_use_ssl": "Použijte SSL/TLS"
+              "openclaw_use_ssl": "Použijte SSL/TLS",
+              "hermes_url": "URL serveru Hermes"
             },
             "data_description": {
               "lmstudio_url": "Základní URL pro místní server nebo server OpenAI-compatible používaný tímto profilem.",
@@ -468,13 +476,15 @@
               "ollama_keep_alive": "Udrzovat Ollama aktivni",
               "ollama_num_ctx": "Kontextove okno Ollama",
               "openclaw_session_key": "Klíč relace",
-              "stateful_session_id": "Hlavička stavové relace"
+              "stateful_session_id": "Hlavička stavové relace",
+              "hermes_session_key": "Klíč relace paměti"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
-              "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru."
+              "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
+              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil."
             }
           },
           "advanced_settings": {

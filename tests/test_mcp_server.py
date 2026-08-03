@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from aiohttp import ClientSession, WSCloseCode, WSMsgType
 import yarl
 from homeassistant.components.weather import WeatherEntityFeature
+from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -25,6 +26,9 @@ from pytest_socket import disable_socket, enable_socket
 import voluptuous as vol
 
 import custom_components.mcp_assist.mcp_server as mcp_server_module
+from custom_components.mcp_assist.tools.packages.recorder import (
+    history as recorder_history_module,
+)
 from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
@@ -171,6 +175,33 @@ def test_sanitize_log_value_escapes_line_breaks() -> None:
     assert mcp_server_module._sanitize_log_value("one\ntwo\rthree") == (
         "one\\ntwo\\rthree"
     )
+
+
+@pytest.mark.parametrize(
+    ("legacy_value", "expected_kelvin"),
+    [(250, 4000), (3200, 3200), ("500", 2000)],
+)
+def test_migrate_deprecated_light_color_temp(
+    legacy_value: object,
+    expected_kelvin: int,
+) -> None:
+    """Legacy mired and mislabeled Kelvin values should migrate in one turn."""
+    data = {"color_temp": legacy_value}
+
+    error = mcp_server_module._migrate_deprecated_light_color_temp(data)
+
+    assert error is None
+    assert data == {"color_temp_kelvin": expected_kelvin}
+
+
+def test_migrate_deprecated_light_color_temp_preserves_explicit_kelvin() -> None:
+    """An explicit modern value should win when both keys are supplied."""
+    data = {"color_temp": "invalid", "color_temp_kelvin": 2700}
+
+    error = mcp_server_module._migrate_deprecated_light_color_temp(data)
+
+    assert error is None
+    assert data == {"color_temp_kelvin": 2700}
 
 
 def test_sanitize_log_value_redacts_common_secret_markers() -> None:
@@ -2118,6 +2149,182 @@ async def test_tool_perform_action_reports_pending_lock_transition(
     assert "Current states right now:" in text
     assert "Front Door Deadbolt: unlocked" in text
     assert "Successfully executed lock.lock" not in text
+
+
+@pytest.mark.asyncio
+async def test_tool_perform_action_converts_legacy_light_color_temperature(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """perform_action should send converted Kelvin data to Home Assistant."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.resolve_target = AsyncMock(
+        return_value={"entity_id": ["light.example_lamp"]}
+    )
+    hass.states.async_set("light.example_lamp", "off")
+    received_data: dict[str, Any] = {}
+
+    async def turn_on_service(call) -> None:
+        received_data.update(call.data)
+
+    hass.services.async_register("light", "turn_on", turn_on_service)
+
+    result = await server.tool_perform_action(
+        {
+            "domain": "light",
+            "action": "turn_on",
+            "target": {},
+            "data": {"color_temp": 250},
+        }
+    )
+
+    assert received_data == {
+        "entity_id": ["light.example_lamp"],
+        "color_temp_kelvin": 4000,
+    }
+    assert result["content"][0]["text"].startswith(
+        "✅ Successfully executed light.turn_on"
+    )
+
+
+@pytest.mark.asyncio
+async def test_tool_perform_action_returns_response_capable_service_payload(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Response-only services should be called with return_response enabled."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.resolve_target = AsyncMock(
+        return_value={"entity_id": ["media_player.example_player"]}
+    )
+    server._observe_action_outcome = AsyncMock(
+        return_value={
+            "status": "unverified",
+            "progress_phrase": "working",
+            "state_lines": [],
+        }
+    )
+    hass.states.async_set("media_player.example_player", "idle")
+
+    async def browse_media_service(call) -> dict[str, Any]:
+        return {
+            "title": "Example Library",
+            "items": [{"title": "Morning Mix", "media_class": "playlist"}],
+        }
+
+    hass.services.async_register(
+        "media_player",
+        "browse_media",
+        browse_media_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    result = await server.tool_perform_action(
+        {
+            "domain": "media_player",
+            "action": "browse_media",
+            "target": {},
+            "data": {},
+        }
+    )
+
+    assert result["response"] == {
+        "title": "Example Library",
+        "items": [{"title": "Morning Mix", "media_class": "playlist"}],
+    }
+    assert '"Morning Mix"' in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_tool_perform_action_bounds_response_preview(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Large service responses should not fill the model-visible tool content."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server.resolve_target = AsyncMock(
+        return_value={"entity_id": ["media_player.example_player"]}
+    )
+    server._observe_action_outcome = AsyncMock(
+        return_value={
+            "status": "unverified",
+            "progress_phrase": "working",
+            "state_lines": [],
+        }
+    )
+    hass.states.async_set("media_player.example_player", "idle")
+    large_response = {"items": ["x" * 200 for _ in range(100)]}
+
+    async def catalog_service(call) -> dict[str, Any]:
+        return large_response
+
+    hass.services.async_register(
+        "media_player",
+        "browse_media",
+        catalog_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    result = await server.tool_perform_action(
+        {
+            "domain": "media_player",
+            "action": "browse_media",
+            "target": {},
+            "data": {},
+        }
+    )
+
+    response_text = result["content"][0]["text"]
+    assert result["response"] == large_response
+    assert "Response preview truncated" in response_text
+    assert len(response_text) < 6500
+
+
+@pytest.mark.asyncio
+async def test_fetch_entity_history_uses_recorder_executor(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Recorder queries should run on the recorder-owned executor."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    recorder_jobs: list[object] = []
+    query_kwargs: dict[str, Any] = {}
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            recorder_jobs.append(job)
+            return job()
+
+    def state_changes_during_period(*args, **kwargs):
+        query_kwargs.update(kwargs)
+        return {"sensor.example": ["newest", "oldest"]}
+
+    monkeypatch.setattr(
+        recorder_history_module,
+        "get_recorder_instance",
+        lambda configured_hass: RecorderInstance(),
+    )
+    monkeypatch.setattr(
+        recorder_history_module.history,
+        "state_changes_during_period",
+        state_changes_during_period,
+    )
+    generic_executor = AsyncMock(
+        side_effect=AssertionError("generic Home Assistant executor was used")
+    )
+    monkeypatch.setattr(hass, "async_add_executor_job", generic_executor)
+
+    states = await server._fetch_entity_history_states(
+        "sensor.example",
+        hours=24,
+        descending=True,
+        limit=2,
+    )
+
+    assert states == ["newest", "oldest"]
+    assert len(recorder_jobs) == 1
+    assert query_kwargs["descending"] is True
+    assert query_kwargs["limit"] == 2
+    generic_executor.assert_not_awaited()
 
 
 def test_history_resolution_prefers_related_contact_sensor_for_open_requests(

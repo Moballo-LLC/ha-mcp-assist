@@ -13,6 +13,7 @@ SERVER_TYPE_ANTHROPIC = "anthropic"
 SERVER_TYPE_OPENROUTER = "openrouter"
 SERVER_TYPE_OPENCLAW = "openclaw"
 SERVER_TYPE_VLLM = "vllm"
+SERVER_TYPE_HERMES = "hermes"
 
 # Configuration keys
 CONF_PROFILE_NAME = "profile_name"
@@ -99,6 +100,12 @@ DEFAULT_OPENCLAW_HOST = "localhost"
 DEFAULT_OPENCLAW_PORT = 18789
 DEFAULT_OPENCLAW_USE_SSL = True
 DEFAULT_OPENCLAW_SESSION_KEY = "main"
+# Hermes Agent OpenAI-compatible API server defaults
+CONF_HERMES_URL = "hermes_url"
+CONF_HERMES_SESSION_KEY = "hermes_session_key"
+DEFAULT_HERMES_URL = "http://localhost:8642"
+DEFAULT_HERMES_SESSION_KEY = "homeassistant"
+DEFAULT_HERMES_MODEL = "hermes-agent"
 DEFAULT_VLLM_URL = "http://localhost:8000"
 DEFAULT_MCP_PORT = 8090
 DEFAULT_API_KEY = ""

@@ -111,6 +111,25 @@ Local models can reduce third-party data exposure, but check your actual setup:
 - Container networking can expose services more broadly than expected.
 - Some local tools or frontends may have telemetry settings of their own.
 
+## Server-Managed Agents
+
+OpenClaw and Hermes Agent run their own prompts, memory, and tools outside MCP
+Assist's normal client-side tool loop. Treat the gateway or API-server host as a
+separate trust boundary:
+
+- Review the tools and Home Assistant credentials configured on that server.
+- Do not assume MCP Assist's per-profile tool-family overrides or **Control Home
+  Assistant** toggle restrict tools that the external agent runs itself.
+- Keep the server on a trusted network or protect it with TLS and authentication.
+- Review server-side transcript, tool, and memory retention separately from MCP
+  Assist's Chat Log Mode and memory tools.
+
+Hermes requests can cause tools to run on the Hermes host before a response is
+returned. When an API key is configured, MCP Assist also sends the stable memory
+session key and the current transcript session ID. It replays bounded local
+history when a transcript session must be replaced. Without API authentication,
+it omits those session headers and sends local conversation history instead.
+
 ## Web Search, Reference Tools, and Maps
 
 The Search, Read URL, Wikipedia Search, and Google Places and Routes tool

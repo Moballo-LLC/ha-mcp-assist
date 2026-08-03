@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from functools import partial
 import logging
 import re
 from typing import Any, Dict, List, Tuple
@@ -20,6 +21,11 @@ try:
     from homeassistant.helpers import floor_registry as fr
 except ImportError:  # pragma: no cover - older Home Assistant versions
     fr = None
+
+try:
+    from homeassistant.components.recorder import get_instance as get_recorder_instance
+except ImportError:  # pragma: no cover - older Home Assistant versions
+    get_recorder_instance = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1639,16 +1645,21 @@ class RecorderToolsMixin:
                 raise ValueError("Either hours or start_time must be provided")
             query_start_time = query_end_time - timedelta(hours=hours)
 
-        states = await self.hass.async_add_executor_job(
-            lambda: history.state_changes_during_period(
-                self.hass,
-                query_start_time,
-                end_time=query_end_time,
-                entity_id=entity_id,
-                no_attributes=True,
-                descending=descending,
-                limit=limit,
-                include_start_time_state=include_start_time_state,
-            )
+        history_job = partial(
+            history.state_changes_during_period,
+            self.hass,
+            query_start_time,
+            end_time=query_end_time,
+            entity_id=entity_id,
+            no_attributes=True,
+            descending=descending,
+            limit=limit,
+            include_start_time_state=include_start_time_state,
         )
+        if get_recorder_instance is not None:
+            states = await get_recorder_instance(self.hass).async_add_executor_job(
+                history_job
+            )
+        else:
+            states = await self.hass.async_add_executor_job(history_job)
         return self._extract_history_states(states, entity_id)

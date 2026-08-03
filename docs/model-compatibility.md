@@ -24,7 +24,9 @@ For Home Assistant control, the model needs to:
 | Local OpenAI-compatible servers | Good for privacy and local control; quality depends heavily on the model and server's tool-calling support |
 | Ollama | Convenient local workflow; confirm the selected model and client path support tools reliably |
 | LM Studio | Good local testing surface; model loading and server settings matter |
-| llama.cpp / vLLM / OpenClaw | Useful self-hosted options when configured with compatible chat and tool-call behavior |
+| llama.cpp / vLLM | Useful self-hosted OpenAI-compatible options when configured with compatible chat and tool-call behavior |
+| OpenClaw | Server-managed agent: model selection, prompts, memory, and tools live on the gateway |
+| Hermes Agent (experimental) | Server-managed agent: MCP Assist uses its chat-completions API while Hermes executes its own configured tools |
 | Cloud providers | Often stronger tool-calling behavior, but involve provider cost, network dependency, and API-key handling |
 
 ## Model Size and Behavior
@@ -102,6 +104,11 @@ Examples that have historically been useful starting points:
 
 Always test the exact model, quantization, and server combination you plan to
 use.
+
+For OpenClaw and Hermes Agent, test the server's configured tool surface rather
+than expecting MCP Assist's client-side tool loop. Profile prompt, temperature,
+history, and tool-iteration tuning does not replace the server's own agent
+configuration.
 
 ## How to Test a Model
 

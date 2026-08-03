@@ -39,6 +39,7 @@ from .const import (
     DOMAIN,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_LLAMACPP,
     SERVER_TYPE_LMSTUDIO,
     SERVER_TYPE_OLLAMA,
@@ -71,6 +72,7 @@ INDEX_GAP_FILLING_PROVIDER_PRIORITY = {
     SERVER_TYPE_LLAMACPP: 22,
     SERVER_TYPE_OLLAMA: 23,
     SERVER_TYPE_OPENCLAW: 100,
+    SERVER_TYPE_HERMES: 101,
 }
 INDEX_GAP_FILLING_UNKNOWN_DIRECT_PROVIDER_PRIORITY = 50
 
@@ -1031,7 +1033,7 @@ Focus on meaningful categories that would help discover relevant entities for us
         """
         domain_data = self.hass.data.get(DOMAIN, {})
         direct_agents: list[tuple[Any, Any]] = []
-        openclaw_agents: list[tuple[Any, Any]] = []
+        conversation_agents: list[tuple[Any, Any]] = []
         last_error: Exception | None = None
         for candidate in self.hass.config_entries.async_entries(DOMAIN):
             if candidate.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
@@ -1041,14 +1043,19 @@ Focus on meaningful categories that would help discover relevant entities for us
             if not candidate_agent:
                 continue
 
-            if candidate.data.get(CONF_SERVER_TYPE) == SERVER_TYPE_OPENCLAW:
-                openclaw_agents.append((candidate, candidate_agent))
+            if candidate.data.get(CONF_SERVER_TYPE) in {
+                SERVER_TYPE_OPENCLAW,
+                SERVER_TYPE_HERMES,
+            }:
+                conversation_agents.append((candidate, candidate_agent))
                 continue
 
             direct_agents.append((candidate, candidate_agent))
 
         direct_agents.sort(key=lambda item: self._gap_filling_profile_sort_key(item[0]))
-        openclaw_agents.sort(key=lambda item: self._gap_filling_profile_sort_key(item[0]))
+        conversation_agents.sort(
+            key=lambda item: self._gap_filling_profile_sort_key(item[0])
+        )
 
         for candidate, agent in direct_agents:
             try:
@@ -1066,9 +1073,9 @@ Focus on meaningful categories that would help discover relevant entities for us
                     err,
                 )
 
-        for candidate, agent in openclaw_agents:
+        for candidate, agent in conversation_agents:
             try:
-                response_text = await self._call_openclaw_agent_for_inference(
+                response_text = await self._call_conversation_agent_for_inference(
                     candidate,
                     agent,
                     prompt,
@@ -1077,7 +1084,7 @@ Focus on meaningful categories that would help discover relevant entities for us
             except Exception as err:
                 last_error = err
                 _LOGGER.debug(
-                    "OpenClaw LLM inference failed for profile %s: %s",
+                    "Server-managed LLM inference failed for profile %s: %s",
                     candidate.entry_id,
                     err,
                 )
@@ -1116,13 +1123,13 @@ Focus on meaningful categories that would help discover relevant entities for us
             raise ValueError("Empty response from LLM")
         return response_text
 
-    async def _call_openclaw_agent_for_inference(
+    async def _call_conversation_agent_for_inference(
         self,
         entry: Any,
         agent: Any,
         prompt: str,
     ) -> str:
-        """Call an OpenClaw profile through its conversation transport."""
+        """Call a server-managed profile through its conversation transport."""
         from homeassistant.components import conversation
         from homeassistant.core import Context
 
@@ -1137,7 +1144,7 @@ Focus on meaningful categories that would help discover relevant entities for us
         )
 
         _LOGGER.debug(
-            "Calling OpenClaw profile for entity type inference: profile=%s",
+            "Calling server-managed profile for entity type inference: profile=%s",
             entry.entry_id,
         )
         response = await agent.async_process(conversation_input)

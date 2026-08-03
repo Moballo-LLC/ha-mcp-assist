@@ -9,6 +9,7 @@ import pytest
 from custom_components.mcp_assist.const import (
     CONF_SERVER_TYPE,
     DOMAIN,
+    SERVER_TYPE_HERMES,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENCLAW,
@@ -194,18 +195,25 @@ async def test_gap_filling_tries_next_profile_when_first_direct_profile_fails(
 
 
 @pytest.mark.asyncio
-async def test_gap_filling_uses_openclaw_conversation_when_it_is_only_profile(
-    hass, profile_entry_factory
+@pytest.mark.parametrize(
+    ("server_type", "profile_name"),
+    [
+        (SERVER_TYPE_OPENCLAW, "OpenClaw"),
+        (SERVER_TYPE_HERMES, "Hermes Agent"),
+    ],
+)
+async def test_gap_filling_uses_server_managed_conversation_when_it_is_only_profile(
+    hass, profile_entry_factory, server_type: str, profile_name: str
 ) -> None:
-    """OpenClaw-only installs should keep the prior conversation fallback behavior."""
-    openclaw_entry = profile_entry_factory(
-        title="OpenClaw - Test Profile",
-        unique_id="openclaw-profile",
-        data={CONF_SERVER_TYPE: SERVER_TYPE_OPENCLAW},
+    """Server-managed-only installs should use the conversation transport."""
+    profile_entry = profile_entry_factory(
+        title=f"{profile_name} - Test Profile",
+        unique_id=f"{server_type}-profile",
+        data={CONF_SERVER_TYPE: server_type},
     )
     seen_inputs = []
 
-    class OpenClawAgent:
+    class ServerManagedAgent:
         async def async_process(self, conversation_input):
             seen_inputs.append(conversation_input)
             return SimpleNamespace(
@@ -221,12 +229,12 @@ async def test_gap_filling_uses_openclaw_conversation_when_it_is_only_profile(
                 )
             )
 
-    hass.data.setdefault(DOMAIN, {})[openclaw_entry.entry_id] = {
-        "agent": OpenClawAgent()
+    hass.data.setdefault(DOMAIN, {})[profile_entry.entry_id] = {
+        "agent": ServerManagedAgent()
     }
     manager = IndexManager(hass)
 
     inferred = await manager._call_llm_for_inference("infer entities")
 
     assert inferred["presence"]["count"] == 4
-    assert seen_inputs[0].agent_id == openclaw_entry.entry_id
+    assert seen_inputs[0].agent_id == profile_entry.entry_id
