@@ -50,6 +50,7 @@ External custom tools are intentionally **safe by default**:
 - Must use namespaced tool names
 - Cannot load from symlinked package directories
 - Cannot reference entrypoint modules or prompt files outside the package directory
+- Treated as write-capable unless each read-only tool declares MCP effect metadata
 
 Important: once enabled, these packages run as Python code inside Home Assistant. Only install or write packages you trust.
 
@@ -310,6 +311,7 @@ Each tool definition must:
 - include `name`
 - include `description`
 - include `inputSchema`
+- declare `annotations.readOnlyHint` when it is safe for read-only profiles
 
 Tool names must:
 
@@ -324,6 +326,30 @@ Example:
 - invalid: `discover_entities`
 
 MCP Assist rejects tool-name collisions with built-in tools or other external packages.
+
+### Effect Metadata
+
+The **Control Home Assistant** profile setting is enforced from MCP tool effect
+annotations. Mark tools that only read data with the standard MCP
+`readOnlyHint`. Tools without that explicit hint are hidden from read-only
+profiles and rejected if called directly.
+
+```python
+{
+    "name": "my_tool_status",
+    "description": "Return package status without changing it.",
+    "inputSchema": {"type": "object", "properties": {}},
+    "annotations": {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    },
+}
+```
+
+For a tool that writes state, use `readOnlyHint: False`. Also set
+`destructiveHint: True` when the tool can perform safety-sensitive or destructive
+operations. Both write and destructive tools require **Control Home Assistant**
+to be enabled for the profile.
 
 ## Routing Metadata
 

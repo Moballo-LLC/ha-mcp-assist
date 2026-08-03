@@ -52,6 +52,7 @@ from .tool_schema import (
     score_adaptive_tool_match,
     tool_definition_name,
 )
+from .tool_effects import ToolEffect, get_tool_effect
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
@@ -518,6 +519,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         self._cached_profile_mcp_tools: list[dict[str, Any]] | None = None
         self._cached_profile_mcp_tools_key: tuple[Any, ...] | None = None
         self._cached_profile_mcp_tools_fetched_at = 0.0
+        self._tool_effects_by_name: dict[str, ToolEffect] = {}
         self._hermes_client: HermesClient | None = None
 
         # Entity attributes
@@ -698,8 +700,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             search_provider=self.search_provider,
         )
 
-    def _is_tool_enabled_for_profile(self, tool_name: str) -> bool:
-        """Return whether a tool should be visible to this profile."""
+    def _is_tool_configured_for_profile(self, tool_name: str) -> bool:
+        """Return whether profile and shared settings enable a tool."""
         built_in_spec = self._get_builtin_toggle_spec(tool_name)
         if built_in_spec is not None:
             return self._is_builtin_package_enabled(built_in_spec)
@@ -710,6 +712,45 @@ class MCPAssistConversationEntity(ConversationEntity):
         if self._is_external_custom_tool(tool_name):
             return self.external_custom_tools_enabled
         return True
+
+    def _get_tool_effect(
+        self,
+        tool_name: str,
+        tool_definition: dict[str, Any] | None = None,
+    ) -> ToolEffect:
+        """Resolve and cache effect metadata for a profile-visible MCP tool."""
+        if tool_definition is None:
+            tools = self._get_shared_tools_loader()
+            getter = getattr(tools, "get_tool_definition", None) if tools else None
+            if callable(getter):
+                try:
+                    tool_definition = getter(tool_name)
+                except Exception as err:
+                    _LOGGER.debug(
+                        "Unable to read effect metadata for %s: %s",
+                        tool_name,
+                        err,
+                    )
+
+        if tool_definition is None and tool_name in self._tool_effects_by_name:
+            return self._tool_effects_by_name[tool_name]
+
+        effect = get_tool_effect(tool_name, tool_definition)
+        self._tool_effects_by_name[tool_name] = effect
+        return effect
+
+    def _is_tool_enabled_for_profile(
+        self,
+        tool_name: str,
+        tool_definition: dict[str, Any] | None = None,
+    ) -> bool:
+        """Return whether a tool should be visible to this profile."""
+        if not self._is_tool_configured_for_profile(tool_name):
+            return False
+        return self.control_home_assistant or self._get_tool_effect(
+            tool_name,
+            tool_definition,
+        ) is ToolEffect.READ_ONLY
 
     # Dynamic configuration properties - read from entry.options/data each time
     @property
@@ -1201,6 +1242,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.device_tools_enabled,
             self.music_assistant_support_enabled,
             self.web_search_tools_enabled,
+            self.control_home_assistant,
             self.context_mode,
             tuple(
                 (
@@ -1326,16 +1368,20 @@ class MCPAssistConversationEntity(ConversationEntity):
     def supported_features(self) -> int:
         """Return supported features."""
         features = ConversationEntityFeature(0)
-
-        # Check if home control is enabled in config
-        control_enabled = self.entry.options.get(
-            CONF_CONTROL_HA, self.entry.data.get(CONF_CONTROL_HA, DEFAULT_CONTROL_HA)
-        )
-
-        if control_enabled:
+        if self.control_home_assistant:
             features |= ConversationEntityFeature.CONTROL
 
         return features
+
+    @property
+    def control_home_assistant(self) -> bool:
+        """Return whether this profile may use write-capable tools."""
+        return bool(
+            self.entry.options.get(
+                CONF_CONTROL_HA,
+                self.entry.data.get(CONF_CONTROL_HA, DEFAULT_CONTROL_HA),
+            )
+        )
 
     @property
     def follow_up_phrases(self) -> str:
@@ -2913,7 +2959,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                             tool_names.append(tool["name"])
 
                         _LOGGER.info("MCP tools available: %s", ", ".join(tool_names))
-                        if "perform_action" in tool_names:
+                        if not self.control_home_assistant:
+                            _LOGGER.debug(
+                                "Write-capable MCP tools are hidden for this profile"
+                            )
+                        elif "perform_action" in tool_names:
                             _LOGGER.info("✅ perform_action tool is available")
                         else:
                             _LOGGER.warning("⚠️ perform_action tool NOT found!")
@@ -3279,7 +3329,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         profile_tools = [
             tool
             for tool in tools
-            if self._is_tool_enabled_for_profile(tool.get("name", ""))
+            if self._is_tool_enabled_for_profile(
+                tool.get("name", ""),
+                tool,
+            )
         ]
 
         if self.light_context_mode:
@@ -3314,7 +3367,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _json_size_bytes(arguments),
         )
 
-        if not self._is_tool_enabled_for_profile(tool_name):
+        if not self._is_tool_configured_for_profile(tool_name):
             return {
                 "isError": True,
                 "content": [
@@ -3323,6 +3376,21 @@ class MCPAssistConversationEntity(ConversationEntity):
                         "text": (
                             f"Tool '{tool_name}' is disabled for this profile. "
                             "Use this profile's enabled tools instead."
+                        ),
+                    }
+                ],
+            }
+
+        effect = self._get_tool_effect(tool_name)
+        if not self.control_home_assistant and effect is not ToolEffect.READ_ONLY:
+            return {
+                "isError": True,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"Tool '{tool_name}' requires Control Home Assistant, "
+                            "which is disabled for this profile."
                         ),
                     }
                 ],

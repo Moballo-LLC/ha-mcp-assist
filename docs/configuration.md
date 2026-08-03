@@ -305,8 +305,8 @@ integration itself. See [External Custom Tools](custom-tools.md).
 ### Read-Only Assistant
 
 - Disable **Control Home Assistant**.
-- Leave read tools enabled, such as discovery, weather, recorder, and response
-  service reads.
+- Leave read tools enabled, such as discovery, weather, recorder, and dedicated
+  response-service reads. Generic service dispatch remains control-gated.
 - Consider disabling web search and external custom tools.
 
 ### Fast Voice Profile

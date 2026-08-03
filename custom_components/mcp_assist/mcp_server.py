@@ -119,6 +119,7 @@ from .tool_schema import (
     score_adaptive_tool_match,
     tool_definition_name,
 )
+from .tool_effects import annotate_tool_effect
 from .tools.packages.recorder.history import RecorderToolsMixin
 from .tools.packages.response_service.calendar import CalendarToolsMixin
 from .tools.packages.response_service.service_calls import ResponseServicesMixin
@@ -2562,7 +2563,11 @@ class MCPServer(
                     _sanitize_log_value(e),
                 )
 
-        tools = [tool for tool in tools if self._is_tool_enabled(tool["name"])]
+        tools = [
+            annotate_tool_effect(tool)
+            for tool in tools
+            if self._is_tool_enabled(tool["name"])
+        ]
         self._cached_tools_list = list(tools)
         self._cached_tools_signature = signature
 

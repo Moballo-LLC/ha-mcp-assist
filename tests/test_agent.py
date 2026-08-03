@@ -33,6 +33,7 @@ from custom_components.mcp_assist.const import (
     CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_CLEAN_RESPONSES,
+    CONF_CONTROL_HA,
     CONF_ENABLE_DEVICE_TOOLS,
     CONF_MAX_HISTORY,
     CONF_CONTEXT_MODE,
@@ -489,6 +490,85 @@ def test_profile_tool_filtering_hides_disabled_optional_tools(
     assert "discover_devices" not in tool_names
     assert "list_assist_tools" not in tool_names
     assert "list_llm_apis" not in tool_names
+
+
+def test_read_only_profile_filters_write_and_unclassified_tools(
+    hass, profile_entry_factory
+) -> None:
+    """Disabling control should advertise only tools declared read-only."""
+    entry = profile_entry_factory(options={CONF_CONTROL_HA: False})
+    agent = MCPAssistConversationEntity(hass, entry)
+    external_read = _tool("sample_status")
+    external_read["annotations"] = {"readOnlyHint": True}
+
+    filtered = agent._filter_mcp_tools_for_profile(
+        [
+            _tool("discover_entities"),
+            _tool("perform_action"),
+            _tool("run_script"),
+            _tool("remember_memory"),
+            external_read,
+            _tool("sample_command"),
+        ]
+    )
+
+    assert {tool["name"] for tool in filtered} == {
+        "discover_entities",
+        "sample_status",
+    }
+
+
+def test_read_only_profile_uses_registered_external_tool_metadata(
+    hass, profile_entry_factory
+) -> None:
+    """A direct authorization check should read current extension metadata."""
+    entry = profile_entry_factory(options={CONF_CONTROL_HA: False})
+    agent = MCPAssistConversationEntity(hass, entry)
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(
+        tools=SimpleNamespace(
+            get_tool_definition=lambda name: {
+                "name": name,
+                "annotations": {"readOnlyHint": True},
+            }
+        )
+    )
+
+    assert agent._is_tool_enabled_for_profile("sample_status") is True
+
+
+@pytest.mark.asyncio
+async def test_read_only_profile_rejects_write_tool_before_dispatch(
+    hass, profile_entry_factory
+) -> None:
+    """A direct write-tool call should fail before reaching the MCP server."""
+    entry = profile_entry_factory(options={CONF_CONTROL_HA: False})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    result = await agent._call_mcp_tool(
+        "perform_action",
+        {
+            "domain": "light",
+            "action": "turn_on",
+            "target": {"entity_id": "light.test"},
+        },
+    )
+
+    assert result["isError"] is True
+    assert "requires Control Home Assistant" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_read_only_profile_rejects_unclassified_tool_before_dispatch(
+    hass, profile_entry_factory
+) -> None:
+    """Missing effect metadata should fail closed as write-capable."""
+    entry = profile_entry_factory(options={CONF_CONTROL_HA: False})
+    agent = MCPAssistConversationEntity(hass, entry)
+
+    result = await agent._call_mcp_tool("sample_command", {})
+
+    assert result["isError"] is True
+    assert "requires Control Home Assistant" in result["content"][0]["text"]
 
 
 def test_light_context_mode_advertises_core_profile_tools(

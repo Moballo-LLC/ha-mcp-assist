@@ -114,7 +114,8 @@ Common settings:
   full profile tool context sent upfront, or Light for small local models that
   need the smallest request.
 - **Response Mode**: None, Smart, or Always.
-- **Control Home Assistant**: Whether the assistant can perform write actions.
+- **Control Home Assistant**: Whether MCP Assist's client-side tool loop can
+  perform write actions. Configure OpenClaw or Hermes permissions on that server.
 - **Max Tool Iterations**: How many tool calls are allowed for one request.
 - **Timeout**: Maximum provider response wait time.
 - **Debug Mode**: Extra logging for troubleshooting.
