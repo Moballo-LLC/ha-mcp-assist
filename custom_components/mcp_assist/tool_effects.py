@@ -71,15 +71,15 @@ _SHIPPED_TOOL_EFFECTS: dict[str, ToolEffect] = {
     "list_memory_categories": ToolEffect.READ_ONLY,
     "recall_memories": ToolEffect.READ_ONLY,
     "remember_memory": ToolEffect.WRITE,
-    "forget_memory": ToolEffect.WRITE,
+    "forget_memory": ToolEffect.HIGH_RISK,
     # Music Assistant queries and controls.
     "list_music_assistant_players": ToolEffect.READ_ONLY,
     "list_music_assistant_instances": ToolEffect.READ_ONLY,
     "search_music_assistant": ToolEffect.READ_ONLY,
     "get_music_assistant_library": ToolEffect.READ_ONLY,
     "get_music_assistant_queue": ToolEffect.READ_ONLY,
-    "play_music_assistant": ToolEffect.WRITE,
-    "control_music_assistant_player": ToolEffect.WRITE,
+    "play_music_assistant": ToolEffect.HIGH_RISK,
+    "control_music_assistant_player": ToolEffect.HIGH_RISK,
     "transfer_music_assistant_queue": ToolEffect.WRITE,
 }
 
