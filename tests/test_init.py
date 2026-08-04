@@ -10,6 +10,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mcp_assist import (
+    _async_handle_validate_external_custom_tools,
     _migrate_brave_search_tool_name,
     _async_apply_shared_mcp_settings,
     _async_release_mcp_server,
@@ -19,6 +20,7 @@ from custom_components.mcp_assist import (
 )
 from custom_components.mcp_assist.const import (
     CONF_ALLOWED_IPS,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_BRAVE_API_KEY,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_CALCULATOR_TOOLS,
@@ -60,6 +62,9 @@ from custom_components.mcp_assist.const import (
 )
 
 
+SECRET_CANARY = "not-a-real-secret-canary-12345"
+
+
 def _mock_system_entry_init(hass, data: dict) -> MockConfigEntry:
     """Simulate creation of the shared system entry without full HA dependency setup."""
     entry = MockConfigEntry(
@@ -88,6 +93,28 @@ async def test_migrate_brave_search_tool_name_updates_legacy_prompt(
 
 
 @pytest.mark.asyncio
+async def test_external_tool_service_response_redacts_secrets(hass) -> None:
+    """Response-producing services must redact nested diagnostics before returning."""
+    server = SimpleNamespace(
+        validate_external_custom_tools=AsyncMock(
+            return_value={
+                "valid": False,
+                "load_errors": [f"api_key={SECRET_CANARY}"],
+                "headers": {"Authorization": f"Bearer {SECRET_CANARY}"},
+            }
+        )
+    )
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = server
+
+    response = await _async_handle_validate_external_custom_tools(
+        SimpleNamespace(hass=hass)
+    )
+
+    assert SECRET_CANARY not in str(response)
+    assert "[redacted]" in str(response)
+
+
+@pytest.mark.asyncio
 async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
     hass, profile_entry_factory
 ) -> None:
@@ -107,6 +134,7 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
             CONF_BRAVE_API_KEY: "abc123",
             CONF_SEARXNG_URL: "http://search.local",
             CONF_ALLOWED_IPS: "10.0.0.0/24",
+            CONF_ALLOW_QUERY_TOKEN_AUTH: True,
             CONF_INCLUDE_CURRENT_USER: False,
             CONF_INCLUDE_HOME_LOCATION: False,
             CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS: True,
@@ -143,6 +171,7 @@ async def test_ensure_system_entry_copies_shared_settings_from_first_profile(
     assert system_entry.data[CONF_BRAVE_API_KEY] == "abc123"
     assert system_entry.data[CONF_SEARXNG_URL] == "http://search.local"
     assert system_entry.data[CONF_ALLOWED_IPS] == "10.0.0.0/24"
+    assert system_entry.data[CONF_ALLOW_QUERY_TOKEN_AUTH] is True
     assert system_entry.data[CONF_INCLUDE_CURRENT_USER] is False
     assert system_entry.data[CONF_INCLUDE_HOME_LOCATION] is False
     assert system_entry.data[CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS] is True
@@ -178,6 +207,7 @@ async def test_ensure_system_entry_uses_defaults_without_profiles(hass) -> None:
     assert CONF_INCLUDE_HOME_LOCATION in system_entry.data
     assert CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS in system_entry.data
     assert CONF_INCLUDE_HOME_LOCATION_IN_TOOL_CALLS in system_entry.data
+    assert system_entry.data[CONF_ALLOW_QUERY_TOKEN_AUTH] is False
     assert system_entry.data[CONF_ENABLE_LLM_API_BRIDGE] == DEFAULT_ENABLE_LLM_API_BRIDGE
     assert system_entry.data[CONF_LLM_API_ALLOWLIST] == DEFAULT_LLM_API_ALLOWLIST
     assert system_entry.data[CONF_ENABLE_DEVICE_TOOLS] == DEFAULT_ENABLE_DEVICE_TOOLS
@@ -188,6 +218,23 @@ async def test_ensure_system_entry_uses_defaults_without_profiles(hass) -> None:
     assert CONF_MEMORY_DEFAULT_TTL_DAYS in system_entry.data
     assert CONF_MEMORY_MAX_TTL_DAYS in system_entry.data
     assert CONF_MEMORY_MAX_ITEMS in system_entry.data
+
+
+@pytest.mark.asyncio
+async def test_ensure_system_entry_preserves_legacy_query_token_auth(hass) -> None:
+    """Upgrades must not strand URL-token clients before operators can migrate them."""
+    legacy_entry = _mock_system_entry_init(
+        hass,
+        {
+            CONF_MCP_PORT: 8090,
+            CONF_MCP_BEARER_TOKEN: "test-token-123456",
+        },
+    )
+
+    system_entry = await ensure_system_entry(hass)
+
+    assert system_entry is legacy_entry
+    assert system_entry.data[CONF_ALLOW_QUERY_TOKEN_AUTH] is True
 
 
 @pytest.mark.asyncio
@@ -208,6 +255,7 @@ async def test_ensure_system_entry_generates_bearer_token_on_self_heal(
     # A high-entropy token was generated instead of the empty (auth-off) default.
     assert isinstance(token, str)
     assert len(token) >= 20
+    assert system_entry.data[CONF_ALLOW_QUERY_TOKEN_AUTH] is True
 
 
 @pytest.mark.asyncio

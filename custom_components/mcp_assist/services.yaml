@@ -8,7 +8,7 @@ validate_external_custom_tools:
 
 get_chat_logs:
   name: Get chat logs
-  description: Return recent opt-in conversation logs captured by Chat Log Mode.
+  description: Return recent opt-in conversation logs. Responses are metadata-only by default and always redact recognized credentials.
   fields:
     limit:
       name: Limit
@@ -30,21 +30,21 @@ get_chat_logs:
         text:
     compact:
       name: Compact response
-      description: Return tool-call metadata without arguments, raw results, or model-facing tool content. Ignored when Projection is set.
-      default: false
+      description: Explicitly select the secure metadata-only view. False leaves the compact default unchanged; use Projection for a detailed view.
+      default: true
       selector:
         boolean:
     projection:
       name: Projection
-      description: Choose whether each tool includes both result forms, only raw results, only model-facing content, or metadata only.
+      description: Choose metadata only (the default) or an explicitly requested redacted troubleshooting view.
       selector:
         select:
           mode: dropdown
           options:
-            - label: Full
-              value: full
             - label: Compact
               value: compact
+            - label: Full (redacted)
+              value: full
             - label: Raw results
               value: raw
             - label: Model-facing content

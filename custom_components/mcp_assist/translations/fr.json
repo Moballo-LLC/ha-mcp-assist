@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "Port du serveur MCP",
           "allowed_ips": "IPs/Plages supplementaires autorisees",
-          "mcp_bearer_token": "Jeton Bearer MCP"
+          "mcp_bearer_token": "Jeton Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
           "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
-          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement."
+          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "Port du serveur MCP",
               "allowed_ips": "IPs/Plages supplementaires autorisees",
-              "mcp_bearer_token": "Jeton Bearer MCP"
+              "mcp_bearer_token": "Jeton Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
               "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
-              "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement."
+              "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "Port du serveur MCP",
           "allowed_ips": "IPs/Plages supplementaires autorisees",
-          "mcp_bearer_token": "Jeton Bearer MCP"
+          "mcp_bearer_token": "Jeton Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
           "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
-          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement."
+          "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "Port du serveur MCP",
               "allowed_ips": "IPs/Plages supplementaires autorisees",
-              "mcp_bearer_token": "Jeton Bearer MCP"
+              "mcp_bearer_token": "Jeton Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Le port local utilisé par le serveur MCP partagé.",
               "allowed_ips": "Adresses IP facultatives séparées par des virgules ou plages CIDR pouvant se connecter en plus de localhost.",
-              "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement."
+              "mcp_bearer_token": "Jeton Bearer facultatif requis par les clients MCP externes. Les nouvelles configurations reçoivent un jeton généré ; effacez ce champ uniquement si vous voulez volontairement utiliser une liste d’adresses IP autorisées sans authentification Bearer. Saisissez FFFF pour générer un nouveau jeton lors de l’enregistrement.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

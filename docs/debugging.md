@@ -60,7 +60,11 @@ When enabled, MCP Assist stores recent conversation records in Home Assistant st
 - MCP tool names, arguments, results, and model-facing tool result text
 - processing errors when a request fails
 
-These logs can include sensitive home context, prompts, entity names, tool arguments, and tool results. Enable Chat Log Mode only while you are actively debugging, and clear logs when you are done.
+These logs can include sensitive home context, prompts, entity names, tool
+arguments, and tool results. Recognized credentials are redacted before storage
+and again when records are returned, but arbitrary sensitive content may not be
+recognizable as a secret. Enable Chat Log Mode only while you are actively
+debugging, and clear logs when you are done.
 
 Chat Log Mode is useful when a request succeeds or fails after several tool
 calls and the normal Home Assistant log is too noisy to reconstruct the
@@ -87,10 +91,11 @@ data:
 ```
 
 The service returns a response payload with `count`, `projection`, and `logs`.
-The default `full` projection preserves the original response shape, including
-both raw MCP results and the compact content sent back to the model.
+The default `compact` projection returns metadata without user or assistant
+text, error details, tool arguments, raw MCP results, or model-facing tool
+content.
 
-For a smaller metadata-only response:
+To request the default metadata-only response explicitly:
 
 ```yaml
 service: mcp_assist.get_chat_logs
@@ -99,13 +104,16 @@ data:
   compact: true
 ```
 
-`compact: true` is a shortcut for `projection: compact`. You can set
-`projection` explicitly to one of:
+`compact: true` is a shortcut for `projection: compact`. Setting it to `false`
+does not select a detailed response; set `projection` explicitly to one of:
 
 - `full`: raw results and model-facing content
 - `raw`: raw results without duplicated model-facing content
 - `model`: model-facing content without raw results
 - `compact`: tool names, timing, status, and argument keys without arguments or results
+
+Every projection redacts recognized credentials. Detailed projections can still
+contain private home and conversation context, so request them only when needed.
 
 When both are set, `projection` takes precedence over `compact`.
 

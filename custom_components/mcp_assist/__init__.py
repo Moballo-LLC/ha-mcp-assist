@@ -14,6 +14,7 @@ from .tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
 from .chat_log_manager import CHAT_LOG_PROJECTION_COMPACT, ChatLogManager
+from .secret_redaction import redact_secrets
 from .const import (
     DOMAIN,
     SYSTEM_ENTRY_UNIQUE_ID,
@@ -27,6 +28,7 @@ from .const import (
     CONF_SEARXNG_URL,
     CONF_ALLOWED_IPS,
     CONF_MCP_BEARER_TOKEN,
+    CONF_ALLOW_QUERY_TOKEN_AUTH,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -80,6 +82,7 @@ from .const import (
     DEFAULT_TIMEOUT,
     DEFAULT_SEARXNG_URL,
     DEFAULT_MCP_BEARER_TOKEN,
+    DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
     SERVICE_VALIDATE_EXTERNAL_CUSTOM_TOOLS,
     SERVER_TYPE_OPENCLAW,
     CONF_OPENCLAW_HOST,
@@ -91,6 +94,7 @@ from .mcp_server import MCPServer
 from .index_manager import IndexManager
 
 _LOGGER = logging.getLogger(__name__)
+_LEGACY_QUERY_TOKEN_AUTH_DEFAULT = True
 
 PLATFORMS = [Platform.CONVERSATION]
 
@@ -144,7 +148,7 @@ async def _async_handle_reload_external_custom_tools(call: ServiceCall) -> dict:
             "load_errors": ["Reload is not supported by this MCP server build"],
         }
 
-    return await reload_external_custom_tools()
+    return redact_secrets(await reload_external_custom_tools())
 
 
 async def _async_handle_validate_external_custom_tools(call: ServiceCall) -> dict:
@@ -172,7 +176,7 @@ async def _async_handle_validate_external_custom_tools(call: ServiceCall) -> dic
             "load_errors": ["Validation is not supported by this MCP server build"],
         }
 
-    return await validate_external_custom_tools()
+    return redact_secrets(await validate_external_custom_tools())
 
 
 async def _async_get_chat_log_manager(hass: HomeAssistant) -> ChatLogManager:
@@ -199,19 +203,23 @@ async def _async_handle_get_chat_logs(call: ServiceCall) -> dict:
         conversation_id=call.data.get("conversation_id"),
         projection=projection,
     )
-    return {
-        "count": len(logs),
-        "projection": projection,
-        "logs": logs,
-    }
+    return redact_secrets(
+        {
+            "count": len(logs),
+            "projection": projection,
+            "logs": logs,
+        }
+    )
 
 
 async def _async_handle_clear_chat_logs(call: ServiceCall) -> dict:
     """Clear persisted chat logs."""
     manager = await _async_get_chat_log_manager(call.hass)
-    return await manager.async_clear(
-        profile_entry_id=call.data.get("profile_entry_id"),
-        conversation_id=call.data.get("conversation_id"),
+    return redact_secrets(
+        await manager.async_clear(
+            profile_entry_id=call.data.get("profile_entry_id"),
+            conversation_id=call.data.get("conversation_id"),
+        )
     )
 
 
@@ -316,6 +324,24 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
     """Ensure system entry exists, create from first profile if not (self-healing)."""
     system_entry = get_system_entry(hass)
 
+    if (
+        system_entry is not None
+        and CONF_ALLOW_QUERY_TOKEN_AUTH not in system_entry.data
+        and CONF_ALLOW_QUERY_TOKEN_AUTH not in system_entry.options
+    ):
+        hass.config_entries.async_update_entry(
+            system_entry,
+            data={
+                **system_entry.data,
+                CONF_ALLOW_QUERY_TOKEN_AUTH: _LEGACY_QUERY_TOKEN_AUTH_DEFAULT,
+            },
+        )
+        _LOGGER.warning(
+            "Preserved legacy MCP access_token query authentication during upgrade. "
+            "Disable Allow Access Token in URL (Legacy) after clients use the "
+            "Authorization header."
+        )
+
     if system_entry is None:
         built_in_specs = await hass.async_add_executor_job(load_builtin_tool_toggle_specs)
         _LOGGER.info("System entry not found, creating from first profile's settings (self-healing)")
@@ -382,6 +408,13 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                     first_profile.data.get(
                         CONF_MCP_BEARER_TOKEN,
                         DEFAULT_MCP_BEARER_TOKEN,
+                    ),
+                ),
+                CONF_ALLOW_QUERY_TOKEN_AUTH: first_profile.options.get(
+                    CONF_ALLOW_QUERY_TOKEN_AUTH,
+                    first_profile.data.get(
+                        CONF_ALLOW_QUERY_TOKEN_AUTH,
+                        _LEGACY_QUERY_TOKEN_AUTH_DEFAULT,
                     ),
                 ),
                 CONF_INCLUDE_CURRENT_USER: first_profile.options.get(
@@ -542,6 +575,7 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
                 CONF_SEARXNG_URL: DEFAULT_SEARXNG_URL,
                 CONF_ALLOWED_IPS: DEFAULT_ALLOWED_IPS,
                 CONF_MCP_BEARER_TOKEN: DEFAULT_MCP_BEARER_TOKEN,
+                CONF_ALLOW_QUERY_TOKEN_AUTH: DEFAULT_ALLOW_QUERY_TOKEN_AUTH,
                 CONF_INCLUDE_CURRENT_USER: DEFAULT_INCLUDE_CURRENT_USER,
                 CONF_INCLUDE_HOME_LOCATION: DEFAULT_INCLUDE_HOME_LOCATION,
                 CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS: DEFAULT_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,

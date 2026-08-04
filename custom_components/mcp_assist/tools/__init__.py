@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..custom_tool_api import MCPAssistExternalTool
+from ..secret_redaction import redact_exception, redact_secret_text
 from ..const import (
     CONF_BRAVE_API_KEY,
     CONF_ENABLE_CUSTOM_TOOLS,
@@ -534,7 +535,10 @@ class CustomToolsLoader:
             try:
                 tool_definitions = tool.get_tool_definitions()
             except Exception as err:
-                _LOGGER.error("Error getting tool definitions from %s: %s", tool_key, err)
+                _LOGGER.error(
+                    "Error getting custom tool definitions (%s)",
+                    type(err).__name__,
+                )
                 continue
 
             for tool_definition in tool_definitions:
@@ -613,7 +617,10 @@ class CustomToolsLoader:
                 for tool_definition in tool_definitions
             )
         except Exception as err:
-            _LOGGER.debug("Unable to serialize tool definitions for cache key: %s", err)
+            _LOGGER.debug(
+                "Unable to serialize tool definitions for cache key (%s)",
+                type(err).__name__,
+            )
             serialized_tool_definitions = ()
 
         return (
@@ -655,13 +662,13 @@ class CustomToolsLoader:
                 profile_entry_id,
             )
         except Exception as err:
+            safe_error = redact_exception(err)
             _LOGGER.error(
-                "Failed to load settings for %s %s: %s",
+                "Failed to load settings for a %s package (%s)",
                 "external custom tool" if registry_entry.is_external else "built-in tool package",
-                tool_name,
-                err,
+                type(err).__name__,
             )
-            return self._build_error_result(str(err))
+            return self._build_error_result(safe_error)
 
         call_context.update(
             {
@@ -679,8 +686,12 @@ class CustomToolsLoader:
         try:
             return await instance.handle_call(tool_name, arguments)
         except Exception as err:
-            _LOGGER.error("Error executing tool package %s: %s", tool_name, err)
-            return self._build_error_result(str(err))
+            safe_error = redact_exception(err)
+            _LOGGER.error(
+                "Error executing tool package (%s)",
+                type(err).__name__,
+            )
+            return self._build_error_result(safe_error)
         finally:
             instance._reset_call_context(token)
 
@@ -689,5 +700,5 @@ class CustomToolsLoader:
         """Return a standard MCP error payload."""
         return {
             "isError": True,
-            "content": [{"type": "text", "text": str(message)}],
+            "content": [{"type": "text", "text": redact_secret_text(message)}],
         }

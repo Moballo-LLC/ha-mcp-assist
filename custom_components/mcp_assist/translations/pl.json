@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "Port serwera MCP",
           "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
-          "mcp_bearer_token": "Token Bearer MCP"
+          "mcp_bearer_token": "Token Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
           "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "Port serwera MCP",
               "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
-              "mcp_bearer_token": "Token Bearer MCP"
+              "mcp_bearer_token": "Token Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
               "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "Port serwera MCP",
           "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
-          "mcp_bearer_token": "Token Bearer MCP"
+          "mcp_bearer_token": "Token Bearer MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
           "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+          "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "Port serwera MCP",
               "allowed_ips": "Dodatkowe dozwolone adresy IP/zakresy",
-              "mcp_bearer_token": "Token Bearer MCP"
+              "mcp_bearer_token": "Token Bearer MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Port lokalny używany przez współdzielony serwer MCP.",
               "allowed_ips": "Opcjonalne adresy IP rozdzielane przecinkami lub zakresy CIDR, z którymi można łączyć się oprócz localhost.",
-              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token."
+              "mcp_bearer_token": "Opcjonalny token bearer wymagany przez zewnętrznych klientów MCP. Nowe konfiguracje otrzymują wygenerowany token; wyczyść to pole tylko wtedy, gdy celowo chcesz używać listy dozwolonych adresów IP bez uwierzytelniania bearer. Wpisz FFFF, aby podczas zapisywania wygenerować nowy token.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

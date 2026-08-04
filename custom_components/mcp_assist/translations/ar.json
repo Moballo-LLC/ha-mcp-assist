@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "منفذ خادم MCP",
           "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "mcp_bearer_token": "رمز Bearer لـ MCP"
+          "mcp_bearer_token": "رمز Bearer لـ MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "منفذ خادم MCP",
               "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-              "mcp_bearer_token": "رمز Bearer لـ MCP"
+              "mcp_bearer_token": "رمز Bearer لـ MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
               "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "منفذ خادم MCP",
           "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-          "mcp_bearer_token": "رمز Bearer لـ MCP"
+          "mcp_bearer_token": "رمز Bearer لـ MCP",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
           "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+          "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "منفذ خادم MCP",
               "allowed_ips": "عناوين IP/نطاقات اضافية مسموح بها",
-              "mcp_bearer_token": "رمز Bearer لـ MCP"
+              "mcp_bearer_token": "رمز Bearer لـ MCP",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "المنفذ المحلي الذي يستخدمه خادم MCP المشترك.",
               "allowed_ips": "عناوين IP اختيارية مفصولة بفواصل أو نطاقات CIDR التي قد تتصل بالإضافة إلى localhost.",
-              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ."
+              "mcp_bearer_token": "رمز Bearer اختياري مطلوب لعملاء MCP الخارجيين. تحصل الإعدادات الجديدة على رمز مُنشأ؛ امسح هذا الحقل فقط إذا كنت تريد عمدًا السماح بعناوين IP دون مصادقة Bearer. أدخل FFFF لإنشاء رمز جديد عند الحفظ.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

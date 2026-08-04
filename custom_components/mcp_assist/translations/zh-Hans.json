@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP服务器端口",
           "allowed_ips": "额外允许的IP/范围",
-          "mcp_bearer_token": "MCP Bearer 令牌"
+          "mcp_bearer_token": "MCP Bearer 令牌",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP服务器端口",
               "allowed_ips": "额外允许的IP/范围",
-              "mcp_bearer_token": "MCP Bearer 令牌"
+              "mcp_bearer_token": "MCP Bearer 令牌",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "共享MCP服务器使用的本地端口。",
               "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP服务器端口",
           "allowed_ips": "额外允许的IP/范围",
-          "mcp_bearer_token": "MCP Bearer 令牌"
+          "mcp_bearer_token": "MCP Bearer 令牌",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "共享MCP服务器使用的本地端口。",
           "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+          "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP服务器端口",
               "allowed_ips": "额外允许的IP/范围",
-              "mcp_bearer_token": "MCP Bearer 令牌"
+              "mcp_bearer_token": "MCP Bearer 令牌",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "共享MCP服务器使用的本地端口。",
               "allowed_ips": "除 localhost 之外还可以连接的可选逗号分隔 IP 地址或 CIDR 范围。",
-              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。"
+              "mcp_bearer_token": "外部 MCP 客户端需要的可选 Bearer 令牌。新设置会获得生成的令牌；只有在你明确想仅使用 IP 允许列表而不使用 Bearer 认证时，才清空此字段。 保存时输入 FFFF 可生成新令牌。",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

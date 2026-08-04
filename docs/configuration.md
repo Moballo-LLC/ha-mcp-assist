@@ -145,8 +145,10 @@ or "thanks".
   argument counts.
 - **Chat Log Mode** stores recent conversation records in Home Assistant
   storage. Records can include user text, assistant replies, tool names,
-  arguments, results, and errors. Keep it off unless you are actively
-  troubleshooting. See [Debugging](debugging.md).
+  arguments, results, and errors. Recognized credentials are redacted, and the
+  review service returns metadata only unless you explicitly select a detailed
+  projection. Keep it off unless you are actively troubleshooting. See
+  [Debugging](debugging.md).
 
 ## Shared MCP Server Settings
 
@@ -157,6 +159,7 @@ Shared settings apply to all profiles:
 | MCP Server Port | The HTTP/WebSocket MCP server port, default `8090` |
 | Additional Allowed IPs/Ranges | Extra clients allowed to connect to the MCP server |
 | MCP Bearer Token | Optional token external MCP clients must send as `Authorization: Bearer <token>`. Enter `FFFF` and save to generate a replacement token. |
+| Allow Access Token in URL (Legacy) | Compatibility setting for query-string authentication. Disabled on new installs because URLs are commonly retained or shared. Upgrades preserve the previously supported behavior until you disable it. |
 | Smart Entity Index | Compact Home Assistant structure index and gap-filling behavior |
 | Max Entities Per Discovery | Upper bound for a single discovery result |
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |

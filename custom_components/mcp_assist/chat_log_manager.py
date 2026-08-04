@@ -10,6 +10,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import DEFAULT_CHAT_LOG_MAX_ENTRIES, DOMAIN
+from .secret_redaction import redact_secrets, redact_secrets_for_storage_migration
 
 _STORAGE_VERSION = 1
 _STORAGE_KEY = f"{DOMAIN}_chat_logs"
@@ -27,6 +28,19 @@ CHAT_LOG_PROJECTIONS = frozenset(
         CHAT_LOG_PROJECTION_RAW,
         CHAT_LOG_PROJECTION_MODEL,
     }
+)
+_COMPACT_RECORD_FIELDS = (
+    "id",
+    "created_at",
+    "completed_at",
+    "duration_ms",
+    "profile_entry_id",
+    "profile_name",
+    "conversation_id",
+    "server_type",
+    "model",
+    "language",
+    "continue_conversation",
 )
 # Debounce persistence: chat logs are written once per conversation turn and
 # the whole (multi-MB) file is rewritten each time, so coalesce rapid writes.
@@ -85,7 +99,7 @@ class ChatLogManager:
                 self._entries = self._entries[-effective_max:]
             await self._save_locked()
 
-        return dict(normalized)
+        return redact_secrets(normalized)
 
     async def async_list(
         self,
@@ -93,7 +107,7 @@ class ChatLogManager:
         limit: int | None = None,
         profile_entry_id: str | None = None,
         conversation_id: str | None = None,
-        projection: str = CHAT_LOG_PROJECTION_FULL,
+        projection: str = CHAT_LOG_PROJECTION_COMPACT,
     ) -> list[dict[str, Any]]:
         """Return matching logs newest first."""
         normalized_projection = self.normalize_projection(projection)
@@ -124,7 +138,7 @@ class ChatLogManager:
     @staticmethod
     def normalize_projection(value: Any) -> str:
         """Return a supported chat-log response projection."""
-        projection = str(value or CHAT_LOG_PROJECTION_FULL).strip().casefold()
+        projection = str(value or CHAT_LOG_PROJECTION_COMPACT).strip().casefold()
         if projection not in CHAT_LOG_PROJECTIONS:
             choices = ", ".join(sorted(CHAT_LOG_PROJECTIONS))
             raise ValueError(f"projection must be one of: {choices}")
@@ -137,7 +151,19 @@ class ChatLogManager:
         projection: str,
     ) -> dict[str, Any]:
         """Return one response-only view without mutating stored records."""
-        projected = dict(entry)
+        entry = redact_secrets(entry)
+        if projection == CHAT_LOG_PROJECTION_COMPACT:
+            projected = {
+                key: entry[key] for key in _COMPACT_RECORD_FIELDS if key in entry
+            }
+            if "error" in entry:
+                projected["status"] = "error"
+            elif "completed_at" in entry:
+                projected["status"] = "ok"
+            else:
+                projected["status"] = "in_progress"
+        else:
+            projected = dict(entry)
         tools = entry.get("tools")
         if not isinstance(tools, list):
             return projected
@@ -170,7 +196,6 @@ class ChatLogManager:
                 "name",
                 "started_at",
                 "completed_at",
-                "error",
             )
             if key in tool
         }
@@ -229,12 +254,17 @@ class ChatLogManager:
 
         stored = await self._store.async_load()
         raw_entries = stored.get("entries", []) if isinstance(stored, dict) else []
+        if not isinstance(raw_entries, list):
+            raw_entries = []
+        migrated_entries = redact_secrets_for_storage_migration(raw_entries)
         self._entries = [
             normalized
-            for item in raw_entries
+            for item in migrated_entries
             if (normalized := self._normalize_loaded_record(item)) is not None
         ]
         self._loaded = True
+        if migrated_entries != raw_entries:
+            await self._store.async_save(self._data_to_save())
 
     async def _save_locked(self, *, immediate: bool = False) -> None:
         """Persist the current chat log list.
@@ -270,7 +300,7 @@ class ChatLogManager:
         public_record = {
             key: value for key, value in record.items() if not str(key).startswith("_")
         }
-        normalized = self._json_safe(public_record)
+        normalized = self._json_safe(redact_secrets(public_record))
         normalized.setdefault("id", uuid4().hex[:12])
         normalized.setdefault("created_at", dt_util.utcnow().isoformat())
         normalized.setdefault("tools", [])

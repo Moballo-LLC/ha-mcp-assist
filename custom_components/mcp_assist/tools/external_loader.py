@@ -20,6 +20,7 @@ from ..const import (
     CUSTOM_TOOLS_DIRECTORY,
 )
 from ..custom_tool_api import MCPAssistCustomToolManifest, MCPAssistExternalTool
+from ..secret_redaction import redact_exception
 from .schema_utils import SchemaValidationError, validate_and_normalize_json_value
 
 _LOGGER = logging.getLogger(__name__)
@@ -207,19 +208,18 @@ class ExternalCustomToolLoader:
                         await tool.async_shutdown()
                     except Exception as shutdown_err:
                         _LOGGER.debug(
-                            "%s %s also failed during cleanup: %s",
+                            "%s cleanup also failed (%s)",
                             self._package_log_label,
-                            getattr(getattr(tool, "manifest", None), "tool_id", tool_dir.name),
-                            shutdown_err,
+                            type(shutdown_err).__name__,
                         )
+                safe_error = redact_exception(err)
                 _LOGGER.error(
-                    "Failed to load %s from %s: %s",
+                    "Failed to load %s (%s)",
                     self._package_log_label,
-                    tool_dir,
-                    err,
+                    type(err).__name__,
                 )
                 self.last_load_errors.append(
-                    {"tool_dir": tool_dir.name, "error": str(err)}
+                    {"tool_dir": tool_dir.name, "error": safe_error}
                 )
 
         return loaded
@@ -662,7 +662,7 @@ class ExternalCustomToolLoader:
                 True,
             )
         except SchemaValidationError as err:
-            raise ValueError(str(err)) from err
+            raise ValueError(redact_exception(err)) from None
 
     def _deep_merge_dicts(
         self,

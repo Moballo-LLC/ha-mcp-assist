@@ -213,12 +213,14 @@
         "data": {
           "mcp_port": "MCP-palvelinportti",
           "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "mcp_bearer_token": "MCP Bearer -tunnus"
+          "mcp_bearer_token": "MCP Bearer -tunnus",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -227,12 +229,14 @@
             "data": {
               "mcp_port": "MCP-palvelinportti",
               "allowed_ips": "Lisat sallitut IP:t/alueet",
-              "mcp_bearer_token": "MCP Bearer -tunnus"
+              "mcp_bearer_token": "MCP Bearer -tunnus",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
               "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {
@@ -559,12 +563,14 @@
         "data": {
           "mcp_port": "MCP-palvelinportti",
           "allowed_ips": "Lisat sallitut IP:t/alueet",
-          "mcp_bearer_token": "MCP Bearer -tunnus"
+          "mcp_bearer_token": "MCP Bearer -tunnus",
+          "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
         },
         "data_description": {
           "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
           "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+          "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä.",
+          "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
         },
         "sections": {
           "server": {
@@ -573,12 +579,14 @@
             "data": {
               "mcp_port": "MCP-palvelinportti",
               "allowed_ips": "Lisat sallitut IP:t/alueet",
-              "mcp_bearer_token": "MCP Bearer -tunnus"
+              "mcp_bearer_token": "MCP Bearer -tunnus",
+              "allow_query_token_auth": "Allow Access Token in URL (Legacy)"
             },
             "data_description": {
               "mcp_port": "Jaetun MCP-palvelimen käyttämä paikallinen portti.",
               "allowed_ips": "Valinnaiset pilkuilla erotetut IP-osoitteet tai CIDR-alueet, jotka voivat muodostaa yhteyden localhost:n lisäksi.",
-              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä."
+              "mcp_bearer_token": "Valinnainen bearer-tunnus, jota ulkoiset MCP-asiakkaat tarvitsevat. Uudet määritykset saavat luodun tunnuksen; tyhjennä tämä kenttä vain, jos haluat tarkoituksella käyttää IP-sallintaa ilman bearer-todennusta. Syötä FFFF, jos haluat luoda uuden tokenin tallennuksen yhteydessä.",
+              "allow_query_token_auth": "Disabled by default. Enable only for legacy clients that cannot set an Authorization header. Query-string tokens can appear in logs, history, screenshots, and proxy records."
             }
           },
           "context": {

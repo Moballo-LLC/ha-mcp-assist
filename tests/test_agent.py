@@ -4517,6 +4517,52 @@ async def test_execute_single_tool_call_records_persistent_tool_log(
 
 
 @pytest.mark.asyncio
+async def test_execute_single_tool_call_redacts_result_before_model_and_chat_log(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A tool-result canary must not reach provider output or persistent chat state."""
+    canary = "not-a-real-secret-canary-12345"
+    entry = profile_entry_factory(options={CONF_CHAT_LOG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    monkeypatch.setattr(
+        agent,
+        "_call_mcp_tool",
+        AsyncMock(
+            return_value={
+                "content": [{"type": "text", "text": f"api_key={canary}"}],
+                "structuredContent": {
+                    "headers": {"Authorization": f"Bearer {canary}"}
+                },
+            }
+        ),
+    )
+    record = {
+        "id": "record-canary",
+        "created_at": "2026-06-01T00:00:00+00:00",
+        "tools": [],
+    }
+    token = agent_module._PERSISTENT_CHAT_LOG_RECORD.set(record)
+
+    try:
+        result = await agent._execute_single_tool_call(
+            {
+                "id": "call-canary",
+                "function": {
+                    "name": "external_status",
+                    "arguments": "{}",
+                },
+            }
+        )
+    finally:
+        agent_module._PERSISTENT_CHAT_LOG_RECORD.reset(token)
+
+    assert canary not in str(result)
+    assert canary not in str(record)
+    assert "[redacted]" in str(result)
+    assert "[redacted]" in str(record)
+
+
+@pytest.mark.asyncio
 async def test_finish_persistent_chat_log_saves_with_manager(
     hass, profile_entry_factory
 ) -> None:
