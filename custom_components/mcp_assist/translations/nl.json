@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "Dit model vereist de Responses API. Kies Responses API of Automatisch, of selecteer een ander model.",
+      "model_requires_chat_completions_api": "Dit model vereist de Chat Completions API. Kies Chat Completions API of selecteer een ander model.",
       "cannot_connect": "Kan geen verbinding maken met de inferentieserver. Zorg ervoor dat deze actief en bereikbaar is.",
       "no_models": "Geen modellen geladen op de server. Laad eerst een model.",
       "invalid_model": "Het opgegeven model is niet beschikbaar op de server.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "Dit model vereist de Responses API. Kies Responses API of Automatisch, of selecteer een ander model.",
+      "model_requires_chat_completions_api": "Dit model vereist de Chat Completions API. Kies Chat Completions API of selecteer een ander model.",
       "mcp_bearer_token_too_short": "Het MCP bearer-token moet leeg zijn of uit minstens 16 tekens bestaan."
     }
   },

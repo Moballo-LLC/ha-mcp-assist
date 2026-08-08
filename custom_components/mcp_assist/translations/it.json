@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "Questo modello richiede Responses API. Scegli Responses API o Automatico, oppure seleziona un altro modello.",
+      "model_requires_chat_completions_api": "Questo modello richiede Chat Completions API. Scegli Chat Completions API oppure seleziona un altro modello.",
       "cannot_connect": "Impossibile connettersi al server di inferenza. Assicurati che sia in esecuzione e accessibile.",
       "no_models": "Nessun modello caricato sul server. Carica prima un modello.",
       "invalid_model": "Il modello specificato non e disponibile sul server.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "Questo modello richiede Responses API. Scegli Responses API o Automatico, oppure seleziona un altro modello.",
+      "model_requires_chat_completions_api": "Questo modello richiede Chat Completions API. Scegli Chat Completions API oppure seleziona un altro modello.",
       "mcp_bearer_token_too_short": "Il token Bearer MCP deve essere vuoto o contenere almeno 16 caratteri."
     }
   },

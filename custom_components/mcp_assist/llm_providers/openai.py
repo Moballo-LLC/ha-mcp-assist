@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..const import (
     CONF_API_KEY,
@@ -31,6 +32,13 @@ _OPENAI_API_TRANSPORTS = {
     OPENAI_API_TRANSPORT_RESPONSES,
     OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
 }
+_CHAT_COMPLETIONS_ONLY_MODEL_PREFIXES = (
+    "gpt-audio",
+    "gpt-4o-audio-preview",
+    "gpt-4o-mini-audio-preview",
+    "gpt-4o-search-preview",
+    "gpt-4o-mini-search-preview",
+)
 
 
 class OpenAIProvider(OpenAICompatibleProvider):
@@ -85,11 +93,23 @@ class OpenAIProvider(OpenAICompatibleProvider):
     @classmethod
     def _is_official_openai_base_url(cls, base_url: str) -> bool:
         """Return whether a base URL targets OpenAI's official API host."""
-        official_base_urls = {
-            OPENAI_BASE_URL.rstrip("/"),
-            f"{OPENAI_BASE_URL.rstrip('/')}/v1",
-        }
-        return str(base_url or "").rstrip("/") in official_base_urls
+        try:
+            parsed = urlsplit(str(base_url or "").strip())
+            port = parsed.port
+        except ValueError:
+            return False
+        hostname = (parsed.hostname or "").rstrip(".")
+        path = parsed.path.rstrip("/")
+        return (
+            parsed.scheme.lower() == "https"
+            and hostname == "api.openai.com"
+            and port in (None, 443)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+            and path in {"", "/v1"}
+        )
 
     @classmethod
     def _configured_transport_from_values(cls, values: dict[str, Any] | None) -> str:
@@ -521,11 +541,23 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 if (model_id.startswith("gpt-") or cls.is_reasoning_model(model_id))
                 and "deep-research" not in model_id.lower()
                 and (
-                    transport == OPENAI_API_TRANSPORT_RESPONSES
-                    or not cls.is_responses_only_model(model_id)
+                    (
+                        transport == OPENAI_API_TRANSPORT_RESPONSES
+                        and not cls.is_chat_completions_only_model(model_id)
+                    )
+                    or (
+                        transport == OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+                        and not cls.is_responses_only_model(model_id)
+                    )
                 )
             ]
         return sorted((model_id for model_id in model_ids if model_id), reverse=True)
+
+    @staticmethod
+    def is_chat_completions_only_model(model_name: str) -> bool:
+        """Return whether OpenAI documents a model family as Chat-only."""
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        return name.startswith(_CHAT_COMPLETIONS_ONLY_MODEL_PREFIXES)
 
     @classmethod
     def model_configuration_error(
@@ -545,4 +577,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
             and cls.is_responses_only_model(model_name)
         ):
             return "model_requires_responses_api"
+        if (
+            transport == OPENAI_API_TRANSPORT_RESPONSES
+            and cls.is_chat_completions_only_model(model_name)
+        ):
+            return "model_requires_chat_completions_api"
         return None

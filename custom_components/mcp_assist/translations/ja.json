@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "このモデルには Responses API が必要です。Responses API または自動を選択するか、別のモデルを選択してください。",
+      "model_requires_chat_completions_api": "このモデルには Chat Completions API が必要です。Chat Completions API を選択するか、別のモデルを選択してください。",
       "cannot_connect": "推論サーバーに接続できません。サーバーが起動していてアクセス可能であることを確認してください。",
       "no_models": "サーバーにモデルがロードされていません。まずモデルをロードしてください。",
       "invalid_model": "指定されたモデルはサーバーで利用できません。",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "このモデルには Responses API が必要です。Responses API または自動を選択するか、別のモデルを選択してください。",
+      "model_requires_chat_completions_api": "このモデルには Chat Completions API が必要です。Chat Completions API を選択するか、別のモデルを選択してください。",
       "mcp_bearer_token_too_short": "MCP Bearer トークンは空欄、または 16 文字以上である必要があります。"
     }
   },

@@ -52,7 +52,9 @@ may implement Chat Completions without implementing Responses, so Automatic
 keeps custom endpoints on Chat Completions. Select Responses explicitly only
 after confirming the server supports its input items, flat function-tool
 schemas, function-call output items, and typed streaming events. MCP Assist does
-not switch APIs automatically after a failed request.
+not switch APIs automatically after a failed request. For the official OpenAI
+endpoint, known API-specific models are filtered from the other API's model list
+and rejected if entered manually.
 
 ### Small Context Local Models
 

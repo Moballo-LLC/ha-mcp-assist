@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "يتطلب هذا الطراز واجهة Responses API. اختر Responses API أو تلقائي، أو حدد طرازًا مختلفًا.",
+      "model_requires_chat_completions_api": "يتطلب هذا الطراز واجهة Chat Completions API. اختر Chat Completions API أو حدد طرازًا مختلفًا.",
       "cannot_connect": "لا يمكن الاتصال بخادم الاستدلال. تاكد من انه يعمل ويمكن الوصول اليه.",
       "no_models": "لا توجد نماذج محملة على الخادم. يرجى تحميل نموذج اولا.",
       "invalid_model": "النموذج المحدد غير متوفر على الخادم.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "يتطلب هذا الطراز واجهة Responses API. اختر Responses API أو تلقائي، أو حدد طرازًا مختلفًا.",
+      "model_requires_chat_completions_api": "يتطلب هذا الطراز واجهة Chat Completions API. اختر Chat Completions API أو حدد طرازًا مختلفًا.",
       "mcp_bearer_token_too_short": "يجب أن يكون رمز Bearer لـ MCP فارغًا أو مكوّنًا من 16 حرفًا على الأقل."
     }
   },

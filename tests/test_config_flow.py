@@ -742,8 +742,23 @@ async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> No
     assert flow.step4_data[CONF_PROFILE_ENABLE_DEVICE_TOOLS] is False
 
 
-async def test_advanced_step_rejects_responses_only_model_with_chat_transport(
-    hass,
+@pytest.mark.parametrize(
+    ("model_name", "transport", "error"),
+    [
+        (
+            "o3-pro",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
+            "gpt-4o-audio-preview",
+            OPENAI_API_TRANSPORT_AUTO,
+            "model_requires_chat_completions_api",
+        ),
+    ],
+)
+async def test_advanced_step_rejects_incompatible_openai_model_transport(
+    hass, model_name: str, transport: str, error: str
 ) -> None:
     """Initial setup should not save a known incompatible OpenAI pairing."""
     flow = MCPAssistConfigFlow()
@@ -754,24 +769,22 @@ async def test_advanced_step_rejects_responses_only_model_with_chat_transport(
         CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
         CONF_API_KEY: "sk-test",
     }
-    flow.step3_data = {CONF_MODEL_NAME: "o3-pro"}
+    flow.step3_data = {CONF_MODEL_NAME: model_name}
 
     result = await flow.async_step_advanced(
         {
             PROVIDER_SECTION_KEY: {
-                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+                CONF_OPENAI_API_TRANSPORT: transport
             }
         }
     )
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "advanced"
-    assert result["errors"] == {"base": "model_requires_responses_api"}
+    assert result["errors"] == {"base": error}
     provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
     markers = _schema_marker_by_field(provider_section.schema)
-    assert markers[CONF_OPENAI_API_TRANSPORT].default() == (
-        OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-    )
+    assert markers[CONF_OPENAI_API_TRANSPORT].default() == transport
 
 
 async def test_shared_mcp_step_groups_context_discovery_and_tools(
@@ -1324,19 +1337,21 @@ def test_openai_api_transport_copy_is_localized() -> None:
         assert localized_description != base_description, path
 
 
-def test_openai_model_transport_error_is_localized() -> None:
+def test_openai_model_transport_errors_are_localized() -> None:
     """The incompatible-model error should be localized in both profile flows."""
     base_strings = json.loads(CONFIG_STRINGS_PATH.read_text(encoding="utf-8"))
 
     for path in sorted(TRANSLATION_DIR.glob("*.json")):
         localized = json.loads(path.read_text(encoding="utf-8"))
         for root in ("config", "options"):
-            message = localized[root]["error"]["model_requires_responses_api"]
-            assert message
-            if path.stem != "en":
-                assert message != base_strings[root]["error"][
-                    "model_requires_responses_api"
-                ], path
+            for error in (
+                "model_requires_responses_api",
+                "model_requires_chat_completions_api",
+            ):
+                message = localized[root]["error"][error]
+                assert message
+                if path.stem != "en":
+                    assert message != base_strings[root]["error"][error], path
 
 
 def test_performance_translations_cover_context_mode() -> None:
@@ -1591,8 +1606,27 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
     )
 
 
-async def test_options_step_rejects_responses_only_model_with_chat_transport(
-    hass, profile_entry_factory
+@pytest.mark.parametrize(
+    ("model_name", "transport", "error"),
+    [
+        (
+            "o3-pro",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
+            "gpt-4o-audio-preview",
+            OPENAI_API_TRANSPORT_RESPONSES,
+            "model_requires_chat_completions_api",
+        ),
+    ],
+)
+async def test_options_step_rejects_incompatible_openai_model_transport(
+    hass,
+    profile_entry_factory,
+    model_name: str,
+    transport: str,
+    error: str,
 ) -> None:
     """Profile edits should reject a known incompatible OpenAI pairing."""
     flow = MCPAssistOptionsFlow()
@@ -1604,7 +1638,7 @@ async def test_options_step_rejects_responses_only_model_with_chat_transport(
             CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
             CONF_API_KEY: "sk-test",
             CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
-            CONF_MODEL_NAME: "o3-pro",
+            CONF_MODEL_NAME: model_name,
             CONF_PROFILE_NAME: "Test Profile",
         },
         options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
@@ -1613,7 +1647,7 @@ async def test_options_step_rejects_responses_only_model_with_chat_transport(
 
     with patch(
         "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
-        AsyncMock(return_value=["o3-pro", "gpt-4.1-mini"]),
+        AsyncMock(return_value=[model_name, "gpt-4.1-mini"]),
     ):
         result = await flow.async_step_init(
             {
@@ -1622,23 +1656,19 @@ async def test_options_step_rejects_responses_only_model_with_chat_transport(
                     CONF_API_KEY: "sk-test",
                     CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
                 },
-                MODEL_SECTION_KEY: {CONF_MODEL_NAME: "o3-pro"},
+                MODEL_SECTION_KEY: {CONF_MODEL_NAME: model_name},
                 PROVIDER_SECTION_KEY: {
-                    CONF_OPENAI_API_TRANSPORT: (
-                        OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-                    )
+                    CONF_OPENAI_API_TRANSPORT: transport
                 },
             }
         )
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
-    assert result["errors"] == {"base": "model_requires_responses_api"}
+    assert result["errors"] == {"base": error}
     provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
     markers = _schema_marker_by_field(provider_section.schema)
-    assert markers[CONF_OPENAI_API_TRANSPORT].default() == (
-        OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-    )
+    assert markers[CONF_OPENAI_API_TRANSPORT].default() == transport
 
 
 async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_section(

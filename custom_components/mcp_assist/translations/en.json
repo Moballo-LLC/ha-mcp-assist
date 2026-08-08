@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "This model requires the Responses API. Choose Responses API or Automatic, or select a different model.",
+      "model_requires_chat_completions_api": "This model requires the Chat Completions API. Choose Chat Completions API, or select a different model.",
       "cannot_connect": "Cannot connect to the inference server. Make sure it's running and accessible.",
       "no_models": "No models loaded on the server. Please load a model first.",
       "invalid_model": "The specified model is not available on the server.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "This model requires the Responses API. Choose Responses API or Automatic, or select a different model.",
+      "model_requires_chat_completions_api": "This model requires the Chat Completions API. Choose Chat Completions API, or select a different model.",
       "mcp_bearer_token_too_short": "MCP bearer token must be blank or at least 16 characters."
     }
   },

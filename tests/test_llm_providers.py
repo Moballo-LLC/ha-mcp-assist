@@ -374,6 +374,50 @@ def test_openai_automatic_transport_uses_responses_only_for_official_api() -> No
     assert custom_provider.chat_url() == "https://api.example.invalid/v1/chat/completions"
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://API.OPENAI.COM/v1",
+        "https://api.openai.com:443",
+        "HTTPS://API.OPENAI.COM:443/v1/",
+        "https://api.openai.com.:443/v1",
+    ],
+)
+def test_openai_official_url_detection_normalizes_equivalent_urls(
+    base_url: str,
+) -> None:
+    """Equivalent official URL spellings should retain OpenAI-only behavior."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=base_url)
+    )
+
+    assert provider.uses_official_openai_api is True
+    assert provider.uses_responses_api is True
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://api.openai.com",
+        "https://api.openai.com:8443",
+        "https://api.openai.com.example.invalid",
+        "https://user@api.openai.com",
+        "https://api.openai.com/v2",
+        "https://api.openai.com?proxy=true",
+    ],
+)
+def test_openai_official_url_detection_rejects_non_equivalent_urls(
+    base_url: str,
+) -> None:
+    """Lookalike or behavior-changing URLs should remain custom endpoints."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=base_url)
+    )
+
+    assert provider.uses_official_openai_api is False
+    assert provider.uses_responses_api is False
+
+
 def test_openai_transport_can_be_selected_for_any_endpoint() -> None:
     """Official and custom endpoints should both honor an explicit API selection."""
     custom_responses = OpenAIProvider(
@@ -435,9 +479,12 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
 
 
 def test_openai_rejects_only_known_official_model_transport_mismatches() -> None:
-    """Responses-only models should not be saved with official Chat Completions."""
+    """Known API-specific models should not be saved with the other API."""
     chat_values = {
         CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+    }
+    responses_values = {
+        CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES
     }
 
     assert (
@@ -450,9 +497,25 @@ def test_openai_rejects_only_known_official_model_transport_mismatches() -> None
     )
     assert (
         OpenAIProvider.model_configuration_error(
+            "gpt-4o-audio-preview",
+            base_url=OPENAI_BASE_URL,
+            values=responses_values,
+        )
+        == "model_requires_chat_completions_api"
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
             "gpt-4.1-mini",
             base_url=OPENAI_BASE_URL,
             values=chat_values,
+        )
+        is None
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
+            "gpt-3.5-turbo",
+            base_url=OPENAI_BASE_URL,
+            values=responses_values,
         )
         is None
     )
@@ -901,15 +964,26 @@ def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
 
 
 def test_openai_filter_model_ids_includes_pro_models_for_responses() -> None:
-    """Responses profiles should offer compatible pro models but not deep research."""
+    """Responses profiles should omit deep-research and Chat-only models."""
     filtered = OpenAIProvider.filter_model_ids(
-        ["gpt-4o", "o3-pro", "o3-deep-research", "whisper-1"],
+        [
+            "gpt-4o",
+            "gpt-3.5-turbo",
+            "gpt-4o-audio-preview",
+            "gpt-4o-search-preview-2025-03-11",
+            "o3-pro",
+            "o3-deep-research",
+            "whisper-1",
+        ],
         base_url=OPENAI_BASE_URL,
         values={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
     )
 
     assert "o3-pro" in filtered
+    assert "gpt-3.5-turbo" in filtered
     assert "o3-deep-research" not in filtered
+    assert "gpt-4o-audio-preview" not in filtered
+    assert "gpt-4o-search-preview-2025-03-11" not in filtered
     assert "whisper-1" not in filtered
 
 
@@ -930,6 +1004,18 @@ def test_is_responses_only_model_classification() -> None:
     assert not is_responses_only("gpt-4o")
     # "pro" must be a segment, not any substring.
     assert not is_responses_only("gpt-4-proxy")
+
+
+def test_is_chat_completions_only_model_classification() -> None:
+    """Documented audio and search-preview families are Chat Completions-only."""
+    is_chat_only = OpenAIProvider.is_chat_completions_only_model
+    assert is_chat_only("gpt-audio-1.5")
+    assert is_chat_only("gpt-4o-audio-preview-2025-06-03")
+    assert is_chat_only("gpt-4o-mini-audio-preview")
+    assert is_chat_only("gpt-4o-search-preview")
+    assert is_chat_only("gpt-4o-mini-search-preview-2025-03-11")
+    assert not is_chat_only("gpt-3.5-turbo")
+    assert not is_chat_only("gpt-4o")
 
 
 def test_openai_responses_provider_applies_prompt_cache_key() -> None:

@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "Kailangan ng modelong ito ang Responses API. Piliin ang Responses API o Awtomatiko, o pumili ng ibang modelo.",
+      "model_requires_chat_completions_api": "Kailangan ng modelong ito ang Chat Completions API. Piliin ang Chat Completions API o pumili ng ibang modelo.",
       "cannot_connect": "Hindi makakonekta sa inference server. Tiyaking tumatakbo ito at naa-access.",
       "no_models": "Walang naka-load na modelo sa server. Mag-load muna ng modelo.",
       "invalid_model": "Ang tinukoy na modelo ay hindi available sa server.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "Kailangan ng modelong ito ang Responses API. Piliin ang Responses API o Awtomatiko, o pumili ng ibang modelo.",
+      "model_requires_chat_completions_api": "Kailangan ng modelong ito ang Chat Completions API. Piliin ang Chat Completions API o pumili ng ibang modelo.",
       "mcp_bearer_token_too_short": "Ang MCP bearer token ay dapat walang laman o hindi bababa sa 16 na character."
     }
   },

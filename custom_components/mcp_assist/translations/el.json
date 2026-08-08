@@ -339,6 +339,7 @@
     },
     "error": {
       "model_requires_responses_api": "Αυτό το μοντέλο απαιτεί το Responses API. Επιλέξτε Responses API ή Αυτόματα, ή επιλέξτε διαφορετικό μοντέλο.",
+      "model_requires_chat_completions_api": "Αυτό το μοντέλο απαιτεί το Chat Completions API. Επιλέξτε Chat Completions API ή διαφορετικό μοντέλο.",
       "cannot_connect": "Αδυναμια συνδεσης με τον διακομιστη συμπερασματος. Βεβαιωθειτε οτι εκτελειται και ειναι προσβασιμος.",
       "no_models": "Δεν υπαρχουν φορτωμενα μοντελα στον διακομιστη. Φορτωστε πρωτα ενα μοντελο.",
       "invalid_model": "Το καθορισμενο μοντελο δεν ειναι διαθεσιμο στον διακομιστη.",
@@ -693,6 +694,7 @@
     },
     "error": {
       "model_requires_responses_api": "Αυτό το μοντέλο απαιτεί το Responses API. Επιλέξτε Responses API ή Αυτόματα, ή επιλέξτε διαφορετικό μοντέλο.",
+      "model_requires_chat_completions_api": "Αυτό το μοντέλο απαιτεί το Chat Completions API. Επιλέξτε Chat Completions API ή διαφορετικό μοντέλο.",
       "mcp_bearer_token_too_short": "Το MCP bearer token πρέπει να είναι κενό ή να έχει τουλάχιστον 16 χαρακτήρες."
     }
   },
