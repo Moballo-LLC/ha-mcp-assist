@@ -1176,6 +1176,7 @@ def test_openai_responses_http_parser_extracts_text() -> None:
 
     message = provider.parse_http_message(
         {
+            "status": "completed",
             "output": [
                 {
                     "type": "message",
@@ -1194,16 +1195,20 @@ def test_openai_responses_http_parser_extracts_text() -> None:
     }
 
 
-def test_openai_responses_http_parser_rejects_incomplete_output() -> None:
-    """Incomplete non-streaming responses must not expose partial tool calls."""
+@pytest.mark.parametrize(
+    "status",
+    ["failed", "incomplete", "cancelled", "in_progress", "queued"],
+)
+def test_openai_responses_http_parser_rejects_noncompleted_output(status: str) -> None:
+    """Non-completed HTTP responses must not expose partial tool calls."""
     provider = OpenAIProvider(
         _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
     )
 
-    with pytest.raises(ValueError, match="incomplete response"):
+    with pytest.raises(ValueError, match=f"status {status}"):
         provider.parse_http_message(
             {
-                "status": "incomplete",
+                "status": status,
                 "output": [
                     {
                         "type": "function_call",
@@ -1262,6 +1267,7 @@ def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> Non
     [
         ("error", "stream failed"),
         ("response.failed", "stream failed"),
+        ("response.cancelled", "stream failed"),
         ("response.incomplete", "stream ended incomplete"),
     ],
 )
