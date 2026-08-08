@@ -372,6 +372,8 @@ class OpenAIProvider(OpenAICompatibleProvider):
         """Normalize a response from the selected OpenAI API."""
         if not self.uses_responses_api:
             return super().parse_http_message(data)
+        if data.get("status") == "incomplete":
+            raise ValueError("OpenAI Responses API returned an incomplete response")
 
         message = self._normalize_responses_message(data)
         self._pending_response_output = self._response_output_items(data)
@@ -393,7 +395,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
             text_delta = str(data.get("delta") or "")
             self._streamed_text_seen = self._streamed_text_seen or bool(text_delta)
             return StreamParseResult(delta={"content": text_delta})
-        if event_type in {"response.completed", "response.incomplete"}:
+        if event_type == "response.incomplete":
+            raise ProviderStreamError("OpenAI Responses stream ended incomplete")
+        if event_type == "response.completed":
             response = data.get("response")
             if not isinstance(response, dict):
                 return StreamParseResult(delta={}, done=True)

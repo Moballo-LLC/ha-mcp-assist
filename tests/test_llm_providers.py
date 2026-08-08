@@ -1194,6 +1194,29 @@ def test_openai_responses_http_parser_extracts_text() -> None:
     }
 
 
+def test_openai_responses_http_parser_rejects_incomplete_output() -> None:
+    """Incomplete non-streaming responses must not expose partial tool calls."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    with pytest.raises(ValueError, match="incomplete response"):
+        provider.parse_http_message(
+            {
+                "status": "incomplete",
+                "output": [
+                    {
+                        "type": "function_call",
+                        "status": "incomplete",
+                        "call_id": "call_1",
+                        "name": "perform_action",
+                        "arguments": "{}",
+                    }
+                ],
+            }
+        )
+
+
 def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> None:
     """A completed Responses event should expose tool calls and replay metadata."""
     provider = OpenAIProvider(
@@ -1234,14 +1257,24 @@ def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> Non
     assert parsed.usage == response["usage"]
 
 
-@pytest.mark.parametrize("event_type", ["error", "response.failed"])
-def test_openai_responses_stream_parser_raises_terminal_errors(event_type: str) -> None:
+@pytest.mark.parametrize(
+    ("event_type", "error_match"),
+    [
+        ("error", "stream failed"),
+        ("response.failed", "stream failed"),
+        ("response.incomplete", "stream ended incomplete"),
+    ],
+)
+def test_openai_responses_stream_parser_raises_terminal_errors(
+    event_type: str,
+    error_match: str,
+) -> None:
     """Terminal Responses events should escape the streaming parser."""
     provider = OpenAIProvider(
         _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
     )
 
-    with pytest.raises(ProviderStreamError, match="Responses stream failed"):
+    with pytest.raises(ProviderStreamError, match=error_match):
         provider.parse_stream_line(f'data: {json.dumps({"type": event_type})}')
 
 
