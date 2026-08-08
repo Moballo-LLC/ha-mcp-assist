@@ -469,10 +469,9 @@ async def test_openai_responses_incomplete_tool_call_is_not_executed(
                 "data: "
                 + json.dumps(
                     {
-                        "type": "response.incomplete",
+                        "type": "response.completed",
                         "response": {
-                            "status": "incomplete",
-                            "incomplete_details": {"reason": "max_output_tokens"},
+                            "status": "completed",
                             "output": [
                                 {
                                     "type": "function_call",
@@ -495,7 +494,7 @@ async def test_openai_responses_incomplete_tool_call_is_not_executed(
 
     monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
 
-    with pytest.raises(ProviderStreamError, match="stream ended incomplete"):
+    with pytest.raises(ProviderStreamError, match="output item with status incomplete"):
         await agent._call_llm([{"role": "user", "content": "Turn off the light"}])
 
     execute_mock.assert_not_awaited()

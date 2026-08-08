@@ -1222,6 +1222,34 @@ def test_openai_responses_http_parser_rejects_noncompleted_output(status: str) -
         )
 
 
+@pytest.mark.parametrize("response_status", [None, "completed"])
+@pytest.mark.parametrize("item_status", ["incomplete", "in_progress"])
+def test_openai_responses_http_parser_rejects_noncompleted_output_item(
+    response_status: str | None,
+    item_status: str,
+) -> None:
+    """A top-level success must not expose a non-completed output item."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+    response = {
+        "output": [
+            {
+                "type": "function_call",
+                "status": item_status,
+                "call_id": "call_1",
+                "name": "perform_action",
+                "arguments": "{}",
+            }
+        ]
+    }
+    if response_status is not None:
+        response["status"] = response_status
+
+    with pytest.raises(ValueError, match=f"output item with status {item_status}"):
+        provider.parse_http_message(response)
+
+
 def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> None:
     """A completed Responses event should expose tool calls and replay metadata."""
     provider = OpenAIProvider(
@@ -1260,6 +1288,36 @@ def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> Non
     ]
     assert parsed.delta["_responses_output"] == response["output"]
     assert parsed.usage == response["usage"]
+
+
+@pytest.mark.parametrize("item_status", ["incomplete", "in_progress"])
+def test_openai_responses_stream_parser_rejects_noncompleted_output_item(
+    item_status: str,
+) -> None:
+    """Completed events must not expose a non-completed output item."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+    response = {
+        "status": "completed",
+        "output": [
+            {
+                "type": "function_call",
+                "status": item_status,
+                "call_id": "call_1",
+                "name": "perform_action",
+                "arguments": "{}",
+            }
+        ],
+    }
+
+    with pytest.raises(
+        ProviderStreamError,
+        match=f"output item with status {item_status}",
+    ):
+        provider.parse_stream_line(
+            f'data: {json.dumps({"type": "response.completed", "response": response})}'
+        )
 
 
 @pytest.mark.parametrize(

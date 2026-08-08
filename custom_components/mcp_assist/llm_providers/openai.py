@@ -375,6 +375,11 @@ class OpenAIProvider(OpenAICompatibleProvider):
         status = data.get("status")
         if status not in (None, "completed"):
             raise ValueError(f"OpenAI Responses API ended with status {status}")
+        item_status = self._noncompleted_output_item_status(data)
+        if item_status is not None:
+            raise ValueError(
+                f"OpenAI Responses API contained an output item with status {item_status}"
+            )
 
         message = self._normalize_responses_message(data)
         self._pending_response_output = self._response_output_items(data)
@@ -407,6 +412,12 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 raise ProviderStreamError(
                     f"OpenAI Responses stream ended with status {status}"
                 )
+            item_status = self._noncompleted_output_item_status(response)
+            if item_status is not None:
+                raise ProviderStreamError(
+                    "OpenAI Responses stream contained an output item with "
+                    f"status {item_status}"
+                )
             message = self._normalize_responses_message(response)
             delta: dict[str, Any] = {
                 _RESPONSES_OUTPUT_KEY: self._response_output_items(response)
@@ -427,6 +438,20 @@ class OpenAIProvider(OpenAICompatibleProvider):
             )
         if event_type in {"error", "response.failed", "response.cancelled"}:
             raise ProviderStreamError("OpenAI Responses stream failed")
+        return None
+
+    @staticmethod
+    def _noncompleted_output_item_status(data: dict[str, Any]) -> str | None:
+        """Return the first explicit non-completed output-item status."""
+        output = data.get("output")
+        if not isinstance(output, list):
+            return None
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            status = item.get("status")
+            if status not in (None, "completed"):
+                return str(status)
         return None
 
     @classmethod
