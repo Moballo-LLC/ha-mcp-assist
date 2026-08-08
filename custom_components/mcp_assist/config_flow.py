@@ -1446,6 +1446,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 TOOLS_SECTION_KEY,
             )
             user_input = _apply_profile_tool_disables(user_input, built_in_specs)
+            self.step4_data = user_input
 
             # Server-managed agents hide client-side generation/tool-loop settings.
             if provider_class.manages_agent_loop:
@@ -1468,6 +1469,20 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_ALLOWED_IPS] = "invalid_ip"
                 _LOGGER.warning("Invalid allowed IPs: %s", error_msg)
 
+            provider_values = _merge_provider_values(
+                self.step1_data,
+                self.step2_data,
+                self.step3_data,
+                user_input,
+            )
+            model_error = provider_class.model_configuration_error(
+                str(self.step3_data.get(CONF_MODEL_NAME, "")),
+                base_url=provider_class.model_base_url(provider_values),
+                values=provider_values,
+            )
+            if model_error:
+                errors["base"] = model_error
+
             if not errors:
                 # Check if this is the first profile (MCP server doesn't exist yet)
                 is_first_profile = "shared_mcp_server" not in self.hass.data.get(
@@ -1476,7 +1491,6 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if is_first_profile:
                     # First profile - store step 4 data and proceed to MCP server config
-                    self.step4_data = user_input
                     return await self.async_step_mcp_server()
                 else:
                     # Subsequent profile - use existing shared MCP server settings
@@ -1671,7 +1685,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(PROVIDER_SECTION_KEY): _build_provider_section(
                     _build_provider_field_schema_items(
-                        provider_class.config_provider_options_fields()
+                        provider_class.config_provider_options_fields(),
+                        getattr(self, "step4_data", {}),
                     )
                 ),
             }
@@ -1731,7 +1746,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
 
             provider_schema_items = _build_provider_field_schema_items(
-                provider_class.config_provider_options_fields()
+                provider_class.config_provider_options_fields(),
+                getattr(self, "step4_data", {}),
             )
             if provider_schema_items:
                 advanced_schema_dict[vol.Required(PROVIDER_SECTION_KEY)] = (
@@ -2127,6 +2143,20 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             user_input = _normalize_prompt_inputs(
                 user_input, server_type, default_system_prompt
             )
+            self.profile_options = user_input
+
+            provider_values = _merge_provider_values(
+                self.config_entry.data,
+                self.config_entry.options,
+                user_input,
+            )
+            model_error = provider_class.model_configuration_error(
+                str(user_input.get(CONF_MODEL_NAME, "")),
+                base_url=provider_class.model_base_url(provider_values),
+                values=provider_values,
+            )
+            if model_error:
+                errors["base"] = model_error
 
             if not errors:
                 # Support both old and new config keys
@@ -2156,13 +2186,15 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                     user_input[CONF_TECHNICAL_PROMPT_MODE] = PROMPT_MODE_DEFAULT
 
                 # Store profile settings and proceed to MCP server settings
-                self.profile_options = user_input
                 return await self.async_step_mcp_server()
 
         # Get current values from options, then data, then defaults
         options = self.config_entry.options
         data = self.config_entry.data
-        current_values = self.profile_options or {}
+        current_values = _merge_provider_values(
+            provider_class.options_from_entry(self.config_entry),
+            self.profile_options,
+        )
 
         # Handle backward compatibility
         response_mode_value = options.get(

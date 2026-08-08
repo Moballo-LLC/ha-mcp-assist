@@ -34,6 +34,7 @@ from custom_components.mcp_assist.const import (
     DEFAULT_OPENCLAW_USE_SSL,
     DEFAULT_VLLM_URL,
     OPENAI_BASE_URL,
+    OPENAI_API_TRANSPORT_AUTO,
     OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
     OPENAI_API_TRANSPORT_RESPONSES,
     OPENROUTER_BASE_URL,
@@ -63,6 +64,7 @@ from custom_components.mcp_assist.llm_providers import (
     OpenAIProvider,
     OpenRouterProvider,
     ProviderSettings,
+    ProviderStreamError,
     VLLMProvider,
     get_llm_provider_class,
     provider_selector_options,
@@ -410,12 +412,58 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
         data = {CONF_OPENAI_API_TRANSPORT: "future-api"}
         options: dict[str, object] = {}
 
+    class LegacyEntry:
+        data: dict[str, object] = {}
+        options: dict[str, object] = {}
+
+    class AutomaticEntry:
+        data = {CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO}
+        options: dict[str, object] = {}
+
     assert OpenAIProvider.options_from_entry(Entry()) == {
         CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
     }
     assert OpenAIProvider.options_from_entry(InvalidEntry()) == {
         CONF_OPENAI_API_TRANSPORT: DEFAULT_OPENAI_API_TRANSPORT
     }
+    assert OpenAIProvider.options_from_entry(LegacyEntry()) == {
+        CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+    }
+    assert OpenAIProvider.options_from_entry(AutomaticEntry()) == {
+        CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO
+    }
+
+
+def test_openai_rejects_only_known_official_model_transport_mismatches() -> None:
+    """Responses-only models should not be saved with official Chat Completions."""
+    chat_values = {
+        CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+    }
+
+    assert (
+        OpenAIProvider.model_configuration_error(
+            "o3-pro",
+            base_url=OPENAI_BASE_URL,
+            values=chat_values,
+        )
+        == "model_requires_responses_api"
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
+            "gpt-4.1-mini",
+            base_url=OPENAI_BASE_URL,
+            values=chat_values,
+        )
+        is None
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
+            "o3-pro",
+            base_url="https://proxy.example.invalid/v1",
+            values=chat_values,
+        )
+        is None
+    )
 
 
 def test_gemini_provider_owns_openai_compatible_endpoint_shape() -> None:
@@ -656,11 +704,20 @@ def test_openai_responses_payload_translates_messages_images_and_tools() -> None
 def test_openai_responses_payload_replays_output_items_and_tool_results() -> None:
     """Stateless tool-loop turns should replay reasoning and function-call items."""
     provider = OpenAIProvider(
-        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url=OPENAI_BASE_URL,
+            model_name="o3-mini",
+        )
     )
     response_data = {
         "output": [
-            {"type": "reasoning", "id": "rs_1", "summary": []},
+            {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": [],
+                "encrypted_content": "encrypted-reasoning-state",
+            },
             {
                 "type": "function_call",
                 "id": "fc_1",
@@ -698,9 +755,15 @@ def test_openai_responses_payload_replays_output_items_and_tool_results() -> Non
             },
         }
     ]
+    assert payload["include"] == ["reasoning.encrypted_content"]
     assert payload["input"] == [
         {"role": "user", "content": "Find the kitchen lights."},
-        {"type": "reasoning", "id": "rs_1", "summary": []},
+        {
+            "type": "reasoning",
+            "id": "rs_1",
+            "summary": [],
+            "encrypted_content": "encrypted-reasoning-state",
+        },
         {
             "type": "function_call",
             "id": "fc_1",
@@ -1059,6 +1122,17 @@ def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> Non
     ]
     assert parsed.delta["_responses_output"] == response["output"]
     assert parsed.usage == response["usage"]
+
+
+@pytest.mark.parametrize("event_type", ["error", "response.failed"])
+def test_openai_responses_stream_parser_raises_terminal_errors(event_type: str) -> None:
+    """Terminal Responses events should escape the streaming parser."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    with pytest.raises(ProviderStreamError, match="Responses stream failed"):
+        provider.parse_stream_line(f'data: {json.dumps({"type": event_type})}')
 
 
 def test_stream_parser_allows_usage_only_chunks() -> None:

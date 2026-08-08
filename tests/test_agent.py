@@ -14,6 +14,7 @@ from homeassistant.core import Context
 
 from custom_components.mcp_assist import agent as agent_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
+from custom_components.mcp_assist.llm_providers import ProviderStreamError
 from custom_components.mcp_assist.tools.builtin_catalog import (
     load_builtin_tool_toggle_specs,
 )
@@ -269,7 +270,7 @@ async def test_openai_responses_completed_event_drives_streamed_tool_loop(
             CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
             CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
             CONF_API_KEY: "sk-test",
-            CONF_MODEL_NAME: "gpt-4.1-mini",
+            CONF_MODEL_NAME: "o3-mini",
         },
         options={
             CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
@@ -308,7 +309,12 @@ async def test_openai_responses_completed_event_drives_streamed_tool_loop(
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
 
     first_output = [
-        {"type": "reasoning", "id": "rs_1", "summary": []},
+        {
+            "type": "reasoning",
+            "id": "rs_1",
+            "summary": [],
+            "encrypted_content": "encrypted-reasoning-state",
+        },
         {
             "type": "function_call",
             "id": "fc_1",
@@ -369,6 +375,10 @@ async def test_openai_responses_completed_event_drives_streamed_tool_loop(
     assert len(posts) == 2
     assert all(post["url"] == "https://api.openai.com/v1/responses" for post in posts)
     assert posts[0]["json"]["store"] is False
+    assert all(
+        post["json"]["include"] == ["reasoning.encrypted_content"]
+        for post in posts
+    )
     assert posts[1]["json"]["input"][-3:] == [
         *first_output,
         {
@@ -377,6 +387,53 @@ async def test_openai_responses_completed_event_drives_streamed_tool_loop(
             "output": "Kitchen light is off.",
         },
     ]
+
+
+@pytest.mark.asyncio
+async def test_openai_responses_terminal_stream_error_is_not_partial_success(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A terminal SSE failure must not return prior text or retry over HTTP."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4.1-mini",
+        },
+        options={
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
+            CONF_MAX_ITERATIONS: 2,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_fallback = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_fallback)
+
+    responses = [
+        _FakeStreamingResponse(
+            [
+                'data: {"type":"response.output_text.delta","delta":"Partial"}',
+                'data: {"type":"response.failed","response":{"error":'
+                '{"message":"generation failed"}}}',
+            ]
+        )
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, [])
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    with pytest.raises(ProviderStreamError, match="Responses stream failed"):
+        await agent._call_llm([{"role": "user", "content": "Hello"}])
+
+    http_fallback.assert_not_awaited()
 
 
 def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
@@ -1189,6 +1246,7 @@ def test_prompt_cache_usage_log_reports_tokens_without_content(
             CONF_API_KEY: "sk-test-key",
             CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
             CONF_MODEL_NAME: "gpt-5-mini",
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
         },
     )
     agent = MCPAssistConversationEntity(hass, entry)

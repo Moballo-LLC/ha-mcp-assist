@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tämä malli vaatii Responses API:n. Valitse Responses API tai Automaattinen, tai valitse toinen malli.",
       "cannot_connect": "Yhteyden muodostaminen paattelypalvelimeen ei onnistu. Varmista, etta se on kaynnissa ja saavutettavissa.",
       "no_models": "Palvelimella ei ole ladattuja malleja. Lataa ensin malli.",
       "invalid_model": "Maaritetty malli ei ole saatavilla palvelimella.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tämä malli vaatii Responses API:n. Valitse Responses API tai Automaattinen, tai valitse toinen malli.",
       "mcp_bearer_token_too_short": "MCP bearer -tunnuksen on oltava tyhjä tai vähintään 16 merkkiä pitkä."
     }
   },

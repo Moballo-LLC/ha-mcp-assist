@@ -20,6 +20,7 @@ from .base import (
     PromptCacheUsage,
     ProviderConfigField,
     ProviderSettings,
+    ProviderStreamError,
     StreamParseResult,
 )
 from .openai_compatible import OpenAICompatibleProvider
@@ -70,8 +71,12 @@ class OpenAIProvider(OpenAICompatibleProvider):
         options = getattr(entry, "options", {}) or {}
         configured = options.get(
             CONF_OPENAI_API_TRANSPORT,
-            data.get(CONF_OPENAI_API_TRANSPORT, DEFAULT_OPENAI_API_TRANSPORT),
+            data.get(CONF_OPENAI_API_TRANSPORT),
         )
+        if configured in (None, ""):
+            return {
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            }
         transport = str(configured or DEFAULT_OPENAI_API_TRANSPORT)
         if transport not in _OPENAI_API_TRANSPORTS:
             transport = DEFAULT_OPENAI_API_TRANSPORT
@@ -156,7 +161,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
             "store": False,
         }
 
-        if not self.is_reasoning_model(self.model_name):
+        if self.is_reasoning_model(self.model_name):
+            payload["include"] = ["reasoning.encrypted_content"]
+        else:
             payload["temperature"] = self.temperature
 
         if self.max_tokens > 0:
@@ -389,7 +396,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 usage=usage if isinstance(usage, dict) else None,
             )
         if event_type in {"error", "response.failed"}:
-            raise ValueError("OpenAI Responses stream failed")
+            raise ProviderStreamError("OpenAI Responses stream failed")
         return None
 
     @classmethod
@@ -519,3 +526,23 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 )
             ]
         return sorted((model_id for model_id in model_ids if model_id), reverse=True)
+
+    @classmethod
+    def model_configuration_error(
+        cls,
+        model_name: str,
+        *,
+        base_url: str,
+        values: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Reject known official-OpenAI model and transport mismatches."""
+        if not cls._is_official_openai_base_url(base_url):
+            return None
+        configured = cls._configured_transport_from_values(values)
+        transport = cls._resolve_api_transport(configured, base_url)
+        if (
+            transport == OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            and cls.is_responses_only_model(model_name)
+        ):
+            return "model_requires_responses_api"
+        return None

@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tento model vyžaduje rozhraní Responses API. Zvolte Responses API nebo Automaticky, případně vyberte jiný model.",
       "cannot_connect": "Nelze se pripojit k inferencnimu serveru. Ujistete se, ze bezi a je dostupny.",
       "no_models": "Na serveru nejsou nacteny zadne modely. Nejprve prosim nactete model.",
       "invalid_model": "Zadany model neni na serveru k dispozici.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tento model vyžaduje rozhraní Responses API. Zvolte Responses API nebo Automaticky, případně vyberte jiný model.",
       "mcp_bearer_token_too_short": "Bearer token MCP musí být prázdný nebo mít alespoň 16 znaků."
     }
   },

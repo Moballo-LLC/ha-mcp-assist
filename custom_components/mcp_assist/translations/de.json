@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Dieses Modell erfordert die Responses API. Wähle Responses API oder Automatisch aus, oder wähle ein anderes Modell.",
       "cannot_connect": "Verbindung zum Inferenz-Server nicht moeglich. Stellen Sie sicher, dass er laeuft und erreichbar ist.",
       "no_models": "Keine Modelle auf dem Server geladen. Bitte laden Sie zuerst ein Modell.",
       "invalid_model": "Das angegebene Modell ist auf dem Server nicht verfuegbar.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Dieses Modell erfordert die Responses API. Wähle Responses API oder Automatisch aus, oder wähle ein anderes Modell.",
       "mcp_bearer_token_too_short": "Das MCP-Bearer-Token muss leer sein oder mindestens 16 Zeichen haben."
     }
   },

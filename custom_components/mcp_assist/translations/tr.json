@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Bu model Responses API gerektirir. Responses API veya Otomatik seçeneğini belirleyin ya da farklı bir model seçin.",
       "cannot_connect": "Cikarim sunucusuna baglanilamiyor. Calistigini ve erisilebilir oldugunu kontrol edin.",
       "no_models": "Sunucuda yuklenmis model yok. Lutfen once bir model yukleyin.",
       "invalid_model": "Belirtilen model sunucuda mevcut degil.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Bu model Responses API gerektirir. Responses API veya Otomatik seçeneğini belirleyin ya da farklı bir model seçin.",
       "mcp_bearer_token_too_short": "MCP bearer belirteci boş olmalı veya en az 16 karakter içermelidir."
     }
   },

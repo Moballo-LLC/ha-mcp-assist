@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Denne model kræver Responses API. Vælg Responses API eller Automatisk, eller vælg en anden model.",
       "cannot_connect": "Kan ikke oprette forbindelse til inferensserveren. Soerg for, at den koerer og er tilgaengelig.",
       "no_models": "Ingen modeller indlaest paa serveren. Indlaes venligst en model foerst.",
       "invalid_model": "Den angivne model er ikke tilgaengelig paa serveren.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Denne model kræver Responses API. Vælg Responses API eller Automatisk, eller vælg en anden model.",
       "mcp_bearer_token_too_short": "MCP bearer-token skal være tom eller mindst 16 tegn."
     }
   },

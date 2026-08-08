@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Este modelo requiere Responses API. Elige Responses API o Automático, o selecciona otro modelo.",
       "cannot_connect": "No se puede conectar al servidor de inferencia. Asegurate de que este funcionando y sea accesible.",
       "no_models": "No hay modelos cargados en el servidor. Por favor, carga un modelo primero.",
       "invalid_model": "El modelo especificado no esta disponible en el servidor.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Este modelo requiere Responses API. Elige Responses API o Automático, o selecciona otro modelo.",
       "mcp_bearer_token_too_short": "El token Bearer de MCP debe estar vacío o tener al menos 16 caracteres."
     }
   },

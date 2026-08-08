@@ -57,6 +57,7 @@ from .tool_effects import ToolEffect, get_tool_effect
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
+    ProviderStreamError,
     build_provider_settings,
     create_llm_provider,
     normalize_tool_call_arguments,
@@ -4562,9 +4563,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 if parsed_stream.done:
                                     break
 
+                            except ProviderStreamError:
+                                raise
                             except Exception as e:
                                 _LOGGER.debug(f"Stream parsing: {e}")
 
+            except ProviderStreamError:
+                raise
             except Exception as stream_error:
                 _LOGGER.warning(
                     "Streaming iteration %d failed: %s",
@@ -4789,7 +4794,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
-        except StatefulStreamingRequestError:
+        except (StatefulStreamingRequestError, ProviderStreamError):
             raise
         except RecoverableStreamingFallbackError as e:
             _LOGGER.debug("%s; using provider HTTP transport", e)

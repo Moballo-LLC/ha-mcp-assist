@@ -65,6 +65,10 @@ class StreamParseResult:
     usage: dict[str, Any] | None = None
 
 
+class ProviderStreamError(Exception):
+    """A provider-reported terminal failure inside a successful HTTP stream."""
+
+
 @dataclass(frozen=True)
 class PromptCacheUsage:
     """Provider-normalized prompt cache usage telemetry."""
@@ -256,6 +260,18 @@ class LLMProvider:
         del base_url, values
         models = [model_id for model_id in model_ids if model_id]
         return sorted(models)
+
+    @classmethod
+    def model_configuration_error(
+        cls,
+        model_name: str,
+        *,
+        base_url: str,
+        values: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Return a config-flow error for an incompatible model selection."""
+        del model_name, base_url, values
+        return None
 
     @classmethod
     def model_list_url(cls, values: dict[str, Any]) -> str:

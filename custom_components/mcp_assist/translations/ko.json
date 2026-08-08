@@ -338,6 +338,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "이 모델에는 Responses API가 필요합니다. Responses API 또는 자동을 선택하거나 다른 모델을 선택하세요.",
       "cannot_connect": "추론 서버에 연결할 수 없습니다. 서버가 실행 중이고 접근 가능한지 확인하세요.",
       "no_models": "서버에 로드된 모델이 없습니다. 먼저 모델을 로드하세요.",
       "invalid_model": "지정된 모델을 서버에서 사용할 수 없습니다.",
@@ -691,6 +692,7 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "이 모델에는 Responses API가 필요합니다. Responses API 또는 자동을 선택하거나 다른 모델을 선택하세요.",
       "mcp_bearer_token_too_short": "MCP Bearer 토큰은 비어 있거나 16자 이상이어야 합니다."
     }
   },
