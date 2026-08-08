@@ -369,8 +369,10 @@ def test_openai_automatic_transport_uses_responses_only_for_official_api() -> No
     )
 
     assert official_provider.uses_responses_api is True
+    assert official_provider.requires_stream_terminal_event is True
     assert official_provider.chat_url() == "https://api.openai.com/v1/responses"
     assert custom_provider.uses_responses_api is False
+    assert custom_provider.requires_stream_terminal_event is False
     assert custom_provider.chat_url() == "https://api.example.invalid/v1/chat/completions"
 
 
@@ -1197,9 +1199,11 @@ def test_openai_responses_http_parser_extracts_text() -> None:
 
 @pytest.mark.parametrize(
     "status",
-    ["failed", "incomplete", "cancelled", "in_progress", "queued"],
+    [None, "failed", "incomplete", "cancelled", "in_progress", "queued"],
 )
-def test_openai_responses_http_parser_rejects_noncompleted_output(status: str) -> None:
+def test_openai_responses_http_parser_rejects_noncompleted_output(
+    status: str | None,
+) -> None:
     """Non-completed HTTP responses must not expose partial tool calls."""
     provider = OpenAIProvider(
         _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
@@ -1223,10 +1227,10 @@ def test_openai_responses_http_parser_rejects_noncompleted_output(status: str) -
 
 
 @pytest.mark.parametrize("response_status", [None, "completed"])
-@pytest.mark.parametrize("item_status", ["incomplete", "in_progress"])
+@pytest.mark.parametrize("item_status", [None, "incomplete", "in_progress"])
 def test_openai_responses_http_parser_rejects_noncompleted_output_item(
     response_status: str | None,
-    item_status: str,
+    item_status: str | None,
 ) -> None:
     """A top-level success must not expose a non-completed output item."""
     provider = OpenAIProvider(
@@ -1290,9 +1294,9 @@ def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> Non
     assert parsed.usage == response["usage"]
 
 
-@pytest.mark.parametrize("item_status", ["incomplete", "in_progress"])
+@pytest.mark.parametrize("item_status", [None, "incomplete", "in_progress"])
 def test_openai_responses_stream_parser_rejects_noncompleted_output_item(
-    item_status: str,
+    item_status: str | None,
 ) -> None:
     """Completed events must not expose a non-completed output item."""
     provider = OpenAIProvider(
@@ -1318,6 +1322,29 @@ def test_openai_responses_stream_parser_rejects_noncompleted_output_item(
         provider.parse_stream_line(
             f'data: {json.dumps({"type": "response.completed", "response": response})}'
         )
+
+
+def test_openai_responses_stream_parser_rejects_explicit_null_response_status() -> None:
+    """An explicit null response status must not count as omitted."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    with pytest.raises(ProviderStreamError, match="ended with status None"):
+        provider.parse_stream_line(
+            'data: {"type":"response.completed","response":'
+            '{"status":null,"output":[]}}'
+        )
+
+
+def test_openai_responses_stream_parser_rejects_missing_completed_response() -> None:
+    """A completed event without its response object is malformed."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    with pytest.raises(ProviderStreamError, match="completed without a response"):
+        provider.parse_stream_line('data: {"type":"response.completed"}')
 
 
 @pytest.mark.parametrize(

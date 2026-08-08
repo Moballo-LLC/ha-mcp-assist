@@ -4304,6 +4304,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             stream_metadata = None
             request_dispatched = False
             request_rejected = False
+            stream_terminal_event_seen = False
 
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -4561,12 +4562,21 @@ class MCPAssistConversationEntity(ConversationEntity):
                                                     pass
 
                                 if parsed_stream.done:
+                                    stream_terminal_event_seen = True
                                     break
 
                             except ProviderStreamError:
                                 raise
                             except Exception as e:
                                 _LOGGER.debug(f"Stream parsing: {e}")
+
+                        if (
+                            provider.requires_stream_terminal_event
+                            and not stream_terminal_event_seen
+                        ):
+                            raise ProviderStreamError(
+                                f"{self.server_type} stream ended without a terminal event"
+                            )
 
             except ProviderStreamError:
                 raise

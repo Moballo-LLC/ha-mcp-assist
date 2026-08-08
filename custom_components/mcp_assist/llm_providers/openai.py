@@ -157,6 +157,11 @@ class OpenAIProvider(OpenAICompatibleProvider):
         """Return whether this profile uses the Responses API."""
         return self.api_transport == OPENAI_API_TRANSPORT_RESPONSES
 
+    @property
+    def requires_stream_terminal_event(self) -> bool:
+        """Require Responses streams to prove they reached a terminal event."""
+        return self.uses_responses_api
+
     def chat_url(self) -> str:
         """Return the selected OpenAI generation endpoint."""
         if self.uses_responses_api:
@@ -373,7 +378,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         if not self.uses_responses_api:
             return super().parse_http_message(data)
         status = data.get("status")
-        if status not in (None, "completed"):
+        if "status" in data and status != "completed":
             raise ValueError(f"OpenAI Responses API ended with status {status}")
         item_status = self._noncompleted_output_item_status(data)
         if item_status is not None:
@@ -406,9 +411,11 @@ class OpenAIProvider(OpenAICompatibleProvider):
         if event_type == "response.completed":
             response = data.get("response")
             if not isinstance(response, dict):
-                return StreamParseResult(delta={}, done=True)
+                raise ProviderStreamError(
+                    "OpenAI Responses stream completed without a response"
+                )
             status = response.get("status")
-            if status not in (None, "completed"):
+            if "status" in response and status != "completed":
                 raise ProviderStreamError(
                     f"OpenAI Responses stream ended with status {status}"
                 )
@@ -450,7 +457,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
             if not isinstance(item, dict):
                 continue
             status = item.get("status")
-            if status not in (None, "completed"):
+            if "status" in item and status != "completed":
                 return str(status)
         return None
 

@@ -437,6 +437,49 @@ async def test_openai_responses_terminal_stream_error_is_not_partial_success(
 
 
 @pytest.mark.asyncio
+async def test_openai_responses_stream_requires_terminal_event(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A clean EOF before a terminal event must not return accumulated text."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4.1-mini",
+        },
+        options={
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
+            CONF_MAX_ITERATIONS: 2,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    http_fallback = AsyncMock(return_value="unexpected fallback")
+    monkeypatch.setattr(agent, "_call_llm_http", http_fallback)
+
+    responses = [
+        _FakeStreamingResponse(
+            ['data: {"type":"response.output_text.delta","delta":"Partial"}']
+        )
+    ]
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, [])
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    with pytest.raises(ProviderStreamError, match="ended without a terminal event"):
+        await agent._call_llm([{"role": "user", "content": "Hello"}])
+
+    http_fallback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_openai_responses_incomplete_tool_call_is_not_executed(
     hass, profile_entry_factory, monkeypatch
 ) -> None:

@@ -186,6 +186,11 @@ class LLMProvider:
         """Initialize the provider transport."""
         self.settings = settings
 
+    @property
+    def requires_stream_terminal_event(self) -> bool:
+        """Return whether a stream must emit an explicit terminal event."""
+        return False
+
     @classmethod
     def config_provider_options_fields(cls) -> tuple[ProviderConfigField, ...]:
         """Return provider fields plus the optional stateful endpoint contract."""
