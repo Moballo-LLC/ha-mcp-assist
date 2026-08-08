@@ -38,6 +38,7 @@ CONF_MAX_ITERATIONS = "max_iterations"
 CONF_DEBUG_MODE = "debug_mode"
 CONF_CHAT_LOG_MODE = "chat_log_mode"
 CONF_STATEFUL_SESSION_ID = "stateful_session_id"
+CONF_OPENAI_API_TRANSPORT = "openai_api_transport"
 CONF_ENABLE_CUSTOM_TOOLS = "enable_custom_tools"
 CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS = "enable_external_custom_tools"
 CONF_BRAVE_API_KEY = "brave_api_key"
@@ -186,6 +187,10 @@ DEFAULT_PROFILE_ENABLE_DEVICE_TOOLS = True
 DEFAULT_PROFILE_ENABLE_MUSIC_ASSISTANT_SUPPORT = True
 DEFAULT_OLLAMA_KEEP_ALIVE = "5m"  # 5 minutes
 DEFAULT_OLLAMA_NUM_CTX = 0  # 0 = use model default
+OPENAI_API_TRANSPORT_AUTO = "auto"
+OPENAI_API_TRANSPORT_RESPONSES = "responses"
+OPENAI_API_TRANSPORT_CHAT_COMPLETIONS = "chat_completions"
+DEFAULT_OPENAI_API_TRANSPORT = OPENAI_API_TRANSPORT_AUTO
 LIGHT_CONTEXT_MAX_HISTORY = 2
 DEFAULT_FOLLOW_UP_PHRASES = (
     "anything else, what else, would you, do you, should i, can i, which, "

@@ -4403,9 +4403,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                                         transport="streaming",
                                         iteration=iteration,
                                     )
-                                if parsed_stream.done:
-                                    break
-
                                 delta = parsed_stream.delta
                                 previous_stream_metadata = stream_metadata
                                 stream_metadata = provider.update_stream_metadata(
@@ -4561,6 +4558,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                                                 except json.JSONDecodeError:
                                                     # Still accumulating arguments
                                                     pass
+
+                                if parsed_stream.done:
+                                    break
 
                             except Exception as e:
                                 _LOGGER.debug(f"Stream parsing: {e}")

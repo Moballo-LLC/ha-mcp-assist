@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 import pytest
@@ -13,6 +14,7 @@ from custom_components.mcp_assist.const import (
     CONF_LMSTUDIO_URL,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
+    CONF_OPENAI_API_TRANSPORT,
     CONF_OPENCLAW_HOST,
     CONF_OPENCLAW_PORT,
     CONF_OPENCLAW_SESSION_KEY,
@@ -25,12 +27,15 @@ from custom_components.mcp_assist.const import (
     DEFAULT_OLLAMA_KEEP_ALIVE,
     DEFAULT_OLLAMA_NUM_CTX,
     DEFAULT_OLLAMA_URL,
+    DEFAULT_OPENAI_API_TRANSPORT,
     DEFAULT_OPENCLAW_HOST,
     DEFAULT_OPENCLAW_PORT,
     DEFAULT_OPENCLAW_SESSION_KEY,
     DEFAULT_OPENCLAW_USE_SSL,
     DEFAULT_VLLM_URL,
     OPENAI_BASE_URL,
+    OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+    OPENAI_API_TRANSPORT_RESPONSES,
     OPENROUTER_BASE_URL,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
@@ -205,7 +210,14 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 (CONF_LMSTUDIO_URL, OPENAI_BASE_URL, "text", True),
                 (CONF_API_KEY, None, "password", True),
             ),
-            (),
+            (
+                (
+                    CONF_OPENAI_API_TRANSPORT,
+                    DEFAULT_OPENAI_API_TRANSPORT,
+                    "select",
+                    True,
+                ),
+            ),
             OPENAI_BASE_URL,
             "invalid_api_key",
             True,
@@ -343,6 +355,67 @@ def test_openai_compatible_provider_owns_versioned_endpoints() -> None:
     assert OpenAIProvider.model_list_url(
         {CONF_LMSTUDIO_URL: "https://api.example.invalid/v1/"}
     ) == "https://api.example.invalid/v1/models"
+
+
+def test_openai_automatic_transport_uses_responses_only_for_official_api() -> None:
+    """Automatic should modernize OpenAI without assuming custom endpoint support."""
+    official_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+    custom_provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url="https://api.example.invalid")
+    )
+
+    assert official_provider.uses_responses_api is True
+    assert official_provider.chat_url() == "https://api.openai.com/v1/responses"
+    assert custom_provider.uses_responses_api is False
+    assert custom_provider.chat_url() == "https://api.example.invalid/v1/chat/completions"
+
+
+def test_openai_transport_can_be_selected_for_any_endpoint() -> None:
+    """Official and custom endpoints should both honor an explicit API selection."""
+    custom_responses = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url="https://api.example.invalid/v1",
+            provider_options={
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES
+            },
+        )
+    )
+    official_chat = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url=OPENAI_BASE_URL,
+            provider_options={
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            },
+        )
+    )
+
+    assert custom_responses.chat_url() == "https://api.example.invalid/v1/responses"
+    assert official_chat.chat_url() == "https://api.openai.com/v1/chat/completions"
+
+
+def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() -> None:
+    """Saved profile options should control the runtime transport safely."""
+
+    class Entry:
+        data = {CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES}
+        options = {
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+        }
+
+    class InvalidEntry:
+        data = {CONF_OPENAI_API_TRANSPORT: "future-api"}
+        options: dict[str, object] = {}
+
+    assert OpenAIProvider.options_from_entry(Entry()) == {
+        CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+    }
+    assert OpenAIProvider.options_from_entry(InvalidEntry()) == {
+        CONF_OPENAI_API_TRANSPORT: DEFAULT_OPENAI_API_TRANSPORT
+    }
 
 
 def test_gemini_provider_owns_openai_compatible_endpoint_shape() -> None:
@@ -493,6 +566,156 @@ def test_openai_compatible_providers_build_chat_payloads(
     }
 
 
+def test_openai_responses_payload_translates_messages_images_and_tools() -> None:
+    """Responses requests should use typed input items and flat function tools."""
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url="https://api.example.invalid/v1",
+            model_name="gpt-4.1-mini",
+            max_tokens=64,
+            temperature=0.2,
+            provider_options={
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES
+            },
+        )
+    )
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [
+                {"role": "system", "content": "Be concise."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is shown?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/png;base64,AA==",
+                                "detail": "low",
+                            },
+                        },
+                    ],
+                },
+            ],
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"area": {"type": "string"}},
+                        },
+                        "strict": True,
+                    },
+                }
+            ],
+            stream=False,
+        )
+    )
+
+    assert payload == {
+        "model": "gpt-4.1-mini",
+        "input": [
+            {"role": "system", "content": "Be concise."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "What is shown?"},
+                    {
+                        "type": "input_image",
+                        "image_url": "data:image/png;base64,AA==",
+                        "detail": "low",
+                    },
+                ],
+            },
+        ],
+        "stream": False,
+        "store": False,
+        "temperature": 0.2,
+        "max_output_tokens": 64,
+        "tools": [
+            {
+                "type": "function",
+                "name": "discover_entities",
+                "description": "Find entities.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"area": {"type": "string"}},
+                },
+                "strict": True,
+            }
+        ],
+        "tool_choice": "auto",
+    }
+
+
+def test_openai_responses_payload_replays_output_items_and_tool_results() -> None:
+    """Stateless tool-loop turns should replay reasoning and function-call items."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+    response_data = {
+        "output": [
+            {"type": "reasoning", "id": "rs_1", "summary": []},
+            {
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "discover_entities",
+                "arguments": '{"area":"Kitchen"}',
+            },
+        ]
+    }
+    message = provider.parse_http_message(response_data)
+    assistant_message = provider.build_tool_call_assistant_message(
+        provider.normalize_tool_calls(message["tool_calls"])
+    )
+
+    payload = provider.build_payload(
+        [
+            {"role": "user", "content": "Find the kitchen lights."},
+            assistant_message,
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": {"entities": ["light.kitchen"]},
+            },
+        ],
+        stream=False,
+    )
+
+    assert message["tool_calls"] == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "discover_entities",
+                "arguments": '{"area":"Kitchen"}',
+            },
+        }
+    ]
+    assert payload["input"] == [
+        {"role": "user", "content": "Find the kitchen lights."},
+        {"type": "reasoning", "id": "rs_1", "summary": []},
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "discover_entities",
+            "arguments": '{"area":"Kitchen"}',
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": '{"entities": ["light.kitchen"]}',
+        },
+    ]
+
+
 def test_openclaw_provider_rejects_http_payload_path() -> None:
     """OpenClaw should stay registered without pretending to be an HTTP transport."""
     provider = OpenClawProvider(_settings(SERVER_TYPE_OPENCLAW))
@@ -597,6 +820,9 @@ def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
     filtered = OpenAIProvider.filter_model_ids(
         ["gpt-4o", "o3", "o3-mini", "o1-pro", "o3-pro", "o3-pro-2025-06-10", "o3-deep-research", "o4-mini-deep-research"],
         base_url=OPENAI_BASE_URL,
+        values={
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+        },
     )
 
     # Chat-completions reasoning models stay.
@@ -609,6 +835,19 @@ def test_openai_filter_model_ids_excludes_responses_only_models() -> None:
     assert "o3-pro-2025-06-10" not in filtered
     assert "o3-deep-research" not in filtered
     assert "o4-mini-deep-research" not in filtered
+
+
+def test_openai_filter_model_ids_includes_pro_models_for_responses() -> None:
+    """Responses profiles should offer compatible pro models but not deep research."""
+    filtered = OpenAIProvider.filter_model_ids(
+        ["gpt-4o", "o3-pro", "o3-deep-research", "whisper-1"],
+        base_url=OPENAI_BASE_URL,
+        values={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+    )
+
+    assert "o3-pro" in filtered
+    assert "o3-deep-research" not in filtered
+    assert "whisper-1" not in filtered
 
 
 def test_is_responses_only_model_classification() -> None:
@@ -630,13 +869,37 @@ def test_is_responses_only_model_classification() -> None:
     assert not is_responses_only("gpt-4-proxy")
 
 
-def test_openai_provider_applies_prompt_cache_key_and_stream_usage() -> None:
-    """Official OpenAI requests should opt into cache routing and stream usage."""
+def test_openai_responses_provider_applies_prompt_cache_key() -> None:
+    """Official Responses requests should use cache routing without chat fields."""
     provider = OpenAIProvider(
         _settings(
             SERVER_TYPE_OPENAI,
             base_url=OPENAI_BASE_URL,
             prompt_cache_key="ha-mcp-assist-cache-key",
+        )
+    )
+
+    payload = provider.prepare_payload(
+        provider.build_payload(
+            [{"role": "user", "content": "Hello"}],
+            stream=True,
+        )
+    )
+
+    assert payload["prompt_cache_key"] == "ha-mcp-assist-cache-key"
+    assert "stream_options" not in payload
+
+
+def test_openai_chat_provider_applies_prompt_cache_key_and_stream_usage() -> None:
+    """Official Chat Completions requests should opt into streamed usage."""
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url=OPENAI_BASE_URL,
+            prompt_cache_key="ha-mcp-assist-cache-key",
+            provider_options={
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            },
         )
     )
 
@@ -709,6 +972,93 @@ def test_openai_provider_extracts_prompt_cache_usage() -> None:
     assert usage.input_tokens == 4096
     assert usage.cached_tokens == 3072
     assert usage.cache_read_tokens == 3072
+
+
+def test_openai_provider_extracts_responses_prompt_cache_usage() -> None:
+    """Responses usage should expose cached input tokens through shared telemetry."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    usage = provider.extract_prompt_cache_usage(
+        {
+            "usage": {
+                "input_tokens": 2048,
+                "input_tokens_details": {"cached_tokens": 1024},
+            }
+        }
+    )
+
+    assert usage is not None
+    assert usage.input_tokens == 2048
+    assert usage.cached_tokens == 1024
+    assert usage.cache_read_tokens == 1024
+
+
+def test_openai_responses_http_parser_extracts_text() -> None:
+    """Responses output text should normalize to the existing assistant shape."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+
+    message = provider.parse_http_message(
+        {
+            "output": [
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {"type": "output_text", "text": "Lights are off."}
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert message == {
+        "role": "assistant",
+        "content": "Lights are off.",
+    }
+
+
+def test_openai_responses_stream_parser_normalizes_completed_tool_calls() -> None:
+    """A completed Responses event should expose tool calls and replay metadata."""
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL)
+    )
+    response = {
+        "output": [
+            {"type": "reasoning", "id": "rs_1", "summary": []},
+            {
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "discover_entities",
+                "arguments": "{}",
+            },
+        ],
+        "usage": {
+            "input_tokens": 20,
+            "input_tokens_details": {"cached_tokens": 10},
+        },
+    }
+
+    parsed = provider.parse_stream_line(
+        f'data: {json.dumps({"type": "response.completed", "response": response})}'
+    )
+
+    assert parsed is not None
+    assert parsed.done is True
+    assert parsed.delta["tool_calls"] == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "discover_entities", "arguments": "{}"},
+            "index": 0,
+        }
+    ]
+    assert parsed.delta["_responses_output"] == response["output"]
+    assert parsed.usage == response["usage"]
 
 
 def test_stream_parser_allows_usage_only_chunks() -> None:

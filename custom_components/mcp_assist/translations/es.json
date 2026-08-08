@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ventana de contexto de Ollama",
           "openclaw_session_key": "Clave de sesión",
           "stateful_session_id": "Encabezado de sesión con estado",
-          "hermes_session_key": "Clave de sesión de memoria"
+          "hermes_session_key": "Clave de sesión de memoria",
+          "openai_api_transport": "API de generación"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ventana de contexto de Ollama",
               "openclaw_session_key": "Clave de sesión",
               "stateful_session_id": "Encabezado de sesión con estado",
-              "hermes_session_key": "Clave de sesión de memoria"
+              "hermes_session_key": "Clave de sesión de memoria",
+              "openai_api_transport": "API de generación"
             },
             "data_description": {
               "ollama_keep_alive": "Cuánto tiempo debe mantener Ollama el modelo seleccionado cargado en la memoria.",
               "ollama_num_ctx": "Anula el tamaño de la ventana de contexto pasado a Ollama. Utilice 0 para mantener el modelo predeterminado.",
               "openclaw_session_key": "Nombre de la sesión OpenClaw a la que enviar mensajes.",
               "stateful_session_id": "Envía el ID de conversación de Assist como X-Session-Id y evita reintentos ambiguos. Actívalo solo cuando este endpoint use el encabezado como estado de sesión del lado del servidor.",
-              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil."
+              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para el punto de conexión oficial de OpenAI y Chat Completions para los puntos de conexión personalizados. Elige una API de forma explícita solo cuando el punto de conexión la admita."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Clave de sesión",
           "stateful_session_id": "Encabezado de sesión con estado",
           "hermes_url": "URL del servidor Hermes",
-          "hermes_session_key": "Clave de sesión de memoria"
+          "hermes_session_key": "Clave de sesión de memoria",
+          "openai_api_transport": "API de generación"
         },
         "data_description": {
           "model_name": "El modelo LLM que debe utilizar este perfil.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ventana de contexto de Ollama",
               "openclaw_session_key": "Clave de sesión",
               "stateful_session_id": "Encabezado de sesión con estado",
-              "hermes_session_key": "Clave de sesión de memoria"
+              "hermes_session_key": "Clave de sesión de memoria",
+              "openai_api_transport": "API de generación"
             },
             "data_description": {
               "ollama_keep_alive": "Cuánto tiempo debe mantener Ollama el modelo seleccionado cargado en la memoria.",
               "ollama_num_ctx": "Anula el tamaño de la ventana de contexto pasado a Ollama. Utilice 0 para mantener el modelo predeterminado.",
               "openclaw_session_key": "Nombre de la sesión OpenClaw a la que enviar mensajes.",
               "stateful_session_id": "Envía el ID de conversación de Assist como X-Session-Id y evita reintentos ambiguos. Actívalo solo cuando este endpoint use el encabezado como estado de sesión del lado del servidor.",
-              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil."
+              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para el punto de conexión oficial de OpenAI y Chat Completions para los puntos de conexión personalizados. Elige una API de forma explícita solo cuando el punto de conexión la admita."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Predeterminado",
         "custom": "Personalizado"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automático",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama संदर्भ विंडो",
           "openclaw_session_key": "सत्र कुंजी",
           "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
-          "hermes_session_key": "मेमोरी सत्र कुंजी"
+          "hermes_session_key": "मेमोरी सत्र कुंजी",
+          "openai_api_transport": "जनरेशन API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
               "openclaw_session_key": "सत्र कुंजी",
               "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
-              "hermes_session_key": "मेमोरी सत्र कुंजी"
+              "hermes_session_key": "मेमोरी सत्र कुंजी",
+              "openai_api_transport": "जनरेशन API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
               "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
               "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।",
-              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।"
+              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।",
+              "openai_api_transport": "स्वचालित विकल्प आधिकारिक OpenAI एंडपॉइंट के लिए Responses और कस्टम एंडपॉइंट के लिए Chat Completions का उपयोग करता है। किसी API को स्पष्ट रूप से तभी चुनें जब एंडपॉइंट उसका समर्थन करता हो।"
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "सत्र कुंजी",
           "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
           "hermes_url": "Hermes सर्वर URL",
-          "hermes_session_key": "मेमोरी सत्र कुंजी"
+          "hermes_session_key": "मेमोरी सत्र कुंजी",
+          "openai_api_transport": "जनरेशन API"
         },
         "data_description": {
           "model_name": "इस प्रोफ़ाइल को LLM मॉडल का उपयोग करना चाहिए।",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama संदर्भ विंडो",
               "openclaw_session_key": "सत्र कुंजी",
               "stateful_session_id": "स्टेटफ़ुल सत्र हेडर",
-              "hermes_session_key": "मेमोरी सत्र कुंजी"
+              "hermes_session_key": "मेमोरी सत्र कुंजी",
+              "openai_api_transport": "जनरेशन API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama को चयनित मॉडल को मेमोरी में कितने समय तक लोड रखना चाहिए।",
               "ollama_num_ctx": "Ollama को दिए गए संदर्भ विंडो आकार को ओवरराइड करें। मॉडल को डिफ़ॉल्ट बनाए रखने के लिए 0 का उपयोग करें।",
               "openclaw_session_key": "संदेश भेजने के लिए OpenClaw सत्र का नाम।",
               "stateful_session_id": "Assist वार्तालाप ID को X-Session-Id के रूप में भेजें और संदिग्ध पुनः प्रयासों को रोकें। इसे केवल तभी सक्षम करें जब यह एंडपॉइंट हेडर को सर्वर-साइड सत्र स्थिति के रूप में उपयोग करता हो।",
-              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।"
+              "hermes_session_key": "इस प्रोफ़ाइल के लिए Hermes की दीर्घकालिक मेमोरी को सीमित करने वाली स्थिर कुंजी।",
+              "openai_api_transport": "स्वचालित विकल्प आधिकारिक OpenAI एंडपॉइंट के लिए Responses और कस्टम एंडपॉइंट के लिए Chat Completions का उपयोग करता है। किसी API को स्पष्ट रूप से तभी चुनें जब एंडपॉइंट उसका समर्थन करता हो।"
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "गलती करना",
         "custom": "रिवाज़"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "स्वचालित",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

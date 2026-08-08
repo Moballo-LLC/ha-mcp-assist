@@ -41,6 +41,7 @@ from custom_components.mcp_assist.const import (
     CONF_MCP_BEARER_TOKEN,
     CONF_MAX_TOKENS,
     CONF_MODEL_NAME,
+    CONF_OPENAI_API_TRANSPORT,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
     CONF_STATEFUL_SESSION_ID,
@@ -66,6 +67,7 @@ from custom_components.mcp_assist.const import (
     CONTEXT_MODE_STANDARD,
     DEFAULT_CONTEXT_MODE,
     OPENAI_BASE_URL,
+    OPENAI_API_TRANSPORT_RESPONSES,
     PROMPT_MODE_CUSTOM,
     SERVER_TYPE_OLLAMA,
     SERVER_TYPE_OPENAI,
@@ -255,6 +257,126 @@ class _FakeStreamingResponse(_FakeAnthropicResponse):
         if self._text is not None:
             return self._text
         return await super().text()
+
+
+@pytest.mark.asyncio
+async def test_openai_responses_completed_event_drives_streamed_tool_loop(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Tool calls delivered on response.completed should run and retain reasoning."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4.1-mini",
+        },
+        options={
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
+            CONF_MAX_ITERATIONS: 2,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "discover_entities",
+                        "description": "Find entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(
+        return_value=[
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "content": "Kitchen light is off.",
+            }
+        ]
+    )
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    first_output = [
+        {"type": "reasoning", "id": "rs_1", "summary": []},
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "discover_entities",
+            "arguments": '{"area":"Kitchen"}',
+        },
+    ]
+    final_output = [
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "output_text", "text": "Kitchen light is off."}
+            ],
+        }
+    ]
+    responses = [
+        _FakeStreamingResponse(
+            [
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {"output": first_output},
+                    }
+                )
+            ]
+        ),
+        _FakeStreamingResponse(
+            [
+                'data: {"type":"response.output_text.delta",'
+                '"delta":"Kitchen light is off."}',
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "response.completed",
+                        "response": {"output": final_output},
+                    }
+                ),
+            ]
+        ),
+    ]
+    posts: list[dict] = []
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    result = await agent._call_llm_streaming(
+        [{"role": "user", "content": "Is the kitchen light on?"}]
+    )
+
+    assert result == "Kitchen light is off."
+    execute_mock.assert_awaited_once()
+    assert len(posts) == 2
+    assert all(post["url"] == "https://api.openai.com/v1/responses" for post in posts)
+    assert posts[0]["json"]["store"] is False
+    assert posts[1]["json"]["input"][-3:] == [
+        *first_output,
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": "Kitchen light is off.",
+        },
+    ]
 
 
 def test_stream_tool_call_index_normalization_handles_nonzero_offsets() -> None:
@@ -1084,8 +1206,8 @@ def test_prompt_cache_usage_log_reports_tokens_without_content(
             provider,
             {
                 "usage": {
-                    "prompt_tokens": 4096,
-                    "prompt_tokens_details": {"cached_tokens": 2048},
+                    "input_tokens": 4096,
+                    "input_tokens_details": {"cached_tokens": 2048},
                 }
             },
             transport="streaming",
@@ -1094,7 +1216,7 @@ def test_prompt_cache_usage_log_reports_tokens_without_content(
 
     assert payload["prompt_cache_key"].startswith("ha-mcp-assist-")
     assert "private-profile-name" not in payload["prompt_cache_key"]
-    assert payload["stream_options"] == {"include_usage": True}
+    assert "stream_options" not in payload
     assert "Prompt cache usage" in caplog.text
     assert "input_tokens=4096" in caplog.text
     assert "cached_tokens=2048" in caplog.text

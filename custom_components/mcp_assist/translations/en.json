@@ -102,7 +102,8 @@
           "clean_responses": "Clean Responses for Voice Output",
           "openclaw_session_key": "Session Key",
           "stateful_session_id": "Stateful Session Header",
-          "hermes_session_key": "Memory Session Key"
+          "hermes_session_key": "Memory Session Key",
+          "openai_api_transport": "Generation API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Session Key",
               "stateful_session_id": "Stateful Session Header",
-              "hermes_session_key": "Memory Session Key"
+              "hermes_session_key": "Memory Session Key",
+              "openai_api_transport": "Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Override the context window size passed to Ollama. Use 0 to keep the model default.",
               "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
               "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state.",
-              "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile."
+              "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile.",
+              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Session Key",
           "stateful_session_id": "Stateful Session Header",
           "hermes_url": "Hermes Server URL",
-          "hermes_session_key": "Memory Session Key"
+          "hermes_session_key": "Memory Session Key",
+          "openai_api_transport": "Generation API"
         },
         "data_description": {
           "model_name": "The LLM model this profile should use.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Session Key",
               "stateful_session_id": "Stateful Session Header",
-              "hermes_session_key": "Memory Session Key"
+              "hermes_session_key": "Memory Session Key",
+              "openai_api_transport": "Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Override the context window size passed to Ollama. Use 0 to keep the model default.",
               "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
               "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state.",
-              "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile."
+              "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile.",
+              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Default",
         "custom": "Custom"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatic",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Fenetre de contexte Ollama",
           "openclaw_session_key": "Clé de session",
           "stateful_session_id": "En-tête de session avec état",
-          "hermes_session_key": "Clé de session mémoire"
+          "hermes_session_key": "Clé de session mémoire",
+          "openai_api_transport": "API de génération"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Fenetre de contexte Ollama",
               "openclaw_session_key": "Clé de session",
               "stateful_session_id": "En-tête de session avec état",
-              "hermes_session_key": "Clé de session mémoire"
+              "hermes_session_key": "Clé de session mémoire",
+              "openai_api_transport": "API de génération"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
               "ollama_num_ctx": "Remplacez la taille de la fenêtre contextuelle transmise à Ollama. Utilisez 0 pour conserver la valeur par défaut du modèle.",
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
               "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
-              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil."
+              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil.",
+              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Clé de session",
           "stateful_session_id": "En-tête de session avec état",
           "hermes_url": "URL du serveur Hermes",
-          "hermes_session_key": "Clé de session mémoire"
+          "hermes_session_key": "Clé de session mémoire",
+          "openai_api_transport": "API de génération"
         },
         "data_description": {
           "model_name": "Modèle LLM que ce profil doit utiliser.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Fenetre de contexte Ollama",
               "openclaw_session_key": "Clé de session",
               "stateful_session_id": "En-tête de session avec état",
-              "hermes_session_key": "Clé de session mémoire"
+              "hermes_session_key": "Clé de session mémoire",
+              "openai_api_transport": "API de génération"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
               "ollama_num_ctx": "Remplacez la taille de la fenêtre contextuelle transmise à Ollama. Utilisez 0 pour conserver la valeur par défaut du modèle.",
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
               "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
-              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil."
+              "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil.",
+              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Défaut",
         "custom": "Coutume"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatique",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

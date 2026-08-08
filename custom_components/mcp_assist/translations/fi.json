@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollaman konteksti-ikkuna",
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
-          "hermes_session_key": "Muistin istuntoavain"
+          "hermes_session_key": "Muistin istuntoavain",
+          "openai_api_transport": "Luontirajapinta"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
-              "hermes_session_key": "Muistin istuntoavain"
+              "hermes_session_key": "Muistin istuntoavain",
+              "openai_api_transport": "Luontirajapinta"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
-              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille."
+              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_url": "Hermes-palvelimen URL",
-          "hermes_session_key": "Muistin istuntoavain"
+          "hermes_session_key": "Muistin istuntoavain",
+          "openai_api_transport": "Luontirajapinta"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
-              "hermes_session_key": "Muistin istuntoavain"
+              "hermes_session_key": "Muistin istuntoavain",
+              "openai_api_transport": "Luontirajapinta"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
-              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille."
+              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Oletus",
         "custom": "Mukautettu"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automaattinen",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama Context Window",
           "openclaw_session_key": "Susi ng Sesyon",
           "stateful_session_id": "Header ng stateful na session",
-          "hermes_session_key": "Session Key ng Memorya"
+          "hermes_session_key": "Session Key ng Memorya",
+          "openai_api_transport": "API ng pagbuo"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Susi ng Sesyon",
               "stateful_session_id": "Header ng stateful na session",
-              "hermes_session_key": "Session Key ng Memorya"
+              "hermes_session_key": "Session Key ng Memorya",
+              "openai_api_transport": "API ng pagbuo"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
               "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
-              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito."
+              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito.",
+              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Susi ng Sesyon",
           "stateful_session_id": "Header ng stateful na session",
           "hermes_url": "URL ng Hermes Server",
-          "hermes_session_key": "Session Key ng Memorya"
+          "hermes_session_key": "Session Key ng Memorya",
+          "openai_api_transport": "API ng pagbuo"
         },
         "data_description": {
           "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama Context Window",
               "openclaw_session_key": "Susi ng Sesyon",
               "stateful_session_id": "Header ng stateful na session",
-              "hermes_session_key": "Session Key ng Memorya"
+              "hermes_session_key": "Session Key ng Memorya",
+              "openai_api_transport": "API ng pagbuo"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
               "ollama_num_ctx": "I-override ang laki ng window ng konteksto na ipinasa sa Ollama. Gamitin ang 0 upang panatilihing default ang modelo.",
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
               "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
-              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito."
+              "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito.",
+              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Default",
         "custom": "Custom"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Awtomatiko",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

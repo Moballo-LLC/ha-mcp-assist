@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama kontekstvindu",
           "openclaw_session_key": "øktnøkkel",
           "stateful_session_id": "Tilstandsbevarende øktheader",
-          "hermes_session_key": "Øktnøkkel for minne"
+          "hermes_session_key": "Øktnøkkel for minne",
+          "openai_api_transport": "API for generering"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama kontekstvindu",
               "openclaw_session_key": "øktnøkkel",
               "stateful_session_id": "Tilstandsbevarende øktheader",
-              "hermes_session_key": "Øktnøkkel for minne"
+              "hermes_session_key": "Øktnøkkel for minne",
+              "openai_api_transport": "API for generering"
             },
             "data_description": {
               "ollama_keep_alive": "Hvor lenge Ollama skal beholde den valgte modellen lastet i minnet.",
               "ollama_num_ctx": "Overstyr kontekstvindustørrelsen som er sendt til Ollama. Bruk 0 for å beholde standardmodellen.",
               "openclaw_session_key": "Navn på OpenClaw-sesjonen det skal sendes meldinger til.",
               "stateful_session_id": "Send Assist-samtale-ID-en som X-Session-Id og hindre tvetydige nye forsøk. Aktiver bare når dette endepunktet bruker headeren som økttilstand på serversiden.",
-              "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen."
+              "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen.",
+              "openai_api_transport": "Automatisk bruker Responses for det offisielle OpenAI-endepunktet og Chat Completions for egendefinerte endepunkter. Velg en API uttrykkelig bare når endepunktet støtter den."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "øktnøkkel",
           "stateful_session_id": "Tilstandsbevarende øktheader",
           "hermes_url": "Hermes server-URL",
-          "hermes_session_key": "Øktnøkkel for minne"
+          "hermes_session_key": "Øktnøkkel for minne",
+          "openai_api_transport": "API for generering"
         },
         "data_description": {
           "model_name": "LLM-modellen denne profilen skal bruke.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama kontekstvindu",
               "openclaw_session_key": "øktnøkkel",
               "stateful_session_id": "Tilstandsbevarende øktheader",
-              "hermes_session_key": "Øktnøkkel for minne"
+              "hermes_session_key": "Øktnøkkel for minne",
+              "openai_api_transport": "API for generering"
             },
             "data_description": {
               "ollama_keep_alive": "Hvor lenge Ollama skal beholde den valgte modellen lastet i minnet.",
               "ollama_num_ctx": "Overstyr kontekstvindustørrelsen som er sendt til Ollama. Bruk 0 for å beholde standardmodellen.",
               "openclaw_session_key": "Navn på OpenClaw-sesjonen det skal sendes meldinger til.",
               "stateful_session_id": "Send Assist-samtale-ID-en som X-Session-Id og hindre tvetydige nye forsøk. Aktiver bare når dette endepunktet bruker headeren som økttilstand på serversiden.",
-              "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen."
+              "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen.",
+              "openai_api_transport": "Automatisk bruker Responses for det offisielle OpenAI-endepunktet og Chat Completions for egendefinerte endepunkter. Velg en API uttrykkelig bare når endepunktet støtter den."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Standard",
         "custom": "Egendefinert"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatisk",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

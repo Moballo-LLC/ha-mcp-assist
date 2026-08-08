@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama kontextfonster",
           "openclaw_session_key": "Sessionsnyckel",
           "stateful_session_id": "Tillståndsbevarande sessionsrubrik",
-          "hermes_session_key": "Sessionsnyckel för minne"
+          "hermes_session_key": "Sessionsnyckel för minne",
+          "openai_api_transport": "API för generering"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama kontextfonster",
               "openclaw_session_key": "Sessionsnyckel",
               "stateful_session_id": "Tillståndsbevarande sessionsrubrik",
-              "hermes_session_key": "Sessionsnyckel för minne"
+              "hermes_session_key": "Sessionsnyckel för minne",
+              "openai_api_transport": "API för generering"
             },
             "data_description": {
               "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
               "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
               "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till.",
               "stateful_session_id": "Skicka Assist-konversationens ID som X-Session-Id och förhindra tvetydiga återförsök. Aktivera endast när den här slutpunkten använder headern som sessionstillstånd på serversidan.",
-              "hermes_session_key": "Stabil nyckel som avgränsar Hermes långtidsminne för denna profil."
+              "hermes_session_key": "Stabil nyckel som avgränsar Hermes långtidsminne för denna profil.",
+              "openai_api_transport": "Automatiskt använder Responses för den officiella OpenAI-slutpunkten och Chat Completions för anpassade slutpunkter. Välj endast ett API uttryckligen när slutpunkten stöder det."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Sessionsnyckel",
           "stateful_session_id": "Tillståndsbevarande sessionsrubrik",
           "hermes_url": "Hermes server-URL",
-          "hermes_session_key": "Sessionsnyckel för minne"
+          "hermes_session_key": "Sessionsnyckel för minne",
+          "openai_api_transport": "API för generering"
         },
         "data_description": {
           "model_name": "LLM-modellen som denna profil ska använda.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama kontextfonster",
               "openclaw_session_key": "Sessionsnyckel",
               "stateful_session_id": "Tillståndsbevarande sessionsrubrik",
-              "hermes_session_key": "Sessionsnyckel för minne"
+              "hermes_session_key": "Sessionsnyckel för minne",
+              "openai_api_transport": "API för generering"
             },
             "data_description": {
               "ollama_keep_alive": "Hur länge Ollama ska behålla den valda modellen inläst i minnet.",
               "ollama_num_ctx": "Åsidosätt kontextfönstrets storlek som skickats till Ollama. Använd 0 för att behålla standardmodellen.",
               "openclaw_session_key": "Namn på OpenClaw-sessionen att skicka meddelanden till.",
               "stateful_session_id": "Skicka Assist-konversationens ID som X-Session-Id och förhindra tvetydiga återförsök. Aktivera endast när den här slutpunkten använder headern som sessionstillstånd på serversidan.",
-              "hermes_session_key": "Stabil nyckel som avgränsar Hermes långtidsminne för denna profil."
+              "hermes_session_key": "Stabil nyckel som avgränsar Hermes långtidsminne för denna profil.",
+              "openai_api_transport": "Automatiskt använder Responses för den officiella OpenAI-slutpunkten och Chat Completions för anpassade slutpunkter. Välj endast ett API uttryckligen när slutpunkten stöder det."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Standard",
         "custom": "Anpassad"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatiskt",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },
