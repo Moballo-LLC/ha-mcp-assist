@@ -3408,25 +3408,31 @@ class MCPServer(
                     data = await response.json()
             return str(data.get("message", {}).get("content") or "").strip()
 
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": question},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}",
+                            "detail": detail if detail in {"auto", "low", "high"} else "auto",
+                        },
+                    },
+                ],
+            }
+        ]
+        uses_responses_api = bool(getattr(provider, "uses_responses_api", False))
         payload = {
             "model": provider.model_name,
             "stream": False,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": question},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}",
-                                "detail": detail if detail in {"auto", "low", "high"} else "auto",
-                            },
-                        },
-                    ],
-                }
-            ],
+            "messages": messages,
         }
+        if uses_responses_api:
+            payload = provider.prepare_payload(
+                provider.build_payload(messages, stream=False)
+            )
         url = provider.chat_url()
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
@@ -3440,11 +3446,14 @@ class MCPServer(
                     )
                 data = await response.json()
 
-        message = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content")
-        )
+        if uses_responses_api:
+            message = provider.parse_http_message(data).get("content")
+        else:
+            message = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content")
+            )
         return self._extract_provider_message_text(message).strip()
 
     async def _generate_image_with_provider(

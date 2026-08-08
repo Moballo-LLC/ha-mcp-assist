@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama contextvenster",
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
-          "hermes_session_key": "Geheugensessiesleutel"
+          "hermes_session_key": "Geheugensessiesleutel",
+          "openai_api_transport": "Generatie-API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama contextvenster",
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
-              "hermes_session_key": "Geheugensessiesleutel"
+              "hermes_session_key": "Geheugensessiesleutel",
+              "openai_api_transport": "Generatie-API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
-              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent."
+              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_url": "Hermes-server-URL",
-          "hermes_session_key": "Geheugensessiesleutel"
+          "hermes_session_key": "Geheugensessiesleutel",
+          "openai_api_transport": "Generatie-API"
         },
         "data_description": {
           "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama contextvenster",
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
-              "hermes_session_key": "Geheugensessiesleutel"
+              "hermes_session_key": "Geheugensessiesleutel",
+              "openai_api_transport": "Generatie-API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
-              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent."
+              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Standaard",
         "custom": "Aangepast"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatisch",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

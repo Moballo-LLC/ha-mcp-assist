@@ -61,8 +61,10 @@ from custom_components.mcp_assist.const import (
     CONF_LMSTUDIO_URL,
     CONF_LLM_API_ALLOWLIST,
     CONF_MODEL_NAME,
+    CONF_OPENAI_API_TRANSPORT,
     CONF_SERVER_TYPE,
     DOMAIN,
+    OPENAI_API_TRANSPORT_RESPONSES,
     SERVER_TYPE_OPENAI,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
@@ -3327,6 +3329,81 @@ async def test_analyze_image_uses_provider_owned_chat_url(
     assert calls[0]["url"] == "https://proxy.example.invalid/v1/chat/completions"
     assert calls[0]["headers"] == {"Authorization": "Bearer sk-test"}
     assert calls[0]["payload"]["model"] == "gpt-4o-mini"
+
+
+@pytest.mark.asyncio
+async def test_analyze_image_uses_selected_openai_responses_api(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Image analysis should translate multimodal input for Responses endpoints."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: "https://proxy.example.invalid/v1",
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4.1-mini",
+        },
+        options={
+            CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
+        },
+    )
+    server = MCPServer(hass, 8099, entry)
+    calls: list[dict[str, Any]] = []
+
+    class _ProviderResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def json(self):
+            return {
+                "output": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {"type": "output_text", "text": "Looks clear."}
+                        ],
+                    }
+                ]
+            }
+
+    class _ProviderSession:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]):
+            calls.append({"url": url, "headers": headers, "payload": json})
+            return _ProviderResponse()
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _ProviderSession)
+
+    result = await server._analyze_image_with_provider(
+        question="What is shown?",
+        image_bytes=b"fake-image",
+        mime_type="image/png",
+        detail="low",
+        context=None,
+    )
+
+    assert result == "Looks clear."
+    assert calls[0]["url"] == "https://proxy.example.invalid/v1/responses"
+    assert calls[0]["payload"]["store"] is False
+    content = calls[0]["payload"]["input"][0]["content"]
+    assert content[0] == {"type": "input_text", "text": "What is shown?"}
+    assert content[1]["type"] == "input_image"
+    assert content[1]["detail"] == "low"
 
 
 @pytest.mark.asyncio

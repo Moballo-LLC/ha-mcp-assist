@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Контекстное окно Ollama",
           "openclaw_session_key": "Сеансовый ключ",
           "stateful_session_id": "Заголовок сеанса с состоянием",
-          "hermes_session_key": "Ключ сессии памяти"
+          "hermes_session_key": "Ключ сессии памяти",
+          "openai_api_transport": "API генерации"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Контекстное окно Ollama",
               "openclaw_session_key": "Сеансовый ключ",
               "stateful_session_id": "Заголовок сеанса с состоянием",
-              "hermes_session_key": "Ключ сессии памяти"
+              "hermes_session_key": "Ключ сессии памяти",
+              "openai_api_transport": "API генерации"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
               "ollama_num_ctx": "Переопределить размер контекстного окна, переданный в Ollama. Используйте 0, чтобы сохранить модель по умолчанию.",
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
               "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера.",
-              "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля."
+              "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля.",
+              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Сеансовый ключ",
           "stateful_session_id": "Заголовок сеанса с состоянием",
           "hermes_url": "URL сервера Hermes",
-          "hermes_session_key": "Ключ сессии памяти"
+          "hermes_session_key": "Ключ сессии памяти",
+          "openai_api_transport": "API генерации"
         },
         "data_description": {
           "model_name": "Модель LLM, которую следует использовать в этом профиле.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Контекстное окно Ollama",
               "openclaw_session_key": "Сеансовый ключ",
               "stateful_session_id": "Заголовок сеанса с состоянием",
-              "hermes_session_key": "Ключ сессии памяти"
+              "hermes_session_key": "Ключ сессии памяти",
+              "openai_api_transport": "API генерации"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
               "ollama_num_ctx": "Переопределить размер контекстного окна, переданный в Ollama. Используйте 0, чтобы сохранить модель по умолчанию.",
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
               "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера.",
-              "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля."
+              "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля.",
+              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "По умолчанию",
         "custom": "Обычай"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Автоматически",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

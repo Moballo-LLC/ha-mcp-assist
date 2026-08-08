@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama Baglam Penceresi",
           "openclaw_session_key": "Oturum Anahtarı",
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
-          "hermes_session_key": "Bellek Oturum Anahtarı"
+          "hermes_session_key": "Bellek Oturum Anahtarı",
+          "openai_api_transport": "Oluşturma API'si"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama Baglam Penceresi",
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
-              "hermes_session_key": "Bellek Oturum Anahtarı"
+              "hermes_session_key": "Bellek Oturum Anahtarı",
+              "openai_api_transport": "Oluşturma API'si"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
               "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
-              "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar."
+              "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Oturum Anahtarı",
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
           "hermes_url": "Hermes Sunucu URL'si",
-          "hermes_session_key": "Bellek Oturum Anahtarı"
+          "hermes_session_key": "Bellek Oturum Anahtarı",
+          "openai_api_transport": "Oluşturma API'si"
         },
         "data_description": {
           "model_name": "Bu profilin kullanması gereken LLM modeli.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama Baglam Penceresi",
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
-              "hermes_session_key": "Bellek Oturum Anahtarı"
+              "hermes_session_key": "Bellek Oturum Anahtarı",
+              "openai_api_transport": "Oluşturma API'si"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
               "ollama_num_ctx": "Ollama'e iletilen bağlam penceresi boyutunu geçersiz kılın. Modeli varsayılan olarak tutmak için 0'ı kullanın.",
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
-              "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar."
+              "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Varsayılan",
         "custom": "Özel"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Otomatik",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

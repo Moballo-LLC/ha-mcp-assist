@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Janela de contexto Ollama",
           "openclaw_session_key": "Chave da sessão",
           "stateful_session_id": "Cabeçalho de sessão com estado",
-          "hermes_session_key": "Chave de sessão de memória"
+          "hermes_session_key": "Chave de sessão de memória",
+          "openai_api_transport": "API de geração"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Janela de contexto Ollama",
               "openclaw_session_key": "Chave da sessão",
               "stateful_session_id": "Cabeçalho de sessão com estado",
-              "hermes_session_key": "Chave de sessão de memória"
+              "hermes_session_key": "Chave de sessão de memória",
+              "openai_api_transport": "API de geração"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
               "ollama_num_ctx": "Substitua o tamanho da janela de contexto passado para Ollama. Use 0 para manter o modelo padrão.",
               "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
               "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor.",
-              "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil."
+              "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Chave da sessão",
           "stateful_session_id": "Cabeçalho de sessão com estado",
           "hermes_url": "URL do servidor Hermes",
-          "hermes_session_key": "Chave de sessão de memória"
+          "hermes_session_key": "Chave de sessão de memória",
+          "openai_api_transport": "API de geração"
         },
         "data_description": {
           "model_name": "O modelo LLM que este perfil deve usar.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Janela de contexto Ollama",
               "openclaw_session_key": "Chave da sessão",
               "stateful_session_id": "Cabeçalho de sessão com estado",
-              "hermes_session_key": "Chave de sessão de memória"
+              "hermes_session_key": "Chave de sessão de memória",
+              "openai_api_transport": "API de geração"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
               "ollama_num_ctx": "Substitua o tamanho da janela de contexto passado para Ollama. Use 0 para manter o modelo padrão.",
               "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
               "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor.",
-              "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil."
+              "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Padrão",
         "custom": "Personalizado"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automático",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

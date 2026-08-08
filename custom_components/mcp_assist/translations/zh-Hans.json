@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama上下文窗口",
           "openclaw_session_key": "会话密钥",
           "stateful_session_id": "有状态会话标头",
-          "hermes_session_key": "记忆会话密钥"
+          "hermes_session_key": "记忆会话密钥",
+          "openai_api_transport": "生成 API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama上下文窗口",
               "openclaw_session_key": "会话密钥",
               "stateful_session_id": "有状态会话标头",
-              "hermes_session_key": "记忆会话密钥"
+              "hermes_session_key": "记忆会话密钥",
+              "openai_api_transport": "生成 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
-              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
+              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
+              "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。"
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "会话密钥",
           "stateful_session_id": "有状态会话标头",
           "hermes_url": "Hermes服务器URL",
-          "hermes_session_key": "记忆会话密钥"
+          "hermes_session_key": "记忆会话密钥",
+          "openai_api_transport": "生成 API"
         },
         "data_description": {
           "model_name": "此配置文件应使用的 LLM 型号。",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Ollama上下文窗口",
               "openclaw_session_key": "会话密钥",
               "stateful_session_id": "有状态会话标头",
-              "hermes_session_key": "记忆会话密钥"
+              "hermes_session_key": "记忆会话密钥",
+              "openai_api_transport": "生成 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
               "ollama_num_ctx": "覆盖传递给 Ollama 的上下文窗口大小。使用 0 保持模型默认。",
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
-              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
+              "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
+              "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。"
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "默认",
         "custom": "风俗"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "自动",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

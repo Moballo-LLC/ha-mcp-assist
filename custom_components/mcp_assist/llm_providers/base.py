@@ -52,6 +52,8 @@ class ProviderConfigField:
     kind: str = "text"
     minimum: int | float | None = None
     maximum: int | float | None = None
+    options: tuple[str, ...] = ()
+    translation_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -248,9 +250,10 @@ class LLMProvider:
         model_ids: list[str],
         *,
         base_url: str,
+        values: dict[str, Any] | None = None,
     ) -> list[str]:
         """Filter and sort provider model IDs for UI display."""
-        del base_url
+        del base_url, values
         models = [model_id for model_id in model_ids if model_id]
         return sorted(models)
 
@@ -306,7 +309,11 @@ class LLMProvider:
                         for model in data.get("data", [])
                         if isinstance(model, dict)
                     ]
-                    return cls.filter_model_ids(model_ids, base_url=base_url)
+                    return cls.filter_model_ids(
+                        model_ids,
+                        base_url=base_url,
+                        values=values,
+                    )
         except Exception as err:
             _LOGGER.error(
                 "%s model fetch failed: %s",

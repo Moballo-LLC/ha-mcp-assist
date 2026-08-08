@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Okno kontekstu Ollama",
           "openclaw_session_key": "Klucz sesji",
           "stateful_session_id": "Nagłówek sesji ze stanem",
-          "hermes_session_key": "Klucz sesji pamięci"
+          "hermes_session_key": "Klucz sesji pamięci",
+          "openai_api_transport": "Interfejs API generowania"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Okno kontekstu Ollama",
               "openclaw_session_key": "Klucz sesji",
               "stateful_session_id": "Nagłówek sesji ze stanem",
-              "hermes_session_key": "Klucz sesji pamięci"
+              "hermes_session_key": "Klucz sesji pamięci",
+              "openai_api_transport": "Interfejs API generowania"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
               "ollama_num_ctx": "Zastąp rozmiar okna kontekstowego przekazany do Ollama. Użyj 0, aby zachować domyślny model.",
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
               "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
-              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu."
+              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu.",
+              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje."
             }
           },
           "tools": {
@@ -392,7 +395,8 @@
           "openclaw_session_key": "Klucz sesji",
           "stateful_session_id": "Nagłówek sesji ze stanem",
           "hermes_url": "Adres URL serwera Hermes",
-          "hermes_session_key": "Klucz sesji pamięci"
+          "hermes_session_key": "Klucz sesji pamięci",
+          "openai_api_transport": "Interfejs API generowania"
         },
         "data_description": {
           "model_name": "Model LLM, którego powinien używać ten profil.",
@@ -481,14 +485,16 @@
               "ollama_num_ctx": "Okno kontekstu Ollama",
               "openclaw_session_key": "Klucz sesji",
               "stateful_session_id": "Nagłówek sesji ze stanem",
-              "hermes_session_key": "Klucz sesji pamięci"
+              "hermes_session_key": "Klucz sesji pamięci",
+              "openai_api_transport": "Interfejs API generowania"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
               "ollama_num_ctx": "Zastąp rozmiar okna kontekstowego przekazany do Ollama. Użyj 0, aby zachować domyślny model.",
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
               "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
-              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu."
+              "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu.",
+              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje."
             }
           },
           "advanced_settings": {
@@ -693,6 +699,13 @@
       "options": {
         "default": "Domyślny",
         "custom": "Zwyczaj"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatycznie",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

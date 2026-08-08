@@ -21,7 +21,7 @@ For Home Assistant control, the model needs to:
 
 | Provider type | Notes |
 | --- | --- |
-| Local OpenAI-compatible servers | Good for privacy and local control; quality depends heavily on the model and server's tool-calling support |
+| Local OpenAI-compatible servers | Good for privacy and local control; OpenAI profiles can use Chat Completions or Responses when the server implements the selected contract |
 | Ollama | Convenient local workflow; confirm the selected model and client path support tools reliably |
 | LM Studio | Good local testing surface; model loading and server settings matter |
 | llama.cpp / vLLM | Useful self-hosted OpenAI-compatible options when configured with compatible chat and tool-call behavior |
@@ -43,6 +43,16 @@ actions. More complex requests usually need stronger tool-calling behavior:
 
 Treat model recommendations as starting points, not guarantees. Models,
 quantizations, provider APIs, and local server behavior change over time.
+
+### OpenAI API Compatibility
+
+The profile's **Generation API** setting controls the wire protocol, not the
+model's reasoning style. A custom endpoint that accepts OpenAI-style requests
+may implement Chat Completions without implementing Responses, so Automatic
+keeps custom endpoints on Chat Completions. Select Responses explicitly only
+after confirming the server supports its input items, flat function-tool
+schemas, function-call output items, and typed streaming events. MCP Assist does
+not switch APIs automatically after a failed request.
 
 ### Small Context Local Models
 

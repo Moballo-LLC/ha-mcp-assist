@@ -265,6 +265,14 @@ def _provider_field_marker(
 
 def _provider_field_validator(field: ProviderConfigField) -> Any:
     """Build a selector or validator for a provider-owned field."""
+    if field.kind == "select":
+        return SelectSelector(
+            SelectSelectorConfig(
+                options=list(field.options),
+                mode=SelectSelectorMode.DROPDOWN,
+                translation_key=field.translation_key,
+            )
+        )
     if field.kind == "password":
         return TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
     if field.kind == "boolean":
