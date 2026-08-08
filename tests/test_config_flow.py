@@ -755,6 +755,11 @@ async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> No
             OPENAI_API_TRANSPORT_AUTO,
             "model_requires_chat_completions_api",
         ),
+        (
+            "o3-deep-research",
+            OPENAI_API_TRANSPORT_RESPONSES,
+            "deep_research_model_not_supported",
+        ),
     ],
 )
 async def test_advanced_step_rejects_incompatible_openai_model_transport(
@@ -1347,6 +1352,7 @@ def test_openai_model_transport_errors_are_localized() -> None:
             for error in (
                 "model_requires_responses_api",
                 "model_requires_chat_completions_api",
+                "deep_research_model_not_supported",
             ):
                 message = localized[root]["error"][error]
                 assert message
@@ -1618,6 +1624,11 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
             "gpt-4o-audio-preview",
             OPENAI_API_TRANSPORT_RESPONSES,
             "model_requires_chat_completions_api",
+        ),
+        (
+            "o3-deep-research",
+            OPENAI_API_TRANSPORT_RESPONSES,
+            "deep_research_model_not_supported",
         ),
     ],
 )

@@ -539,7 +539,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 model_id
                 for model_id in model_ids
                 if (model_id.startswith("gpt-") or cls.is_reasoning_model(model_id))
-                and "deep-research" not in model_id.lower()
+                and not cls.is_deep_research_model(model_id)
                 and (
                     (
                         transport == OPENAI_API_TRANSPORT_RESPONSES
@@ -559,6 +559,12 @@ class OpenAIProvider(OpenAICompatibleProvider):
         name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
         return name.startswith(_CHAT_COMPLETIONS_ONLY_MODEL_PREFIXES)
 
+    @staticmethod
+    def is_deep_research_model(model_name: str) -> bool:
+        """Return whether a model requires OpenAI built-in data-source tools."""
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        return "deep-research" in name
+
     @classmethod
     def model_configuration_error(
         cls,
@@ -570,6 +576,8 @@ class OpenAIProvider(OpenAICompatibleProvider):
         """Reject known official-OpenAI model and transport mismatches."""
         if not cls._is_official_openai_base_url(base_url):
             return None
+        if cls.is_deep_research_model(model_name):
+            return "deep_research_model_not_supported"
         configured = cls._configured_transport_from_values(values)
         transport = cls._resolve_api_transport(configured, base_url)
         if (

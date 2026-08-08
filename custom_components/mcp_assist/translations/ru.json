@@ -340,6 +340,7 @@
     "error": {
       "model_requires_responses_api": "Для этой модели требуется Responses API. Выберите Responses API или «Автоматически» либо выберите другую модель.",
       "model_requires_chat_completions_api": "Для этой модели требуется Chat Completions API. Выберите Chat Completions API либо выберите другую модель.",
+      "deep_research_model_not_supported": "Модели глубокого исследования требуют встроенных инструментов OpenAI для источников данных, которые MCP Assist не предоставляет. Выберите другую модель.",
       "cannot_connect": "Невозможно подключиться к серверу вывода. Убедитесь, что он запущен и доступен.",
       "no_models": "На сервере не загружены модели. Сначала загрузите модель.",
       "invalid_model": "Указанная модель недоступна на сервере.",
@@ -695,6 +696,7 @@
     "error": {
       "model_requires_responses_api": "Для этой модели требуется Responses API. Выберите Responses API или «Автоматически» либо выберите другую модель.",
       "model_requires_chat_completions_api": "Для этой модели требуется Chat Completions API. Выберите Chat Completions API либо выберите другую модель.",
+      "deep_research_model_not_supported": "Модели глубокого исследования требуют встроенных инструментов OpenAI для источников данных, которые MCP Assist не предоставляет. Выберите другую модель.",
       "mcp_bearer_token_too_short": "Bearer-токен MCP должен быть пустым или содержать не менее 16 символов."
     }
   },

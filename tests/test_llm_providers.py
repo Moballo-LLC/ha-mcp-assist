@@ -478,8 +478,8 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
     }
 
 
-def test_openai_rejects_only_known_official_model_transport_mismatches() -> None:
-    """Known API-specific models should not be saved with the other API."""
+def test_openai_rejects_only_known_official_model_incompatibilities() -> None:
+    """Known official model incompatibilities should be rejected before saving."""
     chat_values = {
         CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
     }
@@ -505,6 +505,14 @@ def test_openai_rejects_only_known_official_model_transport_mismatches() -> None
     )
     assert (
         OpenAIProvider.model_configuration_error(
+            "o3-deep-research",
+            base_url=OPENAI_BASE_URL,
+            values=responses_values,
+        )
+        == "deep_research_model_not_supported"
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
             "gpt-4.1-mini",
             base_url=OPENAI_BASE_URL,
             values=chat_values,
@@ -524,6 +532,14 @@ def test_openai_rejects_only_known_official_model_transport_mismatches() -> None
             "o3-pro",
             base_url="https://proxy.example.invalid/v1",
             values=chat_values,
+        )
+        is None
+    )
+    assert (
+        OpenAIProvider.model_configuration_error(
+            "o3-deep-research",
+            base_url="https://api.example.invalid/v1",
+            values=responses_values,
         )
         is None
     )
@@ -1016,6 +1032,14 @@ def test_is_chat_completions_only_model_classification() -> None:
     assert is_chat_only("gpt-4o-mini-search-preview-2025-03-11")
     assert not is_chat_only("gpt-3.5-turbo")
     assert not is_chat_only("gpt-4o")
+
+
+def test_is_deep_research_model_classification() -> None:
+    """Deep-research model names should be recognized across common forms."""
+    is_deep_research = OpenAIProvider.is_deep_research_model
+    assert is_deep_research("o3-deep-research")
+    assert is_deep_research("openai/o4-mini-deep-research-2025-06-26")
+    assert not is_deep_research("o3-pro")
 
 
 def test_openai_responses_provider_applies_prompt_cache_key() -> None:

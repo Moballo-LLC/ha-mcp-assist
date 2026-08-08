@@ -340,6 +340,7 @@
     "error": {
       "model_requires_responses_api": "Este modelo requer a API Responses. Escolha Responses API ou Automático, ou selecione outro modelo.",
       "model_requires_chat_completions_api": "Este modelo requer a API Chat Completions. Escolha Chat Completions API ou selecione outro modelo.",
+      "deep_research_model_not_supported": "Os modelos de pesquisa aprofundada exigem ferramentas de fontes de dados integradas da OpenAI que o MCP Assist não fornece. Selecione outro modelo.",
       "cannot_connect": "Nao foi possivel conectar ao servidor de inferencia. Certifique-se de que esta em execucao e acessivel.",
       "no_models": "Nenhum modelo carregado no servidor. Por favor, carregue um modelo primeiro.",
       "invalid_model": "O modelo especificado nao esta disponivel no servidor.",
@@ -695,6 +696,7 @@
     "error": {
       "model_requires_responses_api": "Este modelo requer a API Responses. Escolha Responses API ou Automático, ou selecione outro modelo.",
       "model_requires_chat_completions_api": "Este modelo requer a API Chat Completions. Escolha Chat Completions API ou selecione outro modelo.",
+      "deep_research_model_not_supported": "Os modelos de pesquisa aprofundada exigem ferramentas de fontes de dados integradas da OpenAI que o MCP Assist não fornece. Selecione outro modelo.",
       "mcp_bearer_token_too_short": "O token Bearer MCP deve ficar em branco ou ter pelo menos 16 caracteres."
     }
   },

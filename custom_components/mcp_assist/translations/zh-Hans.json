@@ -340,6 +340,7 @@
     "error": {
       "model_requires_responses_api": "此模型需要 Responses API。请选择 Responses API 或“自动”，或选择其他模型。",
       "model_requires_chat_completions_api": "此模型需要 Chat Completions API。请选择 Chat Completions API，或选择其他模型。",
+      "deep_research_model_not_supported": "深度研究模型需要 OpenAI 内置的数据源工具，而 MCP Assist 不提供这些工具。请选择其他模型。",
       "cannot_connect": "无法连接到推理服务器。请确保服务器正在运行且可访问。",
       "no_models": "服务器上没有加载模型。请先加载一个模型。",
       "invalid_model": "指定的模型在服务器上不可用。",
@@ -695,6 +696,7 @@
     "error": {
       "model_requires_responses_api": "此模型需要 Responses API。请选择 Responses API 或“自动”，或选择其他模型。",
       "model_requires_chat_completions_api": "此模型需要 Chat Completions API。请选择 Chat Completions API，或选择其他模型。",
+      "deep_research_model_not_supported": "深度研究模型需要 OpenAI 内置的数据源工具，而 MCP Assist 不提供这些工具。请选择其他模型。",
       "mcp_bearer_token_too_short": "MCP Bearer 令牌必须为空或至少包含 16 个字符。"
     }
   },
