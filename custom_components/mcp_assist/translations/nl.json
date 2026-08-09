@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama contextvenster",
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
-          "hermes_session_key": "Geheugensessiesleutel"
+          "hermes_session_key": "Geheugensessiesleutel",
+          "openai_api_transport": "Generatie-API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama contextvenster",
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
-              "hermes_session_key": "Geheugensessiesleutel"
+              "hermes_session_key": "Geheugensessiesleutel",
+              "openai_api_transport": "Generatie-API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
-              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent."
+              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Dit model vereist de Responses API. Kies Responses API of Automatisch, of selecteer een ander model.",
+      "model_requires_chat_completions_api": "Dit model vereist de Chat Completions API. Kies Chat Completions API of selecteer een ander model.",
+      "deep_research_model_not_supported": "Deep-researchmodellen vereisen ingebouwde gegevensbrontools van OpenAI die MCP Assist niet biedt. Selecteer een ander model.",
       "cannot_connect": "Kan geen verbinding maken met de inferentieserver. Zorg ervoor dat deze actief en bereikbaar is.",
       "no_models": "Geen modellen geladen op de server. Laad eerst een model.",
       "invalid_model": "Het opgegeven model is niet beschikbaar op de server.",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_url": "Hermes-server-URL",
-          "hermes_session_key": "Geheugensessiesleutel"
+          "hermes_session_key": "Geheugensessiesleutel",
+          "openai_api_transport": "Generatie-API"
         },
         "data_description": {
           "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Ollama contextvenster",
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
-              "hermes_session_key": "Geheugensessiesleutel"
+              "hermes_session_key": "Geheugensessiesleutel",
+              "openai_api_transport": "Generatie-API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
               "ollama_num_ctx": "Overschrijf de contextvenstergrootte die is doorgegeven aan Ollama. Gebruik 0 om de standaardmodelwaarde te behouden.",
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
-              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent."
+              "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Dit model vereist de Responses API. Kies Responses API of Automatisch, of selecteer een ander model.",
+      "model_requires_chat_completions_api": "Dit model vereist de Chat Completions API. Kies Chat Completions API of selecteer een ander model.",
+      "deep_research_model_not_supported": "Deep-researchmodellen vereisen ingebouwde gegevensbrontools van OpenAI die MCP Assist niet biedt. Selecteer een ander model.",
       "mcp_bearer_token_too_short": "Het MCP bearer-token moet leeg zijn of uit minstens 16 tekens bestaan."
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "Standaard",
         "custom": "Aangepast"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automatisch",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

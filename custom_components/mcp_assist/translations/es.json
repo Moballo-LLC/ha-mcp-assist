@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ventana de contexto de Ollama",
           "openclaw_session_key": "Clave de sesión",
           "stateful_session_id": "Encabezado de sesión con estado",
-          "hermes_session_key": "Clave de sesión de memoria"
+          "hermes_session_key": "Clave de sesión de memoria",
+          "openai_api_transport": "API de generación"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ventana de contexto de Ollama",
               "openclaw_session_key": "Clave de sesión",
               "stateful_session_id": "Encabezado de sesión con estado",
-              "hermes_session_key": "Clave de sesión de memoria"
+              "hermes_session_key": "Clave de sesión de memoria",
+              "openai_api_transport": "API de generación"
             },
             "data_description": {
               "ollama_keep_alive": "Cuánto tiempo debe mantener Ollama el modelo seleccionado cargado en la memoria.",
               "ollama_num_ctx": "Anula el tamaño de la ventana de contexto pasado a Ollama. Utilice 0 para mantener el modelo predeterminado.",
               "openclaw_session_key": "Nombre de la sesión OpenClaw a la que enviar mensajes.",
               "stateful_session_id": "Envía el ID de conversación de Assist como X-Session-Id y evita reintentos ambiguos. Actívalo solo cuando este endpoint use el encabezado como estado de sesión del lado del servidor.",
-              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil."
+              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para el punto de conexión oficial de OpenAI y Chat Completions para los puntos de conexión personalizados. Elige una API de forma explícita solo cuando el punto de conexión la admita."
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Este modelo requiere Responses API. Elige Responses API o Automático, o selecciona otro modelo.",
+      "model_requires_chat_completions_api": "Este modelo requiere Chat Completions API. Elige Chat Completions API o selecciona otro modelo.",
+      "deep_research_model_not_supported": "Los modelos de investigación profunda requieren herramientas de fuentes de datos integradas de OpenAI que MCP Assist no proporciona. Selecciona otro modelo.",
       "cannot_connect": "No se puede conectar al servidor de inferencia. Asegurate de que este funcionando y sea accesible.",
       "no_models": "No hay modelos cargados en el servidor. Por favor, carga un modelo primero.",
       "invalid_model": "El modelo especificado no esta disponible en el servidor.",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "Clave de sesión",
           "stateful_session_id": "Encabezado de sesión con estado",
           "hermes_url": "URL del servidor Hermes",
-          "hermes_session_key": "Clave de sesión de memoria"
+          "hermes_session_key": "Clave de sesión de memoria",
+          "openai_api_transport": "API de generación"
         },
         "data_description": {
           "model_name": "El modelo LLM que debe utilizar este perfil.",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Ventana de contexto de Ollama",
               "openclaw_session_key": "Clave de sesión",
               "stateful_session_id": "Encabezado de sesión con estado",
-              "hermes_session_key": "Clave de sesión de memoria"
+              "hermes_session_key": "Clave de sesión de memoria",
+              "openai_api_transport": "API de generación"
             },
             "data_description": {
               "ollama_keep_alive": "Cuánto tiempo debe mantener Ollama el modelo seleccionado cargado en la memoria.",
               "ollama_num_ctx": "Anula el tamaño de la ventana de contexto pasado a Ollama. Utilice 0 para mantener el modelo predeterminado.",
               "openclaw_session_key": "Nombre de la sesión OpenClaw a la que enviar mensajes.",
               "stateful_session_id": "Envía el ID de conversación de Assist como X-Session-Id y evita reintentos ambiguos. Actívalo solo cuando este endpoint use el encabezado como estado de sesión del lado del servidor.",
-              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil."
+              "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil.",
+              "openai_api_transport": "Automático usa Responses para el punto de conexión oficial de OpenAI y Chat Completions para los puntos de conexión personalizados. Elige una API de forma explícita solo cuando el punto de conexión la admita."
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Este modelo requiere Responses API. Elige Responses API o Automático, o selecciona otro modelo.",
+      "model_requires_chat_completions_api": "Este modelo requiere Chat Completions API. Elige Chat Completions API o selecciona otro modelo.",
+      "deep_research_model_not_supported": "Los modelos de investigación profunda requieren herramientas de fuentes de datos integradas de OpenAI que MCP Assist no proporciona. Selecciona otro modelo.",
       "mcp_bearer_token_too_short": "El token Bearer de MCP debe estar vacío o tener al menos 16 caracteres."
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "Predeterminado",
         "custom": "Personalizado"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automático",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

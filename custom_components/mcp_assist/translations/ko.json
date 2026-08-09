@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollama 컨텍스트 창",
           "openclaw_session_key": "세션 키",
           "stateful_session_id": "상태 유지 세션 헤더",
-          "hermes_session_key": "메모리 세션 키"
+          "hermes_session_key": "메모리 세션 키",
+          "openai_api_transport": "생성 API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollama 컨텍스트 창",
               "openclaw_session_key": "세션 키",
               "stateful_session_id": "상태 유지 세션 헤더",
-              "hermes_session_key": "메모리 세션 키"
+              "hermes_session_key": "메모리 세션 키",
+              "openai_api_transport": "생성 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
               "ollama_num_ctx": "Ollama에 전달된 컨텍스트 창 크기를 재정의합니다. 모델 기본값을 유지하려면 0을 사용합니다.",
               "openclaw_session_key": "메시지를 보낼 OpenClaw 세션의 이름입니다.",
               "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요.",
-              "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키."
+              "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
+              "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요."
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "이 모델에는 Responses API가 필요합니다. Responses API 또는 자동을 선택하거나 다른 모델을 선택하세요.",
+      "model_requires_chat_completions_api": "이 모델에는 Chat Completions API가 필요합니다. Chat Completions API를 선택하거나 다른 모델을 선택하세요.",
+      "deep_research_model_not_supported": "심층 연구 모델에는 MCP Assist가 제공하지 않는 OpenAI 기본 제공 데이터 소스 도구가 필요합니다. 다른 모델을 선택하세요.",
       "cannot_connect": "추론 서버에 연결할 수 없습니다. 서버가 실행 중이고 접근 가능한지 확인하세요.",
       "no_models": "서버에 로드된 모델이 없습니다. 먼저 모델을 로드하세요.",
       "invalid_model": "지정된 모델을 서버에서 사용할 수 없습니다.",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "세션 키",
           "stateful_session_id": "상태 유지 세션 헤더",
           "hermes_url": "Hermes 서버 URL",
-          "hermes_session_key": "메모리 세션 키"
+          "hermes_session_key": "메모리 세션 키",
+          "openai_api_transport": "생성 API"
         },
         "data_description": {
           "model_name": "이 프로필이 사용해야 하는 LLM 모델입니다.",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Ollama 컨텍스트 창",
               "openclaw_session_key": "세션 키",
               "stateful_session_id": "상태 유지 세션 헤더",
-              "hermes_session_key": "메모리 세션 키"
+              "hermes_session_key": "메모리 세션 키",
+              "openai_api_transport": "생성 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
               "ollama_num_ctx": "Ollama에 전달된 컨텍스트 창 크기를 재정의합니다. 모델 기본값을 유지하려면 0을 사용합니다.",
               "openclaw_session_key": "메시지를 보낼 OpenClaw 세션의 이름입니다.",
               "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요.",
-              "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키."
+              "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
+              "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요."
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "이 모델에는 Responses API가 필요합니다. Responses API 또는 자동을 선택하거나 다른 모델을 선택하세요.",
+      "model_requires_chat_completions_api": "이 모델에는 Chat Completions API가 필요합니다. Chat Completions API를 선택하거나 다른 모델을 선택하세요.",
+      "deep_research_model_not_supported": "심층 연구 모델에는 MCP Assist가 제공하지 않는 OpenAI 기본 제공 데이터 소스 도구가 필요합니다. 다른 모델을 선택하세요.",
       "mcp_bearer_token_too_short": "MCP Bearer 토큰은 비어 있거나 16자 이상이어야 합니다."
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "기본값",
         "custom": "맞춤형"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "자동",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

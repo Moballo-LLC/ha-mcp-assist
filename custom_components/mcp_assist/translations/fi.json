@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollaman konteksti-ikkuna",
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
-          "hermes_session_key": "Muistin istuntoavain"
+          "hermes_session_key": "Muistin istuntoavain",
+          "openai_api_transport": "Luontirajapinta"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
-              "hermes_session_key": "Muistin istuntoavain"
+              "hermes_session_key": "Muistin istuntoavain",
+              "openai_api_transport": "Luontirajapinta"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
-              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille."
+              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tämä malli vaatii Responses API:n. Valitse Responses API tai Automaattinen, tai valitse toinen malli.",
+      "model_requires_chat_completions_api": "Tämä malli vaatii Chat Completions API:n. Valitse Chat Completions API tai valitse toinen malli.",
+      "deep_research_model_not_supported": "Syvätutkimusmallit vaativat OpenAI:n sisäänrakennettuja tietolähdetyökaluja, joita MCP Assist ei tarjoa. Valitse toinen malli.",
       "cannot_connect": "Yhteyden muodostaminen paattelypalvelimeen ei onnistu. Varmista, etta se on kaynnissa ja saavutettavissa.",
       "no_models": "Palvelimella ei ole ladattuja malleja. Lataa ensin malli.",
       "invalid_model": "Maaritetty malli ei ole saatavilla palvelimella.",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_url": "Hermes-palvelimen URL",
-          "hermes_session_key": "Muistin istuntoavain"
+          "hermes_session_key": "Muistin istuntoavain",
+          "openai_api_transport": "Luontirajapinta"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Ollaman konteksti-ikkuna",
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
-              "hermes_session_key": "Muistin istuntoavain"
+              "hermes_session_key": "Muistin istuntoavain",
+              "openai_api_transport": "Luontirajapinta"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
               "ollama_num_ctx": "Ohita Ollama:lle välitetty kontekstiikkunan koko. Käytä 0 säilyttääksesi mallin oletusarvon.",
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
-              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille."
+              "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tämä malli vaatii Responses API:n. Valitse Responses API tai Automaattinen, tai valitse toinen malli.",
+      "model_requires_chat_completions_api": "Tämä malli vaatii Chat Completions API:n. Valitse Chat Completions API tai valitse toinen malli.",
+      "deep_research_model_not_supported": "Syvätutkimusmallit vaativat OpenAI:n sisäänrakennettuja tietolähdetyökaluja, joita MCP Assist ei tarjoa. Valitse toinen malli.",
       "mcp_bearer_token_too_short": "MCP bearer -tunnuksen on oltava tyhjä tai vähintään 16 merkkiä pitkä."
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "Oletus",
         "custom": "Mukautettu"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automaattinen",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

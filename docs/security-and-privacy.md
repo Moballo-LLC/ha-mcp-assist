@@ -113,6 +113,13 @@ not include prompts, entity names, user text, or tool results. OpenAI still
 controls its own cache behavior, retention, and billing; review the provider's
 current prompt-caching policy if this matters for your deployment.
 
+OpenAI Responses requests include `store: false`, and MCP Assist replays the
+response output items needed to complete the current client-side MCP tool loop
+instead of relying on a stored provider response. Prompts, images, tool schemas,
+and tool results are still sent to the configured endpoint for processing. A
+custom OpenAI-compatible endpoint may apply its own logging and retention rules
+regardless of that field, so review the endpoint before selecting Responses.
+
 ## Local Provider Privacy
 
 Local models can reduce third-party data exposure, but check your actual setup:

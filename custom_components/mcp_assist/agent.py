@@ -57,6 +57,7 @@ from .tool_effects import ToolEffect, get_tool_effect
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
+    ProviderStreamError,
     build_provider_settings,
     create_llm_provider,
     normalize_tool_call_arguments,
@@ -4303,6 +4304,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             stream_metadata = None
             request_dispatched = False
             request_rejected = False
+            stream_terminal_event_seen = False
 
             try:
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -4403,9 +4405,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                                         transport="streaming",
                                         iteration=iteration,
                                     )
-                                if parsed_stream.done:
-                                    break
-
                                 delta = parsed_stream.delta
                                 previous_stream_metadata = stream_metadata
                                 stream_metadata = provider.update_stream_metadata(
@@ -4562,9 +4561,25 @@ class MCPAssistConversationEntity(ConversationEntity):
                                                     # Still accumulating arguments
                                                     pass
 
+                                if parsed_stream.done:
+                                    stream_terminal_event_seen = True
+                                    break
+
+                            except ProviderStreamError:
+                                raise
                             except Exception as e:
                                 _LOGGER.debug(f"Stream parsing: {e}")
 
+                        if (
+                            provider.requires_stream_terminal_event
+                            and not stream_terminal_event_seen
+                        ):
+                            raise ProviderStreamError(
+                                f"{self.server_type} stream ended without a terminal event"
+                            )
+
+            except ProviderStreamError:
+                raise
             except Exception as stream_error:
                 _LOGGER.warning(
                     "Streaming iteration %d failed: %s",
@@ -4789,7 +4804,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         # Try streaming first, fallback to HTTP if needed
         try:
             return await self._call_llm_streaming(messages)
-        except StatefulStreamingRequestError:
+        except (StatefulStreamingRequestError, ProviderStreamError):
             raise
         except RecoverableStreamingFallbackError as e:
             _LOGGER.debug("%s; using provider HTTP transport", e)

@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Kontextove okno Ollama",
           "openclaw_session_key": "Klíč relace",
           "stateful_session_id": "Hlavička stavové relace",
-          "hermes_session_key": "Klíč relace paměti"
+          "hermes_session_key": "Klíč relace paměti",
+          "openai_api_transport": "API pro generování"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Kontextove okno Ollama",
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
-              "hermes_session_key": "Klíč relace paměti"
+              "hermes_session_key": "Klíč relace paměti",
+              "openai_api_transport": "API pro generování"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
-              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil."
+              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tento model vyžaduje rozhraní Responses API. Zvolte Responses API nebo Automaticky, případně vyberte jiný model.",
+      "model_requires_chat_completions_api": "Tento model vyžaduje rozhraní Chat Completions API. Zvolte Chat Completions API nebo vyberte jiný model.",
+      "deep_research_model_not_supported": "Modely pro hloubkový výzkum vyžadují vestavěné nástroje OpenAI pro datové zdroje, které MCP Assist neposkytuje. Vyberte jiný model.",
       "cannot_connect": "Nelze se pripojit k inferencnimu serveru. Ujistete se, ze bezi a je dostupny.",
       "no_models": "Na serveru nejsou nacteny zadne modely. Nejprve prosim nactete model.",
       "invalid_model": "Zadany model neni na serveru k dispozici.",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "Klíč relace",
           "stateful_session_id": "Hlavička stavové relace",
           "hermes_url": "URL serveru Hermes",
-          "hermes_session_key": "Klíč relace paměti"
+          "hermes_session_key": "Klíč relace paměti",
+          "openai_api_transport": "API pro generování"
         },
         "data_description": {
           "model_name": "Model LLM by tento profil měl používat.",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Kontextove okno Ollama",
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
-              "hermes_session_key": "Klíč relace paměti"
+              "hermes_session_key": "Klíč relace paměti",
+              "openai_api_transport": "API pro generování"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
               "ollama_num_ctx": "Přepíše velikost kontextového okna předaná Ollama. Pomocí 0 ponechte výchozí model.",
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
-              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil."
+              "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "Tento model vyžaduje rozhraní Responses API. Zvolte Responses API nebo Automaticky, případně vyberte jiný model.",
+      "model_requires_chat_completions_api": "Tento model vyžaduje rozhraní Chat Completions API. Zvolte Chat Completions API nebo vyberte jiný model.",
+      "deep_research_model_not_supported": "Modely pro hloubkový výzkum vyžadují vestavěné nástroje OpenAI pro datové zdroje, které MCP Assist neposkytuje. Vyberte jiný model.",
       "mcp_bearer_token_too_short": "Bearer token MCP musí být prázdný nebo mít alespoň 16 znaků."
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "Výchozí",
         "custom": "Zvyk"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "Automaticky",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },

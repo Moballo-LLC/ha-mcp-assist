@@ -52,6 +52,8 @@ class ProviderConfigField:
     kind: str = "text"
     minimum: int | float | None = None
     maximum: int | float | None = None
+    options: tuple[str, ...] = ()
+    translation_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,10 @@ class StreamParseResult:
     delta: dict[str, Any]
     done: bool = False
     usage: dict[str, Any] | None = None
+
+
+class ProviderStreamError(Exception):
+    """A provider-reported terminal failure inside a successful HTTP stream."""
 
 
 @dataclass(frozen=True)
@@ -180,6 +186,11 @@ class LLMProvider:
         """Initialize the provider transport."""
         self.settings = settings
 
+    @property
+    def requires_stream_terminal_event(self) -> bool:
+        """Return whether a stream must emit an explicit terminal event."""
+        return False
+
     @classmethod
     def config_provider_options_fields(cls) -> tuple[ProviderConfigField, ...]:
         """Return provider fields plus the optional stateful endpoint contract."""
@@ -248,11 +259,24 @@ class LLMProvider:
         model_ids: list[str],
         *,
         base_url: str,
+        values: dict[str, Any] | None = None,
     ) -> list[str]:
         """Filter and sort provider model IDs for UI display."""
-        del base_url
+        del base_url, values
         models = [model_id for model_id in model_ids if model_id]
         return sorted(models)
+
+    @classmethod
+    def model_configuration_error(
+        cls,
+        model_name: str,
+        *,
+        base_url: str,
+        values: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Return a config-flow error for an incompatible model selection."""
+        del model_name, base_url, values
+        return None
 
     @classmethod
     def model_list_url(cls, values: dict[str, Any]) -> str:
@@ -306,7 +330,11 @@ class LLMProvider:
                         for model in data.get("data", [])
                         if isinstance(model, dict)
                     ]
-                    return cls.filter_model_ids(model_ids, base_url=base_url)
+                    return cls.filter_model_ids(
+                        model_ids,
+                        base_url=base_url,
+                        values=values,
+                    )
         except Exception as err:
             _LOGGER.error(
                 "%s model fetch failed: %s",

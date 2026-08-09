@@ -17,6 +17,7 @@ Profile settings are independent per conversation agent.
 | Server Type | The provider or local server family |
 | Server URL / API Key | How MCP Assist reaches the provider |
 | Stateful Session Header | Opt-in `X-Session-Id` continuity for endpoints that honor it as server-side session state |
+| Generation API | OpenAI-only choice between Automatic, Responses API, and Chat Completions API |
 | Model Name | Which model the profile uses |
 | System Prompt | General assistant behavior |
 | Technical Instructions | Tool-use rules and Home Assistant-specific guidance |
@@ -78,12 +79,29 @@ For OpenAI, Google Gemini, Anthropic Claude, and OpenRouter, configure an API
 key and model name. Keep provider keys in Home Assistant secrets or another
 safe local workflow where possible.
 
+OpenAI profiles also have a per-profile **Generation API** setting:
+
+- **Automatic** uses the Responses API for the official OpenAI endpoint and
+  Chat Completions for a custom OpenAI-compatible endpoint. This keeps existing
+  custom endpoints on the broadly supported API unless you opt in.
+- **Responses API** sends requests to `/v1/responses`. Use it with a custom
+  endpoint only when that endpoint supports Responses input items, function
+  tools, function-call outputs, and typed streaming events.
+- **Chat Completions API** sends requests to `/v1/chat/completions`, including
+  when the profile points directly to OpenAI.
+
+MCP Assist does not probe one generation API and silently retry with the other.
+An explicit selection is therefore predictable and avoids replaying the same
+turn against a different API after an ambiguous transport failure. Responses
+requests use `store: false` and replay the response output items needed for MCP
+tool calls within the current model turn.
+
 For official OpenAI profiles, MCP Assist sends a stable non-identifying
 `prompt_cache_key` so OpenAI can route repeated profile/tool prefixes to its
 prompt cache more effectively. OpenAI controls whether a specific request is
-cacheable. MCP Assist also requests streaming usage metadata so Debug Mode can
-show cached prompt-token counts when OpenAI returns them. OpenAI-compatible
-local providers do not receive these OpenAI-only fields.
+cacheable. MCP Assist collects usage metadata so Debug Mode can show cached
+input-token counts when OpenAI returns them. OpenAI-compatible local providers
+do not receive these OpenAI-only fields.
 
 ## Prompt Settings
 

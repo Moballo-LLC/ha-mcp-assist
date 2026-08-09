@@ -102,7 +102,8 @@
           "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
           "openclaw_session_key": "セッションキー",
           "stateful_session_id": "ステートフルセッションヘッダー",
-          "hermes_session_key": "メモリセッションキー"
+          "hermes_session_key": "メモリセッションキー",
+          "openai_api_transport": "生成 API"
         },
         "sections": {
           "conversation": {
@@ -155,14 +156,16 @@
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
               "stateful_session_id": "ステートフルセッションヘッダー",
-              "hermes_session_key": "メモリセッションキー"
+              "hermes_session_key": "メモリセッションキー",
+              "openai_api_transport": "生成 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
               "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
-              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
+              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。",
+              "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。"
             }
           },
           "tools": {
@@ -335,6 +338,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "このモデルには Responses API が必要です。Responses API または自動を選択するか、別のモデルを選択してください。",
+      "model_requires_chat_completions_api": "このモデルには Chat Completions API が必要です。Chat Completions API を選択するか、別のモデルを選択してください。",
+      "deep_research_model_not_supported": "ディープリサーチモデルには、MCP Assist が提供していない OpenAI 組み込みのデータソースツールが必要です。別のモデルを選択してください。",
       "cannot_connect": "推論サーバーに接続できません。サーバーが起動していてアクセス可能であることを確認してください。",
       "no_models": "サーバーにモデルがロードされていません。まずモデルをロードしてください。",
       "invalid_model": "指定されたモデルはサーバーで利用できません。",
@@ -392,7 +398,8 @@
           "openclaw_session_key": "セッションキー",
           "stateful_session_id": "ステートフルセッションヘッダー",
           "hermes_url": "HermesサーバーURL",
-          "hermes_session_key": "メモリセッションキー"
+          "hermes_session_key": "メモリセッションキー",
+          "openai_api_transport": "生成 API"
         },
         "data_description": {
           "model_name": "このプロファイルが使用する LLM モデル。",
@@ -481,14 +488,16 @@
               "ollama_num_ctx": "Ollamaコンテキストウィンドウ",
               "openclaw_session_key": "セッションキー",
               "stateful_session_id": "ステートフルセッションヘッダー",
-              "hermes_session_key": "メモリセッションキー"
+              "hermes_session_key": "メモリセッションキー",
+              "openai_api_transport": "生成 API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
               "ollama_num_ctx": "Ollama に渡されるコンテキスト ウィンドウのサイズをオーバーライドします。モデルのデフォルトを維持するには、0 を使用します。",
               "openclaw_session_key": "メッセージの送信先となる OpenClaw セッションの名前。",
               "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
-              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
+              "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。",
+              "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。"
             }
           },
           "advanced_settings": {
@@ -685,6 +694,9 @@
       }
     },
     "error": {
+      "model_requires_responses_api": "このモデルには Responses API が必要です。Responses API または自動を選択するか、別のモデルを選択してください。",
+      "model_requires_chat_completions_api": "このモデルには Chat Completions API が必要です。Chat Completions API を選択するか、別のモデルを選択してください。",
+      "deep_research_model_not_supported": "ディープリサーチモデルには、MCP Assist が提供していない OpenAI 組み込みのデータソースツールが必要です。別のモデルを選択してください。",
       "mcp_bearer_token_too_short": "MCP Bearer トークンは空欄、または 16 文字以上である必要があります。"
     }
   },
@@ -693,6 +705,13 @@
       "options": {
         "default": "デフォルト",
         "custom": "カスタム"
+      }
+    },
+    "openai_api_transport": {
+      "options": {
+        "auto": "自動",
+        "responses": "Responses API",
+        "chat_completions": "Chat Completions API"
       }
     }
   },
