@@ -4187,20 +4187,28 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
                         return False
 
-                    # Try to read first few lines
+                    # Responses may report a terminal error after preliminary events.
                     line_count = 0
+                    terminal_event_seen = False
                     async for line in response.content:
                         decoded_line = line.decode("utf-8", errors="replace")
                         if provider.requires_stream_terminal_event:
-                            provider.parse_stream_line(decoded_line.strip())
+                            parsed = provider.parse_stream_line(decoded_line.strip())
+                            terminal_event_seen = bool(parsed and parsed.done)
                         _LOGGER.info(
                             "📨 Streaming probe line %d: %d chars",
                             line_count,
                             len(decoded_line),
                         )
                         line_count += 1
-                        if line_count >= 3:
+                        if terminal_event_seen or (
+                            not provider.requires_stream_terminal_event and line_count >= 3
+                        ):
                             break
+
+                    if provider.requires_stream_terminal_event and not terminal_event_seen:
+                        _LOGGER.debug("Streaming probe ended without a terminal event")
+                        return False
 
                     _LOGGER.info(
                         f"✅ Basic streaming works! Received {line_count} lines"

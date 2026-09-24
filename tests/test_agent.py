@@ -5083,3 +5083,44 @@ async def test_openai_preamble_retry_preserves_reasoning_and_phase(
     assert len(posts) == 2
     assert posts[1]["json"]["input"][1:3] == first_output
     assert len(posts[1]["json"]["input"]) == 4
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "completed", "truncated"])
+async def test_openai_streaming_probe_waits_for_terminal_event(
+    hass, profile_entry_factory, monkeypatch, outcome: str
+) -> None:
+    """Preliminary Responses events cannot establish probe success."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-6-astra",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    lines = [
+        "event: response.created\n",
+        'data: {"type":"response.created"}\n',
+        "\n",
+        "event: response.in_progress\n",
+        'data: {"type":"response.in_progress"}\n',
+        "\n",
+    ]
+    if outcome == "blocked":
+        lines.append('data: {"type":"error","code":"misalignment_policy_violation"}\n')
+    elif outcome == "completed":
+        lines.append('data: {"type":"response.completed","response":'
+                     '{"status":"completed","output":[]}}\n')
+    posts: list[dict] = []
+    responses = [_FakeStreamingResponse(lines)]
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession",
+        lambda **kwargs: _FakeAnthropicSession(responses, posts),
+    )
+    if outcome == "blocked":
+        with pytest.raises(ProviderStreamError, match="misalignment_policy_violation"):
+            await agent._call_llm([{"role": "user", "content": "Check the lights."}])
+    else:
+        assert await agent._test_streaming_basic() is (outcome == "completed")
+    assert len(posts) == 1
