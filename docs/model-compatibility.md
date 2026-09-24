@@ -58,6 +58,13 @@ and rejected if entered manually. Deep-research models are also filtered and
 rejected because they require OpenAI built-in data-source tools that MCP Assist
 does not currently send.
 
+GPT-6 models use reasoning-model request fields: MCP Assist omits `temperature`,
+uses `max_completion_tokens` for Chat Completions, and requests encrypted
+reasoning continuation on Responses. For official OpenAI GPT-6 Sol and Luna,
+Chat Completions tool calls set `reasoning_effort` to `none`; select Responses to
+use tools with reasoning. Custom OpenAI-compatible endpoints keep their own
+Chat Completions tool contract, since some translate that route to Responses.
+
 ### Small Context Local Models
 
 If Ollama or another local provider rejects a request because it exceeds the

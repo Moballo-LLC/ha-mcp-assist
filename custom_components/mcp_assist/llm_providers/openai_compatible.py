@@ -79,17 +79,23 @@ class OpenAICompatibleProvider(LLMProvider):
         return self.is_reasoning_model(self.model_name)
 
     @staticmethod
+    def is_gpt_6_model(model_name: str) -> bool:
+        """Match the GPT-6 family without matching future numbered families."""
+        name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
+        return name == "gpt-6" or name.startswith("gpt-6-")
+
+    @staticmethod
     def is_reasoning_model(model_name: str) -> bool:
         """Return whether a model is an OpenAI reasoning model.
 
         Reasoning models (the o-series ``o1``/``o3``/``o4``… and the GPT-5
-        family) require ``max_completion_tokens`` instead of ``max_tokens`` and
+        and GPT-6 families) require ``max_completion_tokens`` instead of ``max_tokens`` and
         reject a non-default ``temperature``, so both are 400 errors otherwise.
         A provider prefix such as ``openai/o3-mini`` (OpenRouter-style) is
         stripped before matching.
         """
         name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
-        if name.startswith("gpt-5"):
+        if name.startswith("gpt-5") or OpenAICompatibleProvider.is_gpt_6_model(name):
             return True
         # o-series reasoning models are "o" followed by a digit: o1, o3, o4-mini…
         return len(name) >= 2 and name[0] == "o" and name[1].isdigit()

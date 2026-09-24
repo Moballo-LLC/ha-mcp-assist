@@ -895,6 +895,78 @@ def test_openai_provider_uses_completion_tokens_for_gpt5() -> None:
     assert "temperature" not in payload
 
 
+@pytest.mark.parametrize("model_name", ["gpt-6-sol", "gpt-6-luna"])
+def test_gpt6_responses_payload_keeps_reasoning_continuation_and_tools(
+    model_name: str,
+) -> None:
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            model_name=model_name,
+            max_tokens=321,
+            temperature=0.4,
+            provider_options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+        )
+    )
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Find a device."}],
+        [{"type": "function", "function": {"name": "discover", "parameters": {}}}],
+        stream=False,
+    )
+
+    assert provider.chat_url() == "https://provider.example.invalid/v1/responses"
+    assert payload["model"] == model_name
+    assert payload["include"] == ["reasoning.encrypted_content"]
+    assert payload["max_output_tokens"] == 321
+    assert payload["tools"] == [
+        {"type": "function", "name": "discover", "description": None, "parameters": {}}
+    ]
+    assert "temperature" not in payload
+    assert "max_tokens" not in payload
+
+
+@pytest.mark.parametrize("model_name", ["gpt-6-sol", "gpt-6-luna"])
+def test_gpt6_official_chat_completions_tools_use_no_reasoning(model_name: str) -> None:
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            model_name=model_name,
+            base_url=OPENAI_BASE_URL,
+            max_tokens=321,
+            temperature=0.4,
+            provider_options={
+                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            },
+        )
+    )
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Find a device."}],
+        [{"type": "function", "function": {"name": "discover", "parameters": {}}}],
+        stream=False,
+    )
+
+    assert provider.chat_url() == "https://api.openai.com/v1/chat/completions"
+    assert payload["max_completion_tokens"] == 321
+    assert payload["reasoning_effort"] == "none"
+    assert "max_tokens" not in payload
+    assert "temperature" not in payload
+
+
+def test_gpt6_custom_chat_adapter_keeps_its_tool_reasoning_contract() -> None:
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, model_name="gpt-6-luna", max_tokens=321)
+    )
+    payload = provider.build_payload(
+        [{"role": "user", "content": "Find a device."}],
+        [{"type": "function", "function": {"name": "discover", "parameters": {}}}],
+        stream=False,
+    )
+
+    assert payload["max_completion_tokens"] == 321
+    assert "reasoning_effort" not in payload
+    assert "temperature" not in payload
+
+
 @pytest.mark.parametrize("model_name", ["o3", "o3-mini", "o4-mini", "o1-preview"])
 def test_openai_provider_uses_completion_tokens_for_o_series(model_name: str) -> None:
     """o3/o4-series reasoning models must use max_completion_tokens, no temperature."""
@@ -930,13 +1002,17 @@ def test_openai_provider_keeps_standard_params_for_chat_models(model_name: str) 
 
 
 def test_is_reasoning_model_classification() -> None:
-    """The reasoning-model heuristic should match the o-series and GPT-5 only."""
+    """The reasoning-model heuristic should match o-series, GPT-5, and GPT-6."""
     is_reasoning = OpenAIProvider.is_reasoning_model
     assert is_reasoning("o1")
     assert is_reasoning("o3-mini")
     assert is_reasoning("o4-mini")
     assert is_reasoning("gpt-5")
+    assert is_reasoning("gpt-6-sol")
+    assert is_reasoning("gpt-6-luna")
+    assert is_reasoning("openai/gpt-6-astra")
     assert is_reasoning("openai/o3-mini")  # OpenRouter-style prefix
+    assert not is_reasoning("gpt-60-sol")
     assert not is_reasoning("gpt-4o")
     assert not is_reasoning("gpt-4o-mini")
     assert not is_reasoning("omni-model")  # "o" not followed by a digit

@@ -177,7 +177,14 @@ class OpenAIProvider(OpenAICompatibleProvider):
     ) -> dict[str, Any]:
         """Build a request for the selected OpenAI API transport."""
         if not self.uses_responses_api:
-            return super().build_payload(messages, tools, stream=stream)
+            payload = super().build_payload(messages, tools, stream=stream)
+            if (
+                tools
+                and self.uses_official_openai_api
+                and self.model_name.strip().lower() in {"gpt-6-sol", "gpt-6-luna"}
+            ):
+                payload["reasoning_effort"] = "none"
+            return payload
 
         payload: dict[str, Any] = {
             "model": self.model_name,
