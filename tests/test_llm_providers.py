@@ -415,6 +415,9 @@ def test_openai_official_url_detection_normalizes_equivalent_urls(
         "https://user@api.openai.com",
         "https://api.openai.com/v2",
         "https://api.openai.com?proxy=true",
+        "https://eu.api.openai.com.example.invalid",
+        "https://unknown.api.openai.com",
+        "https://eu.api.openai.com/proxy/v1",
     ],
 )
 def test_openai_official_url_detection_rejects_non_equivalent_urls(
@@ -427,6 +430,34 @@ def test_openai_official_url_detection_rejects_non_equivalent_urls(
 
     assert provider.uses_official_openai_api is False
     assert provider.uses_responses_api is False
+
+
+@pytest.mark.parametrize("region", ["us", "eu", "au", "ca", "jp", "in", "sg", "kr", "gb", "ae"])
+def test_openai_regional_endpoints_apply_official_gpt6_contract(region: str) -> None:
+    base_url = f"https://{region}.api.openai.com/v1"
+    provider = OpenAIProvider(
+        _settings(SERVER_TYPE_OPENAI, base_url=base_url, model_name="gpt-6-astra")
+    )
+    assert provider.uses_official_openai_api
+    assert provider.chat_url() == f"{base_url}/responses"
+    chat_values = {CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS}
+    assert provider.model_configuration_error(
+        "gpt-6-astra", base_url=base_url, values=chat_values
+    ) == "model_requires_responses_api"
+    assert provider.filter_model_ids(
+        ["gpt-6-astra", "gpt-6-sol"], base_url=base_url, values=chat_values
+    ) == ["gpt-6-sol"]
+    chat_provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI, base_url=base_url, model_name="gpt-6-sol",
+            provider_options=chat_values,
+        )
+    )
+    payload = chat_provider.build_payload(
+        [{"role": "user", "content": "Hello"}],
+        [{"type": "function", "function": {"name": "discover", "parameters": {}}}],
+    )
+    assert payload["reasoning_effort"] == "none"
 
 
 def test_openai_transport_can_be_selected_for_any_endpoint() -> None:
@@ -944,7 +975,10 @@ def test_gpt6_responses_payload_keeps_reasoning_continuation_and_tools(
     assert payload["include"] == ["reasoning.encrypted_content"]
     assert payload["max_output_tokens"] == 321
     assert payload["tools"] == [
-        {"type": "function", "name": "discover", "description": None, "parameters": {}}
+        {
+            "type": "function", "name": "discover", "description": None,
+            "parameters": {}, "strict": False,
+        }
     ]
     assert "temperature" not in payload
     assert "max_tokens" not in payload
@@ -1377,6 +1411,89 @@ def test_openai_provider_extracts_responses_prompt_cache_usage() -> None:
     assert usage.input_tokens == 2048
     assert usage.cached_tokens == 1024
     assert usage.cache_read_tokens == 1024
+
+
+@pytest.mark.parametrize("token_key", ["input_tokens", "prompt_tokens"])
+@pytest.mark.parametrize("cache_write_tokens", [None, 0, 1024, "1024"])
+def test_openai_cache_write_usage_is_reported_when_available(
+    token_key: str, cache_write_tokens: object
+) -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI))
+    usage = provider.extract_prompt_cache_usage({
+        "usage": {
+            token_key: 2048,
+            f"{token_key}_details": {
+                "cached_tokens": 512,
+                "cache_write_tokens": cache_write_tokens,
+            },
+        }
+    })
+    assert usage is not None
+    assert usage.cache_creation_tokens == (
+        cache_write_tokens if isinstance(cache_write_tokens, int) else None
+    )
+    assert usage.cache_read_tokens == 512
+
+
+@pytest.mark.parametrize("strict", [None, False, True])
+def test_openai_responses_preserves_optional_tool_schema(strict: bool | None) -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL))
+    parameters = {
+        "type": "object",
+        "properties": {"entity_id": {"type": "string"}, "limit": {"type": "integer"}},
+        "required": ["entity_id"],
+    }
+    function = {"name": "discover", "parameters": parameters}
+    if strict is not None:
+        function["strict"] = strict
+    payload = provider.build_payload([], [{"type": "function", "function": function}])
+
+    assert payload["tools"][0]["strict"] is (strict if strict is not None else False)
+    assert payload["tools"][0]["parameters"] == parameters
+    assert parameters["required"] == ["entity_id"]
+    assert "additionalProperties" not in parameters
+
+
+def test_openai_responses_round_trips_assistant_phase_only() -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL))
+    payload = provider.build_payload([
+        {"role": "user", "content": "Hello", "phase": "commentary"},
+        {"role": "assistant", "content": "Checking.", "phase": "commentary"},
+        {"role": "assistant", "content": "Done.", "phase": "final_answer"},
+    ])
+    assert "phase" not in payload["input"][0]
+    assert payload["input"][1]["phase"] == "commentary"
+    assert payload["input"][2]["phase"] == "final_answer"
+
+
+@pytest.mark.parametrize("event_type", ["error", "response.failed"])
+def test_openai_streamed_safety_stop_exposes_code_without_private_error_text(event_type: str) -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL))
+    error = {"code": "misalignment_policy_violation", "message": "private provider details"}
+    event = {"type": event_type}
+    if event_type == "error":
+        event.update(error)
+    else:
+        event["response"] = {"error": error}
+
+    with pytest.raises(ProviderStreamError, match="misalignment_policy_violation") as exc:
+        provider.parse_stream_line("data: " + json.dumps(event))
+    assert "private provider details" not in str(exc.value)
+
+
+@pytest.mark.parametrize("error_text", ["not json", "[]", '{"error": null}', '{"error": "bad"}'])
+def test_openai_malformed_error_bodies_still_stop_rate_limit_replay(error_text: str) -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI, base_url=OPENAI_BASE_URL))
+    with pytest.raises(ProviderStreamError, match="HTTP 429"):
+        provider.raise_for_non_retryable_error(status=429, error_text=error_text)
+
+
+def test_custom_openai_errors_keep_existing_fallback_contract() -> None:
+    provider = OpenAIProvider(_settings(SERVER_TYPE_OPENAI))
+    provider.raise_for_non_retryable_error(
+        status=403, error_text='{"error":{"code":"misalignment_policy_violation"}}'
+    )
+    provider.raise_for_non_retryable_error(status=429, error_text="rate limited")
 
 
 def test_openai_responses_http_parser_extracts_text() -> None:

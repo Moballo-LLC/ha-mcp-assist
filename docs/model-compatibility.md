@@ -77,6 +77,22 @@ Custom OpenAI-compatible endpoints keep their own Chat Completions tool
 contract, since some translate that route to Responses. Provider-prefixed IDs
 such as `openai/gpt-6-astra` still receive reasoning-model request fields.
 
+Responses function tools default to `strict: false` in MCP Assist so OpenAI
+does not normalize optional Home Assistant tool arguments into required fields.
+An explicitly supplied `strict` setting is preserved. Reasoning items and
+assistant `phase` values are replayed within tool loops and corrective retries,
+including retries after a text-only preamble.
+
+GPT-6's async tools, WebSocket steering, programmatic tool calling, pro mode,
+and server-side compaction require explicit API configuration. MCP Assist uses
+ordinary client-executed function tools over HTTP/SSE and does not enable those
+features. Its Adaptive tool loading remains managed by the integration.
+No sampling, reasoning-effort, cache-retention, or service-tier override is
+added to GPT-6 Responses requests. Project service-tier settings still apply; OpenAI
+currently supports GPT-6 EU data residency only with Standard processing.
+See [the GPT-6 guide](https://developers.openai.com/api/docs/guides/latest-model)
+and [regional API requirements](https://developers.openai.com/api/docs/guides/your-data#data-residency-controls).
+
 ### Small Context Local Models
 
 If Ollama or another local provider rejects a request because it exceeds the

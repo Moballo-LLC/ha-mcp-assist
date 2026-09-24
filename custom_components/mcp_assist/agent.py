@@ -4033,11 +4033,13 @@ class MCPAssistConversationEntity(ConversationEntity):
     def _append_toolless_retry_messages(
         conversation_messages: List[Dict[str, Any]],
         response_text: str,
+        *,
+        assistant_message: dict[str, Any] | None = None,
     ) -> None:
         """Append corrective context after a tool-less preamble response."""
         if response_text.strip():
             conversation_messages.append(
-                {"role": "assistant", "content": response_text.strip()}
+                assistant_message or {"role": "assistant", "content": response_text.strip()}
             )
         conversation_messages.append(
             {"role": "system", "content": TOOLLESS_RETRY_INSTRUCTION}
@@ -4137,6 +4139,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             if final_content or fallback_response is not None:
                 return final_content or str(fallback_response)
             raise ValueError("No-tools provider response was empty")
+        except ProviderStreamError:
+            raise
         except Exception as err:
             if fallback_response is None:
                 raise
@@ -4177,14 +4181,22 @@ class MCPAssistConversationEntity(ConversationEntity):
                         _mapping_key_summary(dict(response.headers)),
                     )
 
+                    if response.status != 200:
+                        provider.raise_for_non_retryable_error(
+                            status=response.status, error_text=await response.text()
+                        )
+                        return False
+
                     # Try to read first few lines
                     line_count = 0
                     async for line in response.content:
-                        line_length = len(line.decode("utf-8", errors="replace"))
+                        decoded_line = line.decode("utf-8", errors="replace")
+                        if provider.requires_stream_terminal_event:
+                            provider.parse_stream_line(decoded_line.strip())
                         _LOGGER.info(
                             "📨 Streaming probe line %d: %d chars",
                             line_count,
-                            line_length,
+                            len(decoded_line),
                         )
                         line_count += 1
                         if line_count >= 3:
@@ -4195,6 +4207,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                     )
                     return True
 
+        except ProviderStreamError:
+            raise
         except aiohttp.ClientConnectionError as e:
             _LOGGER.debug("Streaming probe connection error: %s", e)
             return False
@@ -4343,6 +4357,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 error_text = json.dumps(error_data, indent=2)
                             except Exception:
                                 error_text = await response.text()
+                            provider.raise_for_non_retryable_error(
+                                status=response.status, error_text=error_text
+                            )
                             if provider.is_invalid_tool_arguments_error(
                                 status=response.status,
                                 error_text=error_text,
@@ -4757,6 +4774,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                         self._append_toolless_retry_messages(
                             conversation_messages,
                             response_text,
+                            assistant_message=provider.build_assistant_message(
+                                response_text, metadata=stream_metadata
+                            ),
                         )
                         toolless_retry_used = True
                         response_text = ""
@@ -4840,9 +4860,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                         json=clean_payload,
                     ) as response:
                         if response.status != 200:
+                            error_text = await response.text()
+                            provider.raise_for_non_retryable_error(
+                                status=response.status, error_text=error_text
+                            )
                             return ProviderHttpResponse(
                                 status=response.status,
-                                error_text=await response.text(),
+                                error_text=error_text,
                             )
 
                         return ProviderHttpResponse(
@@ -5094,6 +5118,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 self._append_toolless_retry_messages(
                     conversation_messages,
                     final_content,
+                    assistant_message=provider.build_assistant_message(final_content),
                 )
                 toolless_retry_used = True
                 continue
