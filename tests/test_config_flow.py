@@ -751,6 +751,16 @@ async def test_advanced_step_preserves_provider_fields_from_sections(hass) -> No
             "model_requires_responses_api",
         ),
         (
+            "gpt-6-astra",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
+            "gpt-6-astra-2026-09-24",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
             "gpt-4o-audio-preview",
             OPENAI_API_TRANSPORT_AUTO,
             "model_requires_chat_completions_api",
@@ -1617,6 +1627,16 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
     [
         (
             "o3-pro",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
+            "gpt-6-astra",
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
+            "model_requires_responses_api",
+        ),
+        (
+            "gpt-6-astra-2026-09-24",
             OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
             "model_requires_responses_api",
         ),

@@ -177,7 +177,26 @@ class OpenAIProvider(OpenAICompatibleProvider):
     ) -> dict[str, Any]:
         """Build a request for the selected OpenAI API transport."""
         if not self.uses_responses_api:
-            return super().build_payload(messages, tools, stream=stream)
+            if (
+                tools
+                and self.uses_official_openai_api
+                and self.requires_responses_for_tools(self.model_name)
+            ):
+                raise ValueError(
+                    "This model requires the Responses API for tool calling. "
+                    "Choose Responses API or Automatic in the profile's Generation API setting."
+                )
+            payload = super().build_payload(messages, tools, stream=stream)
+            if (
+                tools
+                and self.uses_official_openai_api
+                and any(
+                    self._matches_model_family(self.model_name, family)
+                    for family in ("gpt-6-sol", "gpt-6-luna")
+                )
+            ):
+                payload["reasoning_effort"] = "none"
+            return payload
 
         payload: dict[str, Any] = {
             "model": self.model_name,
@@ -589,7 +608,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
                     )
                     or (
                         transport == OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-                        and not cls.is_responses_only_model(model_id)
+                        and not cls.requires_responses_for_tools(model_id)
                     )
                 )
             ]
@@ -600,6 +619,13 @@ class OpenAIProvider(OpenAICompatibleProvider):
         """Return whether OpenAI documents a model family as Chat-only."""
         name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
         return name.startswith(_CHAT_COMPLETIONS_ONLY_MODEL_PREFIXES)
+
+    @classmethod
+    def requires_responses_for_tools(cls, model_name: str) -> bool:
+        """Include Astra, whose Chat Completions support excludes tool calling."""
+        return cls.is_responses_only_model(model_name) or cls._matches_model_family(
+            model_name, "gpt-6-astra"
+        )
 
     @staticmethod
     def is_deep_research_model(model_name: str) -> bool:
@@ -624,7 +650,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         transport = cls._resolve_api_transport(configured, base_url)
         if (
             transport == OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-            and cls.is_responses_only_model(model_name)
+            and cls.requires_responses_for_tools(model_name)
         ):
             return "model_requires_responses_api"
         if (
