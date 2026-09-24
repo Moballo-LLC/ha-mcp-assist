@@ -27,6 +27,10 @@ from .base import (
 from .openai_compatible import OpenAICompatibleProvider
 
 _RESPONSES_OUTPUT_KEY = "_responses_output"
+_OPENAI_API_HOSTS = {
+    "api.openai.com",
+    *(f"{region}.api.openai.com" for region in ("us", "eu", "au", "ca", "jp", "in", "sg", "kr", "gb", "ae")),
+}
 _OPENAI_API_TRANSPORTS = {
     OPENAI_API_TRANSPORT_AUTO,
     OPENAI_API_TRANSPORT_RESPONSES,
@@ -102,7 +106,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         path = parsed.path.rstrip("/")
         return (
             parsed.scheme.lower() == "https"
-            and hostname == "api.openai.com"
+            and hostname in _OPENAI_API_HOSTS
             and port in (None, 443)
             and parsed.username is None
             and parsed.password is None
@@ -238,9 +242,8 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 "name": function["name"],
                 "description": function.get("description"),
                 "parameters": function.get("parameters", {}),
+                "strict": function.get("strict", False),
             }
-            if "strict" in function:
-                converted_tool["strict"] = function["strict"]
             converted.append(converted_tool)
         return converted
 
@@ -274,12 +277,13 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
             content = message.get("content")
             if content not in (None, "", []):
-                input_items.append(
-                    {
-                        "role": role,
-                        "content": cls._convert_responses_content(content),
-                    }
-                )
+                input_message = {
+                    "role": role,
+                    "content": cls._convert_responses_content(content),
+                }
+                if role == "assistant" and message.get("phase") in {"commentary", "final_answer"}:
+                    input_message["phase"] = message["phase"]
+                input_items.append(input_message)
 
             tool_calls = message.get("tool_calls")
             if role == "assistant" and isinstance(tool_calls, list):
@@ -378,10 +382,14 @@ class OpenAIProvider(OpenAICompatibleProvider):
         if not isinstance(prompt_details, dict):
             prompt_details = usage.get("prompt_tokens_details")
         cached_tokens = None
+        cache_write_tokens = None
         if isinstance(prompt_details, dict):
             cached_value = prompt_details.get("cached_tokens")
             if isinstance(cached_value, int):
                 cached_tokens = cached_value
+            cache_write_value = prompt_details.get("cache_write_tokens")
+            if isinstance(cache_write_value, int):
+                cache_write_tokens = cache_write_value
 
         input_tokens = usage.get("input_tokens")
         if not isinstance(input_tokens, int):
@@ -390,12 +398,39 @@ class OpenAIProvider(OpenAICompatibleProvider):
             input_tokens=input_tokens if isinstance(input_tokens, int) else None,
             cached_tokens=cached_tokens,
             cache_read_tokens=cached_tokens,
+            cache_creation_tokens=cache_write_tokens,
         )
+
+    def raise_for_non_retryable_error(self, *, status: int, error_text: str) -> None:
+        """Do not replay official OpenAI safety, rate-limit, or overload rejections."""
+        if not self.uses_official_openai_api:
+            return
+        try:
+            data = json.loads(error_text)
+        except (ValueError, TypeError):
+            data = None
+        error = data.get("error") if isinstance(data, dict) else None
+        code = error.get("code") if isinstance(error, dict) else None
+        if code == "misalignment_policy_violation":
+            raise ProviderStreamError(
+                "OpenAI stopped this conversation for review (misalignment_policy_violation). "
+                "Review the conversation and any actions already taken; it will not be retried."
+            )
+        if status in {429, 503}:
+            raise ProviderStreamError(
+                f"OpenAI rejected the request (HTTP {status}). "
+                "No automatic retry was sent; check rate limits, quota, or availability "
+                "before trying again."
+            )
 
     def parse_http_message(self, data: dict[str, Any]) -> dict[str, Any]:
         """Normalize a response from the selected OpenAI API."""
         if not self.uses_responses_api:
             return super().parse_http_message(data)
+        if isinstance(data.get("error"), dict):
+            self.raise_for_non_retryable_error(
+                status=200, error_text=json.dumps({"error": data["error"]})
+            )
         status = data.get("status")
         if "status" in data and status != "completed":
             raise ValueError(f"OpenAI Responses API ended with status {status}")
@@ -463,6 +498,12 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 usage=usage if isinstance(usage, dict) else None,
             )
         if event_type in {"error", "response.failed", "response.cancelled"}:
+            error_response = data.get("response", data)
+            if isinstance(error_response, dict):
+                error = error_response.get("error", error_response)
+                self.raise_for_non_retryable_error(
+                    status=200, error_text=json.dumps({"error": error})
+                )
             raise ProviderStreamError("OpenAI Responses stream failed")
         return None
 
@@ -551,6 +592,18 @@ class OpenAIProvider(OpenAICompatibleProvider):
         if self.uses_responses_api and isinstance(metadata, list):
             self._pending_response_output = metadata
         return tool_calls
+
+    def build_assistant_message(
+        self, response_text: str, *, metadata: Any = None
+    ) -> dict[str, Any]:
+        """Keep reasoning and assistant phases when retrying a text-only preamble."""
+        message = super().build_assistant_message(response_text, metadata=metadata)
+        if self.uses_responses_api:
+            output = metadata if isinstance(metadata, list) else self._pending_response_output
+            self._pending_response_output = None
+            if output:
+                message[_RESPONSES_OUTPUT_KEY] = output
+        return message
 
     def build_tool_call_assistant_message(
         self,

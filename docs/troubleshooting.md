@@ -44,6 +44,21 @@ For cloud providers:
 - Check account quota, billing, and rate limits.
 - Check network connectivity from Home Assistant.
 
+### OpenAI Stops or Temporarily Rejects a Request
+
+- `misalignment_policy_violation`: OpenAI stopped the conversation for review.
+  MCP Assist surfaces the error without automatically replaying the request.
+  Review the conversation and any actions already taken.
+- HTTP `429`, including `slow_down`: check quota and rate limits, then wait
+  before retrying. HTTP `503`, including `server_is_overloaded`: the model may
+  be temporarily unavailable. MCP Assist reports these errors without an
+  immediate retry through its non-streaming fallback.
+- If OpenAI supplies `Retry-After`, wait at least that long before another
+  attempt. See [OpenAI's error guidance](https://developers.openai.com/api/docs/guides/error-codes).
+- If a reasoning response ends incomplete because of `max_output_tokens`,
+  increase **Max Tokens** as appropriate. The limit includes reasoning as well
+  as the visible answer; a short spoken answer can still require more tokens.
+
 ### OpenClaw Pairing Has No Pending Request
 
 MCP Assist waits for the mandatory protocol-4 `connect.challenge` before it

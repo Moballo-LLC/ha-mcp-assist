@@ -107,8 +107,9 @@ it only when the configured endpoint honors that header as server-side session
 state. Treat the opaque ID as provider-visible metadata; it does not contain
 prompt or entity content.
 
-Official OpenAI profiles send a hashed `prompt_cache_key` to improve provider
-prompt-cache routing. The key is derived from profile/provider metadata and does
+Official OpenAI profiles send a hashed `prompt_cache_key` for cache routing on
+older models and separate cache accounting on GPT-5.6 and GPT-6. The key is
+derived from profile/provider metadata and does
 not include prompts, entity names, user text, or tool results. OpenAI still
 controls its own cache behavior, retention, and billing; review the provider's
 current prompt-caching policy if this matters for your deployment.
@@ -119,6 +120,13 @@ instead of relying on a stored provider response. Prompts, images, tool schemas,
 and tool results are still sent to the configured endpoint for processing. A
 custom OpenAI-compatible endpoint may apply its own logging and retention rules
 regardless of that field, so review the endpoint before selecting Responses.
+
+OpenAI can stop Responses conversations with `misalignment_policy_violation`.
+MCP Assist treats that code as a terminal error, including during streaming and
+the initial connection probe. It does not retry the blocked request through a
+fallback or continue dispatching its tools. Review the conversation and actions
+already taken; a later error cannot undo an earlier Home Assistant action.
+See [OpenAI's monitoring guidance](https://developers.openai.com/api/docs/guides/safety-checks/misalignment-monitoring).
 
 ## Local Provider Privacy
 

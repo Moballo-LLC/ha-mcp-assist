@@ -66,7 +66,7 @@ class StreamParseResult:
 
 
 class ProviderStreamError(Exception):
-    """A provider-reported terminal failure inside a successful HTTP stream."""
+    """A terminal provider failure that must not trigger a fallback request."""
 
 
 @dataclass(frozen=True)
@@ -475,6 +475,12 @@ class LLMProvider:
         """Format tool calls for this provider's conversation history."""
         return [self.format_tool_call(tool_call) for tool_call in tool_calls]
 
+    def build_assistant_message(
+        self, response_text: str, *, metadata: Any = None
+    ) -> dict[str, Any]:
+        """Build assistant history for a continuation without tool calls."""
+        return {"role": "assistant", "content": response_text.strip()}
+
     def build_tool_call_assistant_message(
         self,
         tool_calls: list[dict[str, Any]],
@@ -524,6 +530,10 @@ class LLMProvider:
         """Return whether a provider error reports malformed model tool arguments."""
         del status, error_text
         return False
+
+    def raise_for_non_retryable_error(self, *, status: int, error_text: str) -> None:
+        """Let providers stop an error from triggering a fallback request."""
+        del status, error_text
 
     def context_window_error_message(
         self,

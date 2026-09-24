@@ -251,6 +251,7 @@ class _FakeStreamingResponse(_FakeAnthropicResponse):
         text: str | None = None,
     ) -> None:
         super().__init__(payload or {}, status=status)
+        self.headers = {}
         self.content = _FakeStreamContent(lines or [])
         self._text = text
 
@@ -1373,7 +1374,7 @@ def test_prompt_cache_usage_log_reports_tokens_without_content(
             {
                 "usage": {
                     "input_tokens": 4096,
-                    "input_tokens_details": {"cached_tokens": 2048},
+                    "input_tokens_details": {"cached_tokens": 2048, "cache_write_tokens": 1024},
                 }
             },
             transport="streaming",
@@ -1386,6 +1387,7 @@ def test_prompt_cache_usage_log_reports_tokens_without_content(
     assert "Prompt cache usage" in caplog.text
     assert "input_tokens=4096" in caplog.text
     assert "cached_tokens=2048" in caplog.text
+    assert "cache_creation_tokens=1024" in caplog.text
     assert "cache_hit_pct=50.0" in caplog.text
     assert "please keep this private" not in caplog.text
 
@@ -4974,3 +4976,151 @@ def test_clean_text_for_tts_removes_spaces_before_punctuation(
     )
 
     assert cleaned == "I can use it, the weather entity is available."
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (200, "misalignment_policy_violation"),
+        (403, "misalignment_policy_violation"),
+        (429, "slow_down"),
+        (503, "server_is_overloaded"),
+    ],
+)
+@pytest.mark.parametrize("path", ["probe", "stream", "http", "final"])
+async def test_openai_rejections_do_not_replay_requests(
+    hass, profile_entry_factory, monkeypatch, status: int, code: str, path: str
+) -> None:
+    """Safety stops and throttling must not cause an immediate alternate request."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: "https://eu.api.openai.com/v1",
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-6-astra",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    if path != "probe":
+        agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+    error = {"error": {"code": code, "message": "provider error"}}
+    responses = [_FakeStreamingResponse(
+        ["data: " + json.dumps({"type": "error", **error["error"]})],
+        payload=error, status=status, text=json.dumps(error),
+    )]
+    posts: list[dict] = []
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession",
+        lambda **kwargs: _FakeAnthropicSession(responses, posts),
+    )
+    messages = [{"role": "user", "content": "Check the lights."}]
+    with pytest.raises(ProviderStreamError):
+        if path == "http":
+            await agent._call_llm_http(messages)
+        elif path == "final":
+            await agent._call_llm_without_tools(
+                messages, agent._get_llm_provider(), transport="test",
+                fallback_response="Must not hide the error.",
+            )
+        else:
+            await agent._call_llm(messages)
+    assert len(posts) == 1
+    execute_mock.assert_not_awaited()
+
+
+@pytest.mark.parametrize("stream", [False, True])
+async def test_openai_preamble_retry_preserves_reasoning_and_phase(
+    hass, profile_entry_factory, monkeypatch, stream: bool
+) -> None:
+    """A corrective continuation must replay the original commentary items intact."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-6-astra",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[{
+        "type": "function",
+        "function": {"name": "discover_entities", "parameters": {}},
+    }]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    first_output = [
+        {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "opaque-state"},
+        {
+            "type": "message", "id": "msg_1", "role": "assistant", "status": "completed",
+            "phase": "commentary", "content": [{"type": "output_text", "text": "I'll check."}],
+        },
+    ]
+    final_output = [{
+        "type": "message", "role": "assistant", "phase": "final_answer",
+        "content": [{"type": "output_text", "text": "Which lights?"}],
+    }]
+    responses = []
+    for output in (first_output, final_output):
+        data = {"status": "completed", "output": output}
+        responses.append(_FakeStreamingResponse(
+            ["data: " + json.dumps({"type": "response.completed", "response": data})],
+            payload=data,
+        ))
+    posts: list[dict] = []
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession",
+        lambda **kwargs: _FakeAnthropicSession(responses, posts),
+    )
+    messages = [{"role": "user", "content": "Check the lights."}]
+    call = agent._call_llm_streaming if stream else agent._call_llm_http
+    assert await call(messages) == "Which lights?"
+    assert len(posts) == 2
+    assert posts[1]["json"]["input"][1:3] == first_output
+    assert len(posts[1]["json"]["input"]) == 4
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "completed", "truncated"])
+async def test_openai_streaming_probe_waits_for_terminal_event(
+    hass, profile_entry_factory, monkeypatch, outcome: str
+) -> None:
+    """Preliminary Responses events cannot establish probe success."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-6-astra",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    lines = [
+        "event: response.created\n",
+        'data: {"type":"response.created"}\n',
+        "\n",
+        "event: response.in_progress\n",
+        'data: {"type":"response.in_progress"}\n',
+        "\n",
+    ]
+    if outcome == "blocked":
+        lines.append('data: {"type":"error","code":"misalignment_policy_violation"}\n')
+    elif outcome == "completed":
+        lines.append('data: {"type":"response.completed","response":'
+                     '{"status":"completed","output":[]}}\n')
+    posts: list[dict] = []
+    responses = [_FakeStreamingResponse(lines)]
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession",
+        lambda **kwargs: _FakeAnthropicSession(responses, posts),
+    )
+    if outcome == "blocked":
+        with pytest.raises(ProviderStreamError, match="misalignment_policy_violation"):
+            await agent._call_llm([{"role": "user", "content": "Check the lights."}])
+    else:
+        assert await agent._test_streaming_basic() is (outcome == "completed")
+    assert len(posts) == 1

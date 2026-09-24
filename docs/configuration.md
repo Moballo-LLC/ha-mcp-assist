@@ -81,7 +81,8 @@ safe local workflow where possible.
 
 OpenAI profiles also have a per-profile **Generation API** setting:
 
-- **Automatic** uses the Responses API for the official OpenAI endpoint and
+- **Automatic** uses the Responses API for official OpenAI endpoints, including
+  documented regional hosts such as `us.api.openai.com` and `eu.api.openai.com`, and
   Chat Completions for a custom OpenAI-compatible endpoint. This keeps existing
   custom endpoints on the broadly supported API unless you opt in.
 - **Responses API** sends requests to `/v1/responses`. Use it with a custom
@@ -97,11 +98,12 @@ requests use `store: false` and replay the response output items needed for MCP
 tool calls within the current model turn.
 
 For official OpenAI profiles, MCP Assist sends a stable non-identifying
-`prompt_cache_key` so OpenAI can route repeated profile/tool prefixes to its
-prompt cache more effectively. OpenAI controls whether a specific request is
-cacheable. MCP Assist collects usage metadata so Debug Mode can show cached
-input-token counts when OpenAI returns them. OpenAI-compatible local providers
-do not receive these OpenAI-only fields.
+`prompt_cache_key`. It helps cache routing on older models and separates cache
+accounting on GPT-5.6 and GPT-6. OpenAI controls whether a request is cacheable,
+cache retention, and billing. MCP Assist reports both cached input tokens and
+cache-write tokens when available; logs call the latter `cache_creation_tokens`.
+OpenAI-compatible local providers do not receive these OpenAI-only request fields.
+See [OpenAI's prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
 
 ## Prompt Settings
 
