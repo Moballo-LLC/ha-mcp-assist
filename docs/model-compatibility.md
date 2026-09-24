@@ -58,12 +58,24 @@ and rejected if entered manually. Deep-research models are also filtered and
 rejected because they require OpenAI built-in data-source tools that MCP Assist
 does not currently send.
 
-GPT-6 models use reasoning-model request fields: MCP Assist omits `temperature`,
-uses `max_completion_tokens` for Chat Completions, and requests encrypted
-reasoning continuation on Responses. For official OpenAI GPT-6 Sol and Luna,
-Chat Completions tool calls set `reasoning_effort` to `none`; select Responses to
-use tools with reasoning. Custom OpenAI-compatible endpoints keep their own
-Chat Completions tool contract, since some translate that route to Responses.
+GPT-6 Astra, Sol, and Luna, including dated snapshots, use reasoning-model
+request fields: MCP Assist omits `temperature`, uses `max_completion_tokens`
+for Chat Completions, and preserves encrypted reasoning continuation on
+Responses. Choose **Automatic** or **Responses API** on the official OpenAI
+endpoint to use tools with reasoning for all three models.
+
+For official OpenAI Chat Completions, Sol and Luna tool calls set
+`reasoning_effort` to `none`, including when a dated snapshot is selected.
+Astra requires Responses for tool calling and does not support `none` reasoning.
+MCP Assist therefore excludes Astra from the official Chat Completions model
+list and rejects that pairing when entered manually. Existing Astra profiles
+using Chat Completions must switch **Generation API** to **Automatic** or
+**Responses API**; tool requests report an error until the setting is updated.
+See [OpenAI's GPT-6 migration guidance](https://developers.openai.com/api/docs/guides/latest-model#migration-quickstart).
+
+Custom OpenAI-compatible endpoints keep their own Chat Completions tool
+contract, since some translate that route to Responses. Provider-prefixed IDs
+such as `openai/gpt-6-astra` still receive reasoning-model request fields.
 
 ### Small Context Local Models
 
