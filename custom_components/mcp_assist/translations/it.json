@@ -104,7 +104,8 @@
           "stateful_session_id": "Intestazione sessione con stato",
           "hermes_session_key": "Chiave di sessione della memoria",
           "openai_api_transport": "API di generazione",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -159,7 +160,8 @@
               "stateful_session_id": "Intestazione sessione con stato",
               "hermes_session_key": "Chiave di sessione della memoria",
               "openai_api_transport": "API di generazione",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
@@ -168,7 +170,8 @@
               "stateful_session_id": "Invia l’ID conversazione di Assist come X-Session-Id e impedisce tentativi ambigui. Abilita solo se questo endpoint usa l’intestazione come stato della sessione lato server.",
               "hermes_session_key": "Chiave stabile che delimita la memoria a lungo termine di Hermes per questo profilo.",
               "openai_api_transport": "Automatico usa Responses per l'endpoint OpenAI ufficiale e Chat Completions per gli endpoint personalizzati. Scegli esplicitamente un'API solo quando l'endpoint la supporta.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -403,7 +406,8 @@
           "hermes_url": "URL del server Hermes",
           "hermes_session_key": "Chiave di sessione della memoria",
           "openai_api_transport": "API di generazione",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare.",
@@ -494,7 +498,8 @@
               "stateful_session_id": "Intestazione sessione con stato",
               "hermes_session_key": "Chiave di sessione della memoria",
               "openai_api_transport": "API di generazione",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
@@ -503,7 +508,8 @@
               "stateful_session_id": "Invia l’ID conversazione di Assist come X-Session-Id e impedisce tentativi ambigui. Abilita solo se questo endpoint usa l’intestazione come stato della sessione lato server.",
               "hermes_session_key": "Chiave stabile che delimita la memoria a lungo termine di Hermes per questo profilo.",
               "openai_api_transport": "Automatico usa Responses per l'endpoint OpenAI ufficiale e Chat Completions per gli endpoint personalizzati. Scegli esplicitamente un'API solo quando l'endpoint la supporta.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -713,17 +719,18 @@
         "custom": "Costume"
       }
     },
-    "openai_image_model": {
-      "options": {
-        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
-        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
-      }
-    },
     "openai_api_transport": {
       "options": {
         "auto": "Automatico",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

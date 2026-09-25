@@ -3536,9 +3536,7 @@ async def test_generate_image_uses_provider_owned_generation_url(
     assert calls[0]["url"] == "https://proxy.example.invalid/v1/images/generations"
     assert calls[0]["headers"] == {"Authorization": "Bearer sk-test"}
     assert calls[0]["payload"]["model"] == expected_model
-    assert ("response_format" in calls[0]["payload"]) == (
-        expected_model == "custom-image-v2"
-    )
+    assert calls[0]["payload"]["response_format"] == "b64_json"
     assert metadata["model"] == expected_model
     assert metadata["revised_prompt"] == "A concise prompt"
 

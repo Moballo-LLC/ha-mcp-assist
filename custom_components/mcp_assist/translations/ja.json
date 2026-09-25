@@ -104,7 +104,8 @@
           "stateful_session_id": "ステートフルセッションヘッダー",
           "hermes_session_key": "メモリセッションキー",
           "openai_api_transport": "生成 API",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -159,7 +160,8 @@
               "stateful_session_id": "ステートフルセッションヘッダー",
               "hermes_session_key": "メモリセッションキー",
               "openai_api_transport": "生成 API",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
@@ -168,7 +170,8 @@
               "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
               "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。",
               "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -403,7 +406,8 @@
           "hermes_url": "HermesサーバーURL",
           "hermes_session_key": "メモリセッションキー",
           "openai_api_transport": "生成 API",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "このプロファイルが使用する LLM モデル。",
@@ -494,7 +498,8 @@
               "stateful_session_id": "ステートフルセッションヘッダー",
               "hermes_session_key": "メモリセッションキー",
               "openai_api_transport": "生成 API",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
@@ -503,7 +508,8 @@
               "stateful_session_id": "Assist の会話 ID を X-Session-Id として送信し、重複する可能性のある再試行を抑止します。このエンドポイントがヘッダーをサーバー側のセッション状態として扱う場合にのみ有効にしてください。",
               "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。",
               "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -713,17 +719,18 @@
         "custom": "カスタム"
       }
     },
-    "openai_image_model": {
-      "options": {
-        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
-        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
-      }
-    },
     "openai_api_transport": {
       "options": {
         "auto": "自動",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

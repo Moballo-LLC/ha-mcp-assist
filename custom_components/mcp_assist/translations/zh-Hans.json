@@ -104,7 +104,8 @@
           "stateful_session_id": "有状态会话标头",
           "hermes_session_key": "记忆会话密钥",
           "openai_api_transport": "生成 API",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -159,7 +160,8 @@
               "stateful_session_id": "有状态会话标头",
               "hermes_session_key": "记忆会话密钥",
               "openai_api_transport": "生成 API",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
@@ -168,7 +170,8 @@
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -403,7 +406,8 @@
           "hermes_url": "Hermes服务器URL",
           "hermes_session_key": "记忆会话密钥",
           "openai_api_transport": "生成 API",
-          "openai_image_model": "Image Model"
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "此配置文件应使用的 LLM 型号。",
@@ -494,7 +498,8 @@
               "stateful_session_id": "有状态会话标头",
               "hermes_session_key": "记忆会话密钥",
               "openai_api_transport": "生成 API",
-              "openai_image_model": "Image Model"
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
@@ -503,7 +508,8 @@
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
+              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -713,17 +719,18 @@
         "custom": "风俗"
       }
     },
-    "openai_image_model": {
-      "options": {
-        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
-        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
-      }
-    },
     "openai_api_transport": {
       "options": {
         "auto": "自动",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

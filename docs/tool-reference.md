@@ -226,12 +226,16 @@ Image tools depend on provider and source support.
 
 Only use these when the provider and client can support the requested image
 workflow.
-OpenAI profiles select a separate image model in the provider settings. The
-conversation entity exposes `image_model` and `image_model_available: true` for
-the loaded OpenAI profile. Other loaded providers expose
-`image_model_available: false`; these attributes describe configuration, not a
-successful API call.
-The Responses image tool does not accept the `style` argument.
+OpenAI profiles select a separate image model and Image Generation API in the
+provider settings. Custom endpoints default to the Images API independently
+of their conversation transport; Responses image generation requires an
+explicit selection. Other compatible providers retain their profile model
+and Images API route.
+The conversation entity exposes `image_model` and `image_model_available: true`
+when its loaded provider has an image route. Providers without an image route
+expose `image_model_available: false`. These attributes describe configured
+routing, not verified endpoint or model support or a successful API call.
+The Responses image tool and official GPT Image models do not accept `style`.
 
 ## External Custom Tools
 

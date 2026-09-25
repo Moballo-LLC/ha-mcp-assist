@@ -103,6 +103,7 @@ from custom_components.mcp_assist.const import (
     CONF_OLLAMA_NUM_CTX,
     CONF_OPENAI_API_TRANSPORT,
     CONF_OPENAI_IMAGE_MODEL,
+    CONF_OPENAI_IMAGE_API,
     CONF_OPENCLAW_SESSION_KEY,
     CONF_PROFILE_NAME,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
@@ -1627,11 +1628,20 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
     assert image_selector.config["options"] == [
         "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-3"
     ]
+    assert "translation_key" not in image_selector.config
     assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "gpt-image-2.5-flare"
+    api_selector = provider_section.schema.schema[markers[CONF_OPENAI_IMAGE_API]]
+    assert api_selector.config["options"] == ["auto", "images", "responses"]
+    assert markers[CONF_OPENAI_IMAGE_API].default() == "auto"
 
 
+@pytest.mark.parametrize(
+    ("base_url", "model"),
+    [(OPENAI_BASE_URL, "gpt-image-1"), (OPENAI_BASE_URL, "dall-e-2"),
+     (OPENAI_BASE_URL, "dall-e-3"), ("https://images.example.invalid", "flux-custom")],
+)
 async def test_options_image_model_defaults_to_legacy_image_profile(
-    hass, profile_entry_factory
+    hass, profile_entry_factory, base_url, model
 ) -> None:
     """Saving unrelated settings retains an old image-model profile choice."""
     flow = MCPAssistOptionsFlow()
@@ -1639,20 +1649,20 @@ async def test_options_image_model_defaults_to_legacy_image_profile(
     entry = profile_entry_factory(data={
         CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
         CONF_API_KEY: "sk-test",
-        CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
-        CONF_MODEL_NAME: "gpt-image-1",
+        CONF_LMSTUDIO_URL: base_url,
+        CONF_MODEL_NAME: model,
     })
     flow.handler = entry.entry_id
 
     with patch(
         "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
-        AsyncMock(return_value=["gpt-6-sol", "gpt-image-1"]),
+        AsyncMock(return_value=["gpt-6-sol", model]),
     ):
         result = await flow.async_step_init()
 
     provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
     markers = _schema_marker_by_field(provider_section.schema)
-    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "gpt-image-1"
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == model
 
 
 @pytest.mark.parametrize(
@@ -1795,3 +1805,40 @@ async def test_options_step_for_hermes_keeps_model_and_hides_client_tool_loop_fi
     assert _section_field_names(provider_section) == {CONF_HERMES_SESSION_KEY}
     assert CONF_TEMPERATURE not in _section_field_names(advanced_section)
     assert CONF_MAX_ITERATIONS not in _section_field_names(advanced_section)
+
+
+@pytest.mark.parametrize(
+    ("base_url", "model", "expected"),
+    [(OPENAI_BASE_URL, "gpt-6-sol", "gpt-image-2.5-flare"),
+     (OPENAI_BASE_URL, "dall-e-3", "dall-e-3"),
+     ("https://images.example.invalid", "flux-custom", "flux-custom")],
+)
+async def test_new_openai_image_defaults_match_endpoint(hass, base_url, model, expected):
+    """Initial setup must not inject an OpenAI model into a custom endpoint."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+    flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OPENAI}
+    flow.step2_data = {CONF_LMSTUDIO_URL: base_url, CONF_API_KEY: "sk-test"}
+    flow.step3_data = {CONF_MODEL_NAME: model}
+    result = await flow.async_step_advanced()
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    markers = _schema_marker_by_field(provider_section.schema)
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == expected
+    assert markers[CONF_OPENAI_IMAGE_API].default() == "auto"
+
+
+async def test_image_only_model_list_is_not_an_auth_failure(hass):
+    """Filtering image suggestions must not turn a successful fetch into an error."""
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": "user"}
+    flow.step1_data = {CONF_SERVER_TYPE: SERVER_TYPE_OPENAI}
+    flow.step2_data = {CONF_LMSTUDIO_URL: OPENAI_BASE_URL, CONF_API_KEY: "sk-test"}
+    with patch(
+        "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
+        AsyncMock(return_value=["dall-e-3", "gpt-image-1"]),
+    ):
+        result = await flow.async_step_model()
+    assert not result.get("errors")
+    assert flow._fetched_image_models == ("dall-e-3", "gpt-image-1")

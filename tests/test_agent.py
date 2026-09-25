@@ -120,11 +120,13 @@ def test_openai_agent_exposes_loaded_image_model_snapshot(
     assert MCPAssistConversationEntity(hass, entry).image_model == "gpt-image-2.5-sunburst"
 
 
-def test_non_openai_agent_reports_image_model_unavailable(
+def test_unsupported_agent_reports_image_model_unavailable(
     hass, profile_entry_factory
 ) -> None:
     """A loaded unsupported provider is distinct from an unknown old runtime."""
-    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    agent = MCPAssistConversationEntity(
+        hass, profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC})
+    )
     assert agent.image_model is None
     assert agent.extra_state_attributes == {"image_model_available": False}
 

@@ -3471,27 +3471,28 @@ class MCPServer(
         provider = self._get_model_provider(context)
         server_type = provider.server_type
         responses_image_tool = (
-            isinstance(provider, OpenAIProvider) and provider.uses_responses_api
+            isinstance(provider, OpenAIProvider) and provider.uses_responses_image_api
         )
         try:
-            url = (
-                provider.chat_url()
-                if responses_image_tool
-                else provider.image_generation_url()
-            )
+            url = provider.image_generation_url()
         except NotImplementedError as err:
             raise ValueError(
                 f"Image generation is not supported for {provider.display_name} "
                 "profiles through MCP Assist yet."
             ) from err
 
-        image_model = (
-            provider.image_model
-            if isinstance(provider, OpenAIProvider)
-            else provider.model_name
-        )
+        image_model = provider.image_model
+        if responses_image_tool and provider.uses_official_openai_api and (
+            provider.is_image_model_id(provider.model_name)
+            or image_model in {"dall-e-2", "dall-e-3"}
+        ):
+            raise ValueError(
+                "Responses image generation requires a conversation model and a GPT Image model. "
+                "Choose the Images API for an image-only profile or DALL-E."
+            )
         openai_gpt_image = (
             isinstance(provider, OpenAIProvider)
+            and provider.uses_official_openai_api
             and image_model.startswith("gpt-image-")
         )
         if style and (responses_image_tool or openai_gpt_image):

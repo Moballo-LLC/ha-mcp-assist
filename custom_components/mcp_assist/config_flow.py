@@ -35,6 +35,7 @@ from .tools.builtin_catalog import (
 )
 from .localization import get_language_instruction, get_follow_up_phrases, get_end_words
 from .llm_providers import (
+    OpenAIProvider,
     ProviderConfigField,
     get_llm_provider_class,
     provider_selector_options,
@@ -247,6 +248,12 @@ def _provider_field_default(
 ) -> Any:
     """Resolve a provider field default from in-progress, option, data, then spec."""
     default = field.default
+    if field.key == CONF_OPENAI_IMAGE_MODEL:
+        values = _merge_provider_values(data, options, current_values)
+        default = OpenAIProvider.default_image_model(
+            str(values.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)),
+            OpenAIProvider.model_base_url(values),
+        )
     if options is not None or data is not None:
         default = (options or {}).get(field.key, (data or {}).get(field.key, default))
     return _get_form_value(current_values, field.key, default)
@@ -273,8 +280,8 @@ def _provider_field_validator(field: ProviderConfigField) -> Any:
             SelectSelectorConfig(
                 options=list(field.options),
                 mode=SelectSelectorMode.DROPDOWN,
-                translation_key=field.translation_key,
                 custom_value=field.custom_value,
+                **({"translation_key": field.translation_key} if field.translation_key else {}),
             )
         )
     if field.kind == "password":
@@ -1370,7 +1377,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             models = await provider_class.fetch_models(self.hass, provider_values)
             self._fetched_image_models = tuple(
                 model for model in models
-                if isinstance(model, str) and model.startswith("gpt-image-")
+                if server_type == SERVER_TYPE_OPENAI
+                and isinstance(model, str) and OpenAIProvider.is_image_model_id(model)
             )
             if server_type == SERVER_TYPE_OPENAI:
                 models = [
@@ -1382,7 +1390,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 len(models),
                 provider_class.config_display_name(),
             )
-            if provider_class.model_fetch_error and not models:
+            if provider_class.model_fetch_error and not models and not self._fetched_image_models:
                 errors["base"] = provider_class.model_fetch_error
 
         # Build dynamic schema based on whether models were fetched
@@ -1709,7 +1717,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(PROVIDER_SECTION_KEY): _build_provider_section(
                     _build_provider_field_schema_items(
                         provider_class.config_provider_options_fields(),
-                        getattr(self, "step4_data", {}),
+                        _merge_provider_values(
+                            getattr(self, "step2_data", {}),
+                            getattr(self, "step3_data", {}),
+                            getattr(self, "step4_data", {}),
+                        ),
                         image_models=getattr(self, "_fetched_image_models", ()),
                     )
                 ),
@@ -1771,7 +1783,11 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             provider_schema_items = _build_provider_field_schema_items(
                 provider_class.config_provider_options_fields(),
-                getattr(self, "step4_data", {}),
+                _merge_provider_values(
+                    getattr(self, "step2_data", {}),
+                    getattr(self, "step3_data", {}),
+                    getattr(self, "step4_data", {}),
+                ),
                 image_models=getattr(self, "_fetched_image_models", ()),
             )
             if provider_schema_items:
@@ -2238,7 +2254,8 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             models = await provider_class.fetch_models(self.hass, provider_values)
         image_models = tuple(
             model for model in models
-            if isinstance(model, str) and model.startswith("gpt-image-")
+            if server_type == SERVER_TYPE_OPENAI
+            and isinstance(model, str) and OpenAIProvider.is_image_model_id(model)
         )
         if server_type == SERVER_TYPE_OPENAI:
             models = [model for model in models if model not in image_models]

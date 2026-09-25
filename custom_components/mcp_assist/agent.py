@@ -531,12 +531,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         runtime_config = resolve_provider_runtime_config(entry)
         self.server_type = runtime_config.server_type
         server_display_name = runtime_config.display_name
-        self._loaded_image_model = None
-        if self.server_type == "openai":
-            loaded_provider = create_llm_provider(
-                build_provider_settings(entry, max_tokens=0, temperature=None)
-            )
-            self._loaded_image_model = loaded_provider.image_model
+        loaded_provider = create_llm_provider(
+            build_provider_settings(entry, max_tokens=0, temperature=None)
+        )
+        self._loaded_image_model = loaded_provider.image_model
 
         # Set entity attributes
         self._attr_unique_id = entry.entry_id

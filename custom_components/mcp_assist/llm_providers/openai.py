@@ -9,17 +9,19 @@ from urllib.parse import urlsplit
 from ..const import (
     CONF_API_KEY,
     CONF_LMSTUDIO_URL,
-    CONF_MODEL_NAME,
     CONF_OPENAI_API_TRANSPORT,
     CONF_OPENAI_IMAGE_MODEL,
+    CONF_OPENAI_IMAGE_API,
     DEFAULT_OPENAI_API_TRANSPORT,
     DEFAULT_OPENAI_IMAGE_MODEL,
     OPENAI_API_TRANSPORT_AUTO,
     OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
     OPENAI_API_TRANSPORT_RESPONSES,
+    OPENAI_IMAGE_API_IMAGES,
     OPENAI_BASE_URL,
     SERVER_TYPE_OPENAI,
 )
+from ..provider_runtime import resolve_provider_runtime_config
 from .base import (
     PromptCacheUsage,
     ProviderConfigField,
@@ -75,8 +77,18 @@ class OpenAIProvider(OpenAICompatibleProvider):
             default=DEFAULT_OPENAI_IMAGE_MODEL,
             kind="select",
             options=(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-2.5-sunburst"),
-            translation_key="openai_image_model",
             custom_value=True,
+        ),
+        ProviderConfigField(
+            CONF_OPENAI_IMAGE_API,
+            default=OPENAI_API_TRANSPORT_AUTO,
+            kind="select",
+            options=(
+                OPENAI_API_TRANSPORT_AUTO,
+                OPENAI_IMAGE_API_IMAGES,
+                OPENAI_API_TRANSPORT_RESPONSES,
+            ),
+            translation_key="openai_image_api",
         ),
     )
     model_fetch_error = "invalid_api_key"
@@ -106,28 +118,56 @@ class OpenAIProvider(OpenAICompatibleProvider):
         configured_image_model = options.get(
             CONF_OPENAI_IMAGE_MODEL, data.get(CONF_OPENAI_IMAGE_MODEL)
         )
-        if configured_image_model is None:
-            # Older profiles sometimes used an image model as their text model.
-            # Preserve their image-generation behavior until explicitly changed.
-            legacy_model = str(options.get(CONF_MODEL_NAME, data.get(CONF_MODEL_NAME, "")))
-            configured_image_model = (
-                legacy_model
-                if legacy_model.startswith("gpt-image-")
-                else DEFAULT_OPENAI_IMAGE_MODEL
-            )
-        image_model = str(configured_image_model).strip() or DEFAULT_OPENAI_IMAGE_MODEL
+        runtime = resolve_provider_runtime_config(entry)
+        image_model = str(configured_image_model or "").strip() or cls.default_image_model(
+            runtime.model_name, runtime.base_url
+        )
+        image_api = options.get(
+            CONF_OPENAI_IMAGE_API, data.get(CONF_OPENAI_IMAGE_API, OPENAI_API_TRANSPORT_AUTO)
+        )
+        if image_api not in (
+            OPENAI_API_TRANSPORT_AUTO, OPENAI_IMAGE_API_IMAGES, OPENAI_API_TRANSPORT_RESPONSES
+        ):
+            image_api = OPENAI_API_TRANSPORT_AUTO
         return {
             CONF_OPENAI_API_TRANSPORT: transport,
             CONF_OPENAI_IMAGE_MODEL: image_model,
+            CONF_OPENAI_IMAGE_API: image_api,
         }
+
+    @staticmethod
+    def is_image_model_id(model: str) -> bool:
+        """Identify known OpenAI image-only IDs without guessing custom capabilities."""
+        return model.startswith("gpt-image-") or model in {"dall-e-2", "dall-e-3"}
+
+    @classmethod
+    def default_image_model(cls, model: str, base_url: str) -> str:
+        """Keep legacy image IDs and every custom endpoint's existing model."""
+        if cls.is_image_model_id(model) or not cls._is_official_openai_base_url(base_url):
+            return model
+        return DEFAULT_OPENAI_IMAGE_MODEL
 
     @property
     def image_model(self) -> str:
         """Return this provider instance's selected image model."""
-        return str(
-            self.settings.provider_options.get(
-                CONF_OPENAI_IMAGE_MODEL, DEFAULT_OPENAI_IMAGE_MODEL
-            )
+        configured = self.settings.provider_options.get(CONF_OPENAI_IMAGE_MODEL)
+        return str(configured or "").strip() or self.default_image_model(
+            self.model_name, self.base_url
+        )
+
+    @property
+    def uses_responses_image_api(self) -> bool:
+        """Resolve image routing independently of custom endpoints' chat support."""
+        configured = self.settings.provider_options.get(CONF_OPENAI_IMAGE_API)
+        if configured == OPENAI_API_TRANSPORT_RESPONSES:
+            return True
+        if configured == OPENAI_IMAGE_API_IMAGES:
+            return False
+        return (
+            self.uses_official_openai_api
+            and self.uses_responses_api
+            and not self.is_image_model_id(self.model_name)
+            and self.image_model not in {"dall-e-2", "dall-e-3"}
         )
 
     @classmethod
@@ -207,6 +247,12 @@ class OpenAIProvider(OpenAICompatibleProvider):
         if self.uses_responses_api:
             return self.provider_endpoint(self.base_url, "responses")
         return super().chat_url()
+
+    def image_generation_url(self) -> str:
+        """Return the image endpoint independently of the conversation endpoint."""
+        if self.uses_responses_image_api:
+            return self.provider_endpoint(self.base_url, "responses")
+        return super().image_generation_url()
 
     def build_payload(
         self,

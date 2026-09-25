@@ -396,6 +396,11 @@ class LLMProvider:
         """Return the provider image-generation endpoint, if supported."""
         raise NotImplementedError
 
+    @property
+    def image_model(self) -> str | None:
+        """Return the configured image model, or None without an image route."""
+        return None
+
     def build_payload(
         self,
         messages: list[dict[str, Any]],
