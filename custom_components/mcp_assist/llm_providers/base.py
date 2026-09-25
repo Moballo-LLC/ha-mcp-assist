@@ -69,6 +69,14 @@ class ProviderStreamError(Exception):
     """A terminal provider failure that must not trigger a fallback request."""
 
 
+def _sse_data_payload(line: str) -> str | None:
+    """Return an SSE data field's payload, removing its optional one space."""
+    if not line.startswith("data:"):
+        return None
+    payload = line[5:]
+    return payload[1:] if payload.startswith(" ") else payload
+
+
 @dataclass(frozen=True)
 class PromptCacheUsage:
     """Provider-normalized prompt cache usage telemetry."""
@@ -448,12 +456,13 @@ class LLMProvider:
 
     def parse_stream_line(self, line: str) -> StreamParseResult | None:
         """Return a normalized delta from a provider stream line."""
-        if not line.startswith("data: "):
+        payload = _sse_data_payload(line)
+        if payload is None:
             return None
-        if line == "data: [DONE]":
+        if payload == "[DONE]":
             return StreamParseResult(delta={}, done=True)
 
-        data = json.loads(line[6:])
+        data = json.loads(payload)
         choices = data.get("choices") or []
         if not choices:
             return StreamParseResult(delta={}, usage=data.get("usage"))

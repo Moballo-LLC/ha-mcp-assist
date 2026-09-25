@@ -1712,6 +1712,64 @@ def test_stream_parser_allows_usage_only_chunks() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("server_type", "provider_class"),
+    [
+        (SERVER_TYPE_LMSTUDIO, LMStudioProvider),
+        (SERVER_TYPE_LLAMACPP, LlamaCppProvider),
+        (SERVER_TYPE_VLLM, VLLMProvider),
+        (SERVER_TYPE_OPENROUTER, OpenRouterProvider),
+        (SERVER_TYPE_OPENAI, OpenAIProvider),
+    ],
+)
+@pytest.mark.parametrize("prefix", ["data:", "data: "])
+def test_openai_compatible_stream_parser_accepts_optional_data_space(
+    server_type: str,
+    provider_class: type[LLMProvider],
+    prefix: str,
+) -> None:
+    """OpenAI-compatible streams may omit the optional SSE field space."""
+    provider = provider_class(
+        _settings(
+            server_type,
+            base_url="https://custom.example.invalid/v1",
+        )
+    )
+
+    parsed = provider.parse_stream_line(
+        prefix + '{"choices":[{"delta":{"content":"hello"}}]}'
+    )
+    done = provider.parse_stream_line(prefix + "[DONE]")
+
+    assert parsed is not None
+    assert parsed.delta == {"content": "hello"}
+    assert done is not None
+    assert done.done is True
+
+
+def test_custom_openai_responses_stream_accepts_data_without_space() -> None:
+    """Typed Responses events retain completion and terminal-error behavior."""
+    provider = OpenAIProvider(
+        _settings(
+            SERVER_TYPE_OPENAI,
+            base_url="https://custom.example.invalid/v1",
+            provider_options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES},
+        )
+    )
+
+    completed = provider.parse_stream_line(
+        'data:{"type":"response.completed","response":'
+        '{"status":"completed","output":[]}}'
+    )
+
+    assert completed is not None
+    assert completed.done is True
+    assert completed.delta["_responses_output"] == []
+
+    with pytest.raises(ProviderStreamError, match="stream ended incomplete"):
+        provider.parse_stream_line('data:{"type":"response.incomplete"}')
+
+
 def test_ollama_provider_uses_native_tool_shapes() -> None:
     """Ollama should receive native tool arguments and tool-result identifiers."""
     provider = OllamaProvider(
