@@ -103,7 +103,8 @@
           "openclaw_session_key": "Κλειδί συνεδρίας",
           "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση",
           "hermes_session_key": "Κλειδί συνεδρίας μνήμης",
-          "openai_api_transport": "API δημιουργίας"
+          "openai_api_transport": "API δημιουργίας",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Κλειδί συνεδρίας",
               "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση",
               "hermes_session_key": "Κλειδί συνεδρίας μνήμης",
-              "openai_api_transport": "API δημιουργίας"
+              "openai_api_transport": "API δημιουργίας",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων.",
               "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή.",
               "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ.",
-              "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει."
+              "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση",
           "hermes_url": "URL διακομιστή Hermes",
           "hermes_session_key": "Κλειδί συνεδρίας μνήμης",
-          "openai_api_transport": "API δημιουργίας"
+          "openai_api_transport": "API δημιουργίας",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Το μοντέλο LLM θα πρέπει να χρησιμοποιεί αυτό το προφίλ.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Κλειδί συνεδρίας",
               "stateful_session_id": "Κεφαλίδα συνεδρίας με κατάσταση",
               "hermes_session_key": "Κλειδί συνεδρίας μνήμης",
-              "openai_api_transport": "API δημιουργίας"
+              "openai_api_transport": "API δημιουργίας",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Όνομα της συνεδρίας OpenClaw προς αποστολή μηνυμάτων.",
               "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή.",
               "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ.",
-              "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει."
+              "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Αθέτηση",
         "custom": "Εθιμο"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

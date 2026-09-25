@@ -103,7 +103,8 @@
           "openclaw_session_key": "Klucz sesji",
           "stateful_session_id": "Nagłówek sesji ze stanem",
           "hermes_session_key": "Klucz sesji pamięci",
-          "openai_api_transport": "Interfejs API generowania"
+          "openai_api_transport": "Interfejs API generowania",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Klucz sesji",
               "stateful_session_id": "Nagłówek sesji ze stanem",
               "hermes_session_key": "Klucz sesji pamięci",
-              "openai_api_transport": "Interfejs API generowania"
+              "openai_api_transport": "Interfejs API generowania",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
               "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
               "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu.",
-              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje."
+              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Nagłówek sesji ze stanem",
           "hermes_url": "Adres URL serwera Hermes",
           "hermes_session_key": "Klucz sesji pamięci",
-          "openai_api_transport": "Interfejs API generowania"
+          "openai_api_transport": "Interfejs API generowania",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Model LLM, którego powinien używać ten profil.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Klucz sesji",
               "stateful_session_id": "Nagłówek sesji ze stanem",
               "hermes_session_key": "Klucz sesji pamięci",
-              "openai_api_transport": "Interfejs API generowania"
+              "openai_api_transport": "Interfejs API generowania",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Jak długo Ollama powinien przechowywać wybrany model w pamięci.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Nazwa sesji OpenClaw, do której mają być wysyłane komunikaty.",
               "stateful_session_id": "Wysyłaj identyfikator rozmowy Assist jako X-Session-Id i blokuj niejednoznaczne ponowienia. Włącz tylko wtedy, gdy ten punkt końcowy używa nagłówka jako stanu sesji po stronie serwera.",
               "hermes_session_key": "Stały klucz wyznaczający zakres pamięci długoterminowej Hermes dla tego profilu.",
-              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje."
+              "openai_api_transport": "Tryb automatyczny używa Responses dla oficjalnego punktu końcowego OpenAI oraz Chat Completions dla niestandardowych punktów końcowych. Wybierz interfejs API ręcznie tylko wtedy, gdy punkt końcowy go obsługuje.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Domyślny",
         "custom": "Zwyczaj"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

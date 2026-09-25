@@ -103,7 +103,8 @@
           "openclaw_session_key": "Oturum Anahtarı",
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
           "hermes_session_key": "Bellek Oturum Anahtarı",
-          "openai_api_transport": "Oluşturma API'si"
+          "openai_api_transport": "Oluşturma API'si",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
               "hermes_session_key": "Bellek Oturum Anahtarı",
-              "openai_api_transport": "Oluşturma API'si"
+              "openai_api_transport": "Oluşturma API'si",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
               "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
-              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
           "hermes_url": "Hermes Sunucu URL'si",
           "hermes_session_key": "Bellek Oturum Anahtarı",
-          "openai_api_transport": "Oluşturma API'si"
+          "openai_api_transport": "Oluşturma API'si",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Bu profilin kullanması gereken LLM modeli.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
               "hermes_session_key": "Bellek Oturum Anahtarı",
-              "openai_api_transport": "Oluşturma API'si"
+              "openai_api_transport": "Oluşturma API'si",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
               "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
-              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Varsayılan",
         "custom": "Özel"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

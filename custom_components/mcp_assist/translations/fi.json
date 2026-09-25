@@ -103,7 +103,8 @@
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_session_key": "Muistin istuntoavain",
-          "openai_api_transport": "Luontirajapinta"
+          "openai_api_transport": "Luontirajapinta",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
               "hermes_session_key": "Muistin istuntoavain",
-              "openai_api_transport": "Luontirajapinta"
+              "openai_api_transport": "Luontirajapinta",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
               "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
-              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_url": "Hermes-palvelimen URL",
           "hermes_session_key": "Muistin istuntoavain",
-          "openai_api_transport": "Luontirajapinta"
+          "openai_api_transport": "Luontirajapinta",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
               "hermes_session_key": "Muistin istuntoavain",
-              "openai_api_transport": "Luontirajapinta"
+              "openai_api_transport": "Luontirajapinta",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
               "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
-              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Oletus",
         "custom": "Mukautettu"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

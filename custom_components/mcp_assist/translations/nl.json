@@ -103,7 +103,8 @@
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_session_key": "Geheugensessiesleutel",
-          "openai_api_transport": "Generatie-API"
+          "openai_api_transport": "Generatie-API",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
               "hermes_session_key": "Geheugensessiesleutel",
-              "openai_api_transport": "Generatie-API"
+              "openai_api_transport": "Generatie-API",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
               "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
-              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_url": "Hermes-server-URL",
           "hermes_session_key": "Geheugensessiesleutel",
-          "openai_api_transport": "Generatie-API"
+          "openai_api_transport": "Generatie-API",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
               "hermes_session_key": "Geheugensessiesleutel",
-              "openai_api_transport": "Generatie-API"
+              "openai_api_transport": "Generatie-API",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
               "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
-              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Standaard",
         "custom": "Aangepast"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

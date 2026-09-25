@@ -9,8 +9,11 @@ from urllib.parse import urlsplit
 from ..const import (
     CONF_API_KEY,
     CONF_LMSTUDIO_URL,
+    CONF_MODEL_NAME,
     CONF_OPENAI_API_TRANSPORT,
+    CONF_OPENAI_IMAGE_MODEL,
     DEFAULT_OPENAI_API_TRANSPORT,
+    DEFAULT_OPENAI_IMAGE_MODEL,
     OPENAI_API_TRANSPORT_AUTO,
     OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
     OPENAI_API_TRANSPORT_RESPONSES,
@@ -67,6 +70,14 @@ class OpenAIProvider(OpenAICompatibleProvider):
             ),
             translation_key="openai_api_transport",
         ),
+        ProviderConfigField(
+            CONF_OPENAI_IMAGE_MODEL,
+            default=DEFAULT_OPENAI_IMAGE_MODEL,
+            kind="select",
+            options=(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-2.5-sunburst"),
+            translation_key="openai_image_model",
+            custom_value=True,
+        ),
     )
     model_fetch_error = "invalid_api_key"
 
@@ -78,21 +89,46 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
     @classmethod
     def options_from_entry(cls, entry: Any) -> dict[str, Any]:
-        """Return the selected OpenAI API transport from a config entry."""
+        """Return the selected OpenAI transport and image model."""
         data = getattr(entry, "data", {}) or {}
         options = getattr(entry, "options", {}) or {}
         configured = options.get(
             CONF_OPENAI_API_TRANSPORT,
             data.get(CONF_OPENAI_API_TRANSPORT),
         )
-        if configured in (None, ""):
-            return {
-                CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
-            }
-        transport = str(configured or DEFAULT_OPENAI_API_TRANSPORT)
+        transport = (
+            OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
+            if configured in (None, "")
+            else str(configured)
+        )
         if transport not in _OPENAI_API_TRANSPORTS:
             transport = DEFAULT_OPENAI_API_TRANSPORT
-        return {CONF_OPENAI_API_TRANSPORT: transport}
+        configured_image_model = options.get(
+            CONF_OPENAI_IMAGE_MODEL, data.get(CONF_OPENAI_IMAGE_MODEL)
+        )
+        if configured_image_model is None:
+            # Older profiles sometimes used an image model as their text model.
+            # Preserve their image-generation behavior until explicitly changed.
+            legacy_model = str(options.get(CONF_MODEL_NAME, data.get(CONF_MODEL_NAME, "")))
+            configured_image_model = (
+                legacy_model
+                if legacy_model.startswith("gpt-image-")
+                else DEFAULT_OPENAI_IMAGE_MODEL
+            )
+        image_model = str(configured_image_model).strip() or DEFAULT_OPENAI_IMAGE_MODEL
+        return {
+            CONF_OPENAI_API_TRANSPORT: transport,
+            CONF_OPENAI_IMAGE_MODEL: image_model,
+        }
+
+    @property
+    def image_model(self) -> str:
+        """Return this provider instance's selected image model."""
+        return str(
+            self.settings.provider_options.get(
+                CONF_OPENAI_IMAGE_MODEL, DEFAULT_OPENAI_IMAGE_MODEL
+            )
+        )
 
     @classmethod
     def _is_official_openai_base_url(cls, base_url: str) -> bool:

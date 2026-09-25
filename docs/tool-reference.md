@@ -226,6 +226,12 @@ Image tools depend on provider and source support.
 
 Only use these when the provider and client can support the requested image
 workflow.
+OpenAI profiles select a separate image model in the provider settings. The
+conversation entity exposes `image_model` and `image_model_available: true` for
+the loaded OpenAI profile. Other loaded providers expose
+`image_model_available: false`; these attributes describe configuration, not a
+successful API call.
+The Responses image tool does not accept the `style` argument.
 
 ## External Custom Tools
 

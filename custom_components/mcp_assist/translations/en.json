@@ -103,7 +103,8 @@
           "openclaw_session_key": "Session Key",
           "stateful_session_id": "Stateful Session Header",
           "hermes_session_key": "Memory Session Key",
-          "openai_api_transport": "Generation API"
+          "openai_api_transport": "Generation API",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Session Key",
               "stateful_session_id": "Stateful Session Header",
               "hermes_session_key": "Memory Session Key",
-              "openai_api_transport": "Generation API"
+              "openai_api_transport": "Generation API",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
               "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state.",
               "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile.",
-              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it."
+              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Stateful Session Header",
           "hermes_url": "Hermes Server URL",
           "hermes_session_key": "Memory Session Key",
-          "openai_api_transport": "Generation API"
+          "openai_api_transport": "Generation API",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "The LLM model this profile should use.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Session Key",
               "stateful_session_id": "Stateful Session Header",
               "hermes_session_key": "Memory Session Key",
-              "openai_api_transport": "Generation API"
+              "openai_api_transport": "Generation API",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Name of the OpenClaw session to send messages to.",
               "stateful_session_id": "Send the Assist conversation ID as X-Session-Id and suppress ambiguous retries. Enable only when this endpoint honors the header as server-side session state.",
               "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile.",
-              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it."
+              "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Default",
         "custom": "Custom"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

@@ -103,7 +103,8 @@
           "openclaw_session_key": "Susi ng Sesyon",
           "stateful_session_id": "Header ng stateful na session",
           "hermes_session_key": "Session Key ng Memorya",
-          "openai_api_transport": "API ng pagbuo"
+          "openai_api_transport": "API ng pagbuo",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Susi ng Sesyon",
               "stateful_session_id": "Header ng stateful na session",
               "hermes_session_key": "Session Key ng Memorya",
-              "openai_api_transport": "API ng pagbuo"
+              "openai_api_transport": "API ng pagbuo",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
               "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
               "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito.",
-              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint."
+              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Header ng stateful na session",
           "hermes_url": "URL ng Hermes Server",
           "hermes_session_key": "Session Key ng Memorya",
-          "openai_api_transport": "API ng pagbuo"
+          "openai_api_transport": "API ng pagbuo",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Ang modelong LLM na dapat gamitin ng profile na ito.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Susi ng Sesyon",
               "stateful_session_id": "Header ng stateful na session",
               "hermes_session_key": "Session Key ng Memorya",
-              "openai_api_transport": "API ng pagbuo"
+              "openai_api_transport": "API ng pagbuo",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Gaano katagal dapat panatilihin ng Ollama na naka-load ang napiling modelo sa memorya.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Pangalan ng OpenClaw session kung saan papadalhan ng mga mensahe.",
               "stateful_session_id": "Ipadala ang Assist conversation ID bilang X-Session-Id at pigilan ang mga hindi tiyak na muling pagsubok. I-enable lamang kapag ginagamit ng endpoint na ito ang header bilang server-side na estado ng session.",
               "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito.",
-              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint."
+              "openai_api_transport": "Ginagamit ng Awtomatiko ang Responses para sa opisyal na endpoint ng OpenAI at Chat Completions para sa mga custom na endpoint. Pumili lamang ng API nang tahasan kapag sinusuportahan ito ng endpoint.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Default",
         "custom": "Custom"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

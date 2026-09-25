@@ -54,6 +54,7 @@ class ProviderConfigField:
     maximum: int | float | None = None
     options: tuple[str, ...] = ()
     translation_key: str | None = None
+    custom_value: bool = False
 
 
 @dataclass(frozen=True)

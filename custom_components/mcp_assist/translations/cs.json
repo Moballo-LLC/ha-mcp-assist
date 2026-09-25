@@ -103,7 +103,8 @@
           "openclaw_session_key": "Klíč relace",
           "stateful_session_id": "Hlavička stavové relace",
           "hermes_session_key": "Klíč relace paměti",
-          "openai_api_transport": "API pro generování"
+          "openai_api_transport": "API pro generování",
+          "openai_image_model": "Image Model"
         },
         "sections": {
           "conversation": {
@@ -157,7 +158,8 @@
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
               "hermes_session_key": "Klíč relace paměti",
-              "openai_api_transport": "API pro generování"
+              "openai_api_transport": "API pro generování",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
@@ -165,7 +167,8 @@
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
               "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
-              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "tools": {
@@ -399,7 +402,8 @@
           "stateful_session_id": "Hlavička stavové relace",
           "hermes_url": "URL serveru Hermes",
           "hermes_session_key": "Klíč relace paměti",
-          "openai_api_transport": "API pro generování"
+          "openai_api_transport": "API pro generování",
+          "openai_image_model": "Image Model"
         },
         "data_description": {
           "model_name": "Model LLM by tento profil měl používat.",
@@ -489,7 +493,8 @@
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
               "hermes_session_key": "Klíč relace paměti",
-              "openai_api_transport": "API pro generování"
+              "openai_api_transport": "API pro generování",
+              "openai_image_model": "Image Model"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
@@ -497,7 +502,8 @@
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
               "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
-              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje.",
+              "openai_image_model": "Image generation uses this model independently of the conversation model. Flare is the fast default; Sunburst favors precise editing. Enter a custom model ID if your endpoint supports one."
             }
           },
           "advanced_settings": {
@@ -705,6 +711,12 @@
       "options": {
         "default": "Výchozí",
         "custom": "Zvyk"
+      }
+    },
+    "openai_image_model": {
+      "options": {
+        "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+        "gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst"
       }
     },
     "openai_api_transport": {

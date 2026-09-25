@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+from dataclasses import replace
 import logging
 import re
 import secrets
@@ -45,6 +46,8 @@ from .const import (
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
     CONF_MODEL_NAME,
+    CONF_OPENAI_IMAGE_MODEL,
+    SERVER_TYPE_OPENAI,
     CONF_MCP_PORT,
     CONF_AUTO_START,
     CONF_SYSTEM_PROMPT,
@@ -271,6 +274,7 @@ def _provider_field_validator(field: ProviderConfigField) -> Any:
                 options=list(field.options),
                 mode=SelectSelectorMode.DROPDOWN,
                 translation_key=field.translation_key,
+                custom_value=field.custom_value,
             )
         )
     if field.kind == "password":
@@ -293,8 +297,18 @@ def _build_provider_field_schema_items(
     current_values: dict[str, Any] | None = None,
     options: dict[str, Any] | None = None,
     data: dict[str, Any] | None = None,
+    image_models: tuple[str, ...] = (),
 ) -> dict[Any, Any]:
     """Build schema items for provider-owned fields."""
+    fields = tuple(
+        replace(
+            field,
+            options=tuple(dict.fromkeys((*field.options, *image_models))),
+        )
+        if field.key == CONF_OPENAI_IMAGE_MODEL and image_models
+        else field
+        for field in fields
+    )
     return {
         _provider_field_marker(field, current_values, options, data): (
             _provider_field_validator(field)
@@ -1354,6 +1368,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
             )
             models = await provider_class.fetch_models(self.hass, provider_values)
+            self._fetched_image_models = tuple(
+                model for model in models
+                if isinstance(model, str) and model.startswith("gpt-image-")
+            )
+            if server_type == SERVER_TYPE_OPENAI:
+                models = [
+                    model for model in models
+                    if model not in self._fetched_image_models
+                ]
             _LOGGER.debug(
                 "Fetched %d %s models",
                 len(models),
@@ -1687,6 +1710,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _build_provider_field_schema_items(
                         provider_class.config_provider_options_fields(),
                         getattr(self, "step4_data", {}),
+                        image_models=getattr(self, "_fetched_image_models", ()),
                     )
                 ),
             }
@@ -1748,6 +1772,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             provider_schema_items = _build_provider_field_schema_items(
                 provider_class.config_provider_options_fields(),
                 getattr(self, "step4_data", {}),
+                image_models=getattr(self, "_fetched_image_models", ()),
             )
             if provider_schema_items:
                 advanced_schema_dict[vol.Required(PROVIDER_SECTION_KEY)] = (
@@ -2211,6 +2236,12 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
         if provider_class.uses_config_model_step:
             provider_values = _merge_provider_values(data, options, current_values)
             models = await provider_class.fetch_models(self.hass, provider_values)
+        image_models = tuple(
+            model for model in models
+            if isinstance(model, str) and model.startswith("gpt-image-")
+        )
+        if server_type == SERVER_TYPE_OPENAI:
+            models = [model for model in models if model not in image_models]
 
         # Build model selector based on whether models were fetched
         if models:
@@ -2348,6 +2379,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 current_values,
                 options,
                 data,
+                image_models,
             )
             advanced_schema_items: dict[Any, Any] = {
                 vol.Required(
@@ -2554,6 +2586,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 current_values,
                 options,
                 data,
+                image_models,
             )
 
         if provider_schema_items:

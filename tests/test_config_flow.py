@@ -102,6 +102,7 @@ from custom_components.mcp_assist.const import (
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
     CONF_OPENAI_API_TRANSPORT,
+    CONF_OPENAI_IMAGE_MODEL,
     CONF_OPENCLAW_SESSION_KEY,
     CONF_PROFILE_NAME,
     CONF_PROFILE_ENABLE_ASSIST_BRIDGE,
@@ -1319,6 +1320,7 @@ def test_provider_section_translations_cover_provider_specific_fields() -> None:
         CONF_OLLAMA_KEEP_ALIVE,
         CONF_OLLAMA_NUM_CTX,
         CONF_OPENAI_API_TRANSPORT,
+        CONF_OPENAI_IMAGE_MODEL,
         CONF_OPENCLAW_SESSION_KEY,
         CONF_STATEFUL_SESSION_ID,
     }
@@ -1602,7 +1604,7 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
 
     with patch(
         "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
-        AsyncMock(return_value=["gpt-4.1-mini"]),
+        AsyncMock(return_value=["gpt-4.1-mini", "gpt-image-3"]),
     ):
         result = await flow.async_step_init()
 
@@ -1620,6 +1622,37 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
     assert markers[CONF_OPENAI_API_TRANSPORT].default() == (
         OPENAI_API_TRANSPORT_CHAT_COMPLETIONS
     )
+    image_selector = provider_section.schema.schema[markers[CONF_OPENAI_IMAGE_MODEL]]
+    assert image_selector.config["custom_value"] is True
+    assert image_selector.config["options"] == [
+        "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-3"
+    ]
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "gpt-image-2.5-flare"
+
+
+async def test_options_image_model_defaults_to_legacy_image_profile(
+    hass, profile_entry_factory
+) -> None:
+    """Saving unrelated settings retains an old image-model profile choice."""
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    entry = profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+        CONF_API_KEY: "sk-test",
+        CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+        CONF_MODEL_NAME: "gpt-image-1",
+    })
+    flow.handler = entry.entry_id
+
+    with patch(
+        "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
+        AsyncMock(return_value=["gpt-6-sol", "gpt-image-1"]),
+    ):
+        result = await flow.async_step_init()
+
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    markers = _schema_marker_by_field(provider_section.schema)
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "gpt-image-1"
 
 
 @pytest.mark.parametrize(

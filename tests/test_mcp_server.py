@@ -62,10 +62,14 @@ from custom_components.mcp_assist.const import (
     CONF_LLM_API_ALLOWLIST,
     CONF_MODEL_NAME,
     CONF_OPENAI_API_TRANSPORT,
+    CONF_OPENAI_IMAGE_MODEL,
     CONF_SERVER_TYPE,
     DOMAIN,
     OPENAI_API_TRANSPORT_RESPONSES,
+    OPENAI_API_TRANSPORT_AUTO,
+    OPENAI_BASE_URL,
     SERVER_TYPE_OPENAI,
+    SERVER_TYPE_ANTHROPIC,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
 
@@ -3416,6 +3420,7 @@ async def test_analyze_image_uses_selected_openai_responses_api(
 
         async def json(self):
             return {
+                "status": "completed",
                 "output": [
                     {
                         "type": "message",
@@ -3460,9 +3465,13 @@ async def test_analyze_image_uses_selected_openai_responses_api(
     assert content[1]["detail"] == "low"
 
 
+@pytest.mark.parametrize(
+    ("options", "expected_model"),
+    [({}, "gpt-image-1"), ({CONF_OPENAI_IMAGE_MODEL: "custom-image-v2"}, "custom-image-v2")],
+)
 @pytest.mark.asyncio
 async def test_generate_image_uses_provider_owned_generation_url(
-    hass, profile_entry_factory, system_entry_factory, monkeypatch
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, options, expected_model
 ) -> None:
     """Image generation should ask the provider transport for its generation URL."""
     system_entry_factory()
@@ -3472,7 +3481,8 @@ async def test_generate_image_uses_provider_owned_generation_url(
             CONF_LMSTUDIO_URL: "https://proxy.example.invalid",
             CONF_API_KEY: "sk-test",
             CONF_MODEL_NAME: "gpt-image-1",
-        }
+        },
+        options=options,
     )
     server = MCPServer(hass, 8099, entry)
     calls: list[dict[str, Any]] = []
@@ -3525,9 +3535,184 @@ async def test_generate_image_uses_provider_owned_generation_url(
     assert mime_type == "image/png"
     assert calls[0]["url"] == "https://proxy.example.invalid/v1/images/generations"
     assert calls[0]["headers"] == {"Authorization": "Bearer sk-test"}
-    assert calls[0]["payload"]["model"] == "gpt-image-1"
-    assert metadata["model"] == "gpt-image-1"
+    assert calls[0]["payload"]["model"] == expected_model
+    assert ("response_format" in calls[0]["payload"]) == (
+        expected_model == "custom-image-v2"
+    )
+    assert metadata["model"] == expected_model
     assert metadata["revised_prompt"] == "A concise prompt"
+
+
+@pytest.mark.parametrize(
+    "transport", [OPENAI_API_TRANSPORT_AUTO, OPENAI_API_TRANSPORT_RESPONSES]
+)
+@pytest.mark.asyncio
+async def test_generate_image_uses_openai_responses_image_tool(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, transport
+) -> None:
+    """Responses sends the text and image models in their separate fields."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-6-sol",
+        },
+        options={
+            CONF_OPENAI_IMAGE_MODEL: "gpt-image-2.5-sunburst",
+            CONF_OPENAI_API_TRANSPORT: transport,
+        },
+    )
+    server = MCPServer(hass, 8099, entry)
+    calls = []
+
+    class _Response:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def json(self):
+            return {
+                "status": "completed",
+                "output": [
+                    {"type": "message", "content": []},
+                    {
+                        "type": "image_generation_call",
+                        "result": base64.b64encode(b"fake-png").decode("ascii"),
+                    },
+                ]
+            }
+
+    class _Session:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        def post(self, url, *, headers, json):
+            calls.append((url, json))
+            return _Response()
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _Session)
+
+    image, mime, metadata = await server._generate_image_with_provider(
+        prompt="A watercolor house",
+        size="1024x1024",
+        quality="high",
+        style=None,
+        background="transparent",
+        context=None,
+    )
+
+    assert image == b"fake-png"
+    assert mime == "image/png"
+    assert len(calls) == 1
+    assert calls[0][0] == "https://api.openai.com/v1/responses"
+    assert calls[0][1] == {
+        "model": "gpt-6-sol",
+        "input": "A watercolor house",
+        "tools": [{
+            "type": "image_generation",
+            "model": "gpt-image-2.5-sunburst",
+            "size": "1024x1024",
+            "quality": "high",
+            "background": "transparent",
+        }],
+        "tool_choice": {"type": "image_generation"},
+        "store": False,
+    }
+    assert metadata["model"] == "gpt-image-2.5-sunburst"
+
+
+@pytest.mark.asyncio
+async def test_generate_image_rejects_unsupported_style_before_dispatch(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """A DALL-E-only style hint must not reach a GPT Image request."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-6-sol",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO},
+    )
+    server = MCPServer(hass, 8099, entry)
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", Mock())
+
+    with pytest.raises(ValueError, match="Style is not supported"):
+        await server._generate_image_with_provider(
+            prompt="A house", size=None, quality=None, style="vivid",
+            background=None, context=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_generate_image_does_not_retry_ambiguous_provider_failure(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """A timed-out generation is never replayed against another API."""
+    system_entry_factory()
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-6-sol",
+        },
+        options={CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO},
+    )
+    server = MCPServer(hass, 8099, entry)
+    calls = []
+
+    class _Session:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        def post(self, url, *, headers, json):
+            calls.append(url)
+            raise asyncio.TimeoutError
+
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", _Session)
+    with pytest.raises(asyncio.TimeoutError):
+        await server._generate_image_with_provider(
+            prompt="A house", size=None, quality=None, style=None,
+            background=None, context=None,
+        )
+    assert calls == ["https://api.openai.com/v1/responses"]
+
+
+@pytest.mark.asyncio
+async def test_generate_image_reports_unsupported_provider_before_dispatch(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Provider transports without an image route fail before network I/O."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC,
+    }))
+    monkeypatch.setattr(mcp_server_module.aiohttp, "ClientSession", Mock())
+
+    with pytest.raises(ValueError, match="not supported"):
+        await server._generate_image_with_provider(
+            prompt="A house", size=None, quality=None, style=None,
+            background=None, context=None,
+        )
 
 
 def test_resolve_local_image_path_rejects_path_traversal(
