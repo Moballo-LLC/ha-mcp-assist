@@ -248,12 +248,6 @@ def _provider_field_default(
 ) -> Any:
     """Resolve a provider field default from in-progress, option, data, then spec."""
     default = field.default
-    if field.key == CONF_OPENAI_IMAGE_MODEL:
-        values = _merge_provider_values(data, options, current_values)
-        default = OpenAIProvider.default_image_model(
-            str(values.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)),
-            OpenAIProvider.model_base_url(values),
-        )
     if options is not None or data is not None:
         default = (options or {}).get(field.key, (data or {}).get(field.key, default))
     return _get_form_value(current_values, field.key, default)
@@ -1717,11 +1711,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(PROVIDER_SECTION_KEY): _build_provider_section(
                     _build_provider_field_schema_items(
                         provider_class.config_provider_options_fields(),
-                        _merge_provider_values(
-                            getattr(self, "step2_data", {}),
-                            getattr(self, "step3_data", {}),
-                            getattr(self, "step4_data", {}),
-                        ),
+                        getattr(self, "step4_data", {}),
                         image_models=getattr(self, "_fetched_image_models", ()),
                     )
                 ),
@@ -1783,11 +1773,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             provider_schema_items = _build_provider_field_schema_items(
                 provider_class.config_provider_options_fields(),
-                _merge_provider_values(
-                    getattr(self, "step2_data", {}),
-                    getattr(self, "step3_data", {}),
-                    getattr(self, "step4_data", {}),
-                ),
+                getattr(self, "step4_data", {}),
                 image_models=getattr(self, "_fetched_image_models", ()),
             )
             if provider_schema_items:

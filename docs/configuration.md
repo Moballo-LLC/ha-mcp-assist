@@ -97,11 +97,12 @@ turn against a different API after an ambiguous transport failure. Responses
 requests use `store: false` and replay the response output items needed for MCP
 tool calls within the current model turn.
 
-OpenAI profiles also have a separate **Image Model** setting. Official OpenAI
-endpoints default to `gpt-image-2.5-flare`; `gpt-image-2.5-sunburst` is offered
-for precise edits, and custom model IDs are accepted. Existing GPT Image and
-DALL-E model selections are preserved. Custom endpoints keep the profile's
-existing model until you choose a separate image model.
+OpenAI profiles also have a separate **Image Model** setting. Its default,
+`auto`, uses `gpt-image-2.5-flare` on official OpenAI endpoints and the profile's
+model on custom endpoints, preserving existing GPT Image and DALL-E selections.
+This automatic choice follows later endpoint or conversation-model changes.
+Select an explicit model ID to keep the image model fixed instead.
+`gpt-image-2.5-sunburst` is offered for precise edits, and custom IDs are accepted.
 
 **Image Generation API** controls image routing separately from conversations:
 

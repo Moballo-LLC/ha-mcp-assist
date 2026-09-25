@@ -170,7 +170,7 @@
               "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή.",
               "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ.",
               "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
@@ -508,7 +508,7 @@
               "stateful_session_id": "Στείλτε το αναγνωριστικό συνομιλίας Assist ως X-Session-Id και αποτρέψτε αμφίσημες επαναλήψεις αιτημάτων. Ενεργοποιήστε το μόνο όταν αυτό το τελικό σημείο χρησιμοποιεί την κεφαλίδα ως κατάσταση συνεδρίας στην πλευρά του διακομιστή.",
               "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ.",
               "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },

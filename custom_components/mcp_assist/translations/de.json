@@ -170,7 +170,7 @@
               "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet.",
               "hermes_session_key": "Stabiler Schlüssel, der das Langzeitgedächtnis von Hermes für dieses Profil abgrenzt.",
               "openai_api_transport": "Automatisch verwendet Responses für den offiziellen OpenAI-Endpunkt und Chat Completions für benutzerdefinierte Endpunkte. Wählen Sie eine API nur dann ausdrücklich aus, wenn der Endpunkt sie unterstützt.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
@@ -508,7 +508,7 @@
               "stateful_session_id": "Sendet die Assist-Konversations-ID als X-Session-Id und unterdrückt mehrdeutige Wiederholungsversuche. Nur aktivieren, wenn dieser Endpunkt den Header als serverseitigen Sitzungsstatus verwendet.",
               "hermes_session_key": "Stabiler Schlüssel, der das Langzeitgedächtnis von Hermes für dieses Profil abgrenzt.",
               "openai_api_transport": "Automatisch verwendet Responses für den offiziellen OpenAI-Endpunkt und Chat Completions für benutzerdefinierte Endpunkte. Wählen Sie eine API nur dann ausdrücklich aus, wenn der Endpunkt sie unterstützt.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },

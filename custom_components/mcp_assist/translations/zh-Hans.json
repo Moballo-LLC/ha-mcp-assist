@@ -170,7 +170,7 @@
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
@@ -508,7 +508,7 @@
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },

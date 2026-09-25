@@ -30,7 +30,7 @@ from custom_components.mcp_assist.const import (
     DEFAULT_OLLAMA_NUM_CTX,
     DEFAULT_OLLAMA_URL,
     DEFAULT_OPENAI_API_TRANSPORT,
-    DEFAULT_OPENAI_IMAGE_MODEL,
+    OPENAI_IMAGE_MODEL_AUTO,
     DEFAULT_OPENCLAW_HOST,
     DEFAULT_OPENCLAW_PORT,
     DEFAULT_OPENCLAW_SESSION_KEY,
@@ -233,7 +233,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 ),
                 (
                     CONF_OPENAI_IMAGE_MODEL,
-                    DEFAULT_OPENAI_IMAGE_MODEL,
+                    OPENAI_IMAGE_MODEL_AUTO,
                     "select",
                     True,
                 ),
@@ -500,7 +500,6 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
 
     class Entry:
         data = {
-            "server_type": SERVER_TYPE_OPENAI,
             CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_RESPONSES,
             CONF_OPENAI_IMAGE_MODEL: "gpt-image-1",
         }
@@ -510,15 +509,15 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
         }
 
     class InvalidEntry:
-        data = {"server_type": SERVER_TYPE_OPENAI, CONF_OPENAI_API_TRANSPORT: "future-api"}
+        data = {CONF_OPENAI_API_TRANSPORT: "future-api"}
         options: dict[str, object] = {}
 
     class LegacyEntry:
-        data: dict[str, object] = {"server_type": SERVER_TYPE_OPENAI}
+        data: dict[str, object] = {}
         options: dict[str, object] = {}
 
     class AutomaticEntry:
-        data = {"server_type": SERVER_TYPE_OPENAI, CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO}
+        data = {CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO}
         options: dict[str, object] = {}
 
     assert OpenAIProvider.options_from_entry(Entry()) == {
@@ -529,17 +528,17 @@ def test_openai_options_from_entry_prefers_options_and_rejects_unknown_values() 
     assert OpenAIProvider.options_from_entry(InvalidEntry()) == {
         CONF_OPENAI_IMAGE_API: OPENAI_API_TRANSPORT_AUTO,
         CONF_OPENAI_API_TRANSPORT: DEFAULT_OPENAI_API_TRANSPORT,
-        CONF_OPENAI_IMAGE_MODEL: DEFAULT_OPENAI_IMAGE_MODEL,
+        CONF_OPENAI_IMAGE_MODEL: OPENAI_IMAGE_MODEL_AUTO,
     }
     assert OpenAIProvider.options_from_entry(LegacyEntry()) == {
         CONF_OPENAI_IMAGE_API: OPENAI_API_TRANSPORT_AUTO,
         CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
-        CONF_OPENAI_IMAGE_MODEL: DEFAULT_OPENAI_IMAGE_MODEL,
+        CONF_OPENAI_IMAGE_MODEL: OPENAI_IMAGE_MODEL_AUTO,
     }
     assert OpenAIProvider.options_from_entry(AutomaticEntry()) == {
         CONF_OPENAI_IMAGE_API: OPENAI_API_TRANSPORT_AUTO,
         CONF_OPENAI_API_TRANSPORT: OPENAI_API_TRANSPORT_AUTO,
-        CONF_OPENAI_IMAGE_MODEL: DEFAULT_OPENAI_IMAGE_MODEL,
+        CONF_OPENAI_IMAGE_MODEL: OPENAI_IMAGE_MODEL_AUTO,
     }
 
 

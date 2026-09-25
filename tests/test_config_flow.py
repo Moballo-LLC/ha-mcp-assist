@@ -1626,10 +1626,10 @@ async def test_options_step_for_openai_exposes_api_transport_selector(
     image_selector = provider_section.schema.schema[markers[CONF_OPENAI_IMAGE_MODEL]]
     assert image_selector.config["custom_value"] is True
     assert image_selector.config["options"] == [
-        "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-3"
+        "auto", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-3"
     ]
     assert "translation_key" not in image_selector.config
-    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "gpt-image-2.5-flare"
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "auto"
     api_selector = provider_section.schema.schema[markers[CONF_OPENAI_IMAGE_API]]
     assert api_selector.config["options"] == ["auto", "images", "responses"]
     assert markers[CONF_OPENAI_IMAGE_API].default() == "auto"
@@ -1662,7 +1662,7 @@ async def test_options_image_model_defaults_to_legacy_image_profile(
 
     provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
     markers = _schema_marker_by_field(provider_section.schema)
-    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == model
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "auto"
 
 
 @pytest.mark.parametrize(
@@ -1808,12 +1808,11 @@ async def test_options_step_for_hermes_keeps_model_and_hides_client_tool_loop_fi
 
 
 @pytest.mark.parametrize(
-    ("base_url", "model", "expected"),
-    [(OPENAI_BASE_URL, "gpt-6-sol", "gpt-image-2.5-flare"),
-     (OPENAI_BASE_URL, "dall-e-3", "dall-e-3"),
-     ("https://images.example.invalid", "flux-custom", "flux-custom")],
+    ("base_url", "model"),
+    [(OPENAI_BASE_URL, "gpt-6-sol"), (OPENAI_BASE_URL, "dall-e-3"),
+     ("https://images.example.invalid", "flux-custom")],
 )
-async def test_new_openai_image_defaults_match_endpoint(hass, base_url, model, expected):
+async def test_new_openai_image_defaults_remain_automatic(hass, base_url, model):
     """Initial setup must not inject an OpenAI model into a custom endpoint."""
     flow = MCPAssistConfigFlow()
     flow.hass = hass
@@ -1824,7 +1823,7 @@ async def test_new_openai_image_defaults_match_endpoint(hass, base_url, model, e
     result = await flow.async_step_advanced()
     provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
     markers = _schema_marker_by_field(provider_section.schema)
-    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == expected
+    assert markers[CONF_OPENAI_IMAGE_MODEL].default() == "auto"
     assert markers[CONF_OPENAI_IMAGE_API].default() == "auto"
 
 
@@ -1842,3 +1841,53 @@ async def test_image_only_model_list_is_not_an_auth_failure(hass):
         result = await flow.async_step_model()
     assert not result.get("errors")
     assert flow._fetched_image_models == ("dall-e-3", "gpt-image-1")
+
+
+@pytest.mark.parametrize("image_selection", [None, "gpt-image-2.5-sunburst"])
+@pytest.mark.parametrize(
+    ("new_url", "new_model", "automatic_model"),
+    [("https://images.example.invalid/v1", "custom-model", "custom-model"),
+     (OPENAI_BASE_URL, "dall-e-3", "dall-e-3")],
+)
+async def test_options_image_default_tracks_endpoint_and_model_changes(
+    hass, profile_entry_factory, system_entry_factory,
+    image_selection, new_url, new_model, automatic_model
+):
+    """Saving a prefilled default must not pin the old endpoint's image model."""
+    from custom_components.mcp_assist.llm_providers import (
+        build_provider_settings, create_llm_provider,
+    )
+
+    system_entry_factory()
+    initial_options = (
+        {CONF_OPENAI_IMAGE_MODEL: image_selection} if image_selection is not None else {}
+    )
+    entry = profile_entry_factory(
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+              CONF_LMSTUDIO_URL: OPENAI_BASE_URL, CONF_MODEL_NAME: "gpt-4.1-mini"},
+        options=initial_options,
+    )
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    with patch(
+        "custom_components.mcp_assist.llm_providers.openai.OpenAIProvider.fetch_models",
+        AsyncMock(return_value=["gpt-4.1-mini"]),
+    ):
+        result = await flow.async_step_init()
+    provider_section = _schema_section(result["data_schema"], PROVIDER_SECTION_KEY)
+    markers = _schema_marker_by_field(provider_section.schema)
+    prefilled = markers[CONF_OPENAI_IMAGE_MODEL].default()
+    assert prefilled == (image_selection or "auto")
+
+    await flow.async_step_init({
+        CONNECTION_SECTION_KEY: {CONF_LMSTUDIO_URL: new_url},
+        MODEL_SECTION_KEY: {CONF_MODEL_NAME: new_model},
+        PROVIDER_SECTION_KEY: {CONF_OPENAI_IMAGE_MODEL: prefilled},
+    })
+    result = await flow.async_step_mcp_server({})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OPENAI_IMAGE_MODEL] == prefilled
+    updated = SimpleNamespace(data=entry.data, options=result["data"])
+    provider = create_llm_provider(build_provider_settings(updated, max_tokens=0, temperature=None))
+    assert provider.image_model == (image_selection or automatic_model)

@@ -170,7 +170,7 @@
               "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요.",
               "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
               "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
@@ -508,7 +508,7 @@
               "stateful_session_id": "Assist 대화 ID를 X-Session-Id로 전송하고 모호한 재시도를 방지합니다. 이 엔드포인트가 헤더를 서버 측 세션 상태로 처리하는 경우에만 활성화하세요.",
               "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
               "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요.",
-              "openai_image_model": "Image generation uses this model independently of the conversation model. The official OpenAI endpoint defaults to Flare. Existing custom endpoints keep their current model until you change it; check that your endpoint supports the selected model.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },

@@ -18,10 +18,10 @@ from ..const import (
     OPENAI_API_TRANSPORT_CHAT_COMPLETIONS,
     OPENAI_API_TRANSPORT_RESPONSES,
     OPENAI_IMAGE_API_IMAGES,
+    OPENAI_IMAGE_MODEL_AUTO,
     OPENAI_BASE_URL,
     SERVER_TYPE_OPENAI,
 )
-from ..provider_runtime import resolve_provider_runtime_config
 from .base import (
     PromptCacheUsage,
     ProviderConfigField,
@@ -74,9 +74,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
         ),
         ProviderConfigField(
             CONF_OPENAI_IMAGE_MODEL,
-            default=DEFAULT_OPENAI_IMAGE_MODEL,
+            default=OPENAI_IMAGE_MODEL_AUTO,
             kind="select",
-            options=(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-2.5-sunburst"),
+            options=(OPENAI_IMAGE_MODEL_AUTO, DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-2.5-sunburst"),
             custom_value=True,
         ),
         ProviderConfigField(
@@ -118,10 +118,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         configured_image_model = options.get(
             CONF_OPENAI_IMAGE_MODEL, data.get(CONF_OPENAI_IMAGE_MODEL)
         )
-        runtime = resolve_provider_runtime_config(entry)
-        image_model = str(configured_image_model or "").strip() or cls.default_image_model(
-            runtime.model_name, runtime.base_url
-        )
+        image_model = str(configured_image_model or "").strip() or OPENAI_IMAGE_MODEL_AUTO
         image_api = options.get(
             CONF_OPENAI_IMAGE_API, data.get(CONF_OPENAI_IMAGE_API, OPENAI_API_TRANSPORT_AUTO)
         )
@@ -150,10 +147,10 @@ class OpenAIProvider(OpenAICompatibleProvider):
     @property
     def image_model(self) -> str:
         """Return this provider instance's selected image model."""
-        configured = self.settings.provider_options.get(CONF_OPENAI_IMAGE_MODEL)
-        return str(configured or "").strip() or self.default_image_model(
-            self.model_name, self.base_url
-        )
+        configured = str(self.settings.provider_options.get(CONF_OPENAI_IMAGE_MODEL) or "").strip()
+        if configured and configured != OPENAI_IMAGE_MODEL_AUTO:
+            return configured
+        return self.default_image_model(self.model_name, self.base_url)
 
     @property
     def uses_responses_image_api(self) -> bool:
