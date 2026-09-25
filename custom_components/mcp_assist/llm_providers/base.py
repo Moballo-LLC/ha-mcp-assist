@@ -74,7 +74,8 @@ def _sse_data_payload(line: str) -> str | None:
     if not line.startswith("data:"):
         return None
     payload = line[5:]
-    return payload[1:] if payload.startswith(" ") else payload
+    payload = payload[1:] if payload.startswith(" ") else payload
+    return payload if payload.strip() else None
 
 
 @dataclass(frozen=True)

@@ -5085,7 +5085,9 @@ async def test_openai_preamble_retry_preserves_reasoning_and_phase(
     assert len(posts[1]["json"]["input"]) == 4
 
 
-@pytest.mark.parametrize("outcome", ["blocked", "completed", "truncated"])
+@pytest.mark.parametrize(
+    "outcome", ["blocked", "completed", "empty_keepalive", "truncated"]
+)
 async def test_openai_streaming_probe_waits_for_terminal_event(
     hass, profile_entry_factory, monkeypatch, outcome: str
 ) -> None:
@@ -5109,7 +5111,9 @@ async def test_openai_streaming_probe_waits_for_terminal_event(
     ]
     if outcome == "blocked":
         lines.append('data: {"type":"error","code":"misalignment_policy_violation"}\n')
-    elif outcome == "completed":
+    elif outcome in {"completed", "empty_keepalive"}:
+        if outcome == "empty_keepalive":
+            lines.append("data:\n")
         lines.append('data: {"type":"response.completed","response":'
                      '{"status":"completed","output":[]}}\n')
     posts: list[dict] = []
@@ -5122,5 +5126,7 @@ async def test_openai_streaming_probe_waits_for_terminal_event(
         with pytest.raises(ProviderStreamError, match="misalignment_policy_violation"):
             await agent._call_llm([{"role": "user", "content": "Check the lights."}])
     else:
-        assert await agent._test_streaming_basic() is (outcome == "completed")
+        assert await agent._test_streaming_basic() is (
+            outcome in {"completed", "empty_keepalive"}
+        )
     assert len(posts) == 1

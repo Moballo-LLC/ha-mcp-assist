@@ -1747,6 +1747,33 @@ def test_openai_compatible_stream_parser_accepts_optional_data_space(
     assert done.done is True
 
 
+@pytest.mark.parametrize(
+    ("server_type", "provider_class"),
+    [
+        (SERVER_TYPE_LMSTUDIO, LMStudioProvider),
+        (SERVER_TYPE_LLAMACPP, LlamaCppProvider),
+        (SERVER_TYPE_VLLM, VLLMProvider),
+        (SERVER_TYPE_OPENROUTER, OpenRouterProvider),
+        (SERVER_TYPE_OPENAI, OpenAIProvider),
+    ],
+)
+@pytest.mark.parametrize("line", ["data:", "data: ", "data:   "])
+def test_openai_compatible_stream_parser_ignores_empty_data_fields(
+    server_type: str,
+    provider_class: type[LLMProvider],
+    line: str,
+) -> None:
+    """Empty SSE keepalive data fields are not JSON events."""
+    provider = provider_class(
+        _settings(
+            server_type,
+            base_url="https://custom.example.invalid/v1",
+        )
+    )
+
+    assert provider.parse_stream_line(line) is None
+
+
 def test_custom_openai_responses_stream_accepts_data_without_space() -> None:
     """Typed Responses events retain completion and terminal-error behavior."""
     provider = OpenAIProvider(
@@ -1765,6 +1792,8 @@ def test_custom_openai_responses_stream_accepts_data_without_space() -> None:
     assert completed is not None
     assert completed.done is True
     assert completed.delta["_responses_output"] == []
+    assert provider.parse_stream_line("data:") is None
+    assert provider.parse_stream_line("data:  \t") is None
 
     with pytest.raises(ProviderStreamError, match="stream ended incomplete"):
         provider.parse_stream_line('data:{"type":"response.incomplete"}')
