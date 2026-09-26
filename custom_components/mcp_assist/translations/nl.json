@@ -103,7 +103,9 @@
           "openclaw_session_key": "Sessiesleutel",
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_session_key": "Geheugensessiesleutel",
-          "openai_api_transport": "Generatie-API"
+          "openai_api_transport": "Generatie-API",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
               "hermes_session_key": "Geheugensessiesleutel",
-              "openai_api_transport": "Generatie-API"
+              "openai_api_transport": "Generatie-API",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
               "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
-              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Statushoudende sessieheader",
           "hermes_url": "Hermes-server-URL",
           "hermes_session_key": "Geheugensessiesleutel",
-          "openai_api_transport": "Generatie-API"
+          "openai_api_transport": "Generatie-API",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Het LLM-model dat dit profiel moet gebruiken.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Sessiesleutel",
               "stateful_session_id": "Statushoudende sessieheader",
               "hermes_session_key": "Geheugensessiesleutel",
-              "openai_api_transport": "Generatie-API"
+              "openai_api_transport": "Generatie-API",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Hoe lang Ollama het geselecteerde model in het geheugen geladen moet houden.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Naam van de OpenClaw-sessie waarnaar berichten moeten worden verzonden.",
               "stateful_session_id": "Verzend de Assist-gespreks-ID als X-Session-Id en voorkom onduidelijke nieuwe pogingen. Schakel dit alleen in wanneer dit eindpunt de header gebruikt als sessiestatus aan de serverzijde.",
               "hermes_session_key": "Stabiele sleutel die het langetermijngeheugen van Hermes voor dit profiel afbakent.",
-              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt."
+              "openai_api_transport": "Automatisch gebruikt Responses voor het officiële OpenAI-eindpunt en Chat Completions voor aangepaste eindpunten. Kies alleen expliciet een API wanneer het eindpunt deze ondersteunt.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Automatisch",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

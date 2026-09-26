@@ -531,6 +531,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         runtime_config = resolve_provider_runtime_config(entry)
         self.server_type = runtime_config.server_type
         server_display_name = runtime_config.display_name
+        loaded_provider = create_llm_provider(
+            build_provider_settings(entry, max_tokens=0, temperature=None)
+        )
+        self._loaded_image_model = loaded_provider.image_model
 
         # Set entity attributes
         self._attr_unique_id = entry.entry_id
@@ -538,6 +542,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         self._attr_suggested_object_id = (
             f"{self.server_type}_{profile_name.lower().replace(' ', '_')}"
         )
+        self._attr_extra_state_attributes = {
+            "image_model_available": self._loaded_image_model is not None,
+        }
+        if self._loaded_image_model is not None:
+            self._attr_extra_state_attributes["image_model"] = self._loaded_image_model
 
         # Device info
         self._attr_device_info = dr.DeviceInfo(
@@ -766,6 +775,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         return self.entry.options.get(
             CONF_MODEL_NAME, self.entry.data.get(CONF_MODEL_NAME, "")
         )
+
+    @property
+    def image_model(self) -> str | None:
+        """Return the image model loaded when this agent was created."""
+        return self._loaded_image_model
 
     @property
     def mcp_port(self) -> int:

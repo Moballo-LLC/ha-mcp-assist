@@ -97,6 +97,31 @@ turn against a different API after an ambiguous transport failure. Responses
 requests use `store: false` and replay the response output items needed for MCP
 tool calls within the current model turn.
 
+OpenAI profiles also have a separate **Image Model** setting. Its default,
+`auto`, uses `gpt-image-2.5-flare` on official OpenAI endpoints and the profile's
+model on custom endpoints, preserving existing GPT Image and DALL-E selections.
+This automatic choice follows later endpoint or conversation-model changes.
+Select an explicit model ID to keep the image model fixed instead.
+`gpt-image-2.5-sunburst` is offered for precise edits, and custom IDs are accepted.
+
+**Image Generation API** controls image routing separately from conversations:
+
+- **Automatic** follows the conversation API on official OpenAI endpoints,
+  using the Images API for image-only conversation models or DALL-E image
+  models. Custom endpoints keep using the Images API, even when their
+  conversations use Responses.
+- **Images API** sends the image model and prompt to `/v1/images/generations`.
+- **Responses API** sends the conversation model to `/v1/responses` and the
+  image model to its image-generation tool. On official OpenAI, this requires
+  a supported conversation model plus a GPT Image model.
+
+For a custom endpoint, select Responses image generation only if it supports
+that tool: Responses conversation support alone is insufficient. Compatible
+providers such as LM Studio, llama.cpp, vLLM, Gemini, OpenRouter, and Hermes
+retain their existing Images API route and profile model. API compatibility
+does not guarantee that the endpoint or model supports images. MCP Assist
+does not retry a failed generation against another endpoint.
+
 For official OpenAI profiles, MCP Assist sends a stable non-identifying
 `prompt_cache_key`. It helps cache routing on older models and separates cache
 accounting on GPT-5.6 and GPT-6. OpenAI controls whether a request is cacheable,

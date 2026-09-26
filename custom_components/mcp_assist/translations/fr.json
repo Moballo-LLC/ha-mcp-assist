@@ -103,7 +103,9 @@
           "openclaw_session_key": "Clé de session",
           "stateful_session_id": "En-tête de session avec état",
           "hermes_session_key": "Clé de session mémoire",
-          "openai_api_transport": "API de génération"
+          "openai_api_transport": "API de génération",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Clé de session",
               "stateful_session_id": "En-tête de session avec état",
               "hermes_session_key": "Clé de session mémoire",
-              "openai_api_transport": "API de génération"
+              "openai_api_transport": "API de génération",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
               "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
               "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil.",
-              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge."
+              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "En-tête de session avec état",
           "hermes_url": "URL du serveur Hermes",
           "hermes_session_key": "Clé de session mémoire",
-          "openai_api_transport": "API de génération"
+          "openai_api_transport": "API de génération",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Modèle LLM que ce profil doit utiliser.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Clé de session",
               "stateful_session_id": "En-tête de session avec état",
               "hermes_session_key": "Clé de session mémoire",
-              "openai_api_transport": "API de génération"
+              "openai_api_transport": "API de génération",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Combien de temps Ollama doit conserver le modèle sélectionné chargé en mémoire.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Nom de la session OpenClaw à laquelle envoyer des messages.",
               "stateful_session_id": "Envoie l’identifiant de conversation Assist dans X-Session-Id et empêche les nouvelles tentatives ambiguës. À activer uniquement si ce point de terminaison utilise cet en-tête comme état de session côté serveur.",
               "hermes_session_key": "Clé stable délimitant la mémoire à long terme de Hermes pour ce profil.",
-              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge."
+              "openai_api_transport": "Le mode Automatique utilise Responses pour le point de terminaison OpenAI officiel et Chat Completions pour les points de terminaison personnalisés. Ne choisissez explicitement une API que si le point de terminaison la prend en charge.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Automatique",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

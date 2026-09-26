@@ -103,7 +103,9 @@
           "openclaw_session_key": "Chave da sessão",
           "stateful_session_id": "Cabeçalho de sessão com estado",
           "hermes_session_key": "Chave de sessão de memória",
-          "openai_api_transport": "API de geração"
+          "openai_api_transport": "API de geração",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Chave da sessão",
               "stateful_session_id": "Cabeçalho de sessão com estado",
               "hermes_session_key": "Chave de sessão de memória",
-              "openai_api_transport": "API de geração"
+              "openai_api_transport": "API de geração",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
               "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor.",
               "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil.",
-              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela."
+              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Cabeçalho de sessão com estado",
           "hermes_url": "URL do servidor Hermes",
           "hermes_session_key": "Chave de sessão de memória",
-          "openai_api_transport": "API de geração"
+          "openai_api_transport": "API de geração",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "O modelo LLM que este perfil deve usar.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Chave da sessão",
               "stateful_session_id": "Cabeçalho de sessão com estado",
               "hermes_session_key": "Chave de sessão de memória",
-              "openai_api_transport": "API de geração"
+              "openai_api_transport": "API de geração",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Por quanto tempo Ollama deve manter o modelo selecionado carregado na memória.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Nome da sessão OpenClaw para a qual enviar mensagens.",
               "stateful_session_id": "Envia o ID da conversa do Assist como X-Session-Id e impede novas tentativas ambíguas. Ative apenas quando este endpoint usar o cabeçalho como estado de sessão no servidor.",
               "hermes_session_key": "Chave estável que delimita a memória de longo prazo do Hermes para este perfil.",
-              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela."
+              "openai_api_transport": "Automático usa Responses para o endpoint oficial da OpenAI e Chat Completions para endpoints personalizados. Escolha uma API explicitamente apenas quando o endpoint oferecer suporte a ela.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Automático",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

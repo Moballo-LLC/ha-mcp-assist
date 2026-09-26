@@ -103,7 +103,9 @@
           "openclaw_session_key": "Oturum Anahtarı",
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
           "hermes_session_key": "Bellek Oturum Anahtarı",
-          "openai_api_transport": "Oluşturma API'si"
+          "openai_api_transport": "Oluşturma API'si",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
               "hermes_session_key": "Bellek Oturum Anahtarı",
-              "openai_api_transport": "Oluşturma API'si"
+              "openai_api_transport": "Oluşturma API'si",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
               "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
-              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Durum bilgili oturum üst bilgisi",
           "hermes_url": "Hermes Sunucu URL'si",
           "hermes_session_key": "Bellek Oturum Anahtarı",
-          "openai_api_transport": "Oluşturma API'si"
+          "openai_api_transport": "Oluşturma API'si",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Bu profilin kullanması gereken LLM modeli.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Oturum Anahtarı",
               "stateful_session_id": "Durum bilgili oturum üst bilgisi",
               "hermes_session_key": "Bellek Oturum Anahtarı",
-              "openai_api_transport": "Oluşturma API'si"
+              "openai_api_transport": "Oluşturma API'si",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Mesajların gönderileceği OpenClaw oturumunun adı.",
               "stateful_session_id": "Assist konuşma kimliğini X-Session-Id olarak gönderir ve belirsiz yeniden denemeleri önler. Yalnızca bu uç nokta üst bilgiyi sunucu tarafı oturum durumu olarak kullanıyorsa etkinleştirin.",
               "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
-              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin."
+              "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Otomatik",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

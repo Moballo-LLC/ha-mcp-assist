@@ -103,7 +103,9 @@
           "openclaw_session_key": "Klíč relace",
           "stateful_session_id": "Hlavička stavové relace",
           "hermes_session_key": "Klíč relace paměti",
-          "openai_api_transport": "API pro generování"
+          "openai_api_transport": "API pro generování",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
               "hermes_session_key": "Klíč relace paměti",
-              "openai_api_transport": "API pro generování"
+              "openai_api_transport": "API pro generování",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
               "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
-              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Hlavička stavové relace",
           "hermes_url": "URL serveru Hermes",
           "hermes_session_key": "Klíč relace paměti",
-          "openai_api_transport": "API pro generování"
+          "openai_api_transport": "API pro generování",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Model LLM by tento profil měl používat.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Klíč relace",
               "stateful_session_id": "Hlavička stavové relace",
               "hermes_session_key": "Klíč relace paměti",
-              "openai_api_transport": "API pro generování"
+              "openai_api_transport": "API pro generování",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Jak dlouho má Ollama uchovat vybraný model načtený v paměti.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Název relace OpenClaw, do které se mají odesílat zprávy.",
               "stateful_session_id": "Odesílat ID konverzace Assist jako X-Session-Id a zabránit nejednoznačným opakovaným pokusům. Povolte pouze tehdy, když tento koncový bod používá hlavičku jako stav relace na straně serveru.",
               "hermes_session_key": "Stabilní klíč vymezující dlouhodobou paměť Hermes pro tento profil.",
-              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje."
+              "openai_api_transport": "Automatický režim používá Responses pro oficiální koncový bod OpenAI a Chat Completions pro vlastní koncové body. Rozhraní API vyberte ručně pouze tehdy, když ho koncový bod podporuje.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Automaticky",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

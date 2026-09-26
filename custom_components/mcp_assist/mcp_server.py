@@ -114,6 +114,7 @@ from .llm_providers import (
     build_provider_settings,
     create_llm_provider,
 )
+from .llm_providers.openai import OpenAIProvider
 from .tool_schema import (
     ADAPTIVE_META_TOOL_NAMES,
     build_adaptive_llm_tools,
@@ -3466,9 +3467,12 @@ class MCPServer(
         background: str | None,
         context: dict[str, Any] | None,
     ) -> tuple[bytes, str, dict[str, Any]]:
-        """Generate an image through an OpenAI-compatible images API when supported."""
+        """Generate an image with the provider's selected image model."""
         provider = self._get_model_provider(context)
         server_type = provider.server_type
+        responses_image_tool = (
+            isinstance(provider, OpenAIProvider) and provider.uses_responses_image_api
+        )
         try:
             url = provider.image_generation_url()
         except NotImplementedError as err:
@@ -3477,19 +3481,51 @@ class MCPServer(
                 "profiles through MCP Assist yet."
             ) from err
 
-        payload: dict[str, Any] = {
-            "model": provider.model_name,
-            "prompt": prompt,
-            "response_format": "b64_json",
-        }
+        image_model = provider.image_model
+        if responses_image_tool and provider.uses_official_openai_api and (
+            provider.is_image_model_id(provider.model_name)
+            or image_model in {"dall-e-2", "dall-e-3"}
+        ):
+            raise ValueError(
+                "Responses image generation requires a conversation model and a GPT Image model. "
+                "Choose the Images API for an image-only profile or DALL-E."
+            )
+        openai_gpt_image = (
+            isinstance(provider, OpenAIProvider)
+            and provider.uses_official_openai_api
+            and image_model.startswith("gpt-image-")
+        )
+        if style and (responses_image_tool or openai_gpt_image):
+            raise ValueError("Style is not supported by the selected image model.")
+        if responses_image_tool:
+            image_tool: dict[str, Any] = {
+                "type": "image_generation",
+                "model": image_model,
+            }
+            payload: dict[str, Any] = {
+                "model": provider.model_name,
+                "input": prompt,
+                "tools": [image_tool],
+                "tool_choice": {"type": "image_generation"},
+                "store": False,
+            }
+            image_options = image_tool
+        else:
+            payload = {
+                "model": image_model,
+                "prompt": prompt,
+            }
+            if not openai_gpt_image:
+                payload["response_format"] = "b64_json"
+            image_options = payload
         if size:
-            payload["size"] = size
+            image_options["size"] = size
         if quality:
-            payload["quality"] = quality
+            image_options["quality"] = quality
         if style:
-            payload["style"] = style
+            image_options["style"] = style
         if background:
-            payload["background"] = background
+            image_options["background"] = background
 
         timeout = aiohttp.ClientTimeout(total=provider.settings.timeout)
         headers = provider.headers()
@@ -3506,16 +3542,32 @@ class MCPServer(
                     )
                 data = await response.json()
 
-        items = data.get("data")
+        if responses_image_tool and data.get("status") != "completed":
+            raise ValueError("The image generation response did not complete.")
+        items = data.get("output" if responses_image_tool else "data")
         if not isinstance(items, list) or not items:
             raise ValueError("The image generation provider did not return any images.")
-        item = items[0]
+        item = (
+            next(
+                (
+                    candidate
+                    for candidate in items
+                    if isinstance(candidate, dict)
+                    and candidate.get("type") == "image_generation_call"
+                ),
+                None,
+            )
+            if responses_image_tool
+            else items[0]
+        )
         if not isinstance(item, dict):
-            raise ValueError("Unexpected image generation payload from provider.")
+            raise ValueError("The image generation provider returned no usable image data.")
 
         image_bytes: bytes
         mime_type = "image/png"
-        if item.get("b64_json"):
+        if responses_image_tool and item.get("result"):
+            image_bytes = base64.b64decode(str(item["result"]), validate=False)
+        elif item.get("b64_json"):
             image_bytes = base64.b64decode(str(item["b64_json"]), validate=False)
         elif item.get("url"):
             image_bytes, mime_type = await self._fetch_image_reference(str(item["url"]))
@@ -3530,7 +3582,7 @@ class MCPServer(
         metadata = {
             "prompt": prompt,
             "provider": server_type,
-            "model": provider.model_name,
+            "model": image_model,
             "mime_type": mime_type,
             "size_bytes": len(image_bytes),
         }

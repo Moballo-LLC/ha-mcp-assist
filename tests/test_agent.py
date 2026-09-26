@@ -43,6 +43,7 @@ from custom_components.mcp_assist.const import (
     CONF_MAX_TOKENS,
     CONF_MODEL_NAME,
     CONF_OPENAI_API_TRANSPORT,
+    CONF_OPENAI_IMAGE_MODEL,
     CONF_PROFILE_NAME,
     CONF_SERVER_TYPE,
     CONF_STATEFUL_SESSION_ID,
@@ -75,6 +76,8 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_HERMES,
 )
+
+
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
@@ -88,6 +91,44 @@ from custom_components.mcp_assist.tools.packages.recorder.recorder import (
 )
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
+
+
+def test_openai_agent_exposes_loaded_image_model_snapshot(
+    hass, profile_entry_factory
+) -> None:
+    """Entry option changes cannot masquerade as a reloaded image model."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_MODEL_NAME: "gpt-6-sol",
+        },
+        options={CONF_OPENAI_IMAGE_MODEL: "gpt-image-2.5-flare"},
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    assert agent.image_model == "gpt-image-2.5-flare"
+    assert agent.extra_state_attributes == {
+        "image_model": "gpt-image-2.5-flare",
+        "image_model_available": True,
+    }
+
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_OPENAI_IMAGE_MODEL: "gpt-image-2.5-sunburst"}
+    )
+    assert agent.image_model == "gpt-image-2.5-flare"
+    assert agent.extra_state_attributes["image_model"] == "gpt-image-2.5-flare"
+    assert MCPAssistConversationEntity(hass, entry).image_model == "gpt-image-2.5-sunburst"
+
+
+def test_unsupported_agent_reports_image_model_unavailable(
+    hass, profile_entry_factory
+) -> None:
+    """A loaded unsupported provider is distinct from an unknown old runtime."""
+    agent = MCPAssistConversationEntity(
+        hass, profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_ANTHROPIC})
+    )
+    assert agent.image_model is None
+    assert agent.extra_state_attributes == {"image_model_available": False}
 
 
 def _builtin_spec(tool_name: str):

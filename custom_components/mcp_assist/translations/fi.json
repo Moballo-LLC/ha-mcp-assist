@@ -103,7 +103,9 @@
           "openclaw_session_key": "Istuntoavain",
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_session_key": "Muistin istuntoavain",
-          "openai_api_transport": "Luontirajapinta"
+          "openai_api_transport": "Luontirajapinta",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
               "hermes_session_key": "Muistin istuntoavain",
-              "openai_api_transport": "Luontirajapinta"
+              "openai_api_transport": "Luontirajapinta",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
               "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
-              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Tilallisen istunnon otsake",
           "hermes_url": "Hermes-palvelimen URL",
           "hermes_session_key": "Muistin istuntoavain",
-          "openai_api_transport": "Luontirajapinta"
+          "openai_api_transport": "Luontirajapinta",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Istuntoavain",
               "stateful_session_id": "Tilallisen istunnon otsake",
               "hermes_session_key": "Muistin istuntoavain",
-              "openai_api_transport": "Luontirajapinta"
+              "openai_api_transport": "Luontirajapinta",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Sen OpenClaw-istunnon nimi, johon viestit lähetetään.",
               "stateful_session_id": "Lähetä Assist-keskustelun tunnus X-Session-Id-otsakkeena ja estä epäselvät uudelleenyritykset. Ota käyttöön vain, jos tämä päätepiste käyttää otsaketta palvelinpuolen istunnon tilana.",
               "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
-              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä."
+              "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Automaattinen",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },

@@ -45,6 +45,11 @@ class OpenAICompatibleProvider(LLMProvider):
         """Return the OpenAI-compatible image-generation endpoint."""
         return self.provider_endpoint(self.base_url, "images/generations")
 
+    @property
+    def image_model(self) -> str:
+        """Preserve the profile model for compatible image-generation endpoints."""
+        return self.model_name
+
     def build_payload(
         self,
         messages: list[dict[str, Any]],

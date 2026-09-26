@@ -103,7 +103,9 @@
           "openclaw_session_key": "Сеансовый ключ",
           "stateful_session_id": "Заголовок сеанса с состоянием",
           "hermes_session_key": "Ключ сессии памяти",
-          "openai_api_transport": "API генерации"
+          "openai_api_transport": "API генерации",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "sections": {
           "conversation": {
@@ -157,7 +159,9 @@
               "openclaw_session_key": "Сеансовый ключ",
               "stateful_session_id": "Заголовок сеанса с состоянием",
               "hermes_session_key": "Ключ сессии памяти",
-              "openai_api_transport": "API генерации"
+              "openai_api_transport": "API генерации",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
@@ -165,7 +169,9 @@
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
               "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера.",
               "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля.",
-              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает."
+              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "tools": {
@@ -399,7 +405,9 @@
           "stateful_session_id": "Заголовок сеанса с состоянием",
           "hermes_url": "URL сервера Hermes",
           "hermes_session_key": "Ключ сессии памяти",
-          "openai_api_transport": "API генерации"
+          "openai_api_transport": "API генерации",
+          "openai_image_model": "Image Model",
+          "openai_image_api": "Image Generation API"
         },
         "data_description": {
           "model_name": "Модель LLM, которую следует использовать в этом профиле.",
@@ -489,7 +497,9 @@
               "openclaw_session_key": "Сеансовый ключ",
               "stateful_session_id": "Заголовок сеанса с состоянием",
               "hermes_session_key": "Ключ сессии памяти",
-              "openai_api_transport": "API генерации"
+              "openai_api_transport": "API генерации",
+              "openai_image_model": "Image Model",
+              "openai_image_api": "Image Generation API"
             },
             "data_description": {
               "ollama_keep_alive": "Как долго Ollama должен сохранять выбранную модель загруженной в память.",
@@ -497,7 +507,9 @@
               "openclaw_session_key": "Имя сеанса OpenClaw, в который будут отправляться сообщения.",
               "stateful_session_id": "Отправляет идентификатор разговора Assist в X-Session-Id и предотвращает неоднозначные повторные попытки. Включайте, только если эта конечная точка использует заголовок как состояние сеанса на стороне сервера.",
               "hermes_session_key": "Постоянный ключ, ограничивающий долговременную память Hermes для этого профиля.",
-              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает."
+              "openai_api_transport": "Автоматический режим использует Responses для официальной конечной точки OpenAI и Chat Completions для пользовательских конечных точек. Выбирайте API явно, только если конечная точка его поддерживает.",
+              "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
             }
           },
           "advanced_settings": {
@@ -712,6 +724,13 @@
         "auto": "Автоматически",
         "responses": "Responses API",
         "chat_completions": "Chat Completions API"
+      }
+    },
+    "openai_image_api": {
+      "options": {
+        "auto": "Automatic",
+        "images": "Images API",
+        "responses": "Responses API"
       }
     }
   },
