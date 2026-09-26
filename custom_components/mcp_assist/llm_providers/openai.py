@@ -28,6 +28,7 @@ from .base import (
     ProviderSettings,
     ProviderStreamError,
     StreamParseResult,
+    _sse_data_payload,
 )
 from .openai_compatible import OpenAICompatibleProvider
 
@@ -527,10 +528,11 @@ class OpenAIProvider(OpenAICompatibleProvider):
         """Normalize Chat Completions chunks or typed Responses events."""
         if not self.uses_responses_api:
             return super().parse_stream_line(line)
-        if not line.startswith("data: "):
+        payload = _sse_data_payload(line)
+        if payload is None:
             return None
 
-        data = json.loads(line[6:])
+        data = json.loads(payload)
         event_type = data.get("type")
         if event_type == "response.created":
             self._streamed_text_seen = False
