@@ -13,6 +13,7 @@ updates:
       semver-patch-days: 3
     exclude-paths:
       - "requirements_runtime.txt"
+      - "custom_components/mcp_assist/manifest.json"
     groups:
       ha-test-harness:
         applies-to: "version-updates"

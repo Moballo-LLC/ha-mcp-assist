@@ -38,7 +38,10 @@ editing this repository. It applies to the whole repository.
 - Runtime dependencies live in
   `custom_components/mcp_assist/manifest.json`.
 - `requirements_runtime.txt` mirrors the runtime dependency package names so
-  Dependabot can see them. It may carry newer lower bounds than the manifest.
+  Dependabot can see them. Keep the mirrored requirements at least as lenient
+  as the manifest and exclude both files from Dependabot version updates; the
+  Home Assistant Core overlap guard checks each file against Core's installed
+  direct requirements.
 - `tests/test_manifest_dependencies.py` intentionally checks package names, not
   exact specifier equality. Do not change it back to exact equality.
 - Test-only dependencies live in `requirements_test.txt`. They are not runtime

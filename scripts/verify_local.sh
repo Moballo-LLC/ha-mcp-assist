@@ -56,6 +56,7 @@ fi
 echo "Using Python: $("$PYTHON_BIN" --version)"
 
 if [[ "$RUN_STATIC" == "1" ]]; then
+  "$PYTHON_BIN" scripts/check_manifest_core_dependencies.py
   "$PYTHON_BIN" -m ruff check custom_components tests
   "$PYTHON_BIN" -m compileall -q custom_components tests
   "$PYTHON_BIN" -m json.tool custom_components/mcp_assist/strings.json >/dev/null
