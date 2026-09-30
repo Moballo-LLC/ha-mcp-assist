@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import timedelta
 from functools import partial
 import logging
+import math
 import re
 from typing import Any, Dict, List, Tuple
 
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.components.recorder import history
+from homeassistant.components.recorder import statistics as recorder_statistics
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -794,6 +796,320 @@ class RecorderToolsMixin:
 
         text_parts = self._prepend_resolution_note(text_parts, resolution_note)
         return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
+
+    async def tool_get_entity_statistics(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Read bounded long-term statistics for one exposed entity."""
+        entity_id = str(args.get("entity_id") or "").strip()
+        period = str(args.get("period") or "").strip().casefold()
+        metric = str(args.get("metric", "all")).strip().casefold()
+        bucket = str(args.get("bucket", "day")).strip().casefold()
+        limit = self._coerce_int_arg(args.get("limit"), default=50, minimum=1, maximum=100)
+
+        # Exposure must be checked before even asking Recorder which statistics exist.
+        if not entity_id or not async_should_expose(self.hass, "conversation", entity_id):
+            return self._build_text_tool_result(
+                "Entity is not exposed to conversation or was not specified.", is_error=True
+            )
+        if bucket not in {"hour", "day", "month"}:
+            return self._build_text_tool_result("Invalid bucket. Use hour, day, or month.", is_error=True)
+        if metric not in {"all", "change", "mean", "min", "max"}:
+            return self._build_text_tool_result("Invalid metric. Use all, change, mean, min, or max.", is_error=True)
+
+        try:
+            requested_start, requested_end, period_label = self._statistics_window(args, period)
+        except ValueError as err:
+            return self._build_text_tool_result(str(err), is_error=True)
+        if (requested_end - requested_start).total_seconds() > 366 * 86400:
+            return self._build_text_tool_result("Statistics intervals are limited to 366 days.", is_error=True)
+
+        # Home Assistant's long-term API returns hour-start rows; align explicitly and
+        # report this effective interval so boundary hours are never implied complete.
+        epoch_hour = 3600
+        start_ts = math.ceil(requested_start.timestamp() / epoch_hour) * epoch_hour
+        end_ts = math.floor(requested_end.timestamp() / epoch_hour) * epoch_hour
+        effective_start = dt_util.utc_from_timestamp(start_ts)
+        effective_end = dt_util.utc_from_timestamp(end_ts)
+        if effective_end <= effective_start:
+            return self._build_text_tool_result(
+                f"No complete hourly interval is available inside {period_label}."
+            )
+
+        recorder = None
+
+        async def _run_recorder(job):
+            if recorder is not None:
+                return await recorder.async_add_executor_job(job)
+            return await self.hass.async_add_executor_job(job)
+
+        try:
+            recorder = get_recorder_instance(self.hass) if get_recorder_instance is not None else None
+            metadata = await _run_recorder(
+                partial(recorder_statistics.get_metadata, self.hass, statistic_ids={entity_id})
+            )
+            if entity_id not in metadata:
+                return self._build_text_tool_result(
+                    f"No long-term statistics metadata is available for exposed entity {entity_id}."
+                )
+            meta = metadata[entity_id][1]
+            mean_type = meta.get("mean_type")
+            mean_type_value = getattr(mean_type, "value", mean_type)
+            mean_type_name = str(getattr(mean_type, "name", "")).casefold()
+            circular_mean = (
+                mean_type_name == "circular"
+                or str(mean_type_value).casefold() == "circular"
+                or mean_type_value == recorder_statistics.StatisticMeanType.CIRCULAR.value
+            )
+            mean_supported = (
+                mean_type is not None
+                and str(mean_type_value).casefold() not in {"none", "0"}
+            )
+            if metric == "mean" and circular_mean:
+                return self._build_text_tool_result(
+                    f"Mean is not reported for circular statistics such as {entity_id}; an arithmetic average would be misleading."
+                )
+            if metric in {"mean", "min", "max"} and not mean_supported:
+                return self._build_text_tool_result(
+                    f"{metric} is not supported by the long-term statistics for {entity_id}."
+                )
+            if metric == "change" and not meta.get("has_sum"):
+                return self._build_text_tool_result(
+                    f"Change is not supported by the long-term statistics for {entity_id}; no total was inferred."
+                )
+            selected_metrics = {"change", "mean", "min", "max"} if metric == "all" else {metric}
+            if metric == "all" and circular_mean:
+                selected_metrics.discard("mean")
+            types: set[str] = set()
+            if "mean" in selected_metrics and mean_supported and not circular_mean:
+                types.add("mean")
+            if "min" in selected_metrics and mean_supported:
+                types.add("min")
+            if "max" in selected_metrics and mean_supported:
+                types.add("max")
+            if "change" in selected_metrics and meta.get("has_sum"):
+                types.add("change")
+            display_unit = await _run_recorder(
+                partial(
+                    recorder_statistics.get_display_unit,
+                    self.hass,
+                    entity_id,
+                    meta.get("unit_class"),
+                    meta.get("unit_of_measurement"),
+                )
+            )
+            stats = await _run_recorder(
+                partial(
+                    recorder_statistics.statistics_during_period,
+                    self.hass,
+                    effective_start,
+                    effective_end,
+                    {entity_id},
+                    "hour",
+                    None,
+                    types,
+                )
+            )
+        except Exception:
+            _LOGGER.warning("Recorder statistics query failed")
+            return self._build_text_tool_result("Home Assistant could not read recorder statistics for this interval.", is_error=True)
+
+        rows = (stats or {}).get(entity_id, [])
+        if not rows:
+            return self._build_text_tool_result(
+                f"No long-term statistic buckets were returned for {entity_id} during {period_label}; no total or average was inferred."
+            )
+
+        clean_rows: list[dict[str, Any]] = []
+        for row in rows:
+            when = row.get("start")
+            if isinstance(when, (int, float)) and not isinstance(when, bool) and math.isfinite(when):
+                when = dt_util.utc_from_timestamp(when)
+            if not hasattr(when, "tzinfo") or when is None:
+                continue
+            when = dt_util.as_utc(when)
+            clean = {"start": when}
+            for key in selected_metrics:
+                value = row.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+                    clean[key] = float(value)
+            clean_rows.append(clean)
+        clean_rows.sort(key=lambda item: item["start"])
+        if not clean_rows:
+            return self._build_text_tool_result(
+                f"Recorder returned no finite statistic values for {entity_id} during {period_label}."
+            )
+
+        expected = []
+        cursor = effective_start
+        while cursor < effective_end:
+            expected.append(cursor)
+            cursor += timedelta(hours=1)
+        observed = {row["start"] for row in clean_rows}
+        missing = [when for when in expected if when not in observed]
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for row in clean_rows:
+            local = dt_util.as_local(row["start"])
+            if bucket == "hour":
+                key = local.isoformat(timespec="minutes")
+            elif bucket == "month":
+                key = local.strftime("%Y-%m")
+            else:
+                key = local.date().isoformat()
+            groups.setdefault(key, []).append(row)
+
+        change_values = [row["change"] for row in clean_rows if "change" in row]
+        means = [row["mean"] for row in clean_rows if "mean" in row]
+        minima = [row["min"] for row in clean_rows if "min" in row]
+        maxima = [row["max"] for row in clean_rows if "max" in row]
+        unit = display_unit or meta.get("unit_of_measurement") or "unit not reported"
+        lines = [
+            f"Statistics for {meta.get('name') or entity_id} ({entity_id})",
+            f"Period: {period_label}",
+            f"Metric: {metric}",
+            f"Requested interval: {requested_start.isoformat()} to {requested_end.isoformat()}",
+            f"Effective hourly interval: {effective_start.isoformat()} to {effective_end.isoformat()} (end exclusive)",
+            f"Observed buckets: {len(clean_rows)} of {len(expected)} expected hourly buckets; missing: {len(missing)}",
+            f"First observed bucket: {clean_rows[0]['start'].isoformat()}; last observed bucket: {clean_rows[-1]['start'].isoformat()}",
+            f"Statistic unit: {unit}; sum supported: {'yes' if meta.get('has_sum') else 'no'}",
+        ]
+        if "change" in selected_metrics and meta.get("has_sum"):
+            if change_values:
+                complete_change_coverage = (
+                    requested_start == effective_start
+                    and requested_end == effective_end
+                    and len(change_values) == len(expected)
+                )
+                label = "Change total" if complete_change_coverage else "Observed change subtotal"
+                lines.append(
+                    f"{label}: {sum(change_values):g} {unit} across "
+                    f"{len(change_values)} of {len(expected)} expected hourly buckets"
+                )
+            else:
+                lines.append("Change total unavailable: no finite change values were returned.")
+            changes_by_start = {row["start"]: row["change"] for row in clean_rows if "change" in row}
+            complete_days = self._complete_statistic_period_totals(
+                changes_by_start, effective_start, effective_end, "day"
+            )
+            complete_months = self._complete_statistic_period_totals(
+                changes_by_start, effective_start, effective_end, "month"
+            )
+            if complete_days:
+                lines.append(
+                    f"Average per observed complete local day: "
+                    f"{sum(complete_days) / len(complete_days):g} {unit} "
+                    f"({len(complete_days)} complete-day buckets)"
+                )
+            else:
+                lines.append("Average per complete local day unavailable: no fully covered day.")
+            if complete_months:
+                lines.append(
+                    f"Average per observed complete local month: "
+                    f"{sum(complete_months) / len(complete_months):g} {unit} "
+                    f"({len(complete_months)} complete-month buckets)"
+                )
+            else:
+                lines.append("Average per complete local month unavailable: no fully covered month.")
+        elif metric == "all" and not meta.get("has_sum"):
+            lines.append("Change total unavailable: this statistic does not track sums.")
+        if metric == "all" and circular_mean:
+            lines.append("Mean unavailable: circular values are not averaged arithmetically.")
+        elif metric == "all" and not mean_supported:
+            lines.append("Mean/minimum/maximum unavailable: metadata reports no mean support.")
+        elif "mean" in selected_metrics and means:
+            lines.append(f"Mean of observed hourly means: {sum(means) / len(means):g} {unit} ({len(means)} buckets)")
+        elif "mean" in selected_metrics:
+            lines.append("Mean unavailable: no finite means were returned.")
+        if "min" in selected_metrics and minima:
+            lines.append(f"Minimum: {min(minima):g} {unit}")
+        if "max" in selected_metrics and maxima:
+            lines.append(f"Maximum: {max(maxima):g} {unit}")
+        if missing:
+            lines.append("Coverage has gaps; totals and averages describe observed buckets only.")
+        lines.append(f"Displayed {min(len(groups), limit)} of {len(groups)} {bucket} buckets; summary covers all returned hourly buckets:")
+        for key, grouped in list(sorted(groups.items()))[:limit]:
+            changes = [row["change"] for row in grouped if "change" in row]
+            group_means = [row["mean"] for row in grouped if "mean" in row]
+            details = [f"{len(grouped)} observed hour(s)"]
+            if changes:
+                details.append(f"change {sum(changes):g} {unit}")
+            if group_means:
+                details.append(f"mean {sum(group_means) / len(group_means):g} {unit}")
+            group_minima = [row["min"] for row in grouped if "min" in row]
+            group_maxima = [row["max"] for row in grouped if "max" in row]
+            if group_minima:
+                details.append(f"min {min(group_minima):g} {unit}")
+            if group_maxima:
+                details.append(f"max {max(group_maxima):g} {unit}")
+            lines.append(f"{key}: {', '.join(details)}")
+        return self._build_text_tool_result("\n".join(lines))
+
+    def _complete_statistic_period_totals(self, changes, start, end, granularity):
+        """Return totals for local calendar periods fully covered by observed hours."""
+        observed = set(changes)
+        complete = []
+        local_start = dt_util.as_local(start)
+        local_end = dt_util.as_local(end)
+        if granularity == "day":
+            cursor = local_start.replace(hour=0, minute=0, second=0, microsecond=0)
+            step = timedelta(days=1)
+        else:
+            cursor = local_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            step = None
+        while cursor < local_end:
+            if granularity == "day":
+                next_period = cursor + step
+            elif cursor.month == 12:
+                next_period = cursor.replace(year=cursor.year + 1, month=1)
+            else:
+                next_period = cursor.replace(month=cursor.month + 1)
+            period_start = dt_util.as_utc(cursor)
+            period_end = dt_util.as_utc(next_period)
+            if period_start >= start and period_end <= end:
+                expected = []
+                hour = period_start
+                while hour < period_end:
+                    expected.append(hour)
+                    hour += timedelta(hours=1)
+                if expected and all(hour in observed for hour in expected):
+                    complete.append(sum(changes[hour] for hour in expected))
+            cursor = next_period
+        return complete
+
+    def _statistics_window(self, args: Dict[str, Any], period: str):
+        """Resolve a period to aware Home Assistant local datetimes."""
+        now = dt_util.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if period == "today":
+            start, end = today, now
+        elif period == "yesterday":
+            start, end = today - timedelta(days=1), today
+        elif period == "this_month":
+            start, end = today.replace(day=1), now
+        elif period == "last_month":
+            end = today.replace(day=1)
+            start = (end - timedelta(days=1)).replace(day=1)
+        elif period in {"last_7_days", "last_30_days"}:
+            days = 7 if period == "last_7_days" else 30
+            start, end = today - timedelta(days=days), today
+        elif period == "last_12_months":
+            end = today.replace(day=1)
+            start_month = end.month - 12
+            start_year = end.year
+            while start_month <= 0:
+                start_month += 12
+                start_year -= 1
+            start = end.replace(year=start_year, month=start_month)
+        elif period == "custom":
+            raw_start, raw_end = args.get("start_datetime"), args.get("end_datetime")
+            start = dt_util.parse_datetime(str(raw_start)) if raw_start else None
+            end = dt_util.parse_datetime(str(raw_end)) if raw_end else None
+            if start is None or end is None or start.tzinfo is None or end.tzinfo is None:
+                raise ValueError("Custom statistics require start_datetime and end_datetime with explicit time zones.")
+            start, end = dt_util.as_local(start), dt_util.as_local(end)
+        else:
+            raise ValueError("Choose a supported calendar period or custom interval.")
+        if end <= start:
+            raise ValueError("Statistics end_datetime must be later than start_datetime.")
+        return dt_util.as_utc(start), dt_util.as_utc(end), period.replace("_", " ")
 
     async def tool_get_entity_state_at_time(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Return an entity's recorder state at a specific point in time."""

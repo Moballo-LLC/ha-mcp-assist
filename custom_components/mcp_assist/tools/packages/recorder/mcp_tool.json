@@ -2,18 +2,19 @@
   "schema_version": 1,
   "id": "recorder",
   "name": "Recorder History",
-  "description": "Built-in recorder-backed history, analysis, and point-in-time tools.",
+  "description": "Built-in recorder-backed history, analysis, statistics, and point-in-time tools.",
   "version": "1.0.0",
   "entrypoint": "tool:RecorderPackageTool",
   "prompt_append_file": "prompt.md",
   "capabilities": [
-    "Reads and analyzes Home Assistant recorder history."
+    "Reads and analyzes Home Assistant recorder history and long-term statistics."
   ],
   "built_in_toggle": {
     "tool_names": [
       "get_entity_history",
       "analyze_entity_history",
-      "get_entity_state_at_time"
+      "get_entity_state_at_time",
+      "get_entity_statistics"
     ],
     "shared_setting_key": "enable_recorder_tools",
     "profile_setting_key": "profile_enable_recorder_tools",

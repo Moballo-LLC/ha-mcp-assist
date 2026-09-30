@@ -2437,6 +2437,19 @@ def test_adaptive_tool_scoring_matches_present_tense_history_questions() -> None
     assert "recorder" not in control_terms
 
 
+def test_adaptive_tool_catalog_routes_statistics_questions_to_recorder() -> None:
+    """Statistics requests can lazily select the recorder statistics schema."""
+    statistics_tool = next(
+        tool for tool in RECORDER_TOOL_DEFINITIONS
+        if tool["name"] == "get_entity_statistics"
+    )
+
+    assert "last_12_months" in statistics_tool["inputSchema"]["properties"]["period"]["enum"]
+    assert score_adaptive_tool_match(
+        statistics_tool, "What was the energy consumption total last month?"
+    ) > 0
+
+
 def test_adaptive_tool_scoring_avoids_non_plural_s_stems() -> None:
     """Metadata terms like news should not match unrelated singular-looking words."""
     search_tool = {
