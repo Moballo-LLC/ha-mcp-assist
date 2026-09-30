@@ -907,6 +907,19 @@ class RecorderToolsMixin:
             display_unit = await _run_recorder(
                 partial(recorder_statistics.get_display_unit, *display_unit_args)
             )
+            unit_class = meta.get("unit_class")
+            if unit_class is None:
+                # Legacy metadata predates unit_class; use Recorder's unit registry.
+                converter = getattr(
+                    recorder_statistics, "STATISTIC_UNIT_TO_UNIT_CONVERTER", {}
+                ).get(meta.get("unit_of_measurement"))
+                unit_class = getattr(converter, "UNIT_CLASS", None)
+            # Pin the returned values to the same unit used by every output label.
+            requested_units = (
+                {unit_class: display_unit}
+                if unit_class is not None and display_unit is not None
+                else None
+            )
             stats = await _run_recorder(
                 partial(
                     recorder_statistics.statistics_during_period,
@@ -915,7 +928,7 @@ class RecorderToolsMixin:
                     effective_end,
                     {entity_id},
                     "hour",
-                    None,
+                    requested_units,
                     types,
                 )
             )
