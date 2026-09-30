@@ -3049,6 +3049,113 @@ async def test_circular_statistics_never_report_arithmetic_mean(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy_metadata", [False, True], ids=["unit-class", "legacy-unit-class"])
+async def test_statistics_values_match_selected_display_unit(
+    hass, profile_entry_factory, monkeypatch, legacy_metadata
+) -> None:
+    """Recorder conversions apply consistently to summaries and displayed buckets."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    entity_id = "sensor.example_energy"
+    converter = recorder_history_module.recorder_statistics.STATISTIC_UNIT_TO_UNIT_CONVERTER[
+        "Wh"
+    ]
+    assert converter.UNIT_CLASS == "energy"
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    if legacy_metadata:
+        monkeypatch.delattr(
+            recorder_history_module.recorder_statistics,
+            "StatisticMeanType",
+            raising=False,
+        )
+    metadata = {
+        "has_sum": True,
+        "unit_of_measurement": "Wh",
+        "name": "Example energy",
+    }
+    if legacy_metadata:
+        metadata["has_mean"] = True
+    else:
+        metadata.update({"has_mean": True, "mean_type": "arithmetic", "unit_class": "energy"})
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {entity_id: (1, metadata)},
+    )
+
+    def change_state_unit_and_select_display_unit():
+        # A concurrent state-unit change must not change the Recorder query unit.
+        hass.states.async_set(entity_id, "1", {"unit_of_measurement": "MWh"})
+        return "kWh"
+
+    if legacy_metadata:
+        def select_display_unit(hass_arg, statistic_id, statistic_unit):
+            assert hass_arg is hass and statistic_id == entity_id
+            assert statistic_unit == "Wh"
+            return change_state_unit_and_select_display_unit()
+    else:
+        def select_display_unit(hass_arg, statistic_id, unit_class, statistic_unit):
+            assert hass_arg is hass and statistic_id == entity_id
+            assert unit_class == "energy" and statistic_unit == "Wh"
+            return change_state_unit_and_select_display_unit()
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_display_unit",
+        select_display_unit,
+    )
+    requested_units: list[dict[str, str] | None] = []
+
+    def statistics_during_period(*args):
+        units = args[-2]
+        requested_units.append(units)
+        assert units == {"energy": "kWh"}
+        rows = []
+        for index in range(48):
+            rows.append({
+                "start": args[1] + timedelta(hours=index),
+                "change": converter.convert(1000, "Wh", units["energy"]),
+                "mean": converter.convert(1000, "Wh", units["energy"]),
+                "min": converter.convert(500, "Wh", units["energy"]),
+                "max": converter.convert(1500, "Wh", units["energy"]),
+            })
+        return {entity_id: rows}
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        statistics_during_period,
+    )
+    original_tz = dt_util.DEFAULT_TIME_ZONE
+    dt_util.set_default_time_zone(ZoneInfo("America/Los_Angeles"))
+    try:
+        result = await server.tool_get_entity_statistics({
+            "entity_id": entity_id,
+            "period": "custom",
+            "start_datetime": "2026-01-01T00:00:00-08:00",
+            "end_datetime": "2026-01-03T00:00:00-08:00",
+            "bucket": "day",
+        })
+    finally:
+        dt_util.set_default_time_zone(original_tz)
+
+    text = result["content"][0]["text"]
+    assert requested_units == [{"energy": "kWh"}]
+    assert "Change total: 48 kWh" in text
+    assert "Average per observed complete local day: 24 kWh (2 complete-day buckets)" in text
+    assert "Mean of observed hourly means: 1 kWh (48 buckets)" in text
+    assert "Minimum: 0.5 kWh" in text
+    assert "Maximum: 1.5 kWh" in text
+    assert "2026-01-01: 24 observed hour(s), change 24 kWh, mean 1 kWh, min 0.5 kWh, max 1.5 kWh" in text
+    assert "2026-01-02: 24 observed hour(s), change 24 kWh, mean 1 kWh, min 0.5 kWh, max 1.5 kWh" in text
+
+
+@pytest.mark.asyncio
 async def test_statistics_support_legacy_mean_metadata_without_mean_type(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
