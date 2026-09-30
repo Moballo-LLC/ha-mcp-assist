@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from functools import partial
+import inspect
 import logging
 import math
 import re
@@ -854,14 +855,23 @@ class RecorderToolsMixin:
             mean_type = meta.get("mean_type")
             mean_type_value = getattr(mean_type, "value", mean_type)
             mean_type_name = str(getattr(mean_type, "name", "")).casefold()
+            circular_type = getattr(
+                getattr(recorder_statistics, "StatisticMeanType", None),
+                "CIRCULAR",
+                None,
+            )
             circular_mean = (
                 mean_type_name == "circular"
                 or str(mean_type_value).casefold() == "circular"
-                or mean_type_value == recorder_statistics.StatisticMeanType.CIRCULAR.value
+                or (
+                    circular_type is not None
+                    and mean_type_value == circular_type.value
+                )
             )
             mean_supported = (
-                mean_type is not None
-                and str(mean_type_value).casefold() not in {"none", "0"}
+                bool(meta.get("has_mean"))
+                if mean_type is None
+                else str(mean_type_value).casefold() not in {"none", "0"}
             )
             if metric == "mean" and circular_mean:
                 return self._build_text_tool_result(
@@ -887,14 +897,15 @@ class RecorderToolsMixin:
                 types.add("max")
             if "change" in selected_metrics and meta.get("has_sum"):
                 types.add("change")
+            display_unit_args = [self.hass, entity_id]
+            # Recorder added unit_class after the legacy three-argument API.
+            if "unit_class" in inspect.signature(
+                recorder_statistics.get_display_unit
+            ).parameters:
+                display_unit_args.append(meta.get("unit_class"))
+            display_unit_args.append(meta.get("unit_of_measurement"))
             display_unit = await _run_recorder(
-                partial(
-                    recorder_statistics.get_display_unit,
-                    self.hass,
-                    entity_id,
-                    meta.get("unit_class"),
-                    meta.get("unit_of_measurement"),
-                )
+                partial(recorder_statistics.get_display_unit, *display_unit_args)
             )
             stats = await _run_recorder(
                 partial(

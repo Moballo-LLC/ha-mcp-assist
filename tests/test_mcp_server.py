@@ -3048,6 +3048,143 @@ async def test_circular_statistics_never_report_arithmetic_mean(
     assert statistics_calls == 1
 
 
+@pytest.mark.asyncio
+async def test_statistics_support_legacy_mean_metadata_without_mean_type(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Older Recorder metadata uses has_mean and a three-argument unit helper."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    monkeypatch.delattr(recorder_history_module.recorder_statistics, "StatisticMeanType", raising=False)
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.legacy": (1, {
+                "has_sum": True,
+                "has_mean": True,
+                "unit_of_measurement": "kWh",
+            })
+        },
+    )
+    display_calls: list[tuple[object, ...]] = []
+
+    def legacy_get_display_unit(hass_arg, statistic_id, statistic_unit):
+        display_calls.append((hass_arg, statistic_id, statistic_unit))
+        return statistic_unit
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_display_unit",
+        legacy_get_display_unit,
+    )
+    requested_types: list[set[str]] = []
+
+    def statistics_during_period(*args):
+        requested_types.append(args[-1])
+        return {
+            "sensor.legacy": [
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "change": 2.0, "mean": 4.0},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": 3.0, "mean": 6.0},
+            ]
+        }
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        statistics_during_period,
+    )
+    arguments = {
+        "entity_id": "sensor.legacy",
+        "period": "custom",
+        "start_datetime": "2026-01-01T00:00:00+00:00",
+        "end_datetime": "2026-01-01T02:00:00+00:00",
+    }
+
+    result = await server.tool_get_entity_statistics(arguments)
+    text = result["content"][0]["text"]
+    assert "change 5 kWh" in text
+    assert "mean 5 kWh" in text
+    assert requested_types == [{"change", "mean", "min", "max"}]
+    assert display_calls == [(hass, "sensor.legacy", "kWh")]
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.legacy": (1, {"has_sum": True, "has_mean": False})
+        },
+    )
+    unsupported = await server.tool_get_entity_statistics({**arguments, "metric": "mean"})
+    assert "mean is not supported" in unsupported["content"][0]["text"].casefold()
+    assert len(requested_types) == 1
+
+
+@pytest.mark.asyncio
+async def test_statistics_none_mean_type_overrides_legacy_has_mean(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Modern NONE metadata remains authoritative over a legacy compatibility flag."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    mean_none = recorder_history_module.recorder_statistics.StatisticMeanType.NONE
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.none_mean": (1, {
+                "has_sum": True,
+                "has_mean": True,
+                "mean_type": mean_none,
+            })
+        },
+    )
+    statistics_query = Mock(return_value={"sensor.none_mean": []})
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        statistics_query,
+    )
+    display_calls: list[tuple[object, ...]] = []
+
+    def modern_get_display_unit(hass_arg, statistic_id, unit_class, statistic_unit):
+        display_calls.append((hass_arg, statistic_id, unit_class, statistic_unit))
+        return statistic_unit
+
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_display_unit",
+        modern_get_display_unit,
+    )
+    arguments = {
+        "entity_id": "sensor.none_mean",
+        "period": "custom",
+        "start_datetime": "2026-01-01T00:00:00+00:00",
+        "end_datetime": "2026-01-01T02:00:00+00:00",
+    }
+
+    unsupported = await server.tool_get_entity_statistics({**arguments, "metric": "mean"})
+    assert "mean is not supported" in unsupported["content"][0]["text"].casefold()
+    statistics_query.assert_not_called()
+
+    result = await server.tool_get_entity_statistics({**arguments, "metric": "all"})
+    assert "No long-term statistic buckets were returned" in result["content"][0]["text"]
+    assert statistics_query.call_args.args[-1] == {"change"}
+    assert display_calls == [(hass, "sensor.none_mean", None, None)]
+
+
 def test_history_resolution_prefers_related_contact_sensor_for_open_requests(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:
