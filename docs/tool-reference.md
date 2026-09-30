@@ -107,6 +107,7 @@ Recorder tools answer questions about past entity state.
 | `get_entity_history` with `mode: "last_event"` | Find the last matching state event |
 | `analyze_entity_history` | Count, summarize, or analyze state changes over a period |
 | `get_entity_state_at_time` | Read an entity state at a point in time |
+| `get_entity_statistics` | Read long-term statistic changes and numeric summaries over a calendar period |
 
 These tools require Home Assistant recorder data for the relevant entities and
 time range. Use `period: "today"` or `period: "yesterday"` for calendar-day
@@ -115,6 +116,15 @@ Count analyses count transitions into the matching state, not repeated recorder
 rows that report the same state.
 Recorder query boundaries stay in UTC, while timestamps shown in tool results
 are formatted in Home Assistant's configured time zone.
+`get_entity_statistics` accepts this/last month, today/yesterday, the previous
+7 or 30 complete local days, the previous 12 complete calendar months, or an
+exact timezone-aware custom interval. Its `metric` can select change, mean,
+minimum, maximum, or all available metrics. Change totals are available only
+for statistics that track sums; means/minimums/maximums are shown when present. The
+query uses hourly recorder buckets and reports its effective hour-aligned
+interval, observed bucket count, and gaps. Displayed bucket rows are capped;
+summary values cover all returned buckets. Cumulative sum values are never
+reported as period totals.
 
 ## Calculator and Unit Conversion
 

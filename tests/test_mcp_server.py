@@ -2648,6 +2648,406 @@ async def test_fetch_entity_history_uses_recorder_executor(
     generic_executor.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_entity_statistics_uses_exposure_guard_and_recorder_executor(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Statistics use exposed entity IDs and the recorder-owned executor."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    recorder_jobs: list[object] = []
+    calls: list[str] = []
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            recorder_jobs.append(job)
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: (calls.append("metadata") or {
+            "sensor.example": (1, {
+                "has_sum": True,
+                "mean_type": "arithmetic",
+                "unit_of_measurement": "kWh",
+                "name": "Example energy",
+            })
+        }),
+    )
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        lambda *args: (calls.append("statistics") or {
+            "sensor.example": [
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": 1, "mean": 4, "min": 2, "max": 5},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": 3, "mean": 6, "min": 4, "max": 8},
+            ]
+        }),
+    )
+
+    result = await server.tool_get_entity_statistics({
+        "entity_id": "sensor.example",
+        "period": "custom",
+        "start_datetime": "2026-01-01T00:30:00+00:00",
+        "end_datetime": "2026-01-01T03:00:00+00:00",
+        "bucket": "hour",
+    })
+
+    text = result["content"][0]["text"]
+    assert calls == ["metadata", "statistics"]
+    assert len(recorder_jobs) == 3
+    assert "Observed change subtotal: 4 kWh across 2 of 2 expected hourly buckets" in text
+    assert "Observed buckets: 2 of 2 expected hourly buckets; missing: 0" in text
+    assert "Effective hourly interval: 2026-01-01T01:00:00+00:00 to 2026-01-01T03:00:00+00:00" in text
+
+
+@pytest.mark.asyncio
+async def test_entity_statistics_denies_unexposed_entity_before_recorder_query(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    metadata_query = Mock(side_effect=AssertionError("metadata queried before exposure check"))
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: False)
+    monkeypatch.setattr(recorder_history_module.recorder_statistics, "get_metadata", metadata_query)
+
+    result = await server.tool_get_entity_statistics({
+        "entity_id": "sensor.private_example",
+        "period": "today",
+    })
+
+    assert result["isError"] is True
+    metadata_query.assert_not_called()
+
+
+def test_statistics_windows_use_local_calendar_months_leap_year_and_dst(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Statistic period bounds follow HA local calendar boundaries across DST."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    original_tz = dt_util.DEFAULT_TIME_ZONE
+    zone = ZoneInfo("America/Los_Angeles")
+    try:
+        dt_util.set_default_time_zone(zone)
+        monkeypatch.setattr(
+            recorder_history_module.dt_util,
+            "now",
+            lambda: datetime(2025, 4, 15, 12, tzinfo=zone),
+        )
+        last_month = server._statistics_window({}, "last_month")
+        assert dt_util.as_local(last_month[0]) == datetime(2025, 3, 1, tzinfo=zone)
+        assert dt_util.as_local(last_month[1]) == datetime(2025, 4, 1, tzinfo=zone)
+        assert dt_util.as_local(last_month[0]).utcoffset() != dt_util.as_local(last_month[1]).utcoffset()
+        assert (last_month[1] - last_month[0]).total_seconds() == 31 * 86400 - 3600
+
+        monkeypatch.setattr(
+            recorder_history_module.dt_util,
+            "now",
+            lambda: datetime(2025, 2, 15, 12, tzinfo=zone),
+        )
+        last_12_months = server._statistics_window({}, "last_12_months")
+        assert dt_util.as_local(last_12_months[0]) == datetime(2024, 2, 1, tzinfo=zone)
+        assert dt_util.as_local(last_12_months[1]) == datetime(2025, 2, 1, tzinfo=zone)
+        assert (last_12_months[1] - last_12_months[0]).total_seconds() == 366 * 86400
+
+        monkeypatch.setattr(
+            recorder_history_module.dt_util,
+            "now",
+            lambda: datetime(2025, 3, 10, 12, tzinfo=zone),
+        )
+        last_7_days = server._statistics_window({}, "last_7_days")
+        assert (last_7_days[1] - last_7_days[0]).total_seconds() == 167 * 3600
+    finally:
+        dt_util.set_default_time_zone(original_tz)
+
+
+def test_complete_statistic_averages_require_full_dst_day_and_month_coverage(
+    hass, profile_entry_factory
+) -> None:
+    """Complete calendar buckets account for 23/25-hour DST days and reject gaps."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    original_tz = dt_util.DEFAULT_TIME_ZONE
+    zone = ZoneInfo("America/Los_Angeles")
+
+    def _utc_midnight(year, month, day):
+        return dt_util.as_utc(datetime(year, month, day, tzinfo=zone))
+
+    def _hourly_values(start, end):
+        values = {}
+        when = start
+        while when < end:
+            values[when] = 1.0
+            when += timedelta(hours=1)
+        return values
+
+    try:
+        dt_util.set_default_time_zone(zone)
+        spring_start, spring_end = _utc_midnight(2025, 3, 9), _utc_midnight(2025, 3, 10)
+        spring_values = _hourly_values(spring_start, spring_end)
+        assert len(spring_values) == 23
+        assert server._complete_statistic_period_totals(
+            spring_values, spring_start, spring_end, "day"
+        ) == [23.0]
+        assert server._complete_statistic_period_totals(
+            spring_values, spring_start + timedelta(hours=1), spring_end, "day"
+        ) == []
+        del spring_values[spring_start]
+        assert server._complete_statistic_period_totals(
+            spring_values, spring_start, spring_end, "day"
+        ) == []
+
+        fall_start, fall_end = _utc_midnight(2025, 11, 2), _utc_midnight(2025, 11, 3)
+        fall_values = _hourly_values(fall_start, fall_end)
+        assert len(fall_values) == 25
+        assert server._complete_statistic_period_totals(
+            fall_values, fall_start, fall_end, "day"
+        ) == [25.0]
+
+        month_start, month_end = _utc_midnight(2025, 1, 15), _utc_midnight(2025, 4, 1)
+        month_values = _hourly_values(month_start, month_end)
+        missing_february_hour = _utc_midnight(2025, 2, 15) + timedelta(hours=1)
+        del month_values[missing_february_hour]
+        assert server._complete_statistic_period_totals(
+            month_values, month_start, month_end, "month"
+        ) == [743.0]
+    finally:
+        dt_util.set_default_time_zone(original_tz)
+
+
+@pytest.mark.asyncio
+async def test_statistics_reports_unsupported_metrics_and_unavailable_recorder(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Unsupported metadata and recorder lookup failures do not imply zeroes."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    statistics_query = Mock(side_effect=AssertionError("unsupported metric queried statistics"))
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        statistics_query,
+    )
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.example": (1, {"has_sum": False, "mean_type": "none"})
+        },
+    )
+
+    for metric in ("change", "mean"):
+        result = await server.tool_get_entity_statistics(
+            {"entity_id": "sensor.example", "period": "today", "metric": metric}
+        )
+        assert metric in result["content"][0]["text"].casefold()
+        assert "not supported" in result["content"][0]["text"].casefold()
+    statistics_query.assert_not_called()
+
+    metadata_query = Mock(side_effect=AssertionError("metadata queried after recorder lookup failed"))
+    monkeypatch.setattr(recorder_history_module.recorder_statistics, "get_metadata", metadata_query)
+    monkeypatch.setattr(
+        recorder_history_module,
+        "get_recorder_instance",
+        Mock(side_effect=RuntimeError("database details must not be shown")),
+    )
+    unavailable = await server.tool_get_entity_statistics(
+        {"entity_id": "sensor.example", "period": "today"}
+    )
+    assert unavailable["isError"] is True
+    assert "could not read recorder statistics" in unavailable["content"][0]["text"]
+    assert "database details" not in unavailable["content"][0]["text"]
+    metadata_query.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_statistics_rejects_nonfinite_booleans_and_preserves_full_summary(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Bad numeric rows are excluded while display limits leave summaries whole."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.example": (1, {
+                "has_sum": True,
+                "mean_type": "arithmetic",
+                "unit_of_measurement": "kWh",
+                "name": "Example energy",
+            })
+        },
+    )
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_display_unit",
+        lambda *args: "kWh",
+    )
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        lambda *args: {
+            "sensor.example": [
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "change": 1},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": float("nan")},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": True},
+                {"start": True, "change": 100},
+                {"start": datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "change": 3},
+            ]
+        },
+    )
+
+    result = await server.tool_get_entity_statistics({
+        "entity_id": "sensor.example",
+        "period": "custom",
+        "start_datetime": "2026-01-01T00:00:00+00:00",
+        "end_datetime": "2026-01-01T05:00:00+00:00",
+        "metric": "change",
+        "bucket": "hour",
+        "limit": 1,
+    })
+
+    text = result["content"][0]["text"]
+    assert "Observed change subtotal: 4 kWh across 2 of 5 expected hourly buckets" in text
+    assert "Observed buckets: 4 of 5 expected hourly buckets; missing: 1" in text
+    assert "Displayed 1 of 4 hour buckets" in text
+    assert "change 1 kWh" in text
+
+
+@pytest.mark.asyncio
+async def test_statistics_shortened_half_hour_zone_boundary_is_partial_subtotal(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """UTC hour alignment in a half-hour local zone never claims a full total."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    original_tz = dt_util.DEFAULT_TIME_ZONE
+    dt_util.set_default_time_zone(ZoneInfo("Asia/Kolkata"))
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    requested_start = datetime.fromisoformat("2026-01-01T00:00:00+05:30").astimezone(timezone.utc)
+    effective_start = requested_start + timedelta(minutes=30)
+    rows = [
+        {"start": effective_start + timedelta(hours=index), "change": 1.0}
+        for index in range(23)
+    ]
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.example": (1, {
+                "has_sum": True,
+                "mean_type": "none",
+                "unit_of_measurement": "kWh",
+                "name": "Example energy",
+            })
+        },
+    )
+    monkeypatch.setattr(recorder_history_module.recorder_statistics, "get_display_unit", lambda *args: "kWh")
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        lambda *args: {"sensor.example": rows},
+    )
+
+    try:
+        result = await server.tool_get_entity_statistics({
+            "entity_id": "sensor.example",
+            "period": "custom",
+            "start_datetime": "2026-01-01T00:00:00+05:30",
+            "end_datetime": "2026-01-02T00:00:00+05:30",
+            "metric": "change",
+        })
+    finally:
+        dt_util.set_default_time_zone(original_tz)
+
+    text = result["content"][0]["text"]
+    assert "Observed change subtotal: 23 kWh across 23 of 23 expected hourly buckets" in text
+    assert "Change total:" not in text
+    assert "Requested interval:" in text and "Effective hourly interval:" in text
+
+
+@pytest.mark.asyncio
+async def test_circular_statistics_never_report_arithmetic_mean(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Circular means such as 359° and 1° are not averaged to a false 180°."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+
+    class RecorderInstance:
+        async def async_add_executor_job(self, job):
+            return job()
+
+    requested_types: list[set[str]] = []
+    statistics_calls = 0
+
+    def statistics_during_period(*args):
+        nonlocal statistics_calls
+        statistics_calls += 1
+        requested_types.append(args[-1])
+        return {
+            "sensor.wind_direction": [
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "mean": 359.0, "min": 359.0, "max": 359.0},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "mean": 1.0, "min": 1.0, "max": 1.0},
+            ]
+        }
+
+    monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
+    monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "get_metadata",
+        lambda *args, **kwargs: {
+            "sensor.wind_direction": (1, {
+                "has_sum": False,
+                "mean_type": recorder_history_module.recorder_statistics.StatisticMeanType.CIRCULAR,
+                "unit_of_measurement": "°",
+                "name": "Wind direction",
+            })
+        },
+    )
+    monkeypatch.setattr(recorder_history_module.recorder_statistics, "get_display_unit", lambda *args: "°")
+    monkeypatch.setattr(
+        recorder_history_module.recorder_statistics,
+        "statistics_during_period",
+        statistics_during_period,
+    )
+    arguments = {
+        "entity_id": "sensor.wind_direction",
+        "period": "custom",
+        "start_datetime": "2026-01-01T00:00:00+00:00",
+        "end_datetime": "2026-01-01T02:00:00+00:00",
+    }
+
+    all_metrics = await server.tool_get_entity_statistics(arguments)
+    all_text = all_metrics["content"][0]["text"]
+    assert "Mean unavailable: circular values are not averaged arithmetically." in all_text
+    assert "Mean of observed hourly means" not in all_text
+    assert " 180" not in all_text
+    assert requested_types == [{"min", "max"}]
+
+    explicit_mean = await server.tool_get_entity_statistics({**arguments, "metric": "mean"})
+    assert "circular statistics" in explicit_mean["content"][0]["text"]
+    assert statistics_calls == 1
+
+
 def test_history_resolution_prefers_related_contact_sensor_for_open_requests(
     hass, profile_entry_factory, system_entry_factory
 ) -> None:

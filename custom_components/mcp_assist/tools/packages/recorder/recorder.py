@@ -167,6 +167,21 @@ RECORDER_TOOL_DEFINITIONS: list[dict[str, Any]] = [{'name': 'get_entity_history'
                                                              'If no timezone is included, Home '
                                                              'Assistant local time is assumed.'}},
                   'required': ['entity_id', 'datetime'],
+                  'additionalProperties': False}},
+ {'name': 'get_entity_statistics',
+  'description': 'Read Home Assistant long-term statistics for one exposed entity. Reports period change totals, means, minimums, and maximums where the entity supports them.',
+  'llmDescription': 'Read long-term statistics for an entity over a calendar period.',
+  'routingHints': {'keywords': ['statistics', 'consumption', 'energy total', 'long-term statistics'], 'preferred_when': 'Use for historical statistic period totals, averages, minimums, or maximums.'},
+  'inputSchema': {'$schema': 'http://json-schema.org/draft-07/schema#',
+                  'type': 'object',
+                  'properties': {'entity_id': {'type': 'string', 'description': 'Exposed Home Assistant entity ID; statistic IDs are resolved internally.'},
+                                 'period': {'type': 'string', 'enum': ['this_month', 'last_month', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_12_months', 'custom'], 'description': 'Home Assistant-local calendar period. last_7_days and last_30_days mean complete days before today; last_12_months means the preceding 12 complete calendar months. custom requires an exact aware ISO interval.'},
+                                 'start_datetime': {'type': 'string', 'description': 'For custom periods, an ISO 8601 timestamp with timezone.'},
+                                 'end_datetime': {'type': 'string', 'description': 'For custom periods, an ISO 8601 timestamp with timezone.'},
+                                 'metric': {'type': 'string', 'enum': ['all', 'change', 'mean', 'min', 'max'], 'default': 'all', 'description': 'Statistic to report. change is the period change in HA sum statistics, not the cumulative sum value.'},
+                                 'bucket': {'type': 'string', 'enum': ['hour', 'day', 'month'], 'default': 'day', 'description': 'Output grouping. Query totals and averages cover the entire requested period.'},
+                                 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50, 'description': 'Maximum displayed buckets; summary values cover all returned statistics.'}},
+                  'required': ['entity_id', 'period'],
                   'additionalProperties': False}}]
 
 RECORDER_TOOL_NAMES = {
@@ -209,6 +224,8 @@ class RecorderTool(RecorderToolsMixin, HomeAssistantToolRuntime):
             return await self.tool_analyze_entity_history(arguments)
         if tool_name == "get_entity_state_at_time":
             return await self.tool_get_entity_state_at_time(arguments)
+        if tool_name == "get_entity_statistics":
+            return await self.tool_get_entity_statistics(arguments)
         return self._build_text_tool_result(
             f"Unknown recorder tool: {tool_name}",
             is_error=True,
