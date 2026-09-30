@@ -80,8 +80,9 @@ scripts/verify_local.sh
 The script uses `PYTHON` when set, otherwise it prefers the shared local test
 environment at `/tmp/ha-mcp-assist-py314-venv/bin/python`, then `python3.14`,
 `python3`, and `python`. It runs Ruff, Python compilation, JSON validation,
-`git diff --check`, and the full pytest suite with a JUnit file under
-`test-results/`.
+checks that integration runtime requirements do not duplicate direct
+Home Assistant Core dependencies, `git diff --check`, and the full pytest
+suite with a JUnit file under `test-results/`.
 
 To install or refresh test dependencies in the selected environment first:
 

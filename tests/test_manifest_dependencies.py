@@ -6,8 +6,15 @@ import json
 from pathlib import Path
 
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 from packaging.version import Version
+import pytest
 import yaml
+
+from scripts.check_manifest_core_dependencies import (
+    check_manifest_core_dependencies,
+    find_core_dependency_overlaps,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,7 +105,32 @@ def test_dependabot_excludes_runtime_compatibility_mirror() -> None:
     ]
 
     assert len(pip_updates) == 1
-    assert RUNTIME_REQUIREMENTS.name in pip_updates[0].get("exclude-paths", [])
+    excluded_paths = set(pip_updates[0].get("exclude-paths", []))
+    assert RUNTIME_REQUIREMENTS.name in excluded_paths
+    assert "custom_components/mcp_assist/manifest.json" in excluded_paths
+
+
+def test_runtime_surfaces_do_not_duplicate_installed_homeassistant_core() -> None:
+    """The manifest and Dependabot mirror cannot redeclare Core dependencies."""
+    check_manifest_core_dependencies()
+
+
+@pytest.mark.parametrize(
+    ("integration_requirement", "core_requirement"),
+    [
+        ("AIOHTTP>=3.8.0", "aiohttp>=3.8"),
+        ("PyYAML>=6.0", "pyyaml>=6.0"),
+        ("cryptography>=41.0.0", "Cryptography>=41"),
+        ("My_Package>=1", "my-package>=1"),
+    ],
+)
+def test_core_overlap_guard_normalizes_distribution_names(
+    integration_requirement: str, core_requirement: str
+) -> None:
+    """Case and separator variants of a direct Core package are rejected."""
+    assert find_core_dependency_overlaps(
+        [integration_requirement], [core_requirement]
+    ) == {canonicalize_name(Requirement(integration_requirement).name)}
 
 
 def test_duckduckgo_runtime_uses_renamed_ddgs_package() -> None:
