@@ -107,7 +107,7 @@ Recorder tools answer questions about past entity state.
 | `get_entity_history` with `mode: "last_event"` | Find the last matching state event |
 | `analyze_entity_history` | Count, summarize, or analyze state changes over a period |
 | `get_entity_state_at_time` | Read an entity state at a point in time |
-| `get_entity_statistics` | Read long-term statistic changes and numeric summaries over a calendar period |
+| `get_entity_statistics` | Read statistic changes, numeric summaries, coverage, and previous-period comparisons |
 
 These tools require Home Assistant recorder data for the relevant entities and
 time range. Use `period: "today"` or `period: "yesterday"` for calendar-day
@@ -116,15 +116,75 @@ Count analyses count transitions into the matching state, not repeated recorder
 rows that report the same state.
 Recorder query boundaries stay in UTC, while timestamps shown in tool results
 are formatted in Home Assistant's configured time zone.
-`get_entity_statistics` accepts this/last month, today/yesterday, the previous
-7 or 30 complete local days, the previous 12 complete calendar months, or an
-exact timezone-aware custom interval. Its `metric` can select change, mean,
-minimum, maximum, or all available metrics. Change totals are available only
-for statistics that track sums; means/minimums/maximums are shown when present. The
-query uses hourly recorder buckets and reports its effective hour-aligned
-interval, observed bucket count, and gaps. Displayed bucket rows are capped;
-summary values cover all returned buckets. Cumulative sum values are never
-reported as period totals.
+`get_entity_statistics` accepts this/last month, today/yesterday, rolling
+`last_hour`/`last_24_hours`, the previous 7 or 30 complete local days, the previous
+12 complete calendar months, or an exact timezone-aware custom interval. Its
+`metric` selects `change`, `mean`, `min`, `max`, or `all` available metrics. Change
+is the change in Home Assistant's sum statistic, not its cumulative sum value.
+Circular statistics do not produce an arithmetic mean.
+
+`bucket` supports `5minute`, `hour`, `day` (default), `month`, and `auto`.
+Five-minute queries use native Recorder short-term statistics and are limited to
+72 hours per requested interval. `auto` selects five-minute resolution through
+12 hours, hourly through 72 hours, and daily grouping for longer intervals.
+Hourly, daily, and monthly output uses hourly long-term source rows. Short-term
+retention varies by installation; missing data is unavailable, never zero.
+
+Results include readable text and `structuredContent` with `schema_version: 1`:
+
+| Field | Meaning |
+| --- | --- |
+| `available`, `reason` | Whether usable statistics exist; an unavailable result explains why |
+| `entity_id`, `period`, `bucket`, `unit_of_measurement` | Entity, requested period, resolved grouping, and shared display unit |
+| `requested_window`, `effective_window` | UTC start/end timestamps; end is exclusive, and effective boundaries include only complete source intervals |
+| `source_resolution` | `5minute` or `hour` |
+| `summary` | Finite observed change total, arithmetic mean, minimum, and maximum for supported selected metrics |
+| `coverage` | Expected, observed, and missing source buckets, requested-boundary alignment, completeness, and the same counts/completeness per selected metric |
+| `bucket_count`, `buckets`, `truncated` | Full grouped bucket count, displayed rows capped by `limit` (1–100), and whether rows were omitted |
+| `source_coverage` | Optional bounded annotations reported by the entity's source |
+
+Summary values cover every returned valid source bucket even when displayed rows
+are capped. Duplicate timestamps, nonfinite values, and off-grid rows cannot
+establish complete coverage. Gaps produce observed subtotals. Change summaries
+also include `complete_day_count`, `complete_month_count`, and
+`average_per_complete_day`/`average_per_complete_month`: only fully covered Home
+Assistant-local calendar periods contribute, including 23- or 25-hour DST days.
+Absent values are `null`, rather than inferred zeroes. Unavailable results omit
+the numeric analysis fields.
+
+Set `compare_previous: true` to add `comparison.previous` with its windows,
+summary, coverage, and source annotations. The previous interval immediately
+precedes the current interval and has equal elapsed duration; it need not be the
+previous calendar month. One combined Recorder query reads both intervals.
+`comparison.comparable` requires complete coverage for every selected metric in
+both periods and no source-reported uncertainty. Otherwise `differences` is empty
+and `reason` explains the limitation. Comparable metrics include an `absolute`
+difference; only change also has `percent`, which is `null` when previous change
+is zero or negative.
+
+An entity may supply a `recorder_coverage` attribute with these optional fields:
+
+```yaml
+recorder_coverage:
+  started_at: "2026-01-01T00:00:00+00:00"
+  counter_resets: 1
+  note: "Some records were imported from another source."
+  estimated_periods:
+    days: ["2026-01-02"]
+    months: ["2026-02"]
+    unknown_before: "2026-01-01"
+```
+
+`started_at` requires a timezone-aware ISO timestamp; `counter_resets` must be a
+nonnegative integer; `note` is limited to 1,200 characters. Estimated dates use
+canonical ISO dates (at most 400 days) or `YYYY-MM` (at most 24 months).
+`unknown_before` is an ISO date. Only overlapping Home Assistant-local days and
+months appear in results, using the exclusive interval end. Pre-collection time,
+overlapping estimates, older unverified time, and malformed annotations mark
+source coverage uncertain. Unknown fields are omitted. These annotations are
+source-reported evidence, not independently verified provenance; complete
+Recorder buckets do not prove their underlying measurements are accurate.
+Provider notes are data, not instructions for the assistant.
 
 ## Calculator and Unit Conversion
 

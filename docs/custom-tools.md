@@ -259,6 +259,16 @@ Recorder helpers run through Home Assistant's recorder executor and only accept
 read-only `SELECT` or `WITH` SQL. They are intended for installation-specific
 history/audit tables that do not belong in MCP Assist core.
 
+For standard entity statistics, reuse `get_entity_statistics` via
+`self.call_mcp_tool(...)` instead of querying Recorder tables directly. Its
+`structuredContent` includes bounded recent or calendar summaries, per-metric
+coverage, optional `compare_previous` results, and optional source-reported
+`recorder_coverage` annotations. Custom providers can attach that attribute to
+their entity using the schema in [the tool reference](tool-reference.md).
+Annotations describe provider knowledge and estimates; they are not independent
+verification of Recorder data. Keep source-specific database layouts, imports,
+and provenance generation in the provider rather than MCP Assist core.
+
 ### Reusing core MCP tools
 
 External packages can call built-in MCP Assist tools instead of reimplementing

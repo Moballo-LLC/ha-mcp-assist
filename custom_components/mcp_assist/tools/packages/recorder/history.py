@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import partial
 import inspect
 import logging
@@ -19,6 +19,8 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.util import dt as dt_util
+
+from .coverage import source_coverage
 
 try:
     from homeassistant.helpers import floor_registry as fr
@@ -799,11 +801,12 @@ class RecorderToolsMixin:
         return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
 
     async def tool_get_entity_statistics(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Read bounded long-term statistics for one exposed entity."""
+        """Read bounded Recorder statistics for one exposed entity."""
         entity_id = str(args.get("entity_id") or "").strip()
         period = str(args.get("period") or "").strip().casefold()
         metric = str(args.get("metric", "all")).strip().casefold()
         bucket = str(args.get("bucket", "day")).strip().casefold()
+        compare_previous = args.get("compare_previous", False)
         limit = self._coerce_int_arg(args.get("limit"), default=50, minimum=1, maximum=100)
 
         # Exposure must be checked before even asking Recorder which statistics exist.
@@ -811,8 +814,10 @@ class RecorderToolsMixin:
             return self._build_text_tool_result(
                 "Entity is not exposed to conversation or was not specified.", is_error=True
             )
-        if bucket not in {"hour", "day", "month"}:
-            return self._build_text_tool_result("Invalid bucket. Use hour, day, or month.", is_error=True)
+        if bucket not in {"5minute", "hour", "day", "month", "auto"}:
+            return self._build_text_tool_result("Invalid bucket. Use 5minute, hour, day, month, or auto.", is_error=True)
+        if not isinstance(compare_previous, bool):
+            return self._build_text_tool_result("compare_previous must be a boolean.", is_error=True)
         if metric not in {"all", "change", "mean", "min", "max"}:
             return self._build_text_tool_result("Invalid metric. Use all, change, mean, min, or max.", is_error=True)
 
@@ -823,17 +828,59 @@ class RecorderToolsMixin:
         if (requested_end - requested_start).total_seconds() > 366 * 86400:
             return self._build_text_tool_result("Statistics intervals are limited to 366 days.", is_error=True)
 
-        # Home Assistant's long-term API returns hour-start rows; align explicitly and
-        # report this effective interval so boundary hours are never implied complete.
-        epoch_hour = 3600
-        start_ts = math.ceil(requested_start.timestamp() / epoch_hour) * epoch_hour
-        end_ts = math.floor(requested_end.timestamp() / epoch_hour) * epoch_hour
+        duration = requested_end - requested_start
+        if bucket == "auto":
+            bucket = "5minute" if duration <= timedelta(hours=12) else (
+                "hour" if duration <= timedelta(hours=72) else "day"
+            )
+        if bucket == "5minute" and duration > timedelta(hours=72):
+            return self._build_text_tool_result("Five-minute intervals are limited to 72 hours.", is_error=True)
+        resolution = "5minute" if bucket == "5minute" else "hour"
+        sample_seconds = 300 if resolution == "5minute" else 3600
+        resolution_label = "five-minute" if resolution == "5minute" else "hourly"
+
+        # Align to complete source buckets inside the requested interval; never
+        # imply that partially covered boundary buckets describe the full period.
+        start_ts = math.ceil(requested_start.timestamp() / sample_seconds) * sample_seconds
+        end_ts = math.floor(requested_end.timestamp() / sample_seconds) * sample_seconds
         effective_start = dt_util.utc_from_timestamp(start_ts)
         effective_end = dt_util.utc_from_timestamp(end_ts)
-        if effective_end <= effective_start:
+        current_state = self.hass.states.get(entity_id)
+        attributes = current_state.attributes if current_state is not None else {}
+        base_result = {
+            "schema_version": 1,
+            "entity_id": entity_id,
+            "period": period,
+            "bucket": bucket,
+            "source_resolution": resolution,
+            "requested_window": {"start": requested_start.isoformat(), "end": requested_end.isoformat()},
+            "effective_window": {"start": effective_start.isoformat(), "end": effective_end.isoformat()},
+            "source_coverage": source_coverage(attributes, requested_start, requested_end),
+        }
+
+        def unavailable(message, *, is_error=False):
             return self._build_text_tool_result(
-                f"No complete hourly interval is available inside {period_label}."
+                message, is_error=is_error,
+                structured_content={**base_result, "available": False, "reason": message},
             )
+
+        if effective_end <= effective_start:
+            return unavailable(
+                f"No complete {resolution_label} interval is available inside {period_label}."
+            )
+
+        previous_start, previous_end = requested_start, requested_start
+        if compare_previous:
+            try:
+                previous_start = requested_start - duration
+            except OverflowError:
+                return unavailable("The previous interval is outside supported datetime bounds.", is_error=True)
+        previous_effective_start = dt_util.utc_from_timestamp(
+            math.ceil(previous_start.timestamp() / sample_seconds) * sample_seconds
+        )
+        previous_effective_end = dt_util.utc_from_timestamp(
+            math.floor(previous_end.timestamp() / sample_seconds) * sample_seconds
+        )
 
         recorder = None
 
@@ -848,7 +895,7 @@ class RecorderToolsMixin:
                 partial(recorder_statistics.get_metadata, self.hass, statistic_ids={entity_id})
             )
             if entity_id not in metadata:
-                return self._build_text_tool_result(
+                return unavailable(
                     f"No long-term statistics metadata is available for exposed entity {entity_id}."
                 )
             meta = metadata[entity_id][1]
@@ -874,15 +921,15 @@ class RecorderToolsMixin:
                 else str(mean_type_value).casefold() not in {"none", "0"}
             )
             if metric == "mean" and circular_mean:
-                return self._build_text_tool_result(
+                return unavailable(
                     f"Mean is not reported for circular statistics such as {entity_id}; an arithmetic average would be misleading."
                 )
             if metric in {"mean", "min", "max"} and not mean_supported:
-                return self._build_text_tool_result(
+                return unavailable(
                     f"{metric} is not supported by the long-term statistics for {entity_id}."
                 )
             if metric == "change" and not meta.get("has_sum"):
-                return self._build_text_tool_result(
+                return unavailable(
                     f"Change is not supported by the long-term statistics for {entity_id}; no total was inferred."
                 )
             selected_metrics = {"change", "mean", "min", "max"} if metric == "all" else {metric}
@@ -924,41 +971,52 @@ class RecorderToolsMixin:
                 partial(
                     recorder_statistics.statistics_during_period,
                     self.hass,
-                    effective_start,
+                    previous_effective_start if compare_previous else effective_start,
                     effective_end,
                     {entity_id},
-                    "hour",
+                    resolution,
                     requested_units,
                     types,
                 )
             )
         except Exception:
             _LOGGER.warning("Recorder statistics query failed")
-            return self._build_text_tool_result("Home Assistant could not read recorder statistics for this interval.", is_error=True)
+            return unavailable("Home Assistant could not read recorder statistics for this interval.", is_error=True)
 
         rows = (stats or {}).get(entity_id, [])
         if not rows:
-            return self._build_text_tool_result(
-                f"No long-term statistic buckets were returned for {entity_id} during {period_label}; no total or average was inferred."
+            return unavailable(
+                f"No {'five-minute' if resolution == '5minute' else 'long-term'} statistic buckets were returned for {entity_id} during {period_label}; no total or average was inferred."
             )
 
-        clean_rows: list[dict[str, Any]] = []
+        rows_by_start: dict[Any, dict[str, Any]] = {}
+        duplicate_starts = set()
         for row in rows:
+            if not isinstance(row, dict):
+                continue
             when = row.get("start")
             if isinstance(when, (int, float)) and not isinstance(when, bool) and math.isfinite(when):
-                when = dt_util.utc_from_timestamp(when)
-            if not hasattr(when, "tzinfo") or when is None:
+                try:
+                    when = dt_util.utc_from_timestamp(when)
+                except (OverflowError, OSError, ValueError):
+                    continue
+            if not isinstance(when, datetime) or when.tzinfo is None:
                 continue
             when = dt_util.as_utc(when)
+            if when.timestamp() % sample_seconds:
+                continue
+            if when in rows_by_start:
+                duplicate_starts.add(when)
             clean = {"start": when}
             for key in selected_metrics:
                 value = row.get(key)
                 if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
                     clean[key] = float(value)
-            clean_rows.append(clean)
-        clean_rows.sort(key=lambda item: item["start"])
-        if not clean_rows:
-            return self._build_text_tool_result(
+            rows_by_start[when] = clean
+        all_rows = [row for when, row in sorted(rows_by_start.items()) if when not in duplicate_starts]
+        clean_rows = [row for row in all_rows if effective_start <= row["start"] < effective_end]
+        if not clean_rows or not any(len(row) > 1 for row in clean_rows):
+            return unavailable(
                 f"Recorder returned no finite statistic values for {entity_id} during {period_label}."
             )
 
@@ -966,13 +1024,13 @@ class RecorderToolsMixin:
         cursor = effective_start
         while cursor < effective_end:
             expected.append(cursor)
-            cursor += timedelta(hours=1)
+            cursor += timedelta(seconds=sample_seconds)
         observed = {row["start"] for row in clean_rows}
         missing = [when for when in expected if when not in observed]
         groups: dict[str, list[dict[str, Any]]] = {}
         for row in clean_rows:
             local = dt_util.as_local(row["start"])
-            if bucket == "hour":
+            if bucket in {"hour", "5minute"}:
                 key = local.isoformat(timespec="minutes")
             elif bucket == "month":
                 key = local.strftime("%Y-%m")
@@ -990,8 +1048,8 @@ class RecorderToolsMixin:
             f"Period: {period_label}",
             f"Metric: {metric}",
             f"Requested interval: {requested_start.isoformat()} to {requested_end.isoformat()}",
-            f"Effective hourly interval: {effective_start.isoformat()} to {effective_end.isoformat()} (end exclusive)",
-            f"Observed buckets: {len(clean_rows)} of {len(expected)} expected hourly buckets; missing: {len(missing)}",
+            f"Effective {resolution_label} interval: {effective_start.isoformat()} to {effective_end.isoformat()} (end exclusive)",
+            f"Observed buckets: {len(clean_rows)} of {len(expected)} expected {resolution_label} buckets; missing: {len(missing)}",
             f"First observed bucket: {clean_rows[0]['start'].isoformat()}; last observed bucket: {clean_rows[-1]['start'].isoformat()}",
             f"Statistic unit: {unit}; sum supported: {'yes' if meta.get('has_sum') else 'no'}",
         ]
@@ -1005,16 +1063,16 @@ class RecorderToolsMixin:
                 label = "Change total" if complete_change_coverage else "Observed change subtotal"
                 lines.append(
                     f"{label}: {sum(change_values):g} {unit} across "
-                    f"{len(change_values)} of {len(expected)} expected hourly buckets"
+                    f"{len(change_values)} of {len(expected)} expected {resolution_label} buckets"
                 )
             else:
                 lines.append("Change total unavailable: no finite change values were returned.")
             changes_by_start = {row["start"]: row["change"] for row in clean_rows if "change" in row}
             complete_days = self._complete_statistic_period_totals(
-                changes_by_start, effective_start, effective_end, "day"
+                changes_by_start, effective_start, effective_end, "day", sample_seconds
             )
             complete_months = self._complete_statistic_period_totals(
-                changes_by_start, effective_start, effective_end, "month"
+                changes_by_start, effective_start, effective_end, "month", sample_seconds
             )
             if complete_days:
                 lines.append(
@@ -1039,7 +1097,7 @@ class RecorderToolsMixin:
         elif metric == "all" and not mean_supported:
             lines.append("Mean/minimum/maximum unavailable: metadata reports no mean support.")
         elif "mean" in selected_metrics and means:
-            lines.append(f"Mean of observed hourly means: {sum(means) / len(means):g} {unit} ({len(means)} buckets)")
+            lines.append(f"Mean of observed {resolution_label} means: {sum(means) / len(means):g} {unit} ({len(means)} buckets)")
         elif "mean" in selected_metrics:
             lines.append("Mean unavailable: no finite means were returned.")
         if "min" in selected_metrics and minima:
@@ -1048,11 +1106,55 @@ class RecorderToolsMixin:
             lines.append(f"Maximum: {max(maxima):g} {unit}")
         if missing:
             lines.append("Coverage has gaps; totals and averages describe observed buckets only.")
-        lines.append(f"Displayed {min(len(groups), limit)} of {len(groups)} {bucket} buckets; summary covers all returned hourly buckets:")
+        analysis = self._statistics_analysis(
+            clean_rows, requested_start, requested_end, effective_start, effective_end,
+            types, bucket, limit, sample_seconds,
+        )
+        structured = {**base_result, "available": True, "unit_of_measurement": display_unit or meta.get("unit_of_measurement"), **analysis}
+        if structured["source_coverage"].get("uncertain"):
+            lines.append("Source-reported coverage is uncertain; consumption totals and calendar averages may be estimates or omit unknown usage. See source_coverage in structuredContent.")
+        if compare_previous:
+            previous_rows = [row for row in all_rows if previous_effective_start <= row["start"] < previous_effective_end]
+            previous_analysis = self._statistics_analysis(
+                previous_rows, previous_start, previous_end, previous_effective_start,
+                previous_effective_end, types, bucket, limit, sample_seconds,
+            )
+            previous_source = source_coverage(attributes, previous_start, previous_end)
+            comparable = bool(types) and all(
+                analysis["coverage"]["per_metric"][key]["complete"]
+                and previous_analysis["coverage"]["per_metric"][key]["complete"]
+                for key in types
+            ) and not structured["source_coverage"].get("uncertain") and not previous_source.get("uncertain")
+            differences = {}
+            if comparable:
+                for key in types:
+                    current_value = analysis["summary"][key]
+                    previous_value = previous_analysis["summary"][key]
+                    absolute = current_value - previous_value
+                    differences[key] = {"absolute": absolute}
+                    if key == "change":
+                        differences[key]["percent"] = absolute / previous_value * 100 if previous_value > 0 else None
+            structured["comparison"] = {
+                "basis": "immediately preceding equal-length interval",
+                "comparable": comparable,
+                "reason": None if comparable else "Both periods require complete metric coverage and no reported source uncertainty.",
+                "previous": {
+                    "requested_window": {"start": previous_start.isoformat(), "end": previous_end.isoformat()},
+                    "effective_window": {"start": previous_effective_start.isoformat(), "end": previous_effective_end.isoformat()},
+                    "source_coverage": previous_source, **previous_analysis,
+                },
+                "differences": differences,
+            }
+            lines.append(f"Previous equal-length interval: {previous_start.isoformat()} to {previous_end.isoformat()} (end exclusive)")
+            lines.append(f"Previous observed summary: {previous_analysis['summary']}")
+            lines.append(f"Comparison differences: {differences}" if comparable else "Comparison unavailable: incomplete coverage or source-reported uncertainty.")
+        # Essential qualifications precede bucket detail, which the conversation
+        # agent may truncate to keep model context bounded.
+        lines.append(f"Displayed {min(len(groups), limit)} of {len(groups)} {bucket} buckets; summary covers all returned {resolution_label} buckets:")
         for key, grouped in list(sorted(groups.items()))[:limit]:
             changes = [row["change"] for row in grouped if "change" in row]
             group_means = [row["mean"] for row in grouped if "mean" in row]
-            details = [f"{len(grouped)} observed hour(s)"]
+            details = [f"{len(grouped)} observed {'five-minute bucket(s)' if resolution == '5minute' else 'hour(s)'}"]
             if changes:
                 details.append(f"change {sum(changes):g} {unit}")
             if group_means:
@@ -1064,9 +1166,63 @@ class RecorderToolsMixin:
             if group_maxima:
                 details.append(f"max {max(group_maxima):g} {unit}")
             lines.append(f"{key}: {', '.join(details)}")
-        return self._build_text_tool_result("\n".join(lines))
+        return self._build_text_tool_result("\n".join(lines), structured_content=structured)
 
-    def _complete_statistic_period_totals(self, changes, start, end, granularity):
+    def _statistics_analysis(
+        self, rows, requested_start, requested_end, start, end,
+        metrics, bucket, limit, sample_seconds,
+    ):
+        """Summarize finite, unique rows without turning gaps into zero usage."""
+        expected_count = max(0, int((end - start).total_seconds() / sample_seconds))
+        aligned = requested_start == start and requested_end == end
+        summary = {}
+        per_metric = {}
+        reducers = {"change": sum, "mean": lambda values: sum(values) / len(values), "min": min, "max": max}
+        for key in sorted(metrics):
+            values = [row[key] for row in rows if key in row]
+            summary[key] = reducers[key](values) if values else None
+            per_metric[key] = {
+                "expected_buckets": expected_count,
+                "observed_buckets": len(values),
+                "missing_buckets": max(0, expected_count - len(values)),
+                "complete": aligned and expected_count > 0 and len(values) == expected_count,
+            }
+        if "change" in metrics:
+            changes = {row["start"]: row["change"] for row in rows if "change" in row}
+            for granularity in ("day", "month"):
+                totals = self._complete_statistic_period_totals(changes, start, end, granularity, sample_seconds)
+                summary[f"complete_{granularity}_count"] = len(totals)
+                summary[f"average_per_complete_{granularity}"] = sum(totals) / len(totals) if totals else None
+        groups = {}
+        for row in rows:
+            local = dt_util.as_local(row["start"])
+            key = local.isoformat(timespec="minutes") if bucket in {"hour", "5minute"} else (
+                local.strftime("%Y-%m") if bucket == "month" else local.date().isoformat()
+            )
+            groups.setdefault(key, []).append(row)
+        displayed = []
+        for key, grouped in sorted(groups.items())[:limit]:
+            item = {"start": key, "sample_count": len(grouped)}
+            for metric in sorted(metrics):
+                values = [row[metric] for row in grouped if metric in row]
+                item[metric] = reducers[metric](values) if values else None
+            displayed.append(item)
+        return {
+            "summary": summary,
+            "coverage": {
+                "expected_buckets": expected_count,
+                "observed_buckets": len(rows),
+                "missing_buckets": max(0, expected_count - len(rows)),
+                "aligned_to_requested_window": aligned,
+                "per_metric": per_metric,
+                "complete": bool(metrics) and all(value["complete"] for value in per_metric.values()),
+            },
+            "bucket_count": len(groups),
+            "buckets": displayed,
+            "truncated": len(groups) > limit,
+        }
+
+    def _complete_statistic_period_totals(self, changes, start, end, granularity, sample_seconds=3600):
         """Return totals for local calendar periods fully covered by observed hours."""
         observed = set(changes)
         complete = []
@@ -1092,7 +1248,7 @@ class RecorderToolsMixin:
                 hour = period_start
                 while hour < period_end:
                     expected.append(hour)
-                    hour += timedelta(hours=1)
+                    hour += timedelta(seconds=sample_seconds)
                 if expected and all(hour in observed for hour in expected):
                     complete.append(sum(changes[hour] for hour in expected))
             cursor = next_period
@@ -1102,7 +1258,10 @@ class RecorderToolsMixin:
         """Resolve a period to aware Home Assistant local datetimes."""
         now = dt_util.now()
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        if period == "today":
+        if period in {"last_hour", "last_24_hours"}:
+            end = dt_util.as_utc(now)
+            start = end - timedelta(hours=1 if period == "last_hour" else 24)
+        elif period == "today":
             start, end = today, now
         elif period == "yesterday":
             start, end = today - timedelta(days=1), today

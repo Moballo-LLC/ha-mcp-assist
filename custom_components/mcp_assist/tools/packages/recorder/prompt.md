@@ -2,4 +2,4 @@
 - Use analyze_entity_history for counts, durations, streaks, and numeric summaries. For "today" or "yesterday", pass period instead of approximating with hours.
 - If you already selected get_entity_history for a how-many-times question, use mode="count".
 - Use get_entity_state_at_time for point-in-time questions.
-- Use get_entity_statistics for long-term statistic totals and averages over calendar periods.
+- Use get_entity_statistics for statistic totals, averages, and extremes over calendar or recent periods; bucket="auto" selects recent resolution, and compare_previous=true compares the preceding equal-length interval. Check coverage and source uncertainty before quoting differences.
