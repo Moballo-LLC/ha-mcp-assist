@@ -433,6 +433,10 @@ and after a failed request. Changing the reference invalidates old metadata.
 configured reference resolves. This metadata does not prove image generation
 succeeded.
 
+Resolution and cleanup publish these scalar attributes to Home Assistant's
+state machine immediately, so templates and automations see the current
+metadata. A failed or cancelled request removes its resolved metadata.
+
 The conversation entity also publishes scalar state attributes for consumers:
 `image_model_profile` is the configured reference; `resolved_image_model_profile`
 is the resolved profile ID; `image_model_policy_revision` is the policy revision.

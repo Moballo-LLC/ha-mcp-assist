@@ -864,6 +864,12 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._last_resolved_image_model_profile = None
             self._last_resolved_image_model_profile_reference = None
             self._last_resolved_image_model_profile_request = None
+            self._publish_image_profile_metadata()
+
+    def _publish_image_profile_metadata(self) -> None:
+        """Publish safe metadata only while the entity is attached to HA."""
+        if self.hass is not None and self.entity_id is not None:
+            self.async_write_ha_state()
 
     @property
     def image_model(self) -> str | None:
@@ -889,7 +895,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         if metadata is not None:
             attributes["resolved_image_model_profile"] = metadata["profile_id"]
             attributes["image_model_policy_revision"] = metadata["revision"]
-        image_model = self.image_model
+        image_model = (metadata["model"] if metadata is not None
+                       else None if reference else self._loaded_image_model)
         attributes["image_model_available"] = image_model is not None
         if image_model is not None:
             attributes["image_model"] = image_model
@@ -2165,6 +2172,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._last_resolved_model_profile = None
             self._last_resolved_model_profile_reference = None
             self._last_resolved_model_profile_request = None
+        self._publish_image_profile_metadata()
         # Store ChatLog for tool execution methods to access
         self._current_chat_log = chat_log_instance
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
@@ -2215,6 +2223,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _REQUEST_CONVERSATION_ID.reset(conversation_id_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
             self._current_chat_log = None
+            self._publish_image_profile_metadata()
 
     async def _async_handle_message_inner(
         self, user_input: ConversationInput, conversation_id: str
@@ -2246,6 +2255,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 self._last_resolved_image_model_profile = image_resolved
                 self._last_resolved_image_model_profile_reference = image_reference
                 self._last_resolved_image_model_profile_request = profile_request_id
+                self._publish_image_profile_metadata()
             elif profile_reference:
                 resolved = await async_resolve_model_profile(
                     resolve_provider_runtime_config(self.entry), profile_reference

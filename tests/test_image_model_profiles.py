@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import replace
 import hashlib
 import json
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -601,3 +602,62 @@ async def test_failed_http_dispatch_releases_snapshot(
     finally:
         REQUEST_RESOLVED_PROFILES.reset(token)
     assert server._profile_requests == {}
+
+
+@pytest.mark.parametrize("outcome", ["success", "lookup_failure", "generation_failure", "cancel"])
+async def test_image_resolution_is_published_to_ha_state_machine(
+    hass, profile_entry_factory, monkeypatch, outcome,
+):
+    from homeassistant.helpers.entity_component import EntityComponent
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "homeassistant", {})
+    assert await async_setup_component(hass, "conversation", {})
+    hass.data.setdefault(DOMAIN, {})
+    entry = profile_entry_factory(data=image_entry_data())
+    agent = MCPAssistConversationEntity(hass, entry)
+    prepare(agent, monkeypatch)
+    component = EntityComponent(logging.getLogger(__name__), "conversation", hass)
+    await component.async_add_entities([agent])
+    assert hass.states.get(agent.entity_id).attributes["image_model_available"] is False
+    first = validate_model_profiles(image_policy(), "assistant", "visual")
+    second = validate_model_profiles(image_policy("next-image", "next-text"), "assistant", "visual")
+    monkeypatch.setattr(agent_module, "async_resolve_model_profiles", AsyncMock(side_effect=[
+        first, ModelProfileResolutionError() if outcome == "lookup_failure" else second,
+    ]))
+    observed = []
+
+    async def generate(messages):
+        attrs = hass.states.get(agent.entity_id).attributes
+        observed.append(attrs["image_model"])
+        if len(observed) == 2:
+            if outcome == "generation_failure":
+                raise RuntimeError("Example provider failure")
+            if outcome == "cancel":
+                raise asyncio.CancelledError()
+        return "Answer"
+
+    monkeypatch.setattr(agent, "_call_llm", generate)
+    await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+    attrs = hass.states.get(agent.entity_id).attributes
+    assert attrs["image_model_available"] is True
+    assert attrs["image_model"] == "example-image"
+    assert attrs["resolved_image_model_profile"] == "illustration"
+    assert attrs["image_model_policy_revision"] == first[1].revision
+    if outcome == "cancel":
+        with pytest.raises(asyncio.CancelledError):
+            await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+    else:
+        await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+    attrs = hass.states.get(agent.entity_id).attributes
+    assert attrs["image_model_profile"] == "visual"
+    if outcome == "success":
+        assert attrs["image_model"] == "next-image"
+        assert attrs["image_model_policy_revision"] == second[1].revision
+    else:
+        assert attrs["image_model_available"] is False
+        assert not {"image_model", "resolved_image_model_profile",
+                    "image_model_policy_revision"}.intersection(attrs)
+    assert observed == (["example-image"] if outcome == "lookup_failure"
+                        else ["example-image", "next-image"])
+    await agent.async_remove(force_remove=True)
