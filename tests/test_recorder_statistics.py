@@ -48,11 +48,13 @@ def rows(start=START, count=12, value=1, seconds=300):
             for index in range(count)]
 
 
-def with_comparison_baselines(samples, current_start, previous_start, seconds=300):
+def with_comparison_baselines(samples, current_start, previous_start=None, seconds=300):
     """Add finite sum evidence and exact predecessors, preserving malformed rows."""
     prepared = [dict(row, sum=row["start"].timestamp() / seconds) for row in samples]
     observed = {row["start"] for row in prepared}
     for start in (previous_start, current_start):
+        if start is None:
+            continue
         predecessor = start - timedelta(seconds=seconds)
         if predecessor not in observed:
             prepared.append({"start": predecessor, "sum": predecessor.timestamp() / seconds})
@@ -62,8 +64,9 @@ def with_comparison_baselines(samples, current_start, previous_start, seconds=30
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("missing_boundary", [False, True])
+@pytest.mark.parametrize("compare_previous", [False, True])
 async def test_native_change_baselines_do_not_bridge_excluded_boundary(
-    statistics_server, monkeypatch, missing_boundary,
+    statistics_server, monkeypatch, missing_boundary, compare_previous,
 ):
     """Exercise HA's actual change augmentation across an off-grid split."""
     server, query, _ = statistics_server
@@ -85,42 +88,60 @@ async def test_native_change_baselines_do_not_bridge_excluded_boundary(
     )
     first_current = next(row for row in native_result[ENTITY] if row["start"] == current_start)
     assert first_current["change"] == (2 if missing_boundary else 1)
-    query.return_value = native_result
-    data = (await server.tool_get_entity_statistics({
+    query.side_effect = lambda *args: {ENTITY: [
+        row for row in native_result[ENTITY] if args[1] <= row["start"] < args[2]
+    ]}
+    call = {
         "entity_id": ENTITY, "period": "last_hour", "bucket": "auto",
-        "metric": "change", "compare_previous": True,
-    }))["structuredContent"]
-    comparison = data["comparison"]
-    assert query.call_args.args[1] == baseline_start
-    assert comparison["change_baselines_available"] == {"current": not missing_boundary, "previous": True}
-    assert comparison["previous"]["summary"]["change"] == 11
+        "metric": "change",
+    }
+    if compare_previous:
+        call["compare_previous"] = True
+    data = (await server.tool_get_entity_statistics(call))["structuredContent"]
+    assert query.call_args.args[1] == (baseline_start if compare_previous else current_start - timedelta(minutes=5))
+    assert query.call_args.args[-1] == {"change", "sum"}
     if missing_boundary:
         assert data["summary"]["change"] == 10
         assert data["coverage"]["per_metric"]["change"]["observed_buckets"] == 10
         assert data["coverage"]["effective_complete"] is False
-        assert comparison["comparable"] is False
-        assert comparison["differences"] == {}
-        assert "immediate predecessor" in comparison["reason"].casefold()
     else:
         assert data["summary"]["change"] == 11
         assert data["coverage"]["effective_complete"] is True
-        assert comparison["comparable"] is True
-        assert comparison["differences"]["change"] == {"absolute": 0, "percent": 0}
-    for analysis in (data, comparison["previous"]):
+    analyses = [data]
+    if compare_previous:
+        comparison = data["comparison"]
+        assert comparison["change_baselines_available"] == {"current": not missing_boundary, "previous": True}
+        assert comparison["previous"]["summary"]["change"] == 11
+        if missing_boundary:
+            assert comparison["comparable"] is False
+            assert comparison["differences"] == {}
+            assert "immediate predecessor" in comparison["reason"].casefold()
+        else:
+            assert comparison["comparable"] is True
+            assert comparison["differences"]["change"] == {"absolute": 0, "percent": 0}
+        analyses.append(comparison["previous"])
+    else:
+        assert "comparison" not in data
+    for analysis in analyses:
         assert "sum" not in analysis["summary"]
         assert all("sum" not in bucket for bucket in analysis["buckets"])
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("period, slot, invalid", [
-    ("previous", "predecessor", "missing"),
-    ("previous", "predecessor", None),
-    ("previous", "start", float("nan")),
-    ("current", "predecessor", float("inf")),
-    ("current", "start", None),
+@pytest.mark.parametrize("compare_previous, period, slot, invalid", [
+    (True, "previous", "predecessor", "missing"),
+    (True, "previous", "predecessor", None),
+    (True, "previous", "start", float("nan")),
+    (True, "current", "predecessor", float("inf")),
+    (True, "current", "start", None),
+    (False, "current", "predecessor", "missing"),
+    (False, "current", "predecessor", None),
+    (False, "current", "start", float("nan")),
+    (False, "current", "predecessor", float("inf")),
+    (False, "current", "start", None),
 ])
 async def test_finite_mocked_change_does_not_override_invalid_sum_baseline(
-    statistics_server, period, slot, invalid,
+    statistics_server, compare_previous, period, slot, invalid,
 ):
     server, query, _ = statistics_server
     previous_start = START - timedelta(hours=1)
@@ -133,19 +154,25 @@ async def test_finite_mocked_change_does_not_override_invalid_sum_baseline(
     else:
         next(row for row in samples if row["start"] == target)["sum"] = invalid
     query.return_value = {ENTITY: samples}
-    data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
-    comparison = data["comparison"]
-    assert comparison["change_baselines_available"][period] is False
-    assert comparison["comparable"] is False
-    assert comparison["differences"] == {}
-    affected = data if period == "current" else comparison["previous"]
+    call = arguments(**({"compare_previous": True} if compare_previous else {}))
+    data = (await server.tool_get_entity_statistics(call))["structuredContent"]
+    affected = data
+    if compare_previous:
+        comparison = data["comparison"]
+        assert comparison["change_baselines_available"][period] is False
+        assert comparison["comparable"] is False
+        assert comparison["differences"] == {}
+        assert "immediate predecessor" in comparison["reason"].casefold()
+        affected = data if period == "current" else comparison["previous"]
+    else:
+        assert "comparison" not in data
     assert affected["coverage"]["per_metric"]["change"]["missing_buckets"] == 1
     assert affected["summary"]["change"] == (22 if period == "current" else 11)
-    assert "immediate predecessor" in comparison["reason"].casefold()
 
 
 @pytest.mark.asyncio
-async def test_internal_sum_alone_does_not_establish_available_change(statistics_server):
+@pytest.mark.parametrize("compare_previous", [False, True])
+async def test_internal_sum_alone_does_not_establish_available_change(statistics_server, compare_previous):
     server, query, _ = statistics_server
     previous_start = START - timedelta(hours=1)
     samples = with_comparison_baselines(rows(previous_start) + rows(), START, previous_start)
@@ -153,7 +180,9 @@ async def test_internal_sum_alone_does_not_establish_available_change(statistics
         if row["start"] >= START:
             row.pop("change", None)
     query.return_value = {ENTITY: samples}
-    result = await server.tool_get_entity_statistics(arguments(compare_previous=True))
+    result = await server.tool_get_entity_statistics(arguments(
+        **({"compare_previous": True} if compare_previous else {})
+    ))
     assert result["structuredContent"]["available"] is False
     assert "summary" not in result["structuredContent"]
     assert "no finite statistic values" in result["content"][0]["text"].casefold()
@@ -162,10 +191,11 @@ async def test_internal_sum_alone_does_not_establish_available_change(statistics
 @pytest.mark.asyncio
 async def test_recent_native_query_and_summary_ignore_display_limit(statistics_server):
     server, query, jobs = statistics_server
-    query.return_value = {ENTITY: rows()}
+    query.return_value = {ENTITY: with_comparison_baselines(rows(), START)}
     result = await server.tool_get_entity_statistics(arguments(bucket="auto", limit=1))
     data = result["structuredContent"]
-    assert query.call_args.args[1:5] == (START, START + timedelta(hours=1), {ENTITY}, "5minute")
+    assert query.call_args.args[1:5] == (START - timedelta(minutes=5), START + timedelta(hours=1), {ENTITY}, "5minute")
+    assert query.call_args.args[-1] == {"change", "sum"}
     assert len(jobs) == 3
     assert data["schema_version"] == 1 and data["available"]
     assert data["summary"]["change"] == 12
@@ -176,7 +206,9 @@ async def test_recent_native_query_and_summary_ignore_display_limit(statistics_s
 @pytest.mark.asyncio
 async def test_alignment_reports_partial_window(statistics_server):
     server, query, _ = statistics_server
-    query.return_value = {ENTITY: rows(START + timedelta(minutes=5), count=10)}
+    query.return_value = {ENTITY: with_comparison_baselines(
+        rows(START + timedelta(minutes=5), count=10), START + timedelta(minutes=5),
+    )}
     data = (await server.tool_get_entity_statistics(arguments(
         start=START + timedelta(minutes=2), end=START + timedelta(minutes=58)
     )))["structuredContent"]

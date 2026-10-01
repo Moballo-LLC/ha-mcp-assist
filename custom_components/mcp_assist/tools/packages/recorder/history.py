@@ -967,7 +967,7 @@ class RecorderToolsMixin:
                 if unit_class is not None and display_unit is not None
                 else None
             )
-            require_change_baseline = compare_previous and "change" in types
+            require_change_baseline = "change" in types
             query_start = previous_effective_start if compare_previous else effective_start
             query_types = types
             if require_change_baseline:

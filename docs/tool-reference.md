@@ -146,6 +146,12 @@ Results include readable text and `structuredContent` with `schema_version: 1`:
 Summary values cover every returned valid source bucket even when displayed rows
 are capped. Duplicate timestamps, nonfinite values, and off-grid rows cannot
 establish complete coverage. Gaps produce observed subtotals. Change summaries
+read one preceding source bucket and cumulative sums internally to verify the
+immediate baseline at the effective-window start. A missing, duplicated, or
+nonfinite baseline excludes the first change from the subtotal and calendar
+averages: Recorder may otherwise bridge the gap and include usage outside the
+window. This validation applies whether or not comparison is requested.
+Cumulative sums are never reported as interval totals. Change summaries
 also include `complete_day_count`, `complete_month_count`, and
 `average_per_complete_day`/`average_per_complete_month`: only fully covered Home
 Assistant-local calendar periods contribute, including 23- or 25-hour DST days.
@@ -156,14 +162,10 @@ Set `compare_previous: true` to add `comparison.previous` with its windows,
 summary, coverage, and source annotations. The previous interval immediately
 precedes the current interval and has equal elapsed duration; it need not be the
 previous calendar month. One combined Recorder query reads both intervals.
-Change comparisons also read one preceding source bucket and cumulative sums
-internally to verify the immediate baseline at each effective-window start.
+Change comparisons verify the immediate baseline at both effective-window starts.
 `change_baselines_available` reports those checks for the current and previous
-windows, or is `null` for comparisons without change. A missing, duplicated, or
-nonfinite baseline excludes that window's first change from its subtotal and
-calendar averages and prevents comparison: Recorder may otherwise bridge the
-gap and include usage outside the window. Cumulative sums are never reported
-as interval totals.
+windows, or is `null` for comparisons without change. An invalid baseline also
+prevents comparison.
 `comparison.comparable` requires equal positive effective-window durations,
 `effective_complete` coverage for every selected metric in both windows, and no
 source-reported uncertainty. `scope: "effective_windows"` and
