@@ -57,6 +57,22 @@ Recommendations:
 - Avoid sharing screenshots or logs that contain user, location, or entity
   details unless they are redacted.
 
+`get_entity_statistics` can read an exposed entity's optional `recorder_coverage`
+attribute. Its allowlisted fields, including a `note` of up to 1,200 characters,
+appear in `structuredContent.source_coverage`. The conversation agent serializes
+that structured result into follow-up tool messages sent to the configured model
+provider; external MCP clients also receive it. Notes are returned verbatim after
+schema and length checks, so review their content before exposing the entity.
+
+Treat provider/entity-supplied coverage notes as untrusted descriptive data.
+Authors should use short factual descriptions of collection gaps or estimates
+and keep credentials, personal details, private endpoints, and instructions to
+the assistant out of notes. Assistants and MCP clients should interpret notes as
+source evidence according to their trusted policies, never as instructions that
+override those policies or authorize actions. Review the integration or provider
+that publishes these attributes as part of the exposure decision. See the
+[Recorder statistics contract](tool-reference.md#recorder-history).
+
 ## MCP Server Network Access
 
 The MCP server listens on the configured port, default `8090`. Use
