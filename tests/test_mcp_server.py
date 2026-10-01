@@ -2681,8 +2681,9 @@ async def test_entity_statistics_uses_exposure_guard_and_recorder_executor(
         "statistics_during_period",
         lambda *args: (calls.append("statistics") or {
             "sensor.example": [
-                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": 1, "mean": 4, "min": 2, "max": 5},
-                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": 3, "mean": 6, "min": 4, "max": 8},
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 0},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 1, "change": 1, "mean": 4, "min": 2, "max": 5},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "sum": 4, "change": 3, "mean": 6, "min": 4, "max": 8},
             ]
         }),
     )
@@ -2901,11 +2902,12 @@ async def test_statistics_rejects_nonfinite_booleans_and_preserves_full_summary(
         "statistics_during_period",
         lambda *args: {
             "sensor.example": [
-                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "change": 1},
-                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": float("nan")},
-                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": True},
+                {"start": datetime(2025, 12, 31, 23, tzinfo=timezone.utc), "sum": 0},
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 1, "change": 1},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 2, "change": float("nan")},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "sum": 3, "change": True},
                 {"start": True, "change": 100},
-                {"start": datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "change": 3},
+                {"start": datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "sum": 6, "change": 3},
             ]
         },
     )
@@ -2921,7 +2923,7 @@ async def test_statistics_rejects_nonfinite_booleans_and_preserves_full_summary(
     })
 
     text = result["content"][0]["text"]
-    assert "Observed change subtotal: 4 kWh across 2 of 5 expected hourly buckets" in text
+    assert "Observed change subtotal: 1 kWh across 1 of 5 expected hourly buckets" in text
     assert "Observed buckets: 4 of 5 expected hourly buckets; missing: 1" in text
     assert "Displayed 1 of 4 hour buckets" in text
     assert "change 1 kWh" in text
@@ -2943,9 +2945,10 @@ async def test_statistics_shortened_half_hour_zone_boundary_is_partial_subtotal(
     requested_start = datetime.fromisoformat("2026-01-01T00:00:00+05:30").astimezone(timezone.utc)
     effective_start = requested_start + timedelta(minutes=30)
     rows = [
-        {"start": effective_start + timedelta(hours=index), "change": 1.0}
+        {"start": effective_start + timedelta(hours=index), "sum": index + 1.0, "change": 1.0}
         for index in range(23)
     ]
+    rows.insert(0, {"start": effective_start - timedelta(hours=1), "sum": 0.0})
     monkeypatch.setattr(recorder_history_module, "get_recorder_instance", lambda _: RecorderInstance())
     monkeypatch.setattr(recorder_history_module, "async_should_expose", lambda *_: True)
     monkeypatch.setattr(
@@ -3116,9 +3119,10 @@ async def test_statistics_values_match_selected_display_unit(
         requested_units.append(units)
         assert units == {"energy": "kWh"}
         rows = []
-        for index in range(48):
+        for index in range(49):
             rows.append({
                 "start": args[1] + timedelta(hours=index),
+                "sum": converter.convert(index * 1000, "Wh", units["energy"]),
                 "change": converter.convert(1000, "Wh", units["energy"]),
                 "mean": converter.convert(1000, "Wh", units["energy"]),
                 "min": converter.convert(500, "Wh", units["energy"]),
@@ -3197,8 +3201,9 @@ async def test_statistics_support_legacy_mean_metadata_without_mean_type(
         requested_types.append(args[-1])
         return {
             "sensor.legacy": [
-                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "change": 2.0, "mean": 4.0},
-                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": 3.0, "mean": 6.0},
+                {"start": datetime(2025, 12, 31, 23, tzinfo=timezone.utc), "sum": 0.0},
+                {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 2.0, "change": 2.0, "mean": 4.0},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 5.0, "change": 3.0, "mean": 6.0},
             ]
         }
 
@@ -3218,7 +3223,7 @@ async def test_statistics_support_legacy_mean_metadata_without_mean_type(
     text = result["content"][0]["text"]
     assert "change 5 kWh" in text
     assert "mean 5 kWh" in text
-    assert requested_types == [{"change", "mean", "min", "max"}]
+    assert requested_types == [{"change", "sum", "mean", "min", "max"}]
     assert display_calls == [(hass, "sensor.legacy", "kWh")]
 
     monkeypatch.setattr(
@@ -3288,7 +3293,7 @@ async def test_statistics_none_mean_type_overrides_legacy_has_mean(
 
     result = await server.tool_get_entity_statistics({**arguments, "metric": "all"})
     assert "No long-term statistic buckets were returned" in result["content"][0]["text"]
-    assert statistics_query.call_args.args[-1] == {"change"}
+    assert statistics_query.call_args.args[-1] == {"change", "sum"}
     assert display_calls == [(hass, "sensor.none_mean", None, None)]
 
 

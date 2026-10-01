@@ -4,6 +4,44 @@ These examples show the kind of requests MCP Assist is designed to handle and
 the tools it may use behind the scenes. Exact tool calls vary by model,
 configuration, exposed entities, and installed integrations.
 
+## Statistic Questions
+
+User:
+
+```text
+How much energy was used in the last hour compared with the hour before?
+```
+
+After discovering an exposed statistic-capable entity, the assistant can call:
+
+```json
+{
+  "entity_id": "sensor.example_energy",
+  "period": "last_hour",
+  "metric": "change",
+  "bucket": "auto",
+  "compare_previous": true,
+  "limit": 12
+}
+```
+
+The tool uses native five-minute statistics and returns the current and previous
+equal-length intervals. The assistant checks `available`, per-metric coverage,
+and `comparison.comparable` before quoting differences. Missing short-term data
+does not mean zero consumption. A capped bucket list does not cap the summary.
+When the current time falls between source boundaries, the comparison covers
+equally sized effective windows of complete source buckets. Report the returned
+effective interval and excluded boundary fragments rather than claiming exact
+totals for the full requested hour.
+
+For "What was average daily consumption last month?", use
+`period: "last_month"`, `metric: "change"`, and `bucket: "day"`; read
+`summary.average_per_complete_day` together with `complete_day_count` and source
+coverage. Averages include only fully covered local calendar days. Explain gaps
+or source-reported estimates instead of presenting the result as complete proof.
+For "What was the lowest temperature yesterday?", select `metric: "min"` on a
+discovered temperature statistic entity.
+
 ## Basic Control
 
 User:
