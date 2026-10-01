@@ -2,7 +2,7 @@
 
 import asyncio
 from contextvars import ContextVar, Token
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import logging
@@ -173,9 +173,22 @@ _REQUEST_MODEL_PROFILE: ContextVar[tuple[Any, ResolvedModelProfile | None, str, 
     ContextVar("mcp_assist_model_profile", default=None)
 )
 
-_REQUEST_IMAGE_MODEL_PROFILE: ContextVar[
-    tuple[Any, ResolvedImageModelProfile | None, str, object] | None
-] = ContextVar("mcp_assist_image_model_profile", default=None)
+
+@dataclass
+class RequestImageModelProfile:
+    """Share one lazy image resolution across a request's concurrent tools."""
+
+    entry: Any
+    reference: str
+    request_id: object
+    resolved: ResolvedImageModelProfile | None = None
+    failed: bool = False
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+_REQUEST_IMAGE_MODEL_PROFILE: ContextVar[RequestImageModelProfile | None] = ContextVar(
+    "mcp_assist_image_model_profile", default=None
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -857,7 +870,31 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _request_image_model_profile(self) -> ResolvedImageModelProfile | None:
         scoped = _REQUEST_IMAGE_MODEL_PROFILE.get()
-        return scoped[1] if scoped is not None and scoped[0] is self.entry else None
+        return scoped.resolved if scoped is not None and scoped.entry is self.entry else None
+
+    async def _resolve_request_image_profile(self) -> None:
+        """Resolve an image-only reference on first generation, once per request."""
+        scoped = _REQUEST_IMAGE_MODEL_PROFILE.get()
+        if scoped is None or scoped.entry is not self.entry or not scoped.reference:
+            return
+        async with scoped.lock:
+            if scoped.failed:
+                raise ModelProfileResolutionError()
+            if scoped.resolved is not None:
+                return
+            self._last_resolved_image_model_profile_request = scoped.request_id
+            try:
+                _, scoped.resolved = await async_resolve_model_profiles(
+                    resolve_provider_runtime_config(self.entry), "", scoped.reference
+                )
+            except BaseException:
+                scoped.failed = True
+                self._clear_image_model_profile_metadata(scoped.request_id)
+                raise
+            self._last_resolved_image_model_profile = scoped.resolved
+            self._last_resolved_image_model_profile_reference = scoped.reference
+            self._last_resolved_image_model_profile_request = scoped.request_id
+            self._publish_image_profile_metadata()
 
     def _clear_image_model_profile_metadata(self, request_id: object) -> None:
         if getattr(self, "_last_resolved_image_model_profile_request", None) is request_id:
@@ -2199,7 +2236,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         provider_profiles_token = REQUEST_RESOLVED_PROFILES.set(None)
         image_profile_token = _REQUEST_IMAGE_MODEL_PROFILE.set(
-            (self.entry, None, image_reference, profile_request_id)
+            RequestImageModelProfile(self.entry, image_reference, profile_request_id)
         )
         model_profile_token = _REQUEST_MODEL_PROFILE.set(
             (self.entry, None, profile_reference, profile_request_id)
@@ -2240,18 +2277,17 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             image_scoped = _REQUEST_IMAGE_MODEL_PROFILE.get()
             image_reference = (
-                image_scoped[2] if image_scoped is not None and image_scoped[0] is self.entry
+                image_scoped.reference if image_scoped is not None and image_scoped.entry is self.entry
                 else self.image_model_profile
             )
             resolved = image_resolved = None
-            if image_reference:
+            if image_reference and profile_reference:
                 self._last_resolved_image_model_profile_request = profile_request_id
                 resolved, image_resolved = await async_resolve_model_profiles(
                     resolve_provider_runtime_config(self.entry), profile_reference, image_reference
                 )
-                _REQUEST_IMAGE_MODEL_PROFILE.set(
-                    (self.entry, image_resolved, image_reference, profile_request_id)
-                )
+                if image_scoped is not None and image_scoped.entry is self.entry:
+                    image_scoped.resolved = image_resolved
                 self._last_resolved_image_model_profile = image_resolved
                 self._last_resolved_image_model_profile_reference = image_reference
                 self._last_resolved_image_model_profile_request = profile_request_id
@@ -3635,6 +3671,8 @@ class MCPAssistConversationEntity(ConversationEntity):
         profile_server = None
         profile_token = None
         try:
+            if tool_name == "generate_image":
+                await self._resolve_request_image_profile()
             mcp_url = f"http://localhost:{self.mcp_port}"
 
             # Create JSON-RPC request for tool execution
@@ -3656,6 +3694,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             }
             post_kwargs = self._mcp_post_kwargs(payload)
             snapshot = REQUEST_RESOLVED_PROFILES.get()
+            if snapshot is not None and snapshot[0] is self.entry:
+                snapshot = (self.entry, snapshot[1], self._request_image_model_profile() or snapshot[2])
             if (snapshot is not None and snapshot[0] is self.entry
                     and any(value is not None for value in snapshot[1:])):
                 profile_server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")

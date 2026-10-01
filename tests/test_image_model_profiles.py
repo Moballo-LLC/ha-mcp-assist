@@ -15,7 +15,7 @@ import pytest
 from custom_components.mcp_assist import agent as agent_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
 from custom_components.mcp_assist.const import (
-    CONF_LMSTUDIO_URL, CONF_MCP_BEARER_TOKEN, CONF_MCP_PORT, DOMAIN,
+    CONF_LMSTUDIO_URL, CONF_MCP_BEARER_TOKEN, CONF_MCP_PORT, CONF_MODEL_PROFILE, DOMAIN,
     CONF_OPENAI_IMAGE_API, CONF_OPENAI_IMAGE_MODEL, CONF_OPENAI_IMAGE_MODEL_PROFILE,
     CONF_SERVER_TYPE, OPENAI_API_TRANSPORT_RESPONSES, SERVER_TYPE_OLLAMA,
 )
@@ -107,17 +107,27 @@ async def test_text_only_policy_cannot_resolve_image(
     assert len(calls) == 1
 
 
-async def test_unsupported_image_provider_stops_before_generation(
+async def test_unsupported_image_profile_stops_image_tool_without_blocking_text(
     hass, profile_entry_factory, monkeypatch
 ):
     entry = profile_entry_factory(data=image_entry_data(**{CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA}))
     agent = MCPAssistConversationEntity(hass, entry)
+    prepare(agent, monkeypatch)
     calls = mock_session(monkeypatch, Response(b"{}"))
     generation = AsyncMock(return_value="Answer")
     monkeypatch.setattr(agent, "_call_llm", generation)
     result = await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
-    assert result.response.error_code is not None
-    assert not calls and not generation.called
+    assert result == "done"
+    assert not calls and generation.called
+
+    async def generate(messages):
+        result = await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+        assert "error" in result
+        return "Answer"
+
+    monkeypatch.setattr(agent, "_call_llm", generate)
+    await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+    assert not calls
     assert agent.image_model is None and agent.resolved_image_model_profile is None
 
 
@@ -216,6 +226,32 @@ async def test_cancelled_image_request_clears_scopes_and_metadata(
     with pytest.raises(asyncio.CancelledError):
         await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
     assert agent.resolved_image_model_profile is None
+
+
+async def test_lazy_image_lookup_failure_is_not_retried_within_request(
+    hass, profile_entry_factory, monkeypatch,
+):
+    entry = profile_entry_factory(data=image_entry_data(**{CONF_MODEL_PROFILE: ""}))
+    agent = MCPAssistConversationEntity(hass, entry)
+    prepare(agent, monkeypatch)
+    lookup = AsyncMock(side_effect=ModelProfileResolutionError())
+    monkeypatch.setattr(agent_module, "async_resolve_model_profiles", lookup)
+
+    async def generate(messages):
+        results = await asyncio.gather(*(
+            agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+            for _ in range(2)
+        ))
+        results.append(await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"}))
+        assert all("error" in result for result in results)
+        assert agent.model_name == "saved-model"
+        return "Answer"
+
+    monkeypatch.setattr(agent, "_call_llm", generate)
+    for expected in (1, 2):
+        await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+        assert lookup.await_count == expected
+        assert agent.resolved_image_model_profile is None
     assert REQUEST_RESOLVED_PROFILES.get() is None
     assert agent_module._REQUEST_IMAGE_MODEL_PROFILE.get() is None
 
@@ -294,23 +330,23 @@ async def test_real_tool_loop_freezes_both_and_next_request_adopts_policy(
 async def test_image_only_reference_keeps_saved_conversation_model(
     hass, profile_entry_factory, monkeypatch
 ):
-    from custom_components.mcp_assist.const import CONF_MODEL_PROFILE
-
     agent = MCPAssistConversationEntity(hass, profile_entry_factory(
         data=image_entry_data(**{CONF_MODEL_PROFILE: ""})))
     prepare(agent, monkeypatch)
-    calls = mock_session(monkeypatch, Response(json.dumps(image_policy()).encode()))
+    calls = mock_session(monkeypatch, Response(b"Policy unavailable", status=503))
 
     async def generate(messages):
         provider = agent._get_llm_provider()
         assert provider.model_name == "saved-model"
-        assert provider.image_model == "example-image"
+        with pytest.raises(ValueError, match="not been resolved"):
+            _ = provider.image_model
         return "Answer"
 
     monkeypatch.setattr(agent, "_call_llm", generate)
     await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
-    assert len(calls) == 1
+    assert calls == []
     assert agent.resolved_model_profile is None
+    assert agent.resolved_image_model_profile is None
 
 
 async def test_disabling_reference_restores_loaded_concrete_image_fallback(
@@ -426,6 +462,8 @@ async def test_actual_http_policy_lookup_negotiates_image_capability(
 
     async def get_policy(request):
         received.append((dict(request.query), request.headers.get("Authorization"), request.path))
+        if mode != "both" and request.query:
+            return web.Response(status=400)
         # Legacy endpoints may ignore the query and continue serving a text-only policy.
         return web.json_response(image_policy() if expanded else policy())
 
@@ -445,13 +483,15 @@ async def test_actual_http_policy_lookup_negotiates_image_capability(
         )
     assert text.model == ("example-text" if expanded else "example-model")
     assert (image.model if image else None) == ("example-image" if mode == "both" else None)
-    assert received == [({"include_images": "true"}, "Bearer example-key", "/v1/model-profiles")]
+    assert received == [({"include_images": "true"} if mode == "both" else {},
+                        "Bearer example-key", "/v1/model-profiles")]
 
 
 @pytest.mark.parametrize("responses", [False, True])
+@pytest.mark.parametrize("image_only", [False, True])
 async def test_conversation_snapshot_crosses_actual_mcp_http_request(
     hass, aiohttp_server, socket_enabled, profile_entry_factory, system_entry_factory,
-    monkeypatch, responses,
+    monkeypatch, responses, image_only,
 ):
     from aiohttp import web
     import pytest_socket
@@ -463,6 +503,7 @@ async def test_conversation_snapshot_crosses_actual_mcp_http_request(
     generated = []
     handler_contexts = []
     entry = profile_entry_factory(data=image_entry_data(**{
+        CONF_MODEL_PROFILE: "" if image_only else "assistant",
         CONF_OPENAI_IMAGE_API: OPENAI_API_TRANSPORT_RESPONSES if responses else "images",
     }))
     mcp = MCPServer(hass, 8099, entry)
@@ -502,23 +543,36 @@ async def test_conversation_snapshot_crosses_actual_mcp_http_request(
     monkeypatch.setattr(mcp, "_normalize_image_payload", lambda data, mime, _: (data, mime))
 
     async def generate(messages):
+        if image_only:
+            assert policy_reads == []
+        else:
+            current.update(image_policy("next-image", "next-text", "low"))
+        results = await asyncio.gather(*(
+            agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+            for _ in range(2)
+        ))
+        assert all(not result.get("isError") and "error" not in result for result in results)
         current.update(image_policy("next-image", "next-text", "low"))
         result = await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
         assert not result.get("isError") and "error" not in result
-        assert agent._get_llm_provider().model_name == "example-text"
+        assert agent._get_llm_provider().model_name == ("saved-model" if image_only else "example-text")
         assert agent._get_llm_provider().image_model == "example-image"
         return "Answer"
 
     monkeypatch.setattr(agent, "_call_llm", generate)
     await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
-    assert handler_contexts == [None]
-    assert len(policy_reads) == 1 and len(generated) == 1
-    if responses:
-        assert generated[0]["model"] == "example-text"
-        assert generated[0]["reasoning"] == {"effort": "high"}
-        assert generated[0]["tools"][0]["model"] == "example-image"
-    else:
-        assert generated[0]["model"] == "example-image"
+    assert handler_contexts == [None] * 3
+    assert len(policy_reads) == 1 and len(generated) == 3
+    for payload in generated:
+        if responses:
+            assert payload["model"] == ("saved-model" if image_only else "example-text")
+            if image_only:
+                assert "reasoning" not in payload
+            else:
+                assert payload["reasoning"] == {"effort": "high"}
+            assert payload["tools"][0]["model"] == "example-image"
+        else:
+            assert payload["model"] == "example-image"
     assert mcp._profile_requests == {}
     assert REQUEST_RESOLVED_PROFILES.get() is None
 

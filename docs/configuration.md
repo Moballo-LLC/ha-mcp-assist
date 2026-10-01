@@ -416,7 +416,13 @@ When both references are configured, one authenticated bounded lookup resolves
 both from the same snapshot. The image model is frozen through tool follow-ups
 and transport fallback, including Responses image tools and Images API requests.
 The next logical request resolves again. Missing or invalid image policy stops
-the request without falling back to the saved concrete model.
+generation without falling back to the saved concrete model.
+
+With only an image reference configured, policy resolution waits until the first
+`generate_image` call. Ordinary text conversations do not depend on image policy
+availability. Concurrent image tools and subsequent calls in the same logical
+request share that resolution; a failed lookup is retained for that request
+without another policy read.
 
 Conversation tool calls retain the frozen selection across the local MCP HTTP
 boundary using a one-use opaque identifier. The server keeps the selection only
@@ -443,7 +449,8 @@ is the resolved profile ID; `image_model_policy_revision` is the policy revision
 Resolved attributes are omitted until resolution succeeds and whenever the
 reference changes or a request fails.
 
-Policy lookups send `include_images=true` to request the complete text and image
+Policy lookups with an image reference send `include_images=true` to request
+the complete text and image
 policy. Compatible endpoints can keep their default response limited to the text
 policy for older clients, with a revision computed from only its four policy
 fields. The expanded response includes the image policy fields in its revision.

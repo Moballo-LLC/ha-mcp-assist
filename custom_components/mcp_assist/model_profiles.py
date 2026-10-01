@@ -181,7 +181,8 @@ async def async_resolve_model_profiles(
         timeout = aiohttp.ClientTimeout(total=min(max(runtime.timeout, 1), 15))
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(
-                url, headers=headers, params={"include_images": "true"}, allow_redirects=False
+                url, headers=headers, allow_redirects=False,
+                **({"params": {"include_images": "true"}} if image_reference else {}),
             ) as response:
                 if response.status != 200:
                     raise ModelProfileResolutionError()
