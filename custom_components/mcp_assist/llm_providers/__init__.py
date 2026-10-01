@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from .anthropic import AnthropicProvider
@@ -83,7 +84,7 @@ def build_provider_settings(
     provider_class = get_llm_provider_class(runtime_config.server_type)
     data = getattr(entry, "data", {}) or {}
     options = getattr(entry, "options", {}) or {}
-    return ProviderSettings(
+    settings = ProviderSettings(
         server_type=runtime_config.server_type,
         model_name=runtime_config.model_name,
         api_key=runtime_config.api_key,
@@ -102,6 +103,21 @@ def build_provider_settings(
             )
         ),
     )
+
+    # Import after provider modules initialize to avoid a policy/transport import cycle.
+    from ..model_profiles import REQUEST_RESOLVED_PROFILES
+
+    scoped = REQUEST_RESOLVED_PROFILES.get()
+    if scoped is not None and scoped[0] is entry:
+        text, image = scoped[1:]
+        provider_options = dict(settings.provider_options)
+        if text is not None:
+            provider_options["_resolved_model_profile"] = text
+        if image is not None:
+            provider_options["_resolved_image_model_profile"] = image
+        settings = replace(settings, model_name=text.model if text else settings.model_name,
+                           provider_options=provider_options)
+    return settings
 
 
 def create_llm_provider(settings: ProviderSettings) -> LLMProvider:
