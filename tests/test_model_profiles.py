@@ -502,3 +502,77 @@ async def test_older_failed_request_preserves_newer_resolution(
         if not task.done():
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("older_active", [True, False])
+@pytest.mark.parametrize("failure", ["timeout", "error", "cancelled"])
+async def test_newer_lookup_failure_preserves_prior_resolution(
+    hass, profile_entry_factory, monkeypatch, older_active, failure
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data=entry_data()))
+    prepare(agent, monkeypatch)
+    generation_started = asyncio.Event()
+    release_generation = asyncio.Event()
+    lookup_started = asyncio.Event()
+    release_lookup = asyncio.Event()
+    prior = validate_model_profile(policy("prior-model"), "assistant")
+    count = 0
+
+    async def lookup(*args):
+        nonlocal count
+        count += 1
+        if count == 1:
+            return prior
+        lookup_started.set()
+        await release_lookup.wait()
+        if failure == "cancelled":
+            raise asyncio.CancelledError
+        if failure == "timeout":
+            raise agent_module.ProviderResponseTimeoutError(
+                provider_name="OpenAI", timeout_seconds=1, transport="HTTP",
+                attempts=1, iteration=0,
+            )
+        raise ModelProfileResolutionError()
+
+    async def call(messages):
+        assert agent.model_name == "prior-model"
+        generation_started.set()
+        if older_active:
+            await release_generation.wait()
+        return "Answer."
+
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+    monkeypatch.setattr(agent, "_call_llm", call)
+    older_task = asyncio.create_task(agent._async_handle_message(
+        user_input("Older"), SimpleNamespace(conversation_id="older")))
+    tasks = [older_task]
+    try:
+        await asyncio.wait_for(generation_started.wait(), timeout=1)
+        if not older_active:
+            assert await older_task == "done"
+        metadata = agent.resolved_model_profile
+        assert metadata["model"] == "prior-model"
+        newer_task = asyncio.create_task(agent._async_handle_message(
+            user_input("Newer"), SimpleNamespace(conversation_id="newer")))
+        tasks.append(newer_task)
+        await asyncio.wait_for(lookup_started.wait(), timeout=1)
+        assert agent.resolved_model_profile == metadata
+        release_lookup.set()
+        if failure == "cancelled":
+            with pytest.raises(asyncio.CancelledError):
+                await newer_task
+        else:
+            result = await newer_task
+            assert result.response.error_code is not None
+        assert agent.resolved_model_profile == metadata
+        release_generation.set()
+        assert await older_task == "done"
+        assert agent.resolved_model_profile == metadata
+        assert agent_module._REQUEST_MODEL_PROFILE.get() is None
+    finally:
+        release_generation.set()
+        release_lookup.set()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

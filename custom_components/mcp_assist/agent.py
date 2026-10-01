@@ -2082,9 +2082,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         profile_reference = self.model_profile
         profile_request_id = object()
-        self._last_resolved_model_profile = None
-        self._last_resolved_model_profile_reference = None
-        self._last_resolved_model_profile_request = profile_request_id
+        if not profile_reference:
+            self._last_resolved_model_profile = None
+            self._last_resolved_model_profile_reference = None
+            self._last_resolved_model_profile_request = None
         # Store ChatLog for tool execution methods to access
         self._current_chat_log = chat_log_instance
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
