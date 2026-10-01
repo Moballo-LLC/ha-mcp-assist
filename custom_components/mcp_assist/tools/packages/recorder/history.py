@@ -972,8 +972,8 @@ class RecorderToolsMixin:
             query_types = types
             if require_change_baseline:
                 # Native change values can span gaps back to the previous
-                # available sum. Read the immediate predecessor so changes at
-                # each window boundary cannot include usage outside that window.
+                # available sum. Read one preceding bucket and validate adjacent
+                # sums for every change rather than attributing bridged usage.
                 query_start -= timedelta(seconds=sample_seconds)
                 query_types = types | {"sum"}
             stats = await _run_recorder(
@@ -1031,16 +1031,21 @@ class RecorderToolsMixin:
                 "sum" in usable_rows.get(when, {})
                 for when in (start - timedelta(seconds=sample_seconds), start)
             )
-            if not baseline_available:
-                for row in window:
-                    if row["start"] == start:
-                        row.pop("change", None)
-            # Cumulative sums are validation inputs, never interval totals.
+            excluded_changes = 0
             for row in window:
+                if require_change_baseline and "change" in row:
+                    when = row["start"]
+                    if not all(
+                        "sum" in usable_rows.get(point, {})
+                        for point in (when - timedelta(seconds=sample_seconds), when)
+                    ):
+                        row.pop("change", None)
+                        excluded_changes += 1
+                # Cumulative sums are validation inputs, never interval totals.
                 row.pop("sum", None)
-            return window, baseline_available
+            return window, baseline_available, excluded_changes
 
-        clean_rows, current_baseline_available = window_rows(effective_start, effective_end)
+        clean_rows, current_baseline_available, excluded_current_changes = window_rows(effective_start, effective_end)
         if not clean_rows or not any(types.intersection(row) for row in clean_rows):
             return unavailable(
                 f"Recorder returned no finite statistic values for {entity_id} during {period_label}."
@@ -1132,8 +1137,8 @@ class RecorderToolsMixin:
             lines.append(f"Maximum: {max(maxima):g} {unit}")
         if missing:
             lines.append("Coverage has gaps; totals and averages describe observed buckets only.")
-        if not current_baseline_available:
-            lines.append("The first current-window change was excluded because its immediate cumulative-sum baseline is unavailable.")
+        if excluded_current_changes:
+            lines.append(f"Excluded {excluded_current_changes} current-window change bucket(s) without finite immediate cumulative-sum baselines.")
         analysis = self._statistics_analysis(
             clean_rows, requested_start, requested_end, effective_start, effective_end,
             types, bucket, limit, sample_seconds,
@@ -1142,7 +1147,7 @@ class RecorderToolsMixin:
         if structured["source_coverage"].get("uncertain"):
             lines.append("Source-reported coverage is uncertain; consumption totals and calendar averages may be estimates or omit unknown usage. See source_coverage in structuredContent.")
         if compare_previous:
-            previous_rows, previous_baseline_available = window_rows(previous_effective_start, previous_effective_end)
+            previous_rows, previous_baseline_available, excluded_previous_changes = window_rows(previous_effective_start, previous_effective_end)
             previous_analysis = self._statistics_analysis(
                 previous_rows, previous_start, previous_end, previous_effective_start,
                 previous_effective_end, types, bucket, limit, sample_seconds,
@@ -1204,8 +1209,8 @@ class RecorderToolsMixin:
             lines.append(f"Previous effective interval: {previous_effective_start.isoformat()} to {previous_effective_end.isoformat()} (end exclusive)")
             if qualification:
                 lines.append(qualification)
-            if not previous_baseline_available:
-                lines.append("The first previous-window change was excluded because its immediate cumulative-sum baseline is unavailable.")
+            if excluded_previous_changes:
+                lines.append(f"Excluded {excluded_previous_changes} previous-window change bucket(s) without finite immediate cumulative-sum baselines.")
             lines.append(f"Previous observed summary: {previous_analysis['summary']}")
             if comparable:
                 lines.append(f"Comparison differences: {differences}")

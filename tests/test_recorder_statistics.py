@@ -166,8 +166,9 @@ async def test_finite_mocked_change_does_not_override_invalid_sum_baseline(
         affected = data if period == "current" else comparison["previous"]
     else:
         assert "comparison" not in data
-    assert affected["coverage"]["per_metric"]["change"]["missing_buckets"] == 1
-    assert affected["summary"]["change"] == (22 if period == "current" else 11)
+    missing = 2 if slot == "start" else 1
+    assert affected["coverage"]["per_metric"]["change"]["missing_buckets"] == missing
+    assert affected["summary"]["change"] == (12 - missing) * (2 if period == "current" else 1)
 
 
 @pytest.mark.asyncio
@@ -186,6 +187,69 @@ async def test_internal_sum_alone_does_not_establish_available_change(statistics
     assert result["structuredContent"]["available"] is False
     assert "summary" not in result["structuredContent"]
     assert "no finite statistic values" in result["content"][0]["text"].casefold()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("compare_previous", [False, True])
+@pytest.mark.parametrize("fault, missing_metric, missing_rows, bridged_delta", [
+    ("interior_missing", 2, 1, 2),
+    ("delayed_first", 2, 1, 3),
+    ("consecutive_none", 3, 0, 3),
+])
+async def test_native_interior_gaps_never_inflate_summary_or_calendar_average(
+    statistics_server, monkeypatch, compare_previous, fault, missing_metric, missing_rows, bridged_delta,
+):
+    """HA bridges absent sums; only immediate source-slot deltas are reportable."""
+    server, query, _ = statistics_server
+    old_zone = dt_util.DEFAULT_TIME_ZONE
+    try:
+        dt_util.set_default_time_zone(timezone.utc)
+        statistics = history.recorder_statistics
+        monkeypatch.setattr(statistics, "get_instance", lambda _: Mock())
+        monkeypatch.setattr(statistics, "_statistics_at_time", Mock(return_value=[]))
+        baseline_start = START - timedelta(hours=25)
+        samples = [{"start": baseline_start + timedelta(hours=index), "sum": 100 + index}
+                   for index in range(49)]
+        if fault == "interior_missing":
+            samples = [row for row in samples if row["start"] != START + timedelta(hours=6)]
+            bridge_start = START + timedelta(hours=7)
+        elif fault == "delayed_first":
+            samples = [row for row in samples if row["start"] not in {START - timedelta(hours=1), START}]
+            bridge_start = START + timedelta(hours=1)
+        else:
+            for row in samples:
+                if row["start"] in {START + timedelta(hours=6), START + timedelta(hours=7)}:
+                    row["sum"] = None
+            bridge_start = START + timedelta(hours=8)
+        native_result = {ENTITY: samples}
+        statistics._augment_result_with_change(
+            server.hass, Mock(), baseline_start, None, {"change", "sum"},
+            statistics.Statistics, {ENTITY: (1, {"statistic_id": ENTITY})}, native_result,
+        )
+        assert next(row for row in samples if row["start"] == bridge_start)["change"] == bridged_delta
+        query.side_effect = lambda *args: {ENTITY: [
+            row for row in samples if args[1] <= row["start"] < args[2]
+        ]}
+        data = (await server.tool_get_entity_statistics(arguments(
+            end=START + timedelta(days=1), bucket="day",
+            **({"compare_previous": True} if compare_previous else {}),
+        )))["structuredContent"]
+        assert data["summary"]["change"] == 24 - missing_metric
+        assert data["summary"]["complete_day_count"] == 0
+        assert data["summary"]["average_per_complete_day"] is None
+        assert data["coverage"]["missing_buckets"] == missing_rows
+        assert data["coverage"]["per_metric"]["change"]["missing_buckets"] == missing_metric
+        assert data["coverage"]["effective_complete"] is False
+        assert data["buckets"] == [{
+            "start": "2026-01-02", "sample_count": 24 - missing_rows, "change": 24 - missing_metric,
+        }]
+        if compare_previous:
+            assert data["comparison"]["comparable"] is False
+            assert data["comparison"]["differences"] == {}
+        else:
+            assert "comparison" not in data
+    finally:
+        dt_util.set_default_time_zone(old_zone)
 
 
 @pytest.mark.asyncio
@@ -436,9 +500,9 @@ async def test_metric_gaps_and_untrusted_rows_suppress_comparison(statistics_ser
         {"start": START + timedelta(seconds=1), "change": 1000},
     ], START, START - timedelta(hours=1))}
     data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
-    assert data["summary"]["change"] == 9
+    assert data["summary"]["change"] == 8
     assert not data["coverage"]["per_metric"]["change"]["complete"]
-    assert data["coverage"]["per_metric"]["change"]["missing_buckets"] == 3
+    assert data["coverage"]["per_metric"]["change"]["missing_buckets"] == 4
     assert not data["comparison"]["comparable"]
     assert data["comparison"]["differences"] == {}
 

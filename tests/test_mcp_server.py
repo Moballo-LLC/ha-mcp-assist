@@ -2683,7 +2683,7 @@ async def test_entity_statistics_uses_exposure_guard_and_recorder_executor(
             "sensor.example": [
                 {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 0},
                 {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 1, "change": 1, "mean": 4, "min": 2, "max": 5},
-                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": 3, "mean": 6, "min": 4, "max": 8},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "sum": 4, "change": 3, "mean": 6, "min": 4, "max": 8},
             ]
         }),
     )
@@ -2904,10 +2904,10 @@ async def test_statistics_rejects_nonfinite_booleans_and_preserves_full_summary(
             "sensor.example": [
                 {"start": datetime(2025, 12, 31, 23, tzinfo=timezone.utc), "sum": 0},
                 {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 1, "change": 1},
-                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": float("nan")},
-                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "change": True},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 2, "change": float("nan")},
+                {"start": datetime(2026, 1, 1, 2, tzinfo=timezone.utc), "sum": 3, "change": True},
                 {"start": True, "change": 100},
-                {"start": datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "change": 3},
+                {"start": datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "sum": 6, "change": 3},
             ]
         },
     )
@@ -2923,7 +2923,7 @@ async def test_statistics_rejects_nonfinite_booleans_and_preserves_full_summary(
     })
 
     text = result["content"][0]["text"]
-    assert "Observed change subtotal: 4 kWh across 2 of 5 expected hourly buckets" in text
+    assert "Observed change subtotal: 1 kWh across 1 of 5 expected hourly buckets" in text
     assert "Observed buckets: 4 of 5 expected hourly buckets; missing: 1" in text
     assert "Displayed 1 of 4 hour buckets" in text
     assert "change 1 kWh" in text
@@ -3203,7 +3203,7 @@ async def test_statistics_support_legacy_mean_metadata_without_mean_type(
             "sensor.legacy": [
                 {"start": datetime(2025, 12, 31, 23, tzinfo=timezone.utc), "sum": 0.0},
                 {"start": datetime(2026, 1, 1, 0, tzinfo=timezone.utc), "sum": 2.0, "change": 2.0, "mean": 4.0},
-                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "change": 3.0, "mean": 6.0},
+                {"start": datetime(2026, 1, 1, 1, tzinfo=timezone.utc), "sum": 5.0, "change": 3.0, "mean": 6.0},
             ]
         }
 
