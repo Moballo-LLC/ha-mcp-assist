@@ -164,7 +164,7 @@ from .const import (
 )
 from .conversation_history import ConversationHistory
 
-_REQUEST_MODEL_PROFILE: ContextVar[tuple[Any, ResolvedModelProfile | None, str] | None] = (
+_REQUEST_MODEL_PROFILE: ContextVar[tuple[Any, ResolvedModelProfile | None, str, object] | None] = (
     ContextVar("mcp_assist_model_profile", default=None)
 )
 
@@ -813,6 +813,13 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Read only the selection belonging to this entry and request context."""
         scoped = _REQUEST_MODEL_PROFILE.get()
         return scoped[1] if scoped is not None and scoped[0] is self.entry else None
+
+    def _clear_model_profile_metadata(self, request_id: object) -> None:
+        """Clear only the resolution owned by this logical request."""
+        if getattr(self, "_last_resolved_model_profile_request", None) is request_id:
+            self._last_resolved_model_profile = None
+            self._last_resolved_model_profile_reference = None
+            self._last_resolved_model_profile_request = None
 
     @property
     def image_model(self) -> str | None:
@@ -2074,8 +2081,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         )
 
         profile_reference = self.model_profile
+        profile_request_id = object()
         self._last_resolved_model_profile = None
         self._last_resolved_model_profile_reference = None
+        self._last_resolved_model_profile_request = profile_request_id
         # Store ChatLog for tool execution methods to access
         self._current_chat_log = chat_log_instance
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
@@ -2100,14 +2109,15 @@ class MCPAssistConversationEntity(ConversationEntity):
             _PERSISTENT_CHAT_LOG_RECORD.set(persistent_chat_log)
         )
 
-        model_profile_token = _REQUEST_MODEL_PROFILE.set((self.entry, None, profile_reference))
+        model_profile_token = _REQUEST_MODEL_PROFILE.set(
+            (self.entry, None, profile_reference, profile_request_id)
+        )
         try:
             return await self._async_handle_message_inner(
                 user_input, conversation_id
             )
         except BaseException:
-            self._last_resolved_model_profile = None
-            self._last_resolved_model_profile_reference = None
+            self._clear_model_profile_metadata(profile_request_id)
             raise
         finally:
             # Clean up
@@ -2123,8 +2133,11 @@ class MCPAssistConversationEntity(ConversationEntity):
         self, user_input: ConversationInput, conversation_id: str
     ) -> ConversationResult:
         """Process user input with ChatLog tracking."""
+        scoped = _REQUEST_MODEL_PROFILE.get()
+        profile_request_id = (
+            scoped[3] if scoped is not None and scoped[0] is self.entry else object()
+        )
         try:
-            scoped = _REQUEST_MODEL_PROFILE.get()
             profile_reference = (
                 scoped[2] if scoped is not None and scoped[0] is self.entry
                 else self.model_profile
@@ -2133,9 +2146,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                 resolved = await async_resolve_model_profile(
                     resolve_provider_runtime_config(self.entry), profile_reference
                 )
-                _REQUEST_MODEL_PROFILE.set((self.entry, resolved, profile_reference))
+                _REQUEST_MODEL_PROFILE.set(
+                    (self.entry, resolved, profile_reference, profile_request_id)
+                )
                 self._last_resolved_model_profile = resolved
                 self._last_resolved_model_profile_reference = profile_reference
+                self._last_resolved_model_profile_request = profile_request_id
+                record = _PERSISTENT_CHAT_LOG_RECORD.get()
+                if record is not None:
+                    record["model"] = resolved.model
             _LOGGER.debug("Conversation ID: %s", conversation_id)
 
             # OpenClaw: bypass entire LLM/MCP pipeline — server handles everything
@@ -2225,8 +2244,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
         except ProviderResponseTimeoutError as err:
-            self._last_resolved_model_profile = None
-            self._last_resolved_model_profile_reference = None
+            self._clear_model_profile_metadata(profile_request_id)
             _LOGGER.warning(
                 (
                     "Provider request timed out: provider=%s transport=%s "
@@ -2255,8 +2273,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
         except Exception as err:
-            self._last_resolved_model_profile = None
-            self._last_resolved_model_profile_reference = None
+            self._clear_model_profile_metadata(profile_request_id)
             safe_error = redact_exception(err)
             _LOGGER.error("Error processing conversation (%s)", type(err).__name__)
             await self._finish_persistent_chat_log_record(error=safe_error)

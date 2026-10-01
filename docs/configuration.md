@@ -383,7 +383,8 @@ OpenAI endpoints do not support this opt-in contract.
 When configured, MCP Assist makes an authenticated GET to the same base's
 `/v1/model-profiles` endpoint (preserving an existing `/v1` prefix). The endpoint
 must return schema version 1 with a canonical SHA256 `revision`, `models`,
-`profiles`, `bindings`, and `resolvedProfiles`. Each profile specifies a label,
+`profiles`, `bindings`, and `resolvedProfiles`. The `bindings` object may be empty
+when selecting a profile ID directly. Each profile specifies a label,
 model alias, and reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`, or
 `ultra`); its resolved pair must match those settings. Redirects are rejected;
 lookup is limited to 15 seconds and 1 MiB.

@@ -53,7 +53,8 @@ def validate_model_profile(payload: Any, reference: str) -> ResolvedModelProfile
             raise ValueError
         for name in ("models", "profiles", "bindings", "resolvedProfiles"):
             mapping = payload[name]
-            if not isinstance(mapping, dict) or not 1 <= len(mapping) <= 64:
+            minimum_size = 0 if name == "bindings" else 1
+            if not isinstance(mapping, dict) or not minimum_size <= len(mapping) <= 64:
                 raise ValueError
             if any(not isinstance(key, str) or not _ID.fullmatch(key) for key in mapping):
                 raise ValueError

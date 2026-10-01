@@ -18,7 +18,7 @@ from custom_components.mcp_assist.agent import MCPAssistConversationEntity
 from custom_components.mcp_assist.const import (
     CONF_API_KEY, CONF_CHAT_LOG_MODE, CONF_LMSTUDIO_URL, CONF_MODEL_NAME,
     CONF_MODEL_PROFILE, CONF_OPENAI_API_TRANSPORT, CONF_SERVER_TYPE,
-    SERVER_TYPE_OPENAI, SERVER_TYPE_OLLAMA,
+    SERVER_TYPE_OPENAI, SERVER_TYPE_OLLAMA, DOMAIN,
 )
 from custom_components.mcp_assist.llm_providers.openai import OpenAIProvider
 from custom_components.mcp_assist.model_profiles import (
@@ -27,10 +27,10 @@ from custom_components.mcp_assist.model_profiles import (
 from custom_components.mcp_assist.provider_runtime import resolve_provider_runtime_config
 
 
-def policy(model="example-model", effort="high"):
+def policy(model="example-model", effort="high", *, bindings=None):
     value = {"schemaVersion": 1, "models": {"primary": model}, "profiles": {
         "focused": {"label": "Focused", "modelAlias": "primary", "reasoningEffort": effort}
-    }, "bindings": {"assistant": "focused"}}
+    }, "bindings": {"assistant": "focused"} if bindings is None else bindings}
     value["revision"] = hashlib.sha256(json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()).hexdigest()
@@ -60,6 +60,21 @@ def test_binding_and_profile_resolution():
     assert validate_model_profile(value, "assistant") == validate_model_profile(value, "focused")
     value["nativeExport"] = {"ok": False, "error": "example"}
     assert validate_model_profile(value, "assistant").model == "example-model"
+
+
+def test_direct_profile_resolution_without_bindings():
+    value = policy(bindings={})
+    assert validate_model_profile(value, "focused").model == "example-model"
+    with pytest.raises(ModelProfileResolutionError):
+        validate_model_profile(value, "assistant")
+
+
+@pytest.mark.parametrize("mapping", ["models", "profiles", "resolvedProfiles"])
+def test_required_policy_maps_remain_nonempty(mapping):
+    value = policy(bindings={})
+    value[mapping] = {}
+    with pytest.raises(ModelProfileResolutionError):
+        validate_model_profile(value, "focused")
 
 
 @pytest.mark.parametrize("mutate", [
@@ -392,3 +407,98 @@ async def test_preference_change_during_lookup_does_not_relabel_metadata(
     assert models == ["prior-model", "next-model"]
     assert agent.resolved_model_profile["model"] == "next-model"
     assert agent._last_resolved_model_profile_reference == "focused"
+
+
+@pytest.mark.parametrize("failure", [None, "timeout", "error"])
+async def test_persisted_chat_log_records_resolved_model(
+    hass, profile_entry_factory, monkeypatch, failure
+):
+    entry = profile_entry_factory(data={**entry_data(), CONF_CHAT_LOG_MODE: True})
+    agent = MCPAssistConversationEntity(hass, entry)
+    prepare(agent, monkeypatch)
+    monkeypatch.setattr(agent, "_build_response_result",
+                        MCPAssistConversationEntity._build_response_result.__get__(agent))
+    manager = SimpleNamespace(async_record=AsyncMock())
+    hass.data.setdefault(DOMAIN, {})["chat_log_manager"] = manager
+    resolved = validate_model_profile(policy(), "assistant")
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", AsyncMock(return_value=resolved))
+    error = (agent_module.ProviderResponseTimeoutError(
+        provider_name="OpenAI", timeout_seconds=1, transport="HTTP", attempts=1, iteration=0
+    ) if failure == "timeout" else RuntimeError("Request failed") if failure else None)
+    monkeypatch.setattr(agent, "_call_llm", AsyncMock(return_value="Answer.", side_effect=error))
+    chat_log = SimpleNamespace(conversation_id="test",
+                              async_add_assistant_content_without_tools=lambda content: None)
+
+    result = await agent._async_handle_message(user_input(), chat_log)
+
+    assert (result.response.error_code is not None) == bool(failure)
+    manager.async_record.assert_awaited_once()
+    saved = manager.async_record.await_args.args[0]
+    assert saved["model"] == "example-model"
+    assert saved["model"] != agent.model_name
+    assert agent_module._PERSISTENT_CHAT_LOG_RECORD.get() is None
+
+
+@pytest.mark.parametrize("failure", ["timeout", "error", "cancelled"])
+@pytest.mark.parametrize("failure_stage", ["lookup", "generation"])
+async def test_older_failed_request_preserves_newer_resolution(
+    hass, profile_entry_factory, monkeypatch, failure, failure_stage
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data=entry_data()))
+    prepare(agent, monkeypatch)
+    older_started = asyncio.Event()
+    release_older = asyncio.Event()
+    count = 0
+    older = validate_model_profile(policy("older-model"), "assistant")
+    newer = validate_model_profile(policy("newer-model"), "assistant")
+
+    async def fail_older():
+        older_started.set()
+        await release_older.wait()
+        if failure == "cancelled":
+            raise asyncio.CancelledError
+        if failure == "timeout":
+            raise agent_module.ProviderResponseTimeoutError(
+                provider_name="OpenAI", timeout_seconds=1, transport="HTTP",
+                attempts=1, iteration=0,
+            )
+        raise ModelProfileResolutionError()
+
+    async def lookup(*args):
+        nonlocal count
+        count += 1
+        if count == 1:
+            if failure_stage == "lookup":
+                await fail_older()
+            return older
+        return newer
+
+    async def call(messages):
+        if agent.model_name == "older-model":
+            await fail_older()
+        return "Answer."
+
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+    monkeypatch.setattr(agent, "_call_llm", call)
+    task = asyncio.create_task(agent._async_handle_message(
+        user_input("Older"), SimpleNamespace(conversation_id="older")))
+    try:
+        await asyncio.wait_for(older_started.wait(), timeout=1)
+        assert await agent._async_handle_message(
+            user_input("Newer"), SimpleNamespace(conversation_id="newer")) == "done"
+        metadata = agent.resolved_model_profile
+        assert metadata["model"] == "newer-model"
+        release_older.set()
+        if failure == "cancelled":
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            result = await task
+            assert result.response.error_code is not None
+        assert agent.resolved_model_profile == metadata
+        assert agent_module._REQUEST_MODEL_PROFILE.get() is None
+    finally:
+        release_older.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
