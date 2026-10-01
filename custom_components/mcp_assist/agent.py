@@ -37,6 +37,7 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_profile,
 )
 from .model_profiles import (
+    MCP_PROFILE_REQUEST_HEADER,
     ModelProfileResolutionError,
     REQUEST_RESOLVED_PROFILES,
     ResolvedModelProfile,
@@ -3621,6 +3622,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                 ],
             }
 
+        profile_server = None
+        profile_token = None
         try:
             mcp_url = f"http://localhost:{self.mcp_port}"
 
@@ -3641,6 +3644,19 @@ class MCPAssistConversationEntity(ConversationEntity):
                 },
                 "id": request_id,
             }
+            post_kwargs = self._mcp_post_kwargs(payload)
+            snapshot = REQUEST_RESOLVED_PROFILES.get()
+            if (snapshot is not None and snapshot[0] is self.entry
+                    and any(value is not None for value in snapshot[1:])):
+                profile_server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
+                if profile_server is None:
+                    raise ModelProfileResolutionError()
+                profile_token = profile_server.register_profile_request(
+                    snapshot, request_id, tool_name
+                )
+                post_kwargs["headers"] = {
+                    **post_kwargs.get("headers", {}), MCP_PROFILE_REQUEST_HEADER: profile_token
+                }
 
             _LOGGER.debug(
                 "MCP request prepared: id=%s tool=%s argument_keys=%s context_keys=%s payload_bytes=%d",
@@ -3655,7 +3671,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
                     f"{mcp_url}/",
-                    **self._mcp_post_kwargs(payload),
+                    **post_kwargs,
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -3693,6 +3709,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                 type(err).__name__,
             )
             return {"error": safe_error}
+        finally:
+            if profile_token is not None:
+                profile_server.discard_profile_request(profile_token)
 
     def _normalize_mcp_tool_response(self, result: Any) -> Dict[str, Any]:
         """Normalize an MCP JSON-RPC tool result into one predictable shape."""

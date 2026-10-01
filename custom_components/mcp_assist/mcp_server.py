@@ -16,6 +16,7 @@ import math
 import mimetypes
 from pathlib import Path, PurePosixPath
 import re
+import secrets
 from typing import Any, Dict, List, Tuple
 from urllib.parse import unquote, urlparse
 
@@ -54,6 +55,12 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_shared_settings,
 )
 from .openapi import to_openapi
+from .model_profiles import (
+    MCP_PROFILE_REQUEST_HEADER,
+    ModelProfileResolutionError,
+    REQUEST_RESOLVED_PROFILES,
+    ResolvedProfilesSnapshot,
+)
 from .const import (
     DOMAIN,
     MCP_SERVER_NAME,
@@ -323,6 +330,7 @@ class MCPServer(
         self._sse_client_ips: dict[web.StreamResponse, str | None] = {}
         self._progress_queue_ips: dict[asyncio.Queue[Any], str | None] = {}
         self._websocket_clients: dict[WebSocketResponse, str | None] = {}
+        self._profile_requests: dict[str, tuple[str, str, ResolvedProfilesSnapshot]] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.allowed_ips: list[str] = []
@@ -826,6 +834,7 @@ class MCPServer(
     async def stop(self) -> None:
         """Stop the MCP server."""
         _LOGGER.info("Stopping MCP server")
+        self._profile_requests.clear()
 
         if self.site:
             await self.site.stop()
@@ -1955,6 +1964,41 @@ class MCPServer(
 
         return ws
 
+    def register_profile_request(
+        self, snapshot: ResolvedProfilesSnapshot, request_id: str, tool_name: str
+    ) -> str:
+        """Retain a trusted selection for one local HTTP tool dispatch."""
+        if len(self._profile_requests) >= 128:
+            raise ModelProfileResolutionError()
+        token = secrets.token_urlsafe(32)
+        self._profile_requests[token] = (request_id, tool_name, snapshot)
+        return token
+
+    def discard_profile_request(self, token: str) -> None:
+        """Release a dispatch that failed or was cancelled before consumption."""
+        self._profile_requests.pop(token, None)
+
+    def _take_profile_request(
+        self, request: web.Request, data: dict[str, Any]
+    ) -> ResolvedProfilesSnapshot | None:
+        token = (getattr(request, "headers", {}) or {}).get(MCP_PROFILE_REQUEST_HEADER)
+        if token is None:
+            return None
+        retained = self._profile_requests.pop(token, None)
+        params = data.get("params")
+        context = params.get("context") if isinstance(params, dict) else None
+        try:
+            local = ipaddress.ip_address(request.remote).is_loopback
+        except ValueError:
+            local = False
+        if (retained is None or not local or data.get("method") != "tools/call"
+                or data.get("id") != retained[0] or not isinstance(params, dict)
+                or params.get("name") != retained[1] or not isinstance(context, dict)
+                or context.get("profile_entry_id") != retained[2][0].entry_id
+                or self._resolve_profile_entry(context) is not retained[2][0]):
+            raise ModelProfileResolutionError()
+        return retained[2]
+
     async def handle_mcp_request(self, request: web.Request) -> web.Response:
         """Handle HTTP MCP requests with proper JSON-RPC 2.0 protocol."""
         client_ip = request.remote
@@ -1971,6 +2015,7 @@ class MCPServer(
             return security_response
 
         request_id = None
+        profiles_token = REQUEST_RESOLVED_PROFILES.set(None)
         try:
             data = await request.json()
 
@@ -2019,6 +2064,15 @@ class MCPServer(
                     status=400,
                 )
 
+            try:
+                REQUEST_RESOLVED_PROFILES.set(self._take_profile_request(request, data))
+            except ModelProfileResolutionError:
+                return web.json_response(
+                    {"jsonrpc": "2.0", "error": {"code": -32600,
+                     "message": "Invalid profile request snapshot"}, "id": request_id},
+                    status=400,
+                )
+
             # Check if this is a notification (no id field)
             is_notification = "id" not in data
 
@@ -2062,6 +2116,8 @@ class MCPServer(
             )
             error_response["id"] = request_id
             return web.json_response(error_response, status=500)
+        finally:
+            REQUEST_RESOLVED_PROFILES.reset(profiles_token)
 
     async def process_mcp_notification(self, data: Dict[str, Any]) -> None:
         """Process MCP notification (no response expected)."""

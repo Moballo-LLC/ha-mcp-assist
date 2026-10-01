@@ -14,11 +14,13 @@ import pytest
 from custom_components.mcp_assist import agent as agent_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
 from custom_components.mcp_assist.const import (
+    CONF_LMSTUDIO_URL, CONF_MCP_BEARER_TOKEN, CONF_MCP_PORT, DOMAIN,
     CONF_OPENAI_IMAGE_API, CONF_OPENAI_IMAGE_MODEL, CONF_OPENAI_IMAGE_MODEL_PROFILE,
     CONF_SERVER_TYPE, OPENAI_API_TRANSPORT_RESPONSES, SERVER_TYPE_OLLAMA,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
 from custom_components.mcp_assist.model_profiles import (
+    MCP_PROFILE_REQUEST_HEADER,
     ModelProfileResolutionError, REQUEST_RESOLVED_PROFILES,
     async_resolve_model_profile, async_resolve_model_profiles,
     validate_model_profile, validate_model_profiles,
@@ -443,3 +445,159 @@ async def test_actual_http_policy_lookup_negotiates_image_capability(
     assert text.model == ("example-text" if expanded else "example-model")
     assert (image.model if image else None) == ("example-image" if mode == "both" else None)
     assert received == [({"include_images": "true"}, "Bearer example-key", "/v1/model-profiles")]
+
+
+@pytest.mark.parametrize("responses", [False, True])
+async def test_conversation_snapshot_crosses_actual_mcp_http_request(
+    hass, aiohttp_server, socket_enabled, profile_entry_factory, system_entry_factory,
+    monkeypatch, responses,
+):
+    from aiohttp import web
+    import pytest_socket
+
+    pytest_socket.socket_allow_hosts(["127.0.0.1", "::1"])
+    system_entry = system_entry_factory(data={CONF_MCP_BEARER_TOKEN: "example-mcp-key"})
+    current = image_policy()
+    policy_reads = []
+    generated = []
+    handler_contexts = []
+    entry = profile_entry_factory(data=image_entry_data(**{
+        CONF_OPENAI_IMAGE_API: OPENAI_API_TRANSPORT_RESPONSES if responses else "images",
+    }))
+    mcp = MCPServer(hass, 8099, entry)
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = mcp
+
+    async def get_policy(request):
+        policy_reads.append(deepcopy(current))
+        return web.json_response(current)
+
+    async def generate_image(request):
+        generated.append(await request.json())
+        encoded = base64.b64encode(b"example-png").decode()
+        return web.json_response(
+            {"status": "completed", "output": [
+                {"type": "image_generation_call", "result": encoded}
+            ]} if responses else {"data": [{"b64_json": encoded}]}
+        )
+
+    async def mcp_request(request):
+        # The server was started outside the caller's conversation context.
+        handler_contexts.append(REQUEST_RESOLVED_PROFILES.get())
+        assert request.headers["Authorization"] == "Bearer example-mcp-key"
+        assert request.headers[MCP_PROFILE_REQUEST_HEADER]
+        return await mcp.handle_mcp_request(request)
+
+    app = web.Application()
+    app.router.add_get("/v1/model-profiles", get_policy)
+    app.router.add_post("/v1/responses" if responses else "/v1/images/generations", generate_image)
+    app.router.add_post("/", mcp_request)
+    http = await aiohttp_server(app)
+    hass.config_entries.async_update_entry(system_entry, options={CONF_MCP_PORT: http.port})
+    hass.config_entries.async_update_entry(entry, options={
+        CONF_LMSTUDIO_URL: str(http.make_url("/v1")), CONF_MCP_PORT: http.port,
+    })
+    agent = MCPAssistConversationEntity(hass, entry)
+    prepare(agent, monkeypatch)
+    monkeypatch.setattr(mcp, "_normalize_image_payload", lambda data, mime, _: (data, mime))
+
+    async def generate(messages):
+        current.update(image_policy("next-image", "next-text", "low"))
+        result = await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+        assert not result.get("isError") and "error" not in result
+        assert agent._get_llm_provider().model_name == "example-text"
+        assert agent._get_llm_provider().image_model == "example-image"
+        return "Answer"
+
+    monkeypatch.setattr(agent, "_call_llm", generate)
+    await agent._async_handle_message(user_input(), SimpleNamespace(conversation_id="test"))
+    assert handler_contexts == [None]
+    assert len(policy_reads) == 1 and len(generated) == 1
+    if responses:
+        assert generated[0]["model"] == "example-text"
+        assert generated[0]["reasoning"] == {"effort": "high"}
+        assert generated[0]["tools"][0]["model"] == "example-image"
+    else:
+        assert generated[0]["model"] == "example-image"
+    assert mcp._profile_requests == {}
+    assert REQUEST_RESOLVED_PROFILES.get() is None
+
+
+@pytest.mark.parametrize("invalid", ["entry", "id", "tool", "remote", "unknown", "replay"])
+async def test_http_snapshot_rejects_wrong_binding_and_replay(
+    hass, profile_entry_factory, invalid,
+):
+    entry = profile_entry_factory(data=image_entry_data())
+    other = profile_entry_factory(data=image_entry_data())
+    server = MCPServer(hass, 8099, entry)
+    snapshot = (entry, *validate_model_profiles(image_policy(), "assistant", "visual"))
+    token = server.register_profile_request(snapshot, "request", "generate_image")
+    payload = {"jsonrpc": "2.0", "id": "request", "method": "tools/call", "params": {
+        "name": "generate_image", "context": {"profile_entry_id": entry.entry_id},
+    }}
+    request = SimpleNamespace(headers={MCP_PROFILE_REQUEST_HEADER: token}, remote="127.0.0.1")
+    if invalid == "entry":
+        payload["params"]["context"]["profile_entry_id"] = other.entry_id
+    elif invalid == "id":
+        payload["id"] = "different-request"
+    elif invalid == "tool":
+        payload["params"]["name"] = "analyze_image"
+    elif invalid == "remote":
+        request.remote = "192.0.2.1"
+    elif invalid == "unknown":
+        request.headers[MCP_PROFILE_REQUEST_HEADER] = "unknown"
+    else:
+        assert server._take_profile_request(request, payload) == snapshot
+    with pytest.raises(ModelProfileResolutionError):
+        server._take_profile_request(request, payload)
+    server.discard_profile_request(token)
+    assert server._profile_requests == {}
+
+
+async def test_outstanding_http_snapshots_and_registry_limit(hass, profile_entry_factory):
+    entry = profile_entry_factory(data=image_entry_data())
+    server = MCPServer(hass, 8099, entry)
+    snapshots = [(entry, *validate_model_profiles(image_policy(f"image-{i}", f"text-{i}"),
+                 "assistant", "visual")) for i in range(128)]
+    tokens = [server.register_profile_request(snapshot, str(i), "generate_image")
+              for i, snapshot in enumerate(snapshots)]
+    with pytest.raises(ModelProfileResolutionError):
+        server.register_profile_request(snapshots[0], "overflow", "generate_image")
+    for i in reversed(range(128)):
+        request = SimpleNamespace(headers={MCP_PROFILE_REQUEST_HEADER: tokens[i]}, remote="::1")
+        payload = {"id": str(i), "method": "tools/call", "params": {
+            "name": "generate_image", "context": {"profile_entry_id": entry.entry_id},
+        }}
+        assert server._take_profile_request(request, payload) == snapshots[i]
+    assert server._profile_requests == {}
+    server.register_profile_request(snapshots[0], "shutdown", "generate_image")
+    await server.stop()
+    assert server._profile_requests == {}
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_failed_http_dispatch_releases_snapshot(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, cancel,
+):
+    system_entry_factory()
+    entry = profile_entry_factory(data=image_entry_data())
+    server = MCPServer(hass, 8099, entry)
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = server
+    agent = MCPAssistConversationEntity(hass, entry)
+    snapshot = (entry, *validate_model_profiles(image_policy(), "assistant", "visual"))
+    token = REQUEST_RESOLVED_PROFILES.set(snapshot)
+
+    def fail_session(**kwargs):
+        assert len(server._profile_requests) == 1
+        raise asyncio.CancelledError() if cancel else OSError("Example connection failure")
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", fail_session)
+    try:
+        if cancel:
+            with pytest.raises(asyncio.CancelledError):
+                await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+        else:
+            result = await agent._call_mcp_tool("generate_image", {"prompt": "Illustration"})
+            assert "error" in result
+    finally:
+        REQUEST_RESOLVED_PROFILES.reset(token)
+    assert server._profile_requests == {}

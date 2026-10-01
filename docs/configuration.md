@@ -418,6 +418,13 @@ and transport fallback, including Responses image tools and Images API requests.
 The next logical request resolves again. Missing or invalid image policy stops
 the request without falling back to the saved concrete model.
 
+Conversation tool calls retain the frozen selection across the local MCP HTTP
+boundary using a one-use opaque identifier. The server keeps the selection only
+in memory and binds it to the profile entry, tool, and JSON-RPC request. Invalid
+or replayed identifiers fail before dispatch; standalone calls resolve their own
+policy. Identifiers are released on completion, failure, cancellation, or server
+shutdown.
+
 The agent's `image_model_profile` property exposes the current reference.
 `resolved_image_model_profile` exposes `reference`, `model`, `profile_id`, and
 `revision` for the current reference after resolution, or `None` before resolution

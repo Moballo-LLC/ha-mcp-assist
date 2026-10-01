@@ -52,9 +52,13 @@ class ResolvedImageModelProfile:
     revision: str
 
 
-REQUEST_RESOLVED_PROFILES: ContextVar[
-    tuple[Any, ResolvedModelProfile | None, ResolvedImageModelProfile | None] | None
-] = ContextVar("mcp_assist_resolved_provider_profiles", default=None)
+ResolvedProfilesSnapshot = tuple[
+    Any, ResolvedModelProfile | None, ResolvedImageModelProfile | None
+]
+MCP_PROFILE_REQUEST_HEADER = "X-MCP-Assist-Profile-Request"
+REQUEST_RESOLVED_PROFILES: ContextVar[ResolvedProfilesSnapshot | None] = ContextVar(
+    "mcp_assist_resolved_provider_profiles", default=None
+)
 
 
 def _validate_policy(payload: Any) -> None:
