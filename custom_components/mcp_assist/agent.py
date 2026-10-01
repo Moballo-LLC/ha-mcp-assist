@@ -2,7 +2,7 @@
 
 import asyncio
 from contextvars import ContextVar, Token
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import logging
@@ -35,6 +35,11 @@ from homeassistant.util import dt as dt_util
 from .tools.builtin_catalog import (
     BuiltInToolToggleSpec,
     is_builtin_package_enabled_for_profile,
+)
+from .model_profiles import (
+    ModelProfileResolutionError,
+    ResolvedModelProfile,
+    async_resolve_model_profile,
 )
 from .provider_runtime import resolve_provider_runtime_config
 from .secret_redaction import redact_exception, redact_secrets, redact_secret_text
@@ -76,6 +81,7 @@ from .const import (
     DOMAIN,
     CONF_PROFILE_NAME,
     CONF_MODEL_NAME,
+    CONF_MODEL_PROFILE,
     CONF_MCP_PORT,
     CONF_SYSTEM_PROMPT,
     CONF_TECHNICAL_PROMPT,
@@ -144,6 +150,7 @@ from .const import (
     LLM_API_BRIDGE_TECHNICAL_INSTRUCTIONS,
     MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS,
     SERVER_TYPE_HERMES,
+    SERVER_TYPE_OPENAI,
     SERVER_TYPE_OPENCLAW,
     TOOL_FAMILY_EXTERNAL_CUSTOM,
     TOOL_FAMILY_LLM_API_BRIDGE,
@@ -156,6 +163,10 @@ from .const import (
     DEFAULT_HERMES_SESSION_KEY,
 )
 from .conversation_history import ConversationHistory
+
+_REQUEST_MODEL_PROFILE: ContextVar[tuple[Any, ResolvedModelProfile | None, str] | None] = (
+    ContextVar("mcp_assist_model_profile", default=None)
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -772,9 +783,36 @@ class MCPAssistConversationEntity(ConversationEntity):
     @property
     def model_name(self) -> str:
         """Get model name (dynamic)."""
+        resolved = self._request_model_profile()
+        if resolved is not None:
+            return resolved.model
         return self.entry.options.get(
             CONF_MODEL_NAME, self.entry.data.get(CONF_MODEL_NAME, "")
         )
+
+    @property
+    def model_profile(self) -> str:
+        """Return the opt-in provider profile reference."""
+        if self.server_type != SERVER_TYPE_OPENAI:
+            return ""
+        return str(self.entry.options.get(
+            CONF_MODEL_PROFILE, self.entry.data.get(CONF_MODEL_PROFILE, "")
+        ) or "").strip()
+
+    @property
+    def resolved_model_profile(self) -> dict[str, str] | None:
+        """Return safe last-resolution metadata, independently of call success."""
+        resolved = getattr(self, "_last_resolved_model_profile", None)
+        reference = getattr(self, "_last_resolved_model_profile_reference", None)
+        if resolved is None or self.model_profile != reference:
+            return None
+        return {"model": resolved.model, "effort": resolved.effort,
+                "profile_id": resolved.profile_id, "revision": resolved.revision}
+
+    def _request_model_profile(self) -> ResolvedModelProfile | None:
+        """Read only the selection belonging to this entry and request context."""
+        scoped = _REQUEST_MODEL_PROFILE.get()
+        return scoped[1] if scoped is not None and scoped[0] is self.entry else None
 
     @property
     def image_model(self) -> str | None:
@@ -875,12 +913,18 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _build_provider_settings(self) -> ProviderSettings:
         """Build current provider settings from dynamic profile options."""
-        return build_provider_settings(
+        settings = build_provider_settings(
             self.entry,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             prompt_cache_key=self._build_prompt_cache_key(),
         )
+        resolved = self._request_model_profile()
+        if resolved is not None:
+            settings = replace(settings, model_name=resolved.model, provider_options={
+                **settings.provider_options, "_resolved_model_profile": resolved,
+            })
+        return settings
 
     def _get_llm_provider(self) -> LLMProvider:
         """Return the active provider transport."""
@@ -1462,6 +1506,8 @@ class MCPAssistConversationEntity(ConversationEntity):
 
     def _get_friendly_error_message(self, error: Exception) -> str:
         """Convert technical errors to user-friendly TTS messages."""
+        if isinstance(error, ModelProfileResolutionError):
+            return str(error)
         if isinstance(error, HermesBusyError):
             return "Hermes Agent is busy handling another request. Try again shortly."
         if isinstance(error, HermesAuthError):
@@ -2027,6 +2073,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             len(str(user_input.text or "")),
         )
 
+        profile_reference = self.model_profile
+        self._last_resolved_model_profile = None
+        self._last_resolved_model_profile_reference = None
         # Store ChatLog for tool execution methods to access
         self._current_chat_log = chat_log_instance
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
@@ -2051,12 +2100,18 @@ class MCPAssistConversationEntity(ConversationEntity):
             _PERSISTENT_CHAT_LOG_RECORD.set(persistent_chat_log)
         )
 
+        model_profile_token = _REQUEST_MODEL_PROFILE.set((self.entry, None, profile_reference))
         try:
             return await self._async_handle_message_inner(
                 user_input, conversation_id
             )
+        except BaseException:
+            self._last_resolved_model_profile = None
+            self._last_resolved_model_profile_reference = None
+            raise
         finally:
             # Clean up
+            _REQUEST_MODEL_PROFILE.reset(model_profile_token)
             _PERSISTENT_CHAT_LOG_RECORD.reset(chat_log_token)
             _ADAPTIVE_LOADED_TOOL_NAMES.reset(adaptive_loaded_tools_token)
             _REQUEST_TOOL_HISTORY_SUMMARIES.reset(tool_history_token)
@@ -2069,6 +2124,18 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> ConversationResult:
         """Process user input with ChatLog tracking."""
         try:
+            scoped = _REQUEST_MODEL_PROFILE.get()
+            profile_reference = (
+                scoped[2] if scoped is not None and scoped[0] is self.entry
+                else self.model_profile
+            )
+            if profile_reference:
+                resolved = await async_resolve_model_profile(
+                    resolve_provider_runtime_config(self.entry), profile_reference
+                )
+                _REQUEST_MODEL_PROFILE.set((self.entry, resolved, profile_reference))
+                self._last_resolved_model_profile = resolved
+                self._last_resolved_model_profile_reference = profile_reference
             _LOGGER.debug("Conversation ID: %s", conversation_id)
 
             # OpenClaw: bypass entire LLM/MCP pipeline — server handles everything
@@ -2158,6 +2225,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
         except ProviderResponseTimeoutError as err:
+            self._last_resolved_model_profile = None
+            self._last_resolved_model_profile_reference = None
             _LOGGER.warning(
                 (
                     "Provider request timed out: provider=%s transport=%s "
@@ -2186,6 +2255,8 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
         except Exception as err:
+            self._last_resolved_model_profile = None
+            self._last_resolved_model_profile_reference = None
             safe_error = redact_exception(err)
             _LOGGER.error("Error processing conversation (%s)", type(err).__name__)
             await self._finish_persistent_chat_log_record(error=safe_error)
