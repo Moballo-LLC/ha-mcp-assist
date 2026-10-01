@@ -377,7 +377,7 @@ integration itself. See [External Custom Tools](custom-tools.md).
 For the **OpenAI** provider with a custom compatible endpoint, **Model profile
 (optional)** accepts a binding name or profile ID from that endpoint's policy.
 Leave it blank to keep using your saved model without any profile lookup. Other
-providers and image model settings are independent of this option. Official
+providers do not support this option. Official
 OpenAI endpoints do not support this opt-in contract.
 
 When configured, MCP Assist makes an authenticated GET to the same base's
@@ -395,3 +395,48 @@ again. Missing profiles, authentication failures, and invalid policy responses
 stop the request before model generation; MCP Assist does not fall back to the
 saved model. The agent's read-only `resolved_model_profile` metadata reports the
 last resolved pair and revision, not proof that a model request succeeded.
+
+
+**Image model profile (optional)** accepts an image binding or profile ID from the
+same compatible endpoint. It overrides the concrete **Image Model** selection
+when nonempty. Leave it blank to preserve the saved concrete selection or auto
+behavior. This option is unavailable on official OpenAI endpoints and other
+providers; configuring it there stops the request.
+
+Policies may add `imageModels` (alias to concrete model ID), `imageProfiles`
+(profile ID to `{label, modelAlias}`), and `imageBindings` (binding to profile ID).
+Include all three maps together, plus `resolvedImageProfiles` (profile ID to
+`{model}`). Image profiles have no reasoning effort. The canonical revision is
+SHA256 of the sorted compact UTF-8 JSON policy including `schemaVersion`, the
+three text policy maps, and all three image policy maps when present. Resolved
+maps and response metadata are excluded from that digest. Text-only policies
+remain valid for text requests.
+
+When both references are configured, one authenticated bounded lookup resolves
+both from the same snapshot. The image model is frozen through tool follow-ups
+and transport fallback, including Responses image tools and Images API requests.
+The next logical request resolves again. Missing or invalid image policy stops
+the request without falling back to the saved concrete model.
+
+The agent's `image_model_profile` property exposes the current reference.
+`resolved_image_model_profile` exposes `reference`, `model`, `profile_id`, and
+`revision` for the current reference after resolution, or `None` before resolution
+and after a failed request. Changing the reference invalidates old metadata.
+`image_model` reports the effective concrete image model, or `None` until the
+configured reference resolves. This metadata does not prove image generation
+succeeded.
+
+The conversation entity also publishes scalar state attributes for consumers:
+`image_model_profile` is the configured reference; `resolved_image_model_profile`
+is the resolved profile ID; `image_model_policy_revision` is the policy revision.
+Resolved attributes are omitted until resolution succeeds and whenever the
+reference changes or a request fails.
+
+Policy lookups send `include_images=true` to request the complete text and image
+policy. Compatible endpoints can keep their default response limited to the text
+policy for older clients, with a revision computed from only its four policy
+fields. The expanded response includes the image policy fields in its revision.
+Endpoints that ignore the query remain compatible: MCP Assist accepts a valid
+text-only policy for text requests, and requires the image maps for image profile
+requests. The query requests policy capability; it does not change authentication
+or provider routing.

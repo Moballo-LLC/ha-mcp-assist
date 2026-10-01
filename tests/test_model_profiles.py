@@ -134,7 +134,8 @@ async def test_authenticated_lookup_preserves_base_path(profile_entry_factory, m
     runtime = resolve_provider_runtime_config(profile_entry_factory(data=entry_data()))
     assert (await async_resolve_model_profile(runtime, "assistant")).model == "example-model"
     assert calls == [("https://example.invalid/v1/model-profiles", {
-        "headers": {"Authorization": "Bearer example-key"}, "allow_redirects": False})]
+        "headers": {"Authorization": "Bearer example-key"},
+        "params": {"include_images": "true"}, "allow_redirects": False})]
 
 
 @pytest.mark.parametrize("response", [

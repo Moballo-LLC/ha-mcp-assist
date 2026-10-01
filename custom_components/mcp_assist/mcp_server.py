@@ -4,7 +4,7 @@ import asyncio
 import base64
 from collections import defaultdict
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 import hashlib
 import hmac
@@ -2765,6 +2765,38 @@ class MCPServer(
         )
         return create_llm_provider(provider_settings)
 
+    async def _get_image_model_provider(self, context: dict[str, Any] | None) -> LLMProvider:
+        """Reuse the conversation snapshot or resolve a standalone media request."""
+        from .const import CONF_MODEL_PROFILE, CONF_OPENAI_IMAGE_MODEL_PROFILE
+        from .model_profiles import REQUEST_RESOLVED_PROFILES, async_resolve_model_profiles
+        from .provider_runtime import resolve_provider_runtime_config
+
+        entry = self._resolve_profile_entry(context)
+        provider = self._get_model_provider(context)
+        scoped = REQUEST_RESOLVED_PROFILES.get()
+        if scoped is not None and scoped[0] is entry:
+            return provider
+        options, data = entry.options, entry.data
+        image_reference = str(options.get(
+            CONF_OPENAI_IMAGE_MODEL_PROFILE, data.get(CONF_OPENAI_IMAGE_MODEL_PROFILE, "")
+        ) or "").strip()
+        if not image_reference:
+            return provider
+        text_reference = str(options.get(
+            CONF_MODEL_PROFILE, data.get(CONF_MODEL_PROFILE, "")
+        ) or "").strip()
+        text, image = await async_resolve_model_profiles(
+            resolve_provider_runtime_config(entry), text_reference, image_reference
+        )
+        provider_options = {**provider.settings.provider_options,
+                            "_resolved_image_model_profile": image}
+        if text is not None:
+            provider_options["_resolved_model_profile"] = text
+        return create_llm_provider(replace(
+            provider.settings, model_name=text.model if text else provider.model_name,
+            provider_options=provider_options,
+        ))
+
     async def tool_get_image(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch an image and return it as an MCP image content block."""
         try:
@@ -3468,7 +3500,7 @@ class MCPServer(
         context: dict[str, Any] | None,
     ) -> tuple[bytes, str, dict[str, Any]]:
         """Generate an image with the provider's selected image model."""
-        provider = self._get_model_provider(context)
+        provider = await self._get_image_model_provider(context)
         server_type = provider.server_type
         responses_image_tool = (
             isinstance(provider, OpenAIProvider) and provider.uses_responses_image_api
@@ -3509,6 +3541,9 @@ class MCPServer(
                 "tool_choice": {"type": "image_generation"},
                 "store": False,
             }
+            resolved_text = provider.settings.provider_options.get("_resolved_model_profile")
+            if resolved_text is not None:
+                payload["reasoning"] = {"effort": resolved_text.effort}
             image_options = image_tool
         else:
             payload = {

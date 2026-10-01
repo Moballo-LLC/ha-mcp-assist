@@ -10,6 +10,7 @@ import pytest
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
     CONF_MODEL_PROFILE,
+    CONF_OPENAI_IMAGE_MODEL_PROFILE,
     CONF_HERMES_SESSION_KEY,
     CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
@@ -227,6 +228,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             ),
             (
                 (CONF_MODEL_PROFILE, "", "text", False),
+                (CONF_OPENAI_IMAGE_MODEL_PROFILE, "", "text", False),
                 (
                     CONF_OPENAI_API_TRANSPORT,
                     DEFAULT_OPENAI_API_TRANSPORT,
