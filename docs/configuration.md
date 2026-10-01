@@ -371,3 +371,27 @@ integration itself. See [External Custom Tools](custom-tools.md).
 - Use a model with reliable tool calling and enough context.
 - Consider a higher timeout.
 - Keep action controls enabled only if this profile should also control devices.
+
+### Compatible endpoint model profiles
+
+For the **OpenAI** provider with a custom compatible endpoint, **Model profile
+(optional)** accepts a binding name or profile ID from that endpoint's policy.
+Leave it blank to keep using your saved model without any profile lookup. Other
+providers and image model settings are independent of this option. Official
+OpenAI endpoints do not support this opt-in contract.
+
+When configured, MCP Assist makes an authenticated GET to the same base's
+`/v1/model-profiles` endpoint (preserving an existing `/v1` prefix). The endpoint
+must return schema version 1 with a canonical SHA256 `revision`, `models`,
+`profiles`, `bindings`, and `resolvedProfiles`. The `bindings` object may be empty
+when selecting a profile ID directly. Each profile specifies a label,
+model alias, and reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`, or
+`ultra`); its resolved pair must match those settings. Redirects are rejected;
+lookup is limited to 15 seconds and 1 MiB.
+
+The concrete model, effort, and revision are frozen for the entire conversation
+request, including tool follow-ups. The next request resolves the current policy
+again. Missing profiles, authentication failures, and invalid policy responses
+stop the request before model generation; MCP Assist does not fall back to the
+saved model. The agent's read-only `resolved_model_profile` metadata reports the
+last resolved pair and revision, not proof that a model request succeeded.

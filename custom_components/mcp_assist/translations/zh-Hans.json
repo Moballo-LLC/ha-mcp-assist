@@ -103,6 +103,7 @@
           "openclaw_session_key": "会话密钥",
           "stateful_session_id": "有状态会话标头",
           "hermes_session_key": "记忆会话密钥",
+          "model_profile": "Model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
           "openai_image_api": "Image Generation API"
@@ -159,6 +160,7 @@
               "openclaw_session_key": "会话密钥",
               "stateful_session_id": "有状态会话标头",
               "hermes_session_key": "记忆会话密钥",
+              "model_profile": "Model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
               "openai_image_api": "Image Generation API"
@@ -169,6 +171,7 @@
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
+              "model_profile": "Optional binding or profile ID from a compatible endpoint. Leave blank to use the saved model. Resolution failure stops the request.",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
@@ -405,6 +408,7 @@
           "stateful_session_id": "有状态会话标头",
           "hermes_url": "Hermes服务器URL",
           "hermes_session_key": "记忆会话密钥",
+          "model_profile": "Model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
           "openai_image_api": "Image Generation API"
@@ -497,6 +501,7 @@
               "openclaw_session_key": "会话密钥",
               "stateful_session_id": "有状态会话标头",
               "hermes_session_key": "记忆会话密钥",
+              "model_profile": "Model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
               "openai_image_api": "Image Generation API"
@@ -507,6 +512,7 @@
               "openclaw_session_key": "要向其发送消息的 OpenClaw 会话的名称。",
               "stateful_session_id": "将 Assist 对话 ID 作为 X-Session-Id 发送，并阻止可能导致重复的重试。仅当此端点将该标头用作服务器端会话状态时启用。",
               "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
+              "model_profile": "Optional binding or profile ID from a compatible endpoint. Leave blank to use the saved model. Resolution failure stops the request.",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
