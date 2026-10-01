@@ -29,6 +29,10 @@ The tool uses native five-minute statistics and returns the current and previous
 equal-length intervals. The assistant checks `available`, per-metric coverage,
 and `comparison.comparable` before quoting differences. Missing short-term data
 does not mean zero consumption. A capped bucket list does not cap the summary.
+When the current time falls between source boundaries, the comparison covers
+equally sized effective windows of complete source buckets. Report the returned
+effective interval and excluded boundary fragments rather than claiming exact
+totals for the full requested hour.
 
 For "What was average daily consumption last month?", use
 `period: "last_month"`, `metric: "change"`, and `bucket: "day"`; read

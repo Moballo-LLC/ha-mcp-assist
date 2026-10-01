@@ -967,16 +967,25 @@ class RecorderToolsMixin:
                 if unit_class is not None and display_unit is not None
                 else None
             )
+            require_change_baseline = compare_previous and "change" in types
+            query_start = previous_effective_start if compare_previous else effective_start
+            query_types = types
+            if require_change_baseline:
+                # Native change values can span gaps back to the previous
+                # available sum. Read the immediate predecessor so changes at
+                # each window boundary cannot include usage outside that window.
+                query_start -= timedelta(seconds=sample_seconds)
+                query_types = types | {"sum"}
             stats = await _run_recorder(
                 partial(
                     recorder_statistics.statistics_during_period,
                     self.hass,
-                    previous_effective_start if compare_previous else effective_start,
+                    query_start,
                     effective_end,
                     {entity_id},
                     resolution,
                     requested_units,
-                    types,
+                    query_types,
                 )
             )
         except Exception:
@@ -1008,14 +1017,31 @@ class RecorderToolsMixin:
             if when in rows_by_start:
                 duplicate_starts.add(when)
             clean = {"start": when}
-            for key in selected_metrics:
+            for key in selected_metrics | ({"sum"} if require_change_baseline else set()):
                 value = row.get(key)
                 if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
                     clean[key] = float(value)
             rows_by_start[when] = clean
         all_rows = [row for when, row in sorted(rows_by_start.items()) if when not in duplicate_starts]
-        clean_rows = [row for row in all_rows if effective_start <= row["start"] < effective_end]
-        if not clean_rows or not any(len(row) > 1 for row in clean_rows):
+        usable_rows = {row["start"]: row for row in all_rows}
+
+        def window_rows(start, end):
+            window = [dict(row) for row in all_rows if start <= row["start"] < end]
+            baseline_available = not require_change_baseline or all(
+                "sum" in usable_rows.get(when, {})
+                for when in (start - timedelta(seconds=sample_seconds), start)
+            )
+            if not baseline_available:
+                for row in window:
+                    if row["start"] == start:
+                        row.pop("change", None)
+            # Cumulative sums are validation inputs, never interval totals.
+            for row in window:
+                row.pop("sum", None)
+            return window, baseline_available
+
+        clean_rows, current_baseline_available = window_rows(effective_start, effective_end)
+        if not clean_rows or not any(types.intersection(row) for row in clean_rows):
             return unavailable(
                 f"Recorder returned no finite statistic values for {entity_id} during {period_label}."
             )
@@ -1106,6 +1132,8 @@ class RecorderToolsMixin:
             lines.append(f"Maximum: {max(maxima):g} {unit}")
         if missing:
             lines.append("Coverage has gaps; totals and averages describe observed buckets only.")
+        if not current_baseline_available:
+            lines.append("The first current-window change was excluded because its immediate cumulative-sum baseline is unavailable.")
         analysis = self._statistics_analysis(
             clean_rows, requested_start, requested_end, effective_start, effective_end,
             types, bucket, limit, sample_seconds,
@@ -1114,17 +1142,36 @@ class RecorderToolsMixin:
         if structured["source_coverage"].get("uncertain"):
             lines.append("Source-reported coverage is uncertain; consumption totals and calendar averages may be estimates or omit unknown usage. See source_coverage in structuredContent.")
         if compare_previous:
-            previous_rows = [row for row in all_rows if previous_effective_start <= row["start"] < previous_effective_end]
+            previous_rows, previous_baseline_available = window_rows(previous_effective_start, previous_effective_end)
             previous_analysis = self._statistics_analysis(
                 previous_rows, previous_start, previous_end, previous_effective_start,
                 previous_effective_end, types, bucket, limit, sample_seconds,
             )
             previous_source = source_coverage(attributes, previous_start, previous_end)
-            comparable = bool(types) and all(
-                analysis["coverage"]["per_metric"][key]["complete"]
-                and previous_analysis["coverage"]["per_metric"][key]["complete"]
+            effective_duration = effective_end - effective_start
+            equal_effective_windows = (
+                effective_duration > timedelta(0)
+                and effective_duration == previous_effective_end - previous_effective_start
+            )
+            boundaries_aligned = (
+                analysis["coverage"]["aligned_to_requested_window"]
+                and previous_analysis["coverage"]["aligned_to_requested_window"]
+            )
+            qualification = None if boundaries_aligned else (
+                "Comparison covers effective windows only; requested boundary fragments are excluded."
+            )
+            comparable = equal_effective_windows and bool(types) and all(
+                analysis["coverage"]["per_metric"][key]["effective_complete"]
+                and previous_analysis["coverage"]["per_metric"][key]["effective_complete"]
                 for key in types
             ) and not structured["source_coverage"].get("uncertain") and not previous_source.get("uncertain")
+            comparison_reason = None
+            if not equal_effective_windows:
+                comparison_reason = "Effective windows must have equal positive durations."
+            elif not current_baseline_available or not previous_baseline_available:
+                comparison_reason = "Change comparisons require finite cumulative sums at each effective-window start and its immediate predecessor."
+            elif not comparable:
+                comparison_reason = "Both effective windows require complete metric coverage and no reported source uncertainty."
             differences = {}
             if comparable:
                 for key in types:
@@ -1136,8 +1183,16 @@ class RecorderToolsMixin:
                         differences[key]["percent"] = absolute / previous_value * 100 if previous_value > 0 else None
             structured["comparison"] = {
                 "basis": "immediately preceding equal-length interval",
+                "scope": "effective_windows",
+                "boundaries_aligned": boundaries_aligned,
+                "effective_duration_seconds": effective_duration.total_seconds() if equal_effective_windows else None,
+                "qualification": qualification,
+                "change_baselines_available": (
+                    {"current": current_baseline_available, "previous": previous_baseline_available}
+                    if require_change_baseline else None
+                ),
                 "comparable": comparable,
-                "reason": None if comparable else "Both periods require complete metric coverage and no reported source uncertainty.",
+                "reason": comparison_reason,
                 "previous": {
                     "requested_window": {"start": previous_start.isoformat(), "end": previous_end.isoformat()},
                     "effective_window": {"start": previous_effective_start.isoformat(), "end": previous_effective_end.isoformat()},
@@ -1146,8 +1201,18 @@ class RecorderToolsMixin:
                 "differences": differences,
             }
             lines.append(f"Previous equal-length interval: {previous_start.isoformat()} to {previous_end.isoformat()} (end exclusive)")
+            lines.append(f"Previous effective interval: {previous_effective_start.isoformat()} to {previous_effective_end.isoformat()} (end exclusive)")
+            if qualification:
+                lines.append(qualification)
+            if not previous_baseline_available:
+                lines.append("The first previous-window change was excluded because its immediate cumulative-sum baseline is unavailable.")
             lines.append(f"Previous observed summary: {previous_analysis['summary']}")
-            lines.append(f"Comparison differences: {differences}" if comparable else "Comparison unavailable: incomplete coverage or source-reported uncertainty.")
+            if comparable:
+                lines.append(f"Comparison differences: {differences}")
+            elif not equal_effective_windows or not current_baseline_available or not previous_baseline_available:
+                lines.append(f"Comparison unavailable: {comparison_reason}")
+            else:
+                lines.append("Comparison unavailable: incomplete coverage or source-reported uncertainty.")
         # Essential qualifications precede bucket detail, which the conversation
         # agent may truncate to keep model context bounded.
         lines.append(f"Displayed {min(len(groups), limit)} of {len(groups)} {bucket} buckets; summary covers all returned {resolution_label} buckets:")
@@ -1185,6 +1250,7 @@ class RecorderToolsMixin:
                 "expected_buckets": expected_count,
                 "observed_buckets": len(values),
                 "missing_buckets": max(0, expected_count - len(values)),
+                "effective_complete": expected_count > 0 and len(values) == expected_count,
                 "complete": aligned and expected_count > 0 and len(values) == expected_count,
             }
         if "change" in metrics:
@@ -1215,6 +1281,7 @@ class RecorderToolsMixin:
                 "missing_buckets": max(0, expected_count - len(rows)),
                 "aligned_to_requested_window": aligned,
                 "per_metric": per_metric,
+                "effective_complete": bool(metrics) and all(value["effective_complete"] for value in per_metric.values()),
                 "complete": bool(metrics) and all(value["complete"] for value in per_metric.values()),
             },
             "bucket_count": len(groups),

@@ -48,6 +48,117 @@ def rows(start=START, count=12, value=1, seconds=300):
             for index in range(count)]
 
 
+def with_comparison_baselines(samples, current_start, previous_start, seconds=300):
+    """Add finite sum evidence and exact predecessors, preserving malformed rows."""
+    prepared = [dict(row, sum=row["start"].timestamp() / seconds) for row in samples]
+    observed = {row["start"] for row in prepared}
+    for start in (previous_start, current_start):
+        predecessor = start - timedelta(seconds=seconds)
+        if predecessor not in observed:
+            prepared.append({"start": predecessor, "sum": predecessor.timestamp() / seconds})
+            observed.add(predecessor)
+    return prepared
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing_boundary", [False, True])
+async def test_native_change_baselines_do_not_bridge_excluded_boundary(
+    statistics_server, monkeypatch, missing_boundary,
+):
+    """Exercise HA's actual change augmentation across an off-grid split."""
+    server, query, _ = statistics_server
+    now = datetime(2026, 1, 3, 12, 2, 17, 123456, tzinfo=timezone.utc)
+    monkeypatch.setattr(history.dt_util, "now", lambda: now)
+    baseline_start = datetime(2026, 1, 3, 10, tzinfo=timezone.utc)
+    current_start = baseline_start + timedelta(hours=1, minutes=5)
+    statistics = history.recorder_statistics
+    monkeypatch.setattr(statistics, "get_instance", lambda _: Mock())
+    monkeypatch.setattr(statistics, "_statistics_at_time", Mock(return_value=[]))
+    native_result = {ENTITY: [
+        {"start": baseline_start + timedelta(minutes=index * 5), "sum": 100 + index}
+        for index in range(24)
+        if not missing_boundary or index != 12
+    ]}
+    statistics._augment_result_with_change(
+        server.hass, Mock(), baseline_start, None, {"change", "sum"},
+        statistics.StatisticsShortTerm, {ENTITY: (1, {"statistic_id": ENTITY})}, native_result,
+    )
+    first_current = next(row for row in native_result[ENTITY] if row["start"] == current_start)
+    assert first_current["change"] == (2 if missing_boundary else 1)
+    query.return_value = native_result
+    data = (await server.tool_get_entity_statistics({
+        "entity_id": ENTITY, "period": "last_hour", "bucket": "auto",
+        "metric": "change", "compare_previous": True,
+    }))["structuredContent"]
+    comparison = data["comparison"]
+    assert query.call_args.args[1] == baseline_start
+    assert comparison["change_baselines_available"] == {"current": not missing_boundary, "previous": True}
+    assert comparison["previous"]["summary"]["change"] == 11
+    if missing_boundary:
+        assert data["summary"]["change"] == 10
+        assert data["coverage"]["per_metric"]["change"]["observed_buckets"] == 10
+        assert data["coverage"]["effective_complete"] is False
+        assert comparison["comparable"] is False
+        assert comparison["differences"] == {}
+        assert "immediate predecessor" in comparison["reason"].casefold()
+    else:
+        assert data["summary"]["change"] == 11
+        assert data["coverage"]["effective_complete"] is True
+        assert comparison["comparable"] is True
+        assert comparison["differences"]["change"] == {"absolute": 0, "percent": 0}
+    for analysis in (data, comparison["previous"]):
+        assert "sum" not in analysis["summary"]
+        assert all("sum" not in bucket for bucket in analysis["buckets"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("period, slot, invalid", [
+    ("previous", "predecessor", "missing"),
+    ("previous", "predecessor", None),
+    ("previous", "start", float("nan")),
+    ("current", "predecessor", float("inf")),
+    ("current", "start", None),
+])
+async def test_finite_mocked_change_does_not_override_invalid_sum_baseline(
+    statistics_server, period, slot, invalid,
+):
+    server, query, _ = statistics_server
+    previous_start = START - timedelta(hours=1)
+    samples = with_comparison_baselines(rows(previous_start) + rows(value=2), START, previous_start)
+    target = START if period == "current" else previous_start
+    if slot == "predecessor":
+        target -= timedelta(minutes=5)
+    if invalid == "missing":
+        samples = [row for row in samples if row["start"] != target]
+    else:
+        next(row for row in samples if row["start"] == target)["sum"] = invalid
+    query.return_value = {ENTITY: samples}
+    data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
+    comparison = data["comparison"]
+    assert comparison["change_baselines_available"][period] is False
+    assert comparison["comparable"] is False
+    assert comparison["differences"] == {}
+    affected = data if period == "current" else comparison["previous"]
+    assert affected["coverage"]["per_metric"]["change"]["missing_buckets"] == 1
+    assert affected["summary"]["change"] == (22 if period == "current" else 11)
+    assert "immediate predecessor" in comparison["reason"].casefold()
+
+
+@pytest.mark.asyncio
+async def test_internal_sum_alone_does_not_establish_available_change(statistics_server):
+    server, query, _ = statistics_server
+    previous_start = START - timedelta(hours=1)
+    samples = with_comparison_baselines(rows(previous_start) + rows(), START, previous_start)
+    for row in samples:
+        if row["start"] >= START:
+            row.pop("change", None)
+    query.return_value = {ENTITY: samples}
+    result = await server.tool_get_entity_statistics(arguments(compare_previous=True))
+    assert result["structuredContent"]["available"] is False
+    assert "summary" not in result["structuredContent"]
+    assert "no finite statistic values" in result["content"][0]["text"].casefold()
+
+
 @pytest.mark.asyncio
 async def test_recent_native_query_and_summary_ignore_display_limit(statistics_server):
     server, query, jobs = statistics_server
@@ -73,6 +184,164 @@ async def test_alignment_reports_partial_window(statistics_server):
                                         "end": (START + timedelta(minutes=55)).isoformat()}
     assert data["coverage"]["missing_buckets"] == 0
     assert not data["coverage"]["complete"]
+    assert data["coverage"]["effective_complete"]
+    assert data["coverage"]["per_metric"]["change"]["effective_complete"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("period, bucket, hours, seconds, count", [
+    ("last_hour", "auto", 1, 300, 11),
+    ("last_24_hours", "auto", 24, 3600, 23),
+    ("last_24_hours", "5minute", 24, 300, 287),
+])
+async def test_off_grid_rolling_comparison_uses_only_complete_effective_windows(
+    statistics_server, profile_entry_factory, monkeypatch, period, bucket, hours, seconds, count,
+):
+    """Real clock seconds must not disable an honest comparison of retained buckets."""
+    server, query, jobs = statistics_server
+    now = datetime(2026, 1, 3, 12, 2, 17, 123456, tzinfo=timezone.utc)
+    monkeypatch.setattr(history.dt_util, "now", lambda: now)
+    requested_start = now - timedelta(hours=hours)
+    effective_end = now.replace(minute=0, second=0, microsecond=0)
+    effective_start = effective_end - timedelta(seconds=count * seconds)
+    previous_start = effective_start - timedelta(hours=hours)
+    previous_end = effective_end - timedelta(hours=hours)
+    query.return_value = {ENTITY: with_comparison_baselines(
+        rows(previous_start, count=count, seconds=seconds) +
+        rows(effective_start, count=count, seconds=seconds, value=2),
+        effective_start, previous_start, seconds,
+    )}
+    result = await server.tool_get_entity_statistics({
+        "entity_id": ENTITY, "period": period, "bucket": bucket,
+        "metric": "change", "compare_previous": True, "limit": 1,
+    })
+    data = result["structuredContent"]
+    comparison = data["comparison"]
+    assert data["requested_window"] == {"start": requested_start.isoformat(), "end": now.isoformat()}
+    assert data["effective_window"] == {"start": effective_start.isoformat(), "end": effective_end.isoformat()}
+    assert comparison["previous"]["effective_window"] == {
+        "start": previous_start.isoformat(), "end": previous_end.isoformat(),
+    }
+    assert comparison["comparable"]
+    assert comparison["scope"] == "effective_windows"
+    assert comparison["boundaries_aligned"] is False
+    assert comparison["effective_duration_seconds"] == count * seconds
+    assert comparison["qualification"] == (
+        "Comparison covers effective windows only; requested boundary fragments are excluded."
+    )
+    for coverage in (data["coverage"], comparison["previous"]["coverage"]):
+        assert coverage["complete"] is False
+        assert coverage["effective_complete"] is True
+        assert coverage["per_metric"]["change"]["complete"] is False
+        assert coverage["per_metric"]["change"]["effective_complete"] is True
+    assert comparison["differences"]["change"] == {"absolute": count, "percent": 100}
+    assert data["summary"]["change"] == 2 * count
+    assert data["truncated"] and len(data["buckets"]) == 1
+    query.assert_called_once()
+    assert len(jobs) == 3
+    assert query.call_args.args[1:3] == (previous_start - timedelta(seconds=seconds), effective_end)
+    assert query.call_args.args[-1] == {"change", "sum"}
+    agent = MCPAssistConversationEntity(server.hass, profile_entry_factory())
+    text = agent._format_tool_result_for_llm("get_entity_statistics", result).casefold()
+    assert "effective windows" in text
+    assert "excluded" in text or "omitted" in text
+    assert "comparison differences:" in text
+    assert text.index(comparison["qualification"].casefold()) < text.index("displayed ")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("affected_period, missing_kind", [
+    ("current", "bucket"), ("previous", "bucket"),
+    ("current", "finite_metric"), ("previous", "finite_metric"),
+])
+async def test_effective_comparison_requires_each_period_and_selected_metric(
+    statistics_server, monkeypatch, affected_period, missing_kind,
+):
+    server, query, _ = statistics_server
+    now = datetime(2026, 1, 3, 12, 2, 17, 123456, tzinfo=timezone.utc)
+    monkeypatch.setattr(history.dt_util, "now", lambda: now)
+    current = rows(datetime(2026, 1, 3, 11, 5, tzinfo=timezone.utc), count=11, value=2)
+    previous = rows(datetime(2026, 1, 3, 10, 5, tzinfo=timezone.utc), count=11)
+    for row in current + previous:
+        row.update(mean=4, min=3, max=5)
+    affected = current if affected_period == "current" else previous
+    if missing_kind == "bucket":
+        affected.pop(3)
+    else:
+        affected[3]["mean"] = float("nan")
+    query.return_value = {ENTITY: with_comparison_baselines(
+        previous + current, current[0]["start"], previous[0]["start"],
+    )}
+    data = (await server.tool_get_entity_statistics({
+        "entity_id": ENTITY, "period": "last_hour", "bucket": "auto",
+        "metric": "all", "compare_previous": True,
+    }))["structuredContent"]
+    comparison = data["comparison"]
+    affected_coverage = data["coverage"] if affected_period == "current" else comparison["previous"]["coverage"]
+    assert affected_coverage["effective_complete"] is False
+    assert affected_coverage["per_metric"]["mean"]["effective_complete"] is False
+    if missing_kind == "finite_metric":
+        assert affected_coverage["missing_buckets"] == 0
+        assert affected_coverage["per_metric"]["change"]["effective_complete"] is True
+    assert comparison["comparable"] is False
+    assert comparison["differences"] == {}
+
+
+@pytest.mark.asyncio
+async def test_unequal_fully_covered_effective_intervals_are_not_comparable(statistics_server):
+    server, query, _ = statistics_server
+    current_start = START + timedelta(minutes=5)
+    previous_start = START - timedelta(minutes=30)
+    query.return_value = {ENTITY: with_comparison_baselines(
+        rows(previous_start, count=6) + rows(current_start, count=5, value=2),
+        current_start, previous_start,
+    )}
+    data = (await server.tool_get_entity_statistics(arguments(
+        start=START + timedelta(minutes=2), end=START + timedelta(minutes=34), compare_previous=True,
+    )))["structuredContent"]
+    comparison = data["comparison"]
+    assert data["coverage"]["effective_complete"]
+    assert comparison["previous"]["coverage"]["effective_complete"]
+    current_window = data["effective_window"]
+    previous_window = comparison["previous"]["effective_window"]
+    assert datetime.fromisoformat(current_window["end"]) - datetime.fromisoformat(current_window["start"]) == timedelta(minutes=25)
+    assert datetime.fromisoformat(previous_window["end"]) - datetime.fromisoformat(previous_window["start"]) == timedelta(minutes=30)
+    assert comparison["comparable"] is False
+    assert comparison["differences"] == {}
+    assert comparison["effective_duration_seconds"] is None
+    assert "equal" in comparison["reason"].casefold()
+
+
+@pytest.mark.asyncio
+async def test_rolling_dst_comparison_preserves_equal_elapsed_utc_intervals(statistics_server, monkeypatch):
+    server, query, _ = statistics_server
+    old_zone = dt_util.DEFAULT_TIME_ZONE
+    zone = ZoneInfo("America/New_York")
+    try:
+        dt_util.set_default_time_zone(zone)
+        now = datetime(2026, 3, 9, 0, 2, 17, 123456, tzinfo=zone)
+        monkeypatch.setattr(history.dt_util, "now", lambda: now)
+        effective_end = datetime(2026, 3, 9, 4, tzinfo=timezone.utc)
+        effective_start = effective_end - timedelta(hours=23)
+        previous_start = effective_start - timedelta(hours=24)
+        query.return_value = {ENTITY: with_comparison_baselines(
+            rows(previous_start, count=23, seconds=3600) +
+            rows(effective_start, count=23, seconds=3600, value=2),
+            effective_start, previous_start, 3600,
+        )}
+        data = (await server.tool_get_entity_statistics({
+            "entity_id": ENTITY, "period": "last_24_hours", "bucket": "auto",
+            "metric": "change", "compare_previous": True,
+        }))["structuredContent"]
+        comparison = data["comparison"]
+        for window in (data["requested_window"], comparison["previous"]["requested_window"]):
+            assert datetime.fromisoformat(window["end"]) - datetime.fromisoformat(window["start"]) == timedelta(hours=24)
+        assert comparison["effective_duration_seconds"] == 23 * 3600
+        assert comparison["comparable"]
+        assert comparison["differences"]["change"]["percent"] == 100
+        assert comparison["boundaries_aligned"] is False
+    finally:
+        dt_util.set_default_time_zone(old_zone)
 
 
 @pytest.mark.asyncio
@@ -100,7 +369,7 @@ async def test_five_minute_cap_applies_per_interval(statistics_server):
     await server.tool_get_entity_statistics(arguments(
         end=START + timedelta(hours=72), compare_previous=True
     ))
-    assert query.call_args.args[2] - query.call_args.args[1] == timedelta(hours=144)
+    assert query.call_args.args[2] - query.call_args.args[1] == timedelta(hours=144, minutes=5)
 
 
 @pytest.mark.asyncio
@@ -108,13 +377,18 @@ async def test_five_minute_cap_applies_per_interval(statistics_server):
 async def test_comparison_reuses_one_query_and_units(statistics_server, previous, percent):
     server, query, jobs = statistics_server
     previous_start = START - timedelta(hours=1)
-    query.return_value = {ENTITY: rows(previous_start, value=previous) + rows(value=2)}
+    query.return_value = {ENTITY: with_comparison_baselines(
+        rows(previous_start, value=previous) + rows(value=2), START, previous_start,
+    )}
     data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
     query.assert_called_once()
     assert len(jobs) == 3
-    assert query.call_args.args[1] == previous_start
+    assert query.call_args.args[1] == previous_start - timedelta(minutes=5)
+    assert query.call_args.args[-1] == {"change", "sum"}
     comparison = data["comparison"]
     assert comparison["comparable"]
+    assert comparison["boundaries_aligned"] is True
+    assert comparison["qualification"] is None
     assert comparison["previous"]["requested_window"]["end"] == START.isoformat()
     assert comparison["differences"]["change"] == {"absolute": 24 - previous * 12, "percent": percent}
 
@@ -125,10 +399,10 @@ async def test_metric_gaps_and_untrusted_rows_suppress_comparison(statistics_ser
     current = rows()
     current[0]["change"] = float("nan")
     current[1]["change"] = True
-    query.return_value = {ENTITY: rows(START - timedelta(hours=1)) + current + [
+    query.return_value = {ENTITY: with_comparison_baselines(rows(START - timedelta(hours=1)) + current + [
         current[2], {"start": START + timedelta(hours=1), "change": 1000},
         {"start": START + timedelta(seconds=1), "change": 1000},
-    ]}
+    ], START, START - timedelta(hours=1))}
     data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
     assert data["summary"]["change"] == 9
     assert not data["coverage"]["per_metric"]["change"]["complete"]
@@ -160,7 +434,7 @@ async def test_comparison_and_coverage_survive_model_compaction(
     samples = rows(START - timedelta(hours=72), count=144, seconds=3600, value=123456.123456)
     for row in samples:
         row.update(mean=123.456789, min=100.123456, max=150.234567)
-    query.return_value = {ENTITY: samples}
+    query.return_value = {ENTITY: with_comparison_baselines(samples, START, START - timedelta(hours=72), 3600)}
     result = await server.tool_get_entity_statistics(arguments(
         end=START + timedelta(hours=72), bucket="auto", metric="all",
         compare_previous=True, limit=limit,
@@ -199,7 +473,9 @@ async def test_scope_denial_precedes_state_and_database(statistics_server, monke
 async def test_source_uncertainty_blocks_otherwise_complete_comparison(statistics_server, annotation):
     server, query, _ = statistics_server
     server.hass.states.async_set(ENTITY, "1", {"recorder_coverage": annotation})
-    query.return_value = {ENTITY: rows(START - timedelta(hours=1)) + rows()}
+    query.return_value = {ENTITY: with_comparison_baselines(
+        rows(START - timedelta(hours=1)) + rows(), START, START - timedelta(hours=1),
+    )}
     data = (await server.tool_get_entity_statistics(arguments(compare_previous=True)))["structuredContent"]
     assert data["coverage"]["complete"]
     assert data["source_coverage"]["uncertain"]

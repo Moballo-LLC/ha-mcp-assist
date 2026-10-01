@@ -139,7 +139,7 @@ Results include readable text and `structuredContent` with `schema_version: 1`:
 | `requested_window`, `effective_window` | UTC start/end timestamps; end is exclusive, and effective boundaries include only complete source intervals |
 | `source_resolution` | `5minute` or `hour` |
 | `summary` | Finite observed change total, arithmetic mean, minimum, and maximum for supported selected metrics |
-| `coverage` | Expected, observed, and missing source buckets, requested-boundary alignment, completeness, and the same counts/completeness per selected metric |
+| `coverage` | Expected, observed, and missing source buckets, requested-boundary alignment, `complete` for the entire requested interval, `effective_complete` for its complete source buckets, and the same counts/completeness per selected metric |
 | `bucket_count`, `buckets`, `truncated` | Full grouped bucket count, displayed rows capped by `limit` (1–100), and whether rows were omitted |
 | `source_coverage` | Optional bounded annotations reported by the entity's source |
 
@@ -156,8 +156,23 @@ Set `compare_previous: true` to add `comparison.previous` with its windows,
 summary, coverage, and source annotations. The previous interval immediately
 precedes the current interval and has equal elapsed duration; it need not be the
 previous calendar month. One combined Recorder query reads both intervals.
-`comparison.comparable` requires complete coverage for every selected metric in
-both periods and no source-reported uncertainty. Otherwise `differences` is empty
+Change comparisons also read one preceding source bucket and cumulative sums
+internally to verify the immediate baseline at each effective-window start.
+`change_baselines_available` reports those checks for the current and previous
+windows, or is `null` for comparisons without change. A missing, duplicated, or
+nonfinite baseline excludes that window's first change from its subtotal and
+calendar averages and prevents comparison: Recorder may otherwise bridge the
+gap and include usage outside the window. Cumulative sums are never reported
+as interval totals.
+`comparison.comparable` requires equal positive effective-window durations,
+`effective_complete` coverage for every selected metric in both windows, and no
+source-reported uncertainty. `scope: "effective_windows"` and
+`effective_duration_seconds` identify what the differences cover. Off-grid
+rolling windows can be compared without pretending their requested boundary
+fragments were measured: `boundaries_aligned` is false, `qualification` explains
+the exclusions, and requested-interval `coverage.complete` remains false.
+The same restriction applies to custom intervals; unequal effective durations
+cannot be compared. Otherwise `differences` is empty
 and `reason` explains the limitation. Comparable metrics include an `absolute`
 difference; only change also has `percent`, which is `null` when previous change
 is zero or negative.
