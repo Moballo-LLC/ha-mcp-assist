@@ -281,3 +281,11 @@ If you believe you found a security issue, avoid posting sensitive details in a
 public issue. Use GitHub's private vulnerability reporting flow if available for
 the repository, or contact the maintainers through an appropriate private
 channel.
+
+## Downloadable support diagnostics
+
+Home Assistant diagnostics use an allowlist of configuration flags, enum values,
+lengths, and cached tool counts/sizes. They omit private connection details,
+profile/model names, prompts, entities, and conversations. See
+[Debugging](debugging.md#download-support-diagnostics) for the download and its
+evidence limits.

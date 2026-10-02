@@ -7,6 +7,22 @@ MCP Assist has two troubleshooting modes:
 
 Chat Log Mode is off by default. Enable it per profile from the profile's advanced settings.
 
+## Download support diagnostics
+
+Open **Settings → Devices & services → HA MCP Assist**, open the entry menu,
+and select **Download diagnostics**. Each profile reports provider type, context
+mode, whether its agent is loaded, model-selection/resolution status, configured
+prompt lengths, limits, and the size of its cached tool schemas. Shared settings
+report server presence and whether external tools and bearer authentication are
+configured.
+
+The download omits credentials, endpoint addresses, profile/model names, prompts,
+entity data, paths, conversation history, and tool schemas. It reads existing
+configuration and caches on demand without discovery, network requests, or paid
+model calls. A tool cache that has not been built has no size yet. An unresolved
+model profile can be normal before its first request; this report does not prove
+provider connectivity or successful device control.
+
 ## Debug Mode
 
 Use Debug Mode when you need to inspect provider behavior, prompt construction,

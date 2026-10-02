@@ -163,3 +163,7 @@ If the model replies as if it acted but no entity changes, go to
 - Review available tools: [Tool Reference](tool-reference.md)
 - Tune profile and shared settings: [Configuration](configuration.md)
 - Check model behavior: [Model Compatibility](model-compatibility.md)
+
+If setup is unclear, [download support diagnostics](debugging.md#download-support-diagnostics)
+from the integration entry menu. The report shows configuration and cache
+metadata without sending a model request or including private settings.
