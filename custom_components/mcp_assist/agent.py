@@ -4431,7 +4431,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             return fallback_response
 
     async def _test_streaming_basic(self) -> bool:
-        """Test basic streaming without tools to isolate connection issues."""
+        """Explicitly probe streaming without tools to diagnose connection issues."""
         provider = self._get_llm_provider()
         payload = provider.build_payload(
             [{"role": "user", "content": "Say hello"}],
@@ -4510,14 +4510,6 @@ class MCPAssistConversationEntity(ConversationEntity):
     async def _call_llm_streaming(self, messages: List[Dict[str, Any]]) -> str:
         """Stream LLM responses with immediate TTS feedback."""
         _LOGGER.info(f"🚀 Starting streaming {self.server_type} conversation")
-
-        # Test streaming once and cache result
-        if not hasattr(self, "_streaming_available"):
-            self._streaming_available = await self._test_streaming_basic()
-
-        if not self._streaming_available:
-            _LOGGER.debug("Streaming not available; using provider HTTP transport")
-            raise RecoverableStreamingFallbackError("Streaming not available")
 
         tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()
