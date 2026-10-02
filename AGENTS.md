@@ -66,6 +66,10 @@ editing this repository. It applies to the whole repository.
   3. Let `.github/workflows/release.yml` validate the tag, build
      `dist/mcp_assist.zip`, and publish the GitHub release.
 - The release workflow requires the tag version to match the manifest version.
+- Name everything for a release with the bare tag, e.g. `v1.11.0`: the
+  version-bump commit and PR title, the annotated tag message
+  (`git tag -a v1.11.0 -m "v1.11.0"`), and the GitHub release title. Do not
+  use forms like `Release HA MCP Assist 1.11.0`.
 
 ## CI and Validation
 
