@@ -275,10 +275,14 @@
             "description": "Controle como o servidor MCP compartilhado cria e retorna resultados de descoberta.",
             "data": {
               "enable_gap_filling": "Habilitar Índice de Entidade Inteligente",
+              "enable_index_auto_refresh": "Atualizar índice com alterações no registro",
+              "index_refresh_delay_seconds": "Atraso de atualização do índice (segundos, 10-86400)",
               "max_entities_per_discovery": "Máximo de entidades por descoberta (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Cria um índice de sistema compacto para manter a descoberta rápida e consciente do contexto.",
+              "enable_index_auto_refresh": "Reconstrói o índice de entidades inteligentes em segundo plano quando entidades, dispositivos, áreas, andares ou etiquetas mudam. Quando desativado, o índice só é reconstruído após recarregar o MCP Assist ou o Home Assistant.",
+              "index_refresh_delay_seconds": "Quanto tempo as alterações no registro devem parar antes de uma reconstrução em segundo plano. Atrasos maiores significam menos reconstruções e menos chamadas ao modelo para preenchimento de lacunas.",
               "max_entities_per_discovery": "Limita quantas entidades uma única chamada de descoberta pode retornar."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Controle como o servidor MCP compartilhado cria e retorna resultados de descoberta.",
             "data": {
               "enable_gap_filling": "Habilitar Índice de Entidade Inteligente",
+              "enable_index_auto_refresh": "Atualizar índice com alterações no registro",
+              "index_refresh_delay_seconds": "Atraso de atualização do índice (segundos, 10-86400)",
               "max_entities_per_discovery": "Máximo de entidades por descoberta (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Cria um índice de sistema compacto para manter a descoberta rápida e consciente do contexto.",
+              "enable_index_auto_refresh": "Reconstrói o índice de entidades inteligentes em segundo plano quando entidades, dispositivos, áreas, andares ou etiquetas mudam. Quando desativado, o índice só é reconstruído após recarregar o MCP Assist ou o Home Assistant.",
+              "index_refresh_delay_seconds": "Quanto tempo as alterações no registro devem parar antes de uma reconstrução em segundo plano. Atrasos maiores significam menos reconstruções e menos chamadas ao modelo para preenchimento de lacunas.",
               "max_entities_per_discovery": "Limita quantas entidades uma única chamada de descoberta pode retornar."
             }
           },

@@ -275,10 +275,14 @@
             "description": "Control how the shared MCP server builds and returns discovery results.",
             "data": {
               "enable_gap_filling": "Enable Smart Entity Index",
+              "enable_index_auto_refresh": "Refresh Index on Registry Changes",
+              "index_refresh_delay_seconds": "Index Refresh Delay (Seconds, 10-86400)",
               "max_entities_per_discovery": "Max Entities Per Discovery (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Builds a compact system index to keep discovery fast and context-aware.",
+              "enable_index_auto_refresh": "Rebuilds the Smart Entity Index in the background after entities, devices, areas, floors, or labels change. When off, the index only rebuilds after MCP Assist or Home Assistant reloads.",
+              "index_refresh_delay_seconds": "How long registry changes must stop before a background rebuild runs. Longer delays mean fewer rebuilds and fewer gap-filling model calls.",
               "max_entities_per_discovery": "Caps how many entities a single discovery call may return."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Control how the shared MCP server builds and returns discovery results.",
             "data": {
               "enable_gap_filling": "Enable Smart Entity Index",
+              "enable_index_auto_refresh": "Refresh Index on Registry Changes",
+              "index_refresh_delay_seconds": "Index Refresh Delay (Seconds, 10-86400)",
               "max_entities_per_discovery": "Max Entities Per Discovery (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Builds a compact system index to keep discovery fast and context-aware.",
+              "enable_index_auto_refresh": "Rebuilds the Smart Entity Index in the background after entities, devices, areas, floors, or labels change. When off, the index only rebuilds after MCP Assist or Home Assistant reloads.",
+              "index_refresh_delay_seconds": "How long registry changes must stop before a background rebuild runs. Longer delays mean fewer rebuilds and fewer gap-filling model calls.",
               "max_entities_per_discovery": "Caps how many entities a single discovery call may return."
             }
           },

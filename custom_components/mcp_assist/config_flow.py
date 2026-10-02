@@ -80,6 +80,8 @@ from .const import (
     CONF_SEARCH_PROVIDER,
     CONF_ENABLE_WEB_SEARCH,
     CONF_ENABLE_GAP_FILLING,
+    CONF_ENABLE_INDEX_AUTO_REFRESH,
+    CONF_INDEX_REFRESH_DELAY_SECONDS,
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_LLM_API_BRIDGE,
     CONF_LLM_API_ALLOWLIST,
@@ -140,6 +142,10 @@ from .const import (
     DEFAULT_SEARCH_PROVIDER,
     DEFAULT_ENABLE_WEB_SEARCH,
     DEFAULT_ENABLE_GAP_FILLING,
+    DEFAULT_ENABLE_INDEX_AUTO_REFRESH,
+    DEFAULT_INDEX_REFRESH_DELAY_SECONDS,
+    MAX_INDEX_REFRESH_DELAY_SECONDS,
+    MIN_INDEX_REFRESH_DELAY_SECONDS,
     DEFAULT_ENABLE_ASSIST_BRIDGE,
     DEFAULT_ENABLE_LLM_API_BRIDGE,
     DEFAULT_LLM_API_ALLOWLIST,
@@ -1024,6 +1030,20 @@ def _build_shared_discovery_section(defaults: dict[str, Any]) -> section:
                     CONF_ENABLE_GAP_FILLING,
                     default=defaults[CONF_ENABLE_GAP_FILLING],
                 ): bool,
+                vol.Optional(
+                    CONF_ENABLE_INDEX_AUTO_REFRESH,
+                    default=defaults[CONF_ENABLE_INDEX_AUTO_REFRESH],
+                ): bool,
+                vol.Optional(
+                    CONF_INDEX_REFRESH_DELAY_SECONDS,
+                    default=defaults[CONF_INDEX_REFRESH_DELAY_SECONDS],
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(
+                        min=MIN_INDEX_REFRESH_DELAY_SECONDS,
+                        max=MAX_INDEX_REFRESH_DELAY_SECONDS,
+                    ),
+                ),
                 vol.Optional(
                     CONF_MAX_ENTITIES_PER_DISCOVERY,
                     default=defaults[CONF_MAX_ENTITIES_PER_DISCOVERY],
@@ -1983,6 +2003,16 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_ENABLE_GAP_FILLING,
                 DEFAULT_ENABLE_GAP_FILLING,
             ),
+            CONF_ENABLE_INDEX_AUTO_REFRESH: _get_form_value(
+                current_values,
+                CONF_ENABLE_INDEX_AUTO_REFRESH,
+                DEFAULT_ENABLE_INDEX_AUTO_REFRESH,
+            ),
+            CONF_INDEX_REFRESH_DELAY_SECONDS: _get_form_value(
+                current_values,
+                CONF_INDEX_REFRESH_DELAY_SECONDS,
+                DEFAULT_INDEX_REFRESH_DELAY_SECONDS,
+            ),
             CONF_MAX_ENTITIES_PER_DISCOVERY: _get_form_value(
                 current_values,
                 CONF_MAX_ENTITIES_PER_DISCOVERY,
@@ -2895,6 +2925,28 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 sys_options.get(
                     CONF_ENABLE_GAP_FILLING,
                     sys_data.get(CONF_ENABLE_GAP_FILLING, DEFAULT_ENABLE_GAP_FILLING),
+                ),
+            ),
+            CONF_ENABLE_INDEX_AUTO_REFRESH: _get_form_value(
+                current_values,
+                CONF_ENABLE_INDEX_AUTO_REFRESH,
+                sys_options.get(
+                    CONF_ENABLE_INDEX_AUTO_REFRESH,
+                    sys_data.get(
+                        CONF_ENABLE_INDEX_AUTO_REFRESH,
+                        DEFAULT_ENABLE_INDEX_AUTO_REFRESH,
+                    ),
+                ),
+            ),
+            CONF_INDEX_REFRESH_DELAY_SECONDS: _get_form_value(
+                current_values,
+                CONF_INDEX_REFRESH_DELAY_SECONDS,
+                sys_options.get(
+                    CONF_INDEX_REFRESH_DELAY_SECONDS,
+                    sys_data.get(
+                        CONF_INDEX_REFRESH_DELAY_SECONDS,
+                        DEFAULT_INDEX_REFRESH_DELAY_SECONDS,
+                    ),
                 ),
             ),
             CONF_ENABLE_ASSIST_BRIDGE: _get_form_value(

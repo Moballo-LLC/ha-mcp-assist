@@ -76,6 +76,14 @@ state. A typical flow is:
 
 For entities without standardized `device_class` attributes, optional
 gap-filling can infer useful categories from naming patterns.
+Gap-filling only calls the model when those naming patterns change. Registry
+updates that leave the patterns unchanged reuse the previous result, and a failed
+or empty model response is retried at most every 6 hours.
+
+By default the index rebuilds in the background after registry changes, once
+changes have stopped for the configured **Index Refresh Delay**. Both the
+automatic refresh and the delay can be changed in the shared MCP server
+discovery settings.
 
 ## Entity Exposure
 

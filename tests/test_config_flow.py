@@ -88,6 +88,8 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_RECORDER_TOOLS,
     CONF_ENABLE_RESPONSE_SERVICE_TOOLS,
     CONF_ENABLE_WEATHER_FORECAST_TOOL,
+    CONF_ENABLE_INDEX_AUTO_REFRESH,
+    CONF_INDEX_REFRESH_DELAY_SECONDS,
     CONF_MAX_ENTITIES_PER_DISCOVERY,
     CONF_MAX_HISTORY,
     CONF_MAX_ITERATIONS,
@@ -886,6 +888,8 @@ async def test_shared_mcp_step_groups_context_discovery_and_tools(
     }
     assert discovery_keys == {
         CONF_ENABLE_GAP_FILLING,
+        CONF_ENABLE_INDEX_AUTO_REFRESH,
+        CONF_INDEX_REFRESH_DELAY_SECONDS,
         CONF_MAX_ENTITIES_PER_DISCOVERY,
     }
     assert memory_keys == SHARED_MEMORY_SECTION_ORDER

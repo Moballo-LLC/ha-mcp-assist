@@ -275,10 +275,14 @@
             "description": "Bepaal hoe de gedeelde MCP-server detectieresultaten opbouwt en retourneert.",
             "data": {
               "enable_gap_filling": "Slimme entiteitsindex inschakelen",
+              "enable_index_auto_refresh": "Index vernieuwen bij registerwijzigingen",
+              "index_refresh_delay_seconds": "Vertraging indexvernieuwing (seconden, 10-86400)",
               "max_entities_per_discovery": "Max. aantal entiteiten per ontdekking (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Bouwt een compacte systeemindex om ontdekking snel en contextbewust te houden.",
+              "enable_index_auto_refresh": "Bouwt de slimme entiteitsindex op de achtergrond opnieuw op wanneer entiteiten, apparaten, ruimtes, verdiepingen of labels veranderen. Indien uitgeschakeld, wordt de index alleen opnieuw opgebouwd nadat MCP Assist of Home Assistant opnieuw is geladen.",
+              "index_refresh_delay_seconds": "Hoe lang registerwijzigingen moeten stoppen voordat een herbouw op de achtergrond start. Langere vertragingen betekenen minder herbouwacties en minder modelaanroepen voor het opvullen van hiaten.",
               "max_entities_per_discovery": "Beperkt hoeveel entiteiten een enkele ontdekkingsoproep kan retourneren."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Bepaal hoe de gedeelde MCP-server detectieresultaten opbouwt en retourneert.",
             "data": {
               "enable_gap_filling": "Slimme entiteitsindex inschakelen",
+              "enable_index_auto_refresh": "Index vernieuwen bij registerwijzigingen",
+              "index_refresh_delay_seconds": "Vertraging indexvernieuwing (seconden, 10-86400)",
               "max_entities_per_discovery": "Max. aantal entiteiten per ontdekking (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Bouwt een compacte systeemindex om ontdekking snel en contextbewust te houden.",
+              "enable_index_auto_refresh": "Bouwt de slimme entiteitsindex op de achtergrond opnieuw op wanneer entiteiten, apparaten, ruimtes, verdiepingen of labels veranderen. Indien uitgeschakeld, wordt de index alleen opnieuw opgebouwd nadat MCP Assist of Home Assistant opnieuw is geladen.",
+              "index_refresh_delay_seconds": "Hoe lang registerwijzigingen moeten stoppen voordat een herbouw op de achtergrond start. Langere vertragingen betekenen minder herbouwacties en minder modelaanroepen voor het opvullen van hiaten.",
               "max_entities_per_discovery": "Beperkt hoeveel entiteiten een enkele ontdekkingsoproep kan retourneren."
             }
           },

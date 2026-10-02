@@ -206,6 +206,8 @@ Shared settings apply to all profiles:
 | MCP Bearer Token | Optional token external MCP clients must send as `Authorization: Bearer <token>`. Enter `FFFF` and save to generate a replacement token. |
 | Allow Access Token in URL (Legacy) | Compatibility setting for query-string authentication. Disabled on new installs because URLs are commonly retained or shared. Upgrades preserve the previously supported behavior until you disable it. |
 | Smart Entity Index | Compact Home Assistant structure index and gap-filling behavior |
+| Refresh Index on Registry Changes | Rebuild the index in the background when entities, devices, areas, floors, or labels change. On by default. When off, the index rebuilds only after MCP Assist or Home Assistant reloads |
+| Index Refresh Delay | Seconds registry changes must stop before a background rebuild runs (10-86400, default 60). Raise it if frequent registry updates cause too many rebuilds |
 | Max Entities Per Discovery | Upper bound for a single discovery result |
 | Context Sharing | Whether user and home-location context is included in prompts or tool-call metadata |
 | Web Search Provider | None, DuckDuckGo, Brave Search, or SearXNG |

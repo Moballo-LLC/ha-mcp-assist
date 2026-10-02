@@ -275,10 +275,14 @@
             "description": "공유 MCP 서버가 검색 결과를 빌드하고 반환하는 방법을 제어합니다.",
             "data": {
               "enable_gap_filling": "스마트 엔터티 색인 활성화",
+              "enable_index_auto_refresh": "레지스트리 변경 시 인덱스 새로 고침",
+              "index_refresh_delay_seconds": "인덱스 새로 고침 지연(초, 10-86400)",
               "max_entities_per_discovery": "검색당 최대 엔터티 수(20-500)"
             },
             "data_description": {
               "enable_gap_filling": "검색 속도와 상황 인식을 유지하기 위해 컴팩트한 시스템 색인을 구축합니다.",
+              "enable_index_auto_refresh": "엔터티, 기기, 영역, 층 또는 라벨이 변경되면 스마트 엔터티 인덱스를 백그라운드에서 다시 빌드합니다. 끄면 MCP Assist 또는 Home Assistant를 다시 로드한 후에만 인덱스가 다시 빌드됩니다.",
+              "index_refresh_delay_seconds": "백그라운드 재빌드가 실행되기 전에 레지스트리 변경이 멈춰 있어야 하는 시간입니다. 지연이 길수록 재빌드와 갭 채우기 모델 호출이 줄어듭니다.",
               "max_entities_per_discovery": "단일 검색 호출이 반환할 수 있는 엔터티 수를 제한합니다."
             }
           },
@@ -643,10 +647,14 @@
             "description": "공유 MCP 서버가 검색 결과를 빌드하고 반환하는 방법을 제어합니다.",
             "data": {
               "enable_gap_filling": "스마트 엔터티 색인 활성화",
+              "enable_index_auto_refresh": "레지스트리 변경 시 인덱스 새로 고침",
+              "index_refresh_delay_seconds": "인덱스 새로 고침 지연(초, 10-86400)",
               "max_entities_per_discovery": "검색당 최대 엔터티 수(20-500)"
             },
             "data_description": {
               "enable_gap_filling": "검색 속도와 상황 인식을 유지하기 위해 컴팩트한 시스템 색인을 구축합니다.",
+              "enable_index_auto_refresh": "엔터티, 기기, 영역, 층 또는 라벨이 변경되면 스마트 엔터티 인덱스를 백그라운드에서 다시 빌드합니다. 끄면 MCP Assist 또는 Home Assistant를 다시 로드한 후에만 인덱스가 다시 빌드됩니다.",
+              "index_refresh_delay_seconds": "백그라운드 재빌드가 실행되기 전에 레지스트리 변경이 멈춰 있어야 하는 시간입니다. 지연이 길수록 재빌드와 갭 채우기 모델 호출이 줄어듭니다.",
               "max_entities_per_discovery": "단일 검색 호출이 반환할 수 있는 엔터티 수를 제한합니다."
             }
           },

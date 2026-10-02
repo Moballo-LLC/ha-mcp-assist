@@ -275,10 +275,14 @@
             "description": "共有 MCP サーバーがどのように構築され、検出結果を返すかを制御します。",
             "data": {
               "enable_gap_filling": "スマート エンティティ インデックスを有効にする",
+              "enable_index_auto_refresh": "レジストリ変更時にインデックスを更新",
+              "index_refresh_delay_seconds": "インデックス更新の遅延（秒、10-86400）",
               "max_entities_per_discovery": "検出ごとの最大エンティティ数 (20 ～ 500)"
             },
             "data_description": {
               "enable_gap_filling": "コンパクトなシステム インデックスを構築して、検出を高速かつコンテキストに応じた状態に保ちます。",
+              "enable_index_auto_refresh": "エンティティ、デバイス、エリア、フロア、ラベルが変更されたときに、スマート エンティティ インデックスをバックグラウンドで再構築します。オフの場合、インデックスは MCP Assist または Home Assistant の再読み込み後にのみ再構築されます。",
+              "index_refresh_delay_seconds": "バックグラウンドで再構築する前に、レジストリの変更が止まっている必要がある時間です。遅延を長くすると、再構築とギャップ補完のモデル呼び出しが減ります。",
               "max_entities_per_discovery": "1 回の検出呼び出しで返されるエンティティの数を制限します。"
             }
           },
@@ -643,10 +647,14 @@
             "description": "共有 MCP サーバーがどのように構築され、検出結果を返すかを制御します。",
             "data": {
               "enable_gap_filling": "スマート エンティティ インデックスを有効にする",
+              "enable_index_auto_refresh": "レジストリ変更時にインデックスを更新",
+              "index_refresh_delay_seconds": "インデックス更新の遅延（秒、10-86400）",
               "max_entities_per_discovery": "検出ごとの最大エンティティ数 (20 ～ 500)"
             },
             "data_description": {
               "enable_gap_filling": "コンパクトなシステム インデックスを構築して、検出を高速かつコンテキストに応じた状態に保ちます。",
+              "enable_index_auto_refresh": "エンティティ、デバイス、エリア、フロア、ラベルが変更されたときに、スマート エンティティ インデックスをバックグラウンドで再構築します。オフの場合、インデックスは MCP Assist または Home Assistant の再読み込み後にのみ再構築されます。",
+              "index_refresh_delay_seconds": "バックグラウンドで再構築する前に、レジストリの変更が止まっている必要がある時間です。遅延を長くすると、再構築とギャップ補完のモデル呼び出しが減ります。",
               "max_entities_per_discovery": "1 回の検出呼び出しで返されるエンティティの数を制限します。"
             }
           },

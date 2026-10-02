@@ -77,6 +77,11 @@ INDEX_GAP_FILLING_PROVIDER_PRIORITY = {
 INDEX_GAP_FILLING_UNKNOWN_DIRECT_PROVIDER_PRIORITY = 50
 
 
+# Minimum wait before retrying gap-filling after a failed or empty LLM response
+# when the entity patterns have not changed.
+GAP_FILL_FAILURE_RETRY_SECONDS = 6 * 60 * 60
+
+
 class IndexManager:
     """Manages the system structure index for smart entity discovery."""
 
@@ -87,7 +92,7 @@ class IndexManager:
         self._last_updated: Optional[datetime] = None
         self._refresh_task: Optional[asyncio.Task] = None
         self._unsub_listeners: list[Callable[[], None]] = []
-        self._refresh_debounce_seconds = 60
+        self._refresh_debounce_seconds: Optional[float] = None
         self._gap_filling_in_progress = False  # Re-entrancy guard for gap-filling
         self._first_index_generated = False  # Skip gap-filling on first index (startup)
         # Serializes generation so concurrent lazy get_index() calls and the
@@ -99,6 +104,12 @@ class IndexManager:
         # One-shot follow-up so gap-filling (skipped on the first index) runs
         # once even on a stable system with no further registry changes.
         self._initial_gap_fill_scheduled = False
+        # Last gap-filling attempt, keyed by the inference prompt, so registry
+        # churn that doesn't change entity patterns never re-bills the LLM.
+        self._last_inference_prompt: Optional[str] = None
+        self._last_inference_result: Dict[str, Any] = {}
+        self._last_inference_succeeded = False
+        self._last_inference_at: Optional[datetime] = None
 
     async def start(self) -> None:
         """Start index manager and set up event listeners."""
@@ -111,6 +122,11 @@ class IndexManager:
         @callback
         def registry_changed(event: Event) -> None:
             """Schedule index refresh on registry changes."""
+            if not self._is_auto_refresh_enabled():
+                _LOGGER.debug(
+                    "%s changed, but automatic index refresh is disabled", event.event_type
+                )
+                return
             _LOGGER.debug("%s changed, scheduling index refresh", event.event_type)
             self._schedule_refresh()
 
@@ -171,7 +187,7 @@ class IndexManager:
         try:
             while self._refresh_pending:
                 self._refresh_pending = False
-                await asyncio.sleep(self._refresh_debounce_seconds)
+                await asyncio.sleep(self._get_refresh_delay_seconds())
                 if self._refresh_pending:
                     # More changes landed during the wait — reset the window.
                     continue
@@ -967,8 +983,10 @@ class IndexManager:
 
         # Build prompt for LLM
         pattern_list = "\n".join([
-            f"- {pattern}: {len(entities)} entities (examples: {', '.join(entities[:3])})"
-            for pattern, entities in sorted(patterns.items(), key=lambda x: len(x[1]), reverse=True)
+            f"- {pattern}: {len(entities)} entities (examples: {', '.join(sorted(entities)[:3])})"
+            for pattern, entities in sorted(
+                patterns.items(), key=lambda x: (-len(x[1]), x[0])
+            )
         ])
 
         prompt = f"""Analyze these Home Assistant entity patterns and categorize them into semantic types.
@@ -1004,6 +1022,10 @@ Example:
 
 Focus on meaningful categories that would help discover relevant entities for user queries."""
 
+        cached = self._get_cached_inference(prompt)
+        if cached is not None:
+            return cached
+
         # Set re-entrancy guard to prevent recursion
         # (gap-filling calls agent → agent builds prompt with index → index calls gap-filling)
         self._gap_filling_in_progress = True
@@ -1011,13 +1033,42 @@ Focus on meaningful categories that would help discover relevant entities for us
         try:
             inferred = await self._call_llm_for_inference(prompt)
             _LOGGER.info("LLM gap-filling completed: found %d inferred types", len(inferred))
+            # An empty result (e.g. the provider returned "{}") is treated like a
+            # failure so it is retried after the cooldown instead of cached forever.
+            self._store_inference(prompt, inferred, succeeded=bool(inferred))
             return inferred
         except Exception as err:
             _LOGGER.debug("LLM gap-filling failed: %s. Index will not include inferred types.", err)
+            self._store_inference(prompt, {}, succeeded=False)
             return {}
         finally:
             # Always clear the flag, even if exception occurred
             self._gap_filling_in_progress = False
+
+    def _get_cached_inference(self, prompt: str) -> Optional[Dict[str, Any]]:
+        """Return the previous gap-filling result if the LLM call can be skipped.
+
+        Successful results are reused until the entity patterns change. Failed
+        or empty attempts are retried only after a cooldown, so a provider that
+        keeps returning empty responses is not billed on every refresh.
+        """
+        if prompt != self._last_inference_prompt or self._last_inference_at is None:
+            return None
+        if not self._last_inference_succeeded:
+            elapsed = (datetime.now() - self._last_inference_at).total_seconds()
+            if elapsed >= GAP_FILL_FAILURE_RETRY_SECONDS:
+                return None
+        _LOGGER.debug("Entity patterns unchanged; reusing previous gap-filling result")
+        return dict(self._last_inference_result)
+
+    def _store_inference(
+        self, prompt: str, inferred: Dict[str, Any], *, succeeded: bool
+    ) -> None:
+        """Remember the latest gap-filling attempt for reuse."""
+        self._last_inference_prompt = prompt
+        self._last_inference_result = dict(inferred)
+        self._last_inference_succeeded = succeeded
+        self._last_inference_at = datetime.now()
 
     async def _call_llm_for_inference(self, prompt: str) -> Dict[str, Any]:
         """Call the user's configured LLM to perform inference.
@@ -1272,6 +1323,47 @@ Focus on meaningful categories that would help discover relevant entities for us
                 recovered[key] = value
 
         return recovered
+
+    def _get_shared_setting(self, key: str, default: Any) -> Any:
+        """Read a shared setting from the system entry, falling back to default."""
+        from . import get_system_entry
+
+        system_entry = get_system_entry(self.hass)
+        if system_entry is None:
+            return default
+        value = system_entry.options.get(key, system_entry.data.get(key))
+        return default if value is None else value
+
+    def _is_auto_refresh_enabled(self) -> bool:
+        """Return whether registry changes should trigger background refreshes."""
+        from .const import CONF_ENABLE_INDEX_AUTO_REFRESH, DEFAULT_ENABLE_INDEX_AUTO_REFRESH
+
+        return bool(
+            self._get_shared_setting(
+                CONF_ENABLE_INDEX_AUTO_REFRESH, DEFAULT_ENABLE_INDEX_AUTO_REFRESH
+            )
+        )
+
+    def _get_refresh_delay_seconds(self) -> float:
+        """Return how long the registry must be quiet before a refresh runs."""
+        if self._refresh_debounce_seconds is not None:
+            return self._refresh_debounce_seconds
+
+        from .const import (
+            CONF_INDEX_REFRESH_DELAY_SECONDS,
+            DEFAULT_INDEX_REFRESH_DELAY_SECONDS,
+            MAX_INDEX_REFRESH_DELAY_SECONDS,
+            MIN_INDEX_REFRESH_DELAY_SECONDS,
+        )
+
+        value = self._get_shared_setting(
+            CONF_INDEX_REFRESH_DELAY_SECONDS, DEFAULT_INDEX_REFRESH_DELAY_SECONDS
+        )
+        try:
+            delay = int(value)
+        except (TypeError, ValueError):
+            delay = DEFAULT_INDEX_REFRESH_DELAY_SECONDS
+        return max(MIN_INDEX_REFRESH_DELAY_SECONDS, min(MAX_INDEX_REFRESH_DELAY_SECONDS, delay))
 
     async def _is_gap_filling_enabled(self) -> bool:
         """Check if gap-filling is enabled in config.

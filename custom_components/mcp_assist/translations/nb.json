@@ -275,10 +275,14 @@
             "description": "Kontroller hvordan den delte MCP-serveren bygger og returnerer oppdagelsesresultater.",
             "data": {
               "enable_gap_filling": "Aktiver Smart Entity Index",
+              "enable_index_auto_refresh": "Oppdater indeks ved registerendringer",
+              "index_refresh_delay_seconds": "Forsinkelse for indeksoppdatering (sekunder, 10-86400)",
               "max_entities_per_discovery": "Maks. enheter per oppdagelse (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Bygger en kompakt systemindeks for å holde oppdagelsen rask og kontekstbevisst.",
+              "enable_index_auto_refresh": "Bygger Smart Entity Index på nytt i bakgrunnen når entiteter, enheter, områder, etasjer eller etiketter endres. Når den er av, bygges indeksen bare på nytt etter at MCP Assist eller Home Assistant lastes inn på nytt.",
+              "index_refresh_delay_seconds": "Hvor lenge registerendringer må stoppe før en ombygging i bakgrunnen kjører. Lengre forsinkelser gir færre ombygginger og færre modellkall for utfylling.",
               "max_entities_per_discovery": "Avgrenser hvor mange enheter et enkelt oppdagelsesanrop kan returnere."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Kontroller hvordan den delte MCP-serveren bygger og returnerer oppdagelsesresultater.",
             "data": {
               "enable_gap_filling": "Aktiver Smart Entity Index",
+              "enable_index_auto_refresh": "Oppdater indeks ved registerendringer",
+              "index_refresh_delay_seconds": "Forsinkelse for indeksoppdatering (sekunder, 10-86400)",
               "max_entities_per_discovery": "Maks. enheter per oppdagelse (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Bygger en kompakt systemindeks for å holde oppdagelsen rask og kontekstbevisst.",
+              "enable_index_auto_refresh": "Bygger Smart Entity Index på nytt i bakgrunnen når entiteter, enheter, områder, etasjer eller etiketter endres. Når den er av, bygges indeksen bare på nytt etter at MCP Assist eller Home Assistant lastes inn på nytt.",
+              "index_refresh_delay_seconds": "Hvor lenge registerendringer må stoppe før en ombygging i bakgrunnen kjører. Lengre forsinkelser gir færre ombygginger og færre modellkall for utfylling.",
               "max_entities_per_discovery": "Avgrenser hvor mange enheter et enkelt oppdagelsesanrop kan returnere."
             }
           },
