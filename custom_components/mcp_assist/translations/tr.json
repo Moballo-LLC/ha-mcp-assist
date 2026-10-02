@@ -275,10 +275,14 @@
             "description": "Paylaşılan MCP sunucusunun keşif sonuçlarını nasıl oluşturup döndürdüğünü denetleyin.",
             "data": {
               "enable_gap_filling": "Akıllı Varlık Dizinini Etkinleştir",
+              "enable_index_auto_refresh": "Kayıt defteri değişikliklerinde dizini yenile",
+              "index_refresh_delay_seconds": "Dizin yenileme gecikmesi (saniye, 10-86400)",
               "max_entities_per_discovery": "Keşif Başına Maksimum Varlık (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Keşfi hızlı ve bağlama duyarlı tutmak için kompakt bir sistem dizini oluşturur.",
+              "enable_index_auto_refresh": "Varlıklar, cihazlar, alanlar, katlar veya etiketler değiştiğinde Akıllı Varlık Dizini'ni arka planda yeniden oluşturur. Kapalıyken dizin yalnızca MCP Assist veya Home Assistant yeniden yüklendikten sonra yeniden oluşturulur.",
+              "index_refresh_delay_seconds": "Arka planda yeniden oluşturma başlamadan önce kayıt defteri değişikliklerinin ne kadar süre durması gerektiği. Daha uzun gecikme, daha az yeniden oluşturma ve boşluk doldurma için daha az model çağrısı demektir.",
               "max_entities_per_discovery": "Tek bir keşif çağrısının kaç varlık döndürebileceğini sınırlar."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Paylaşılan MCP sunucusunun keşif sonuçlarını nasıl oluşturup döndürdüğünü denetleyin.",
             "data": {
               "enable_gap_filling": "Akıllı Varlık Dizinini Etkinleştir",
+              "enable_index_auto_refresh": "Kayıt defteri değişikliklerinde dizini yenile",
+              "index_refresh_delay_seconds": "Dizin yenileme gecikmesi (saniye, 10-86400)",
               "max_entities_per_discovery": "Keşif Başına Maksimum Varlık (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Keşfi hızlı ve bağlama duyarlı tutmak için kompakt bir sistem dizini oluşturur.",
+              "enable_index_auto_refresh": "Varlıklar, cihazlar, alanlar, katlar veya etiketler değiştiğinde Akıllı Varlık Dizini'ni arka planda yeniden oluşturur. Kapalıyken dizin yalnızca MCP Assist veya Home Assistant yeniden yüklendikten sonra yeniden oluşturulur.",
+              "index_refresh_delay_seconds": "Arka planda yeniden oluşturma başlamadan önce kayıt defteri değişikliklerinin ne kadar süre durması gerektiği. Daha uzun gecikme, daha az yeniden oluşturma ve boşluk doldurma için daha az model çağrısı demektir.",
               "max_entities_per_discovery": "Tek bir keşif çağrısının kaç varlık döndürebileceğini sınırlar."
             }
           },

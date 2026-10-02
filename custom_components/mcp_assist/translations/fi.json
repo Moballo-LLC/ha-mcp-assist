@@ -275,10 +275,14 @@
             "description": "Hallitse, kuinka jaettu MCP-palvelin rakentaa ja palauttaa etsintätuloksia.",
             "data": {
               "enable_gap_filling": "Ota Smart Entity Index käyttöön",
+              "enable_index_auto_refresh": "Päivitä indeksi rekisterimuutoksissa",
+              "index_refresh_delay_seconds": "Indeksin päivitysviive (sekuntia, 10-86400)",
               "max_entities_per_discovery": "Entiteettien enimmäismäärä löytöä kohti (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Muodostaa kompaktin järjestelmähakemiston, jotta etsintä pysyy nopeana ja kontekstitietoisena.",
+              "enable_index_auto_refresh": "Rakentaa älykkään entiteetti-indeksin uudelleen taustalla, kun entiteetit, laitteet, alueet, kerrokset tai tunnisteet muuttuvat. Kun pois päältä, indeksi rakennetaan uudelleen vain MCP Assistin tai Home Assistantin uudelleenlatauksen jälkeen.",
+              "index_refresh_delay_seconds": "Kuinka kauan rekisterimuutosten on oltava tauolla ennen taustalla tehtävää uudelleenrakennusta. Pidempi viive tarkoittaa harvempia uudelleenrakennuksia ja vähemmän mallikutsuja aukkojen täyttöön.",
               "max_entities_per_discovery": "Rajoittaa kuinka monta entiteettiä yksi etsintäkutsu voi palauttaa."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Hallitse, kuinka jaettu MCP-palvelin rakentaa ja palauttaa etsintätuloksia.",
             "data": {
               "enable_gap_filling": "Ota Smart Entity Index käyttöön",
+              "enable_index_auto_refresh": "Päivitä indeksi rekisterimuutoksissa",
+              "index_refresh_delay_seconds": "Indeksin päivitysviive (sekuntia, 10-86400)",
               "max_entities_per_discovery": "Entiteettien enimmäismäärä löytöä kohti (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Muodostaa kompaktin järjestelmähakemiston, jotta etsintä pysyy nopeana ja kontekstitietoisena.",
+              "enable_index_auto_refresh": "Rakentaa älykkään entiteetti-indeksin uudelleen taustalla, kun entiteetit, laitteet, alueet, kerrokset tai tunnisteet muuttuvat. Kun pois päältä, indeksi rakennetaan uudelleen vain MCP Assistin tai Home Assistantin uudelleenlatauksen jälkeen.",
+              "index_refresh_delay_seconds": "Kuinka kauan rekisterimuutosten on oltava tauolla ennen taustalla tehtävää uudelleenrakennusta. Pidempi viive tarkoittaa harvempia uudelleenrakennuksia ja vähemmän mallikutsuja aukkojen täyttöön.",
               "max_entities_per_discovery": "Rajoittaa kuinka monta entiteettiä yksi etsintäkutsu voi palauttaa."
             }
           },

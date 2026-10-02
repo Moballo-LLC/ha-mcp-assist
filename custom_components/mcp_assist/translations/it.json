@@ -275,10 +275,14 @@
             "description": "Controlla il modo in cui il server MCP condiviso crea e restituisce i risultati del rilevamento.",
             "data": {
               "enable_gap_filling": "Abilita indice di entità intelligenti",
+              "enable_index_auto_refresh": "Aggiorna l'indice alle modifiche del registro",
+              "index_refresh_delay_seconds": "Ritardo di aggiornamento dell'indice (secondi, 10-86400)",
               "max_entities_per_discovery": "Entità massime per scoperta (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Crea un indice di sistema compatto per mantenere la scoperta rapida e sensibile al contesto.",
+              "enable_index_auto_refresh": "Ricostruisce l'indice di entità intelligenti in background quando cambiano entità, dispositivi, aree, piani o etichette. Se disattivato, l'indice viene ricostruito solo dopo il ricaricamento di MCP Assist o Home Assistant.",
+              "index_refresh_delay_seconds": "Per quanto tempo le modifiche al registro devono fermarsi prima di una ricostruzione in background. Ritardi più lunghi significano meno ricostruzioni e meno chiamate al modello per il completamento.",
               "max_entities_per_discovery": "Limita il numero di entità che una singola chiamata di individuazione può restituire."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Controlla il modo in cui il server MCP condiviso crea e restituisce i risultati del rilevamento.",
             "data": {
               "enable_gap_filling": "Abilita indice di entità intelligenti",
+              "enable_index_auto_refresh": "Aggiorna l'indice alle modifiche del registro",
+              "index_refresh_delay_seconds": "Ritardo di aggiornamento dell'indice (secondi, 10-86400)",
               "max_entities_per_discovery": "Entità massime per scoperta (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Crea un indice di sistema compatto per mantenere la scoperta rapida e sensibile al contesto.",
+              "enable_index_auto_refresh": "Ricostruisce l'indice di entità intelligenti in background quando cambiano entità, dispositivi, aree, piani o etichette. Se disattivato, l'indice viene ricostruito solo dopo il ricaricamento di MCP Assist o Home Assistant.",
+              "index_refresh_delay_seconds": "Per quanto tempo le modifiche al registro devono fermarsi prima di una ricostruzione in background. Ritardi più lunghi significano meno ricostruzioni e meno chiamate al modello per il completamento.",
               "max_entities_per_discovery": "Limita il numero di entità che una singola chiamata di individuazione può restituire."
             }
           },

@@ -275,10 +275,14 @@
             "description": "Kontrolin kung paano bumubuo at nagbabalik ng mga resulta ng pagtuklas ang nakabahaging MCP server.",
             "data": {
               "enable_gap_filling": "Paganahin ang Smart Entity Index",
+              "enable_index_auto_refresh": "I-refresh ang index kapag may pagbabago sa registry",
+              "index_refresh_delay_seconds": "Antala ng pag-refresh ng index (segundo, 10-86400)",
               "max_entities_per_discovery": "Max na Entity Bawat Pagtuklas (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Bumubuo ng isang compact system index upang mapanatiling mabilis ang pagtuklas at may kamalayan sa konteksto.",
+              "enable_index_auto_refresh": "Muling binubuo ang Smart Entity Index sa background kapag nagbago ang mga entity, device, area, floor, o label. Kapag naka-off, muling binubuo lang ang index pagkatapos i-reload ang MCP Assist o Home Assistant.",
+              "index_refresh_delay_seconds": "Gaano katagal dapat tumigil ang mga pagbabago sa registry bago tumakbo ang muling pagbuo sa background. Mas mahabang antala ay nangangahulugang mas kaunting muling pagbuo at mas kaunting tawag sa model para sa gap-filling.",
               "max_entities_per_discovery": "Nililimitahan kung ilang entity ang maaaring ibalik ng isang pagtuklas na tawag."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Kontrolin kung paano bumubuo at nagbabalik ng mga resulta ng pagtuklas ang nakabahaging MCP server.",
             "data": {
               "enable_gap_filling": "Paganahin ang Smart Entity Index",
+              "enable_index_auto_refresh": "I-refresh ang index kapag may pagbabago sa registry",
+              "index_refresh_delay_seconds": "Antala ng pag-refresh ng index (segundo, 10-86400)",
               "max_entities_per_discovery": "Max na Entity Bawat Pagtuklas (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Bumubuo ng isang compact system index upang mapanatiling mabilis ang pagtuklas at may kamalayan sa konteksto.",
+              "enable_index_auto_refresh": "Muling binubuo ang Smart Entity Index sa background kapag nagbago ang mga entity, device, area, floor, o label. Kapag naka-off, muling binubuo lang ang index pagkatapos i-reload ang MCP Assist o Home Assistant.",
+              "index_refresh_delay_seconds": "Gaano katagal dapat tumigil ang mga pagbabago sa registry bago tumakbo ang muling pagbuo sa background. Mas mahabang antala ay nangangahulugang mas kaunting muling pagbuo at mas kaunting tawag sa model para sa gap-filling.",
               "max_entities_per_discovery": "Nililimitahan kung ilang entity ang maaaring ibalik ng isang pagtuklas na tawag."
             }
           },

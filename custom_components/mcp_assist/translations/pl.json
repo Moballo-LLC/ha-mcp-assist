@@ -275,10 +275,14 @@
             "description": "Kontroluj sposób, w jaki współużytkowany serwer MCP buduje i zwraca wyniki wykrywania.",
             "data": {
               "enable_gap_filling": "Włącz indeks inteligentnych jednostek",
+              "enable_index_auto_refresh": "Odświeżaj indeks przy zmianach rejestru",
+              "index_refresh_delay_seconds": "Opóźnienie odświeżania indeksu (sekundy, 10-86400)",
               "max_entities_per_discovery": "Maksymalna liczba elementów na odkrycie (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Tworzy kompaktowy indeks systemowy, aby zapewnić szybkie i kontekstowe wykrywanie.",
+              "enable_index_auto_refresh": "Odbudowuje inteligentny indeks encji w tle po zmianie encji, urządzeń, obszarów, pięter lub etykiet. Po wyłączeniu indeks jest odbudowywany tylko po ponownym załadowaniu MCP Assist lub Home Assistant.",
+              "index_refresh_delay_seconds": "Jak długo zmiany rejestru muszą ustać, zanim uruchomi się odbudowa w tle. Dłuższe opóźnienie oznacza mniej odbudów i mniej wywołań modelu do uzupełniania luk.",
               "max_entities_per_discovery": "Ogranicza liczbę jednostek, które może zwrócić pojedyncze wywołanie odnajdywania."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Kontroluj sposób, w jaki współużytkowany serwer MCP buduje i zwraca wyniki wykrywania.",
             "data": {
               "enable_gap_filling": "Włącz indeks inteligentnych jednostek",
+              "enable_index_auto_refresh": "Odświeżaj indeks przy zmianach rejestru",
+              "index_refresh_delay_seconds": "Opóźnienie odświeżania indeksu (sekundy, 10-86400)",
               "max_entities_per_discovery": "Maksymalna liczba elementów na odkrycie (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Tworzy kompaktowy indeks systemowy, aby zapewnić szybkie i kontekstowe wykrywanie.",
+              "enable_index_auto_refresh": "Odbudowuje inteligentny indeks encji w tle po zmianie encji, urządzeń, obszarów, pięter lub etykiet. Po wyłączeniu indeks jest odbudowywany tylko po ponownym załadowaniu MCP Assist lub Home Assistant.",
+              "index_refresh_delay_seconds": "Jak długo zmiany rejestru muszą ustać, zanim uruchomi się odbudowa w tle. Dłuższe opóźnienie oznacza mniej odbudów i mniej wywołań modelu do uzupełniania luk.",
               "max_entities_per_discovery": "Ogranicza liczbę jednostek, które może zwrócić pojedyncze wywołanie odnajdywania."
             }
           },

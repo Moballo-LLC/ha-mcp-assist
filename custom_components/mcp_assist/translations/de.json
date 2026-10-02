@@ -275,10 +275,14 @@
             "description": "Steuern Sie, wie der gemeinsam genutzte MCP-Server Erkennungsergebnisse erstellt und zurückgibt.",
             "data": {
               "enable_gap_filling": "Aktivieren Sie den Smart-Entity-Index",
+              "enable_index_auto_refresh": "Index bei Registry-Änderungen aktualisieren",
+              "index_refresh_delay_seconds": "Verzögerung der Indexaktualisierung (Sekunden, 10-86400)",
               "max_entities_per_discovery": "Maximale Entitäten pro Entdeckung (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Erstellt einen kompakten Systemindex, um die Erkennung schnell und kontextorientiert zu gestalten.",
+              "enable_index_auto_refresh": "Baut den Smart Entity Index im Hintergrund neu auf, wenn sich Entitäten, Geräte, Bereiche, Etagen oder Labels ändern. Wenn deaktiviert, wird der Index nur nach einem Neuladen von MCP Assist oder Home Assistant neu aufgebaut.",
+              "index_refresh_delay_seconds": "Wie lange Registry-Änderungen ausbleiben müssen, bevor ein Neuaufbau im Hintergrund startet. Längere Verzögerungen bedeuten weniger Neuaufbauten und weniger Modellaufrufe zum Lückenfüllen.",
               "max_entities_per_discovery": "Begrenzt die Anzahl der Entitäten, die ein einzelner Erkennungsaufruf zurückgeben kann."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Steuern Sie, wie der gemeinsam genutzte MCP-Server Erkennungsergebnisse erstellt und zurückgibt.",
             "data": {
               "enable_gap_filling": "Aktivieren Sie den Smart-Entity-Index",
+              "enable_index_auto_refresh": "Index bei Registry-Änderungen aktualisieren",
+              "index_refresh_delay_seconds": "Verzögerung der Indexaktualisierung (Sekunden, 10-86400)",
               "max_entities_per_discovery": "Maximale Entitäten pro Entdeckung (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Erstellt einen kompakten Systemindex, um die Erkennung schnell und kontextorientiert zu gestalten.",
+              "enable_index_auto_refresh": "Baut den Smart Entity Index im Hintergrund neu auf, wenn sich Entitäten, Geräte, Bereiche, Etagen oder Labels ändern. Wenn deaktiviert, wird der Index nur nach einem Neuladen von MCP Assist oder Home Assistant neu aufgebaut.",
+              "index_refresh_delay_seconds": "Wie lange Registry-Änderungen ausbleiben müssen, bevor ein Neuaufbau im Hintergrund startet. Längere Verzögerungen bedeuten weniger Neuaufbauten und weniger Modellaufrufe zum Lückenfüllen.",
               "max_entities_per_discovery": "Begrenzt die Anzahl der Entitäten, die ein einzelner Erkennungsaufruf zurückgeben kann."
             }
           },

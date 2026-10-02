@@ -11,8 +11,16 @@ import pytest
 from custom_components.mcp_assist.index_manager import IndexManager
 
 
-def _fake_hass() -> SimpleNamespace:
-    return SimpleNamespace(bus=SimpleNamespace(async_listen=lambda *a, **k: Mock()))
+def _fake_hass(listeners: list | None = None) -> SimpleNamespace:
+    def _async_listen(event_type, listener):
+        if listeners is not None:
+            listeners.append(listener)
+        return Mock()
+
+    return SimpleNamespace(
+        bus=SimpleNamespace(async_listen=_async_listen),
+        config_entries=SimpleNamespace(async_entries=lambda domain: []),
+    )
 
 
 @pytest.mark.asyncio
@@ -165,3 +173,75 @@ async def test_debounce_resets_quiet_window_on_events_during_wait(monkeypatch) -
 
     assert refresh_calls == 1  # one rebuild, not one per event
     assert sleep_count == 2  # the quiet window was reset exactly once
+
+
+@pytest.mark.asyncio
+async def test_registry_change_skips_refresh_when_auto_refresh_disabled(monkeypatch) -> None:
+    """Turning off automatic refresh should ignore registry change events."""
+    listeners: list = []
+    manager = IndexManager(_fake_hass(listeners))
+    monkeypatch.setattr(manager, "_is_auto_refresh_enabled", lambda: False)
+    await manager.start()
+
+    for listener in listeners:
+        listener(SimpleNamespace(event_type="entity_registry_updated"))
+
+    assert manager._refresh_task is None
+    assert manager._refresh_pending is False
+
+
+@pytest.mark.asyncio
+async def test_registry_change_schedules_refresh_by_default() -> None:
+    """Automatic refresh stays on when no shared setting is stored."""
+    listeners: list = []
+    manager = IndexManager(_fake_hass(listeners))
+    manager._refresh_debounce_seconds = 3600
+    await manager.start()
+
+    listeners[0](SimpleNamespace(event_type="entity_registry_updated"))
+
+    assert manager._refresh_task is not None
+    await manager.async_stop()
+
+
+def test_refresh_settings_default_without_system_entry() -> None:
+    """Defaults apply when no shared settings entry exists."""
+    manager = IndexManager(_fake_hass())
+
+    assert manager._is_auto_refresh_enabled() is True
+    assert manager._get_refresh_delay_seconds() == 60
+
+
+@pytest.mark.asyncio
+async def test_refresh_settings_read_from_system_entry(hass, system_entry_factory) -> None:
+    """Shared settings control automatic refresh and its quiet window."""
+    from custom_components.mcp_assist.const import (
+        CONF_ENABLE_INDEX_AUTO_REFRESH,
+        CONF_INDEX_REFRESH_DELAY_SECONDS,
+    )
+
+    system_entry_factory(
+        options={
+            CONF_ENABLE_INDEX_AUTO_REFRESH: False,
+            CONF_INDEX_REFRESH_DELAY_SECONDS: 3600,
+        }
+    )
+    manager = IndexManager(hass)
+
+    assert manager._is_auto_refresh_enabled() is False
+    assert manager._get_refresh_delay_seconds() == 3600
+
+
+@pytest.mark.asyncio
+async def test_refresh_delay_is_clamped_to_supported_range(hass, system_entry_factory) -> None:
+    """Out-of-range stored delays are clamped instead of breaking refreshes."""
+    from custom_components.mcp_assist.const import CONF_INDEX_REFRESH_DELAY_SECONDS
+
+    entry = system_entry_factory(options={CONF_INDEX_REFRESH_DELAY_SECONDS: 1})
+    manager = IndexManager(hass)
+    assert manager._get_refresh_delay_seconds() == 10
+
+    hass.config_entries.async_update_entry(
+        entry, options={CONF_INDEX_REFRESH_DELAY_SECONDS: "not-a-number"}
+    )
+    assert manager._get_refresh_delay_seconds() == 60

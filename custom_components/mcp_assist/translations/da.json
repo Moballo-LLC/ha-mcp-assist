@@ -275,10 +275,14 @@
             "description": "Kontroller, hvordan den delte MCP-server bygger og returnerer opdagelsesresultater.",
             "data": {
               "enable_gap_filling": "Aktiver Smart Entity Index",
+              "enable_index_auto_refresh": "Opdater indeks ved registerændringer",
+              "index_refresh_delay_seconds": "Forsinkelse for indeksopdatering (sekunder, 10-86400)",
               "max_entities_per_discovery": "Maks. enheder pr. opdagelse (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Opbygger et kompakt systemindeks for at holde opdagelsen hurtig og kontekstbevidst.",
+              "enable_index_auto_refresh": "Genopbygger Smart Entity Index i baggrunden, når entiteter, enheder, områder, etager eller etiketter ændres. Når den er slået fra, genopbygges indekset kun, når MCP Assist eller Home Assistant genindlæses.",
+              "index_refresh_delay_seconds": "Hvor længe registerændringer skal stoppe, før en genopbygning i baggrunden kører. Længere forsinkelser betyder færre genopbygninger og færre modelkald til udfyldning.",
               "max_entities_per_discovery": "Begrænser, hvor mange enheder et enkelt opdagelseskald kan returnere."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Kontroller, hvordan den delte MCP-server bygger og returnerer opdagelsesresultater.",
             "data": {
               "enable_gap_filling": "Aktiver Smart Entity Index",
+              "enable_index_auto_refresh": "Opdater indeks ved registerændringer",
+              "index_refresh_delay_seconds": "Forsinkelse for indeksopdatering (sekunder, 10-86400)",
               "max_entities_per_discovery": "Maks. enheder pr. opdagelse (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "Opbygger et kompakt systemindeks for at holde opdagelsen hurtig og kontekstbevidst.",
+              "enable_index_auto_refresh": "Genopbygger Smart Entity Index i baggrunden, når entiteter, enheder, områder, etager eller etiketter ændres. Når den er slået fra, genopbygges indekset kun, når MCP Assist eller Home Assistant genindlæses.",
+              "index_refresh_delay_seconds": "Hvor længe registerændringer skal stoppe, før en genopbygning i baggrunden kører. Længere forsinkelser betyder færre genopbygninger og færre modelkald til udfyldning.",
               "max_entities_per_discovery": "Begrænser, hvor mange enheder et enkelt opdagelseskald kan returnere."
             }
           },

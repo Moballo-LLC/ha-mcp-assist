@@ -275,10 +275,14 @@
             "description": "Řídit, jak sdílený server MCP vytváří a vrací výsledky zjišťování.",
             "data": {
               "enable_gap_filling": "Povolit index inteligentních entit",
+              "enable_index_auto_refresh": "Obnovit index při změnách registru",
+              "index_refresh_delay_seconds": "Prodleva obnovení indexu (sekundy, 10-86400)",
               "max_entities_per_discovery": "Maximální počet entit na objev (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Vytváří kompaktní systémový index, aby bylo zjišťování rychlé a s ohledem na kontext.",
+              "enable_index_auto_refresh": "Po změně entit, zařízení, oblastí, podlaží nebo štítků znovu sestaví index inteligentních entit na pozadí. Když je vypnuto, index se znovu sestaví jen po opětovném načtení MCP Assist nebo Home Assistant.",
+              "index_refresh_delay_seconds": "Jak dlouho musí změny registru ustat, než se spustí sestavení na pozadí. Delší prodleva znamená méně sestavení a méně volání modelu pro doplňování.",
               "max_entities_per_discovery": "Omezuje, kolik entit může vrátit jedno zjišťovací volání."
             }
           },
@@ -643,10 +647,14 @@
             "description": "Řídit, jak sdílený server MCP vytváří a vrací výsledky zjišťování.",
             "data": {
               "enable_gap_filling": "Povolit index inteligentních entit",
+              "enable_index_auto_refresh": "Obnovit index při změnách registru",
+              "index_refresh_delay_seconds": "Prodleva obnovení indexu (sekundy, 10-86400)",
               "max_entities_per_discovery": "Maximální počet entit na objev (20–500)"
             },
             "data_description": {
               "enable_gap_filling": "Vytváří kompaktní systémový index, aby bylo zjišťování rychlé a s ohledem na kontext.",
+              "enable_index_auto_refresh": "Po změně entit, zařízení, oblastí, podlaží nebo štítků znovu sestaví index inteligentních entit na pozadí. Když je vypnuto, index se znovu sestaví jen po opětovném načtení MCP Assist nebo Home Assistant.",
+              "index_refresh_delay_seconds": "Jak dlouho musí změny registru ustat, než se spustí sestavení na pozadí. Delší prodleva znamená méně sestavení a méně volání modelu pro doplňování.",
               "max_entities_per_discovery": "Omezuje, kolik entit může vrátit jedno zjišťovací volání."
             }
           },

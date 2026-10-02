@@ -275,10 +275,14 @@
             "description": "控制共享 MCP 服务器如何构建和返回发现结果。",
             "data": {
               "enable_gap_filling": "启用智能实体索引",
+              "enable_index_auto_refresh": "注册表变更时刷新索引",
+              "index_refresh_delay_seconds": "索引刷新延迟（秒，10-86400）",
               "max_entities_per_discovery": "每次发现的最大实体数 (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "构建紧凑的系统索引，以保持快速发现和上下文感知。",
+              "enable_index_auto_refresh": "当实体、设备、区域、楼层或标签发生变化时，在后台重建智能实体索引。关闭后，只有在重新加载 MCP Assist 或 Home Assistant 后才会重建索引。",
+              "index_refresh_delay_seconds": "注册表变更需要停止多长时间后才会在后台重建。延迟越长，重建次数和补全所需的模型调用就越少。",
               "max_entities_per_discovery": "限制单个发现调用可以返回的实体数量。"
             }
           },
@@ -643,10 +647,14 @@
             "description": "控制共享 MCP 服务器如何构建和返回发现结果。",
             "data": {
               "enable_gap_filling": "启用智能实体索引",
+              "enable_index_auto_refresh": "注册表变更时刷新索引",
+              "index_refresh_delay_seconds": "索引刷新延迟（秒，10-86400）",
               "max_entities_per_discovery": "每次发现的最大实体数 (20-500)"
             },
             "data_description": {
               "enable_gap_filling": "构建紧凑的系统索引，以保持快速发现和上下文感知。",
+              "enable_index_auto_refresh": "当实体、设备、区域、楼层或标签发生变化时，在后台重建智能实体索引。关闭后，只有在重新加载 MCP Assist 或 Home Assistant 后才会重建索引。",
+              "index_refresh_delay_seconds": "注册表变更需要停止多长时间后才会在后台重建。延迟越长，重建次数和补全所需的模型调用就越少。",
               "max_entities_per_discovery": "限制单个发现调用可以返回的实体数量。"
             }
           },
