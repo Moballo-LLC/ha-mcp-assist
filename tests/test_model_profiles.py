@@ -17,7 +17,8 @@ from custom_components.mcp_assist import model_profiles as profiles_module
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
 from custom_components.mcp_assist.const import (
     CONF_API_KEY, CONF_CHAT_LOG_MODE, CONF_LMSTUDIO_URL, CONF_MODEL_NAME,
-    CONF_MODEL_PROFILE, CONF_OPENAI_API_TRANSPORT, CONF_SERVER_TYPE,
+    CONF_MODEL_PROFILE, CONF_OPENAI_API_TRANSPORT, CONF_OPENAI_IMAGE_MODEL_PROFILE,
+    CONF_SERVER_TYPE,
     SERVER_TYPE_OPENAI, SERVER_TYPE_OLLAMA, DOMAIN,
 )
 from custom_components.mcp_assist.llm_providers.openai import OpenAIProvider
@@ -577,3 +578,143 @@ async def test_newer_lookup_failure_preserves_prior_resolution(
             if not task.done():
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.mark.parametrize("transport,key", [
+    ("responses", "reasoning"), ("chat_completions", "reasoning_effort"),
+])
+async def test_standalone_no_tools_resolves_text_profile_payload(
+    hass, profile_entry_factory, monkeypatch, transport, key,
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(
+        data={**entry_data(), CONF_OPENAI_IMAGE_MODEL_PROFILE: "image-assistant"},
+        options={CONF_OPENAI_API_TRANSPORT: transport},
+    ))
+    resolved = validate_model_profile(policy(), "assistant")
+    lookup = AsyncMock(return_value=resolved)
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+    monkeypatch.setattr(agent_module, "async_resolve_model_profiles", AsyncMock(
+        side_effect=AssertionError("image policy must stay lazy"),
+    ))
+    observed = []
+
+    async def response(provider, payload, *, iteration):
+        observed.append(payload)
+        data = ({"output": [{"type": "message", "role": "assistant", "content": [
+            {"type": "output_text", "text": "Answer."},
+        ]}]} if transport == "responses" else {
+            "choices": [{"message": {"role": "assistant", "content": "Answer."}}],
+        })
+        return agent_module.ProviderHttpResponse(status=200, data=data)
+
+    monkeypatch.setattr(agent, "_request_provider_http_response", response)
+    assert await agent.async_call_llm_without_tools([
+        {"role": "user", "content": "Fill an index gap."},
+    ]) == "Answer."
+    lookup.assert_awaited_once()
+    assert lookup.await_args.args[1] == "assistant"
+    assert observed[0]["model"] == "example-model"
+    assert observed[0][key] == ({"effort": "high"} if transport == "responses" else "high")
+    assert not observed[0].get("tools")
+    assert agent.model_name == "saved-model"
+    assert agent.resolved_model_profile is None
+    assert agent_module._REQUEST_MODEL_PROFILE.get() is None
+
+
+async def test_standalone_no_tools_resolution_failure_blocks_generation(
+    hass, profile_entry_factory, monkeypatch,
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data=entry_data()))
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", AsyncMock(
+        side_effect=ModelProfileResolutionError(),
+    ))
+    generation = AsyncMock()
+    monkeypatch.setattr(agent, "_call_llm_without_tools", generation)
+    with pytest.raises(ModelProfileResolutionError):
+        await agent.async_call_llm_without_tools([])
+    generation.assert_not_awaited()
+    assert agent.resolved_model_profile is None
+    assert agent_module._REQUEST_MODEL_PROFILE.get() is None
+
+
+@pytest.mark.parametrize("reference", ["", "  "])
+async def test_standalone_no_tools_blank_profile_keeps_saved_model(
+    hass, profile_entry_factory, monkeypatch, reference,
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data=entry_data(reference)))
+    lookup = AsyncMock(side_effect=AssertionError("unexpected profile lookup"))
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+
+    async def generation(messages, provider, *, transport):
+        assert provider.build_payload(messages)["model"] == "saved-model"
+        return "Answer."
+
+    monkeypatch.setattr(agent, "_call_llm_without_tools", generation)
+    assert await agent.async_call_llm_without_tools([]) == "Answer."
+    lookup.assert_not_awaited()
+
+
+async def test_no_tools_reuses_same_entry_conversation_selection(
+    hass, profile_entry_factory, monkeypatch,
+):
+    entry = profile_entry_factory(data=entry_data())
+    agent = MCPAssistConversationEntity(hass, entry)
+    resolved = validate_model_profile(policy("frozen-model", "low"), "assistant")
+    lookup = AsyncMock(side_effect=AssertionError("conversation policy must stay frozen"))
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+
+    async def generation(messages, provider, *, transport):
+        payload = provider.build_payload(messages)
+        assert payload["model"] == "frozen-model"
+        assert payload["reasoning_effort"] == "low"
+        return "Answer."
+
+    monkeypatch.setattr(agent, "_call_llm_without_tools", generation)
+    token = agent_module._REQUEST_MODEL_PROFILE.set((entry, resolved, "assistant", object()))
+    try:
+        assert await agent.async_call_llm_without_tools([]) == "Answer."
+        assert agent_module._REQUEST_MODEL_PROFILE.get()[1] is resolved
+    finally:
+        agent_module._REQUEST_MODEL_PROFILE.reset(token)
+    lookup.assert_not_awaited()
+
+
+async def test_concurrent_standalone_no_tools_selections_remain_local(
+    hass, profile_entry_factory, monkeypatch,
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data=entry_data()))
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    calls = 0
+
+    async def lookup(*args):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_started.set()
+            await release_first.wait()
+            return validate_model_profile(policy("first-model", "high"), "assistant")
+        return validate_model_profile(policy("second-model", "low"), "assistant")
+
+    observed = []
+
+    async def generation(messages, provider, *, transport):
+        payload = provider.build_payload(messages)
+        await asyncio.sleep(0)
+        observed.append((payload["model"], payload["reasoning_effort"]))
+        assert agent.model_name == "saved-model"
+        assert agent.resolved_model_profile is None
+        assert agent_module._REQUEST_MODEL_PROFILE.get() is None
+        return payload["model"]
+
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+    monkeypatch.setattr(agent, "_call_llm_without_tools", generation)
+    first = asyncio.create_task(agent.async_call_llm_without_tools([]))
+    await first_started.wait()
+    try:
+        assert await agent.async_call_llm_without_tools([]) == "second-model"
+    finally:
+        release_first.set()
+    assert await first == "first-model"
+    assert observed == [("second-model", "low"), ("first-model", "high")]
+    assert calls == 2

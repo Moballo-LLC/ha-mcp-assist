@@ -4347,7 +4347,16 @@ class MCPAssistConversationEntity(ConversationEntity):
         transport: str = "direct_no_tools",
     ) -> str:
         """Call the active provider directly with tools disabled."""
-        provider = self._get_llm_provider()
+        settings = self._build_provider_settings()
+        reference = self.model_profile
+        if reference and self._request_model_profile() is None:
+            resolved = await async_resolve_model_profile(
+                resolve_provider_runtime_config(self.entry), reference
+            )
+            settings = replace(settings, model_name=resolved.model, provider_options={
+                **settings.provider_options, "_resolved_model_profile": resolved,
+            })
+        provider = create_llm_provider(settings)
         return await self._call_llm_without_tools(
             messages,
             provider,

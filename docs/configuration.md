@@ -393,7 +393,9 @@ lookup is limited to 15 seconds and 1 MiB.
 
 The concrete model, effort, and revision are frozen for the entire conversation
 request, including tool follow-ups. The next request resolves the current policy
-again. Missing profiles, authentication failures, and invalid policy responses
+again. Smart Entity Index gap filling also resolves the named text profile for
+standalone calls and reuses the frozen selection when called within a conversation.
+Missing profiles, authentication failures, and invalid policy responses
 stop the request before model generation; MCP Assist does not fall back to the
 saved model. The agent's read-only `resolved_model_profile` metadata reports the
 last resolved pair and revision, not proof that a model request succeeded.
