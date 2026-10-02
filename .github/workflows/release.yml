@@ -80,10 +80,33 @@ jobs:
           REQUIRE_MAIN_ANCESTOR: "1"
         run: scripts/verify_release_candidate.sh
 
+      # Releases are immutable once published, so assets must be attached while
+      # the release is still a draft. Create (or reuse) a draft, upload the
+      # package, then publish it.
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          generate_release_notes: true
-          files: dist/mcp_assist.zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          is_draft="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo missing)"
+          case "$is_draft" in
+            missing)
+              gh release create "$RELEASE_TAG" dist/mcp_assist.zip \
+                --repo "$GITHUB_REPOSITORY" \
+                --verify-tag \
+                --draft \
+                --title "$RELEASE_TAG" \
+                --generate-notes
+              ;;
+            true)
+              gh release upload "$RELEASE_TAG" dist/mcp_assist.zip \
+                --repo "$GITHUB_REPOSITORY" \
+                --clobber
+              ;;
+            *)
+              echo "::error::Release $RELEASE_TAG is already published and immutable, so mcp_assist.zip cannot be attached. Release a new version instead."
+              exit 1
+              ;;
+          esac
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

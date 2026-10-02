@@ -129,8 +129,11 @@ git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-7. Watch the **Release** workflow. It publishes the GitHub release titled
-   with the bare tag, e.g. `v1.11.1`.
+7. Watch the **Release** workflow. It creates a draft release titled with the
+   bare tag (e.g. `v1.11.1`), attaches `mcp_assist.zip`, then publishes it.
+   Releases are immutable once published, so assets can't be added afterwards.
+   If the workflow fails before publishing, re-run it and it reuses the draft;
+   if a release was published without the zip, release a new patch version.
 8. Edit the generated GitHub release body so it starts with notable changes,
    then a `---` separator, then the full generated changelog.
 
