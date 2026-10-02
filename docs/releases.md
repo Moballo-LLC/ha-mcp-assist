@@ -111,7 +111,11 @@ and compiles the extracted integration.
 ## How to Publish a Release
 
 1. Make sure the release PRs are merged.
-2. Update `custom_components/mcp_assist/manifest.json` with the new version.
+2. Update `custom_components/mcp_assist/manifest.json` with the new version
+   in its own commit titled with the bare tag, e.g. `v1.11.1`. Title a
+   bump-only PR the same way. If the bump rides along with code changes, keep
+   the PR's descriptive title and merge it with a merge commit instead of
+   squashing, so the `vX.Y.Z` commit is kept.
 3. Run `scripts/verify_release_candidate.sh` with the intended tag.
 4. Merge the version bump.
 5. Confirm CI, HACS, and Hassfest are green on `main`.
@@ -121,11 +125,12 @@ and compiles the extracted integration.
 git checkout main
 git pull origin main
 RELEASE_TAG=vX.Y.Z scripts/verify_release_candidate.sh
-git tag vX.Y.Z
+git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-7. Watch the **Release** workflow.
+7. Watch the **Release** workflow. It publishes the GitHub release titled
+   with the bare tag, e.g. `v1.11.1`.
 8. Edit the generated GitHub release body so it starts with notable changes,
    then a `---` separator, then the full generated changelog.
 
