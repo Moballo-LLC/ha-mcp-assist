@@ -56,6 +56,7 @@ _SHIPPED_TOOL_EFFECTS: dict[str, ToolEffect] = {
     "get_google_place_details": ToolEffect.READ_ONLY,
     "get_google_route": ToolEffect.READ_ONLY,
     "get_weather_forecast": ToolEffect.READ_ONLY,
+    "get_maintenance_status": ToolEffect.READ_ONLY,
     "get_entity_history": ToolEffect.READ_ONLY,
     "analyze_entity_history": ToolEffect.READ_ONLY,
     "get_entity_state_at_time": ToolEffect.READ_ONLY,

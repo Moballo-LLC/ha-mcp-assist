@@ -236,6 +236,21 @@ assistant or a room-specific voice profile.
 
 See [Tool Reference](tool-reference.md) for the tool families.
 
+## Maintenance Status
+
+**Maintenance Status** is an optional built-in tool family, disabled in shared
+settings by default. Enable it under **Shared Tool Families** to read current
+maintenance signals from entities exposed to the conversation assistant. Profiles
+may use it by default once shared settings enable it; **Disable Maintenance
+Status** removes it from an individual profile. It also works when **Control
+Home Assistant** is disabled.
+
+The tool runs only when called. It checks native battery, update, unavailable,
+unknown, and problem states, without repairs, service calls, or remote queries.
+See [Maintenance Status](tool-reference.md#maintenance-status) for filters and
+paging. Results describe exposed entities only and cannot establish whole-home
+health.
+
 ## Web Search Configuration
 
 Web search is optional and disabled unless enabled in shared tool settings.

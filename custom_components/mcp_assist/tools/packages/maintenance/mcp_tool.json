@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "maintenance",
+  "name": "Maintenance Status",
+  "description": "Read current native maintenance signals from exposed Home Assistant entities.",
+  "version": "1.0.0",
+  "entrypoint": "tool:MaintenancePackageTool",
+  "prompt_append_file": "prompt.md",
+  "capabilities": [],
+  "built_in_toggle": {
+    "tool_names": ["get_maintenance_status"],
+    "shared_setting_key": "enable_maintenance_tools",
+    "profile_setting_key": "profile_enable_maintenance_tools",
+    "shared_default": false,
+    "profile_default": true,
+    "shared_label": "Maintenance Status",
+    "shared_description": "Read exposed entities' low batteries, updates, unavailable states, and native problem signals.",
+    "profile_disable_label": "Disable Maintenance Status",
+    "profile_disable_description": "Prevents this profile from reading maintenance signals from exposed entities."
+  }
+}
