@@ -1327,7 +1327,7 @@ class RecorderToolsMixin:
         return complete
 
     def _statistics_window(self, args: Dict[str, Any], period: str):
-        """Resolve a period to aware Home Assistant local datetimes."""
+        """Resolve local calendar or elapsed periods to ordered UTC bounds."""
         now = dt_util.now()
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if period in {"last_hour", "last_24_hours"}:
@@ -1359,12 +1359,12 @@ class RecorderToolsMixin:
             end = dt_util.parse_datetime(str(raw_end)) if raw_end else None
             if start is None or end is None or start.tzinfo is None or end.tzinfo is None:
                 raise ValueError("Custom statistics require start_datetime and end_datetime with explicit time zones.")
-            start, end = dt_util.as_local(start), dt_util.as_local(end)
         else:
             raise ValueError("Choose a supported calendar period or custom interval.")
+        start, end = dt_util.as_utc(start), dt_util.as_utc(end)
         if end <= start:
             raise ValueError("Statistics end_datetime must be later than start_datetime.")
-        return dt_util.as_utc(start), dt_util.as_utc(end), period.replace("_", " ")
+        return start, end, period.replace("_", " ")
 
     async def tool_get_entity_state_at_time(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Return an entity's recorder state at a specific point in time."""

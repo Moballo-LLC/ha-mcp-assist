@@ -626,3 +626,74 @@ def test_rolling_duration_and_complete_day_average_across_dst(statistics_server,
         assert server._complete_statistic_period_totals(changes, day_start, day_end, "day") == []
     finally:
         dt_util.set_default_time_zone(old_zone)
+
+
+@pytest.fixture
+def statistics_dst_timezone(hass):
+    old_zone = dt_util.DEFAULT_TIME_ZONE
+    zone = ZoneInfo("Europe/Berlin")
+    dt_util.set_default_time_zone(zone)
+    try:
+        yield zone
+    finally:
+        dt_util.set_default_time_zone(old_zone)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_custom_interval_orders_absolute_instants_across_dst_fold(
+    statistics_server, statistics_dst_timezone, reverse,
+):
+    server, query, jobs = statistics_server
+    start = datetime(2026, 10, 25, 0, 50, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 25, 1, 10, tzinfo=timezone.utc)
+    query.return_value = {ENTITY: with_comparison_baselines(rows(start, count=4), start)}
+    result = await server.tool_get_entity_statistics(arguments(
+        start=end if reverse else start, end=start if reverse else end,
+    ))
+    if reverse:
+        assert result["isError"] is True
+        assert "later than" in result["content"][0]["text"]
+        query.assert_not_called()
+        assert jobs == []
+    else:
+        assert not result.get("isError")
+        data = result["structuredContent"]
+        assert data["requested_window"] == {"start": start.isoformat(), "end": end.isoformat()}
+        assert data["effective_window"] == data["requested_window"]
+        assert data["coverage"]["complete"] is True
+        assert data["summary"]["change"] == 4
+        assert query.call_args.args[1:3] == (start - timedelta(minutes=5), end)
+
+
+@pytest.mark.parametrize("now", [
+    datetime(2026, 3, 29, 1, 30, tzinfo=timezone.utc),
+    datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc),
+])
+@pytest.mark.parametrize("period,hours", [("last_hour", 1), ("last_24_hours", 24)])
+def test_rolling_intervals_keep_elapsed_duration_across_dst(
+    statistics_server, statistics_dst_timezone, monkeypatch, now, period, hours,
+):
+    server, _, _ = statistics_server
+    zone = statistics_dst_timezone
+    monkeypatch.setattr(history.dt_util, "now", lambda: now.astimezone(zone))
+    start, end, _ = server._statistics_window({}, period)
+    assert end == now
+    assert end - start == timedelta(hours=hours)
+
+
+@pytest.mark.parametrize("now,hours", [
+    (datetime(2026, 3, 30, tzinfo=ZoneInfo("Europe/Berlin")), 23),
+    (datetime(2026, 10, 26, tzinfo=ZoneInfo("Europe/Berlin")), 25),
+])
+def test_calendar_day_keeps_local_boundaries_across_dst(
+    statistics_server, statistics_dst_timezone, monkeypatch, now, hours,
+):
+    server, _, _ = statistics_server
+    monkeypatch.setattr(history.dt_util, "now", lambda: now)
+    start, end, _ = server._statistics_window({}, "yesterday")
+    assert end - start == timedelta(hours=hours)
+    assert dt_util.as_local(start).date() == now.date() - timedelta(days=1)
+    assert dt_util.as_local(start).hour == dt_util.as_local(end).hour == 0
+    changes = {row["start"]: row["change"] for row in rows(start, count=hours, seconds=3600)}
+    assert server._complete_statistic_period_totals(changes, start, end, "day") == [hours]
