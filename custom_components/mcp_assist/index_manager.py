@@ -1033,7 +1033,9 @@ Focus on meaningful categories that would help discover relevant entities for us
         try:
             inferred = await self._call_llm_for_inference(prompt)
             _LOGGER.info("LLM gap-filling completed: found %d inferred types", len(inferred))
-            self._store_inference(prompt, inferred, succeeded=True)
+            # An empty result (e.g. the provider returned "{}") is treated like a
+            # failure so it is retried after the cooldown instead of cached forever.
+            self._store_inference(prompt, inferred, succeeded=bool(inferred))
             return inferred
         except Exception as err:
             _LOGGER.debug("LLM gap-filling failed: %s. Index will not include inferred types.", err)

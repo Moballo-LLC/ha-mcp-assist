@@ -295,3 +295,33 @@ async def test_gap_filling_failure_waits_for_cooldown_before_retry(hass, monkeyp
     )
     await manager._infer_entity_types(list(_PATTERN_ENTITIES))
     assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_gap_filling_empty_result_is_retried_after_cooldown(
+    hass, monkeypatch
+) -> None:
+    """A valid but empty `{}` response must not be cached as a success forever."""
+    from datetime import timedelta
+
+    from custom_components.mcp_assist import index_manager as index_manager_module
+
+    manager = IndexManager(hass)
+    calls = []
+
+    async def empty_call(prompt):
+        calls.append(prompt)
+        return {}
+
+    monkeypatch.setattr(manager, "_call_llm_for_inference", empty_call)
+
+    assert await manager._infer_entity_types(list(_PATTERN_ENTITIES)) == {}
+    assert await manager._infer_entity_types(list(_PATTERN_ENTITIES)) == {}
+    assert len(calls) == 1
+    assert manager._last_inference_succeeded is False
+
+    manager._last_inference_at -= timedelta(
+        seconds=index_manager_module.GAP_FILL_FAILURE_RETRY_SECONDS + 1
+    )
+    await manager._infer_entity_types(list(_PATTERN_ENTITIES))
+    assert len(calls) == 2
