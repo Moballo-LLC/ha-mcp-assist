@@ -1115,7 +1115,12 @@ Focus on meaningful categories that would help discover relevant entities for us
                     agent,
                     prompt,
                 )
-                return self._parse_inferred_types(response_text)
+                inferred = self._parse_inferred_types(response_text)
+                if not inferred:
+                    # Treat an empty result as a failure for this profile so
+                    # the remaining fallbacks are tried before the cooldown.
+                    raise ValueError("LLM returned no inferred types")
+                return inferred
             except Exception as err:
                 last_error = err
                 _LOGGER.debug(
@@ -1131,7 +1136,12 @@ Focus on meaningful categories that would help discover relevant entities for us
                     agent,
                     prompt,
                 )
-                return self._parse_inferred_types(response_text)
+                inferred = self._parse_inferred_types(response_text)
+                if not inferred:
+                    # Treat an empty result as a failure for this profile so
+                    # the remaining fallbacks are tried before the cooldown.
+                    raise ValueError("LLM returned no inferred types")
+                return inferred
             except Exception as err:
                 last_error = err
                 _LOGGER.debug(

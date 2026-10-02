@@ -325,3 +325,106 @@ async def test_gap_filling_empty_result_is_retried_after_cooldown(
     )
     await manager._infer_entity_types(list(_PATTERN_ENTITIES))
     assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fallback_server_type", "fallback_name"),
+    [
+        (SERVER_TYPE_OLLAMA, "Ollama"),
+        (SERVER_TYPE_OPENCLAW, "OpenClaw"),
+    ],
+)
+async def test_gap_filling_empty_result_falls_through_to_next_profile(
+    hass, profile_entry_factory, fallback_server_type: str, fallback_name: str
+) -> None:
+    """An empty `{}` from the top-ranked profile should not block fallbacks."""
+    empty_entry = profile_entry_factory(
+        title="OpenAI - Test Profile",
+        unique_id="openai-profile",
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OPENAI},
+    )
+    fallback_entry = profile_entry_factory(
+        title=f"{fallback_name} - Test Profile",
+        unique_id=f"{fallback_server_type}-profile",
+        data={CONF_SERVER_TYPE: fallback_server_type},
+    )
+    seen_calls = []
+    categories = (
+        '{"presence": {"pattern": "binary_sensor.*_presence", '
+        '"count": 6, "description": "Presence sensors"}}'
+    )
+
+    class EmptyAgent:
+        async def async_call_llm_without_tools(self, messages, *, transport):
+            seen_calls.append("empty")
+            return "{}"
+
+    class FallbackAgent:
+        async def async_call_llm_without_tools(self, messages, *, transport):
+            seen_calls.append("fallback")
+            return categories
+
+        async def async_process(self, conversation_input):
+            seen_calls.append("fallback")
+            return SimpleNamespace(
+                response=SimpleNamespace(speech={"plain": {"speech": categories}})
+            )
+
+    hass.data.setdefault(DOMAIN, {})[empty_entry.entry_id] = {"agent": EmptyAgent()}
+    hass.data.setdefault(DOMAIN, {})[fallback_entry.entry_id] = {
+        "agent": FallbackAgent()
+    }
+    manager = IndexManager(hass)
+
+    inferred = await manager._call_llm_for_inference("infer entities")
+
+    assert inferred["presence"]["count"] == 6
+    assert seen_calls == ["empty", "fallback"]
+
+
+@pytest.mark.asyncio
+async def test_gap_filling_all_profiles_empty_starts_single_cooldown(
+    hass, profile_entry_factory
+) -> None:
+    """When every profile returns `{}`, each is tried once and then cooled down."""
+    from datetime import timedelta
+
+    from custom_components.mcp_assist import index_manager as index_manager_module
+
+    first_entry = profile_entry_factory(
+        title="OpenAI - Test Profile",
+        unique_id="openai-profile",
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OPENAI},
+    )
+    second_entry = profile_entry_factory(
+        title="Ollama - Test Profile",
+        unique_id="ollama-profile",
+        data={CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA},
+    )
+    seen_calls = []
+
+    def make_agent(name):
+        class EmptyAgent:
+            async def async_call_llm_without_tools(self, messages, *, transport):
+                seen_calls.append(name)
+                return "{}"
+
+        return EmptyAgent()
+
+    hass.data.setdefault(DOMAIN, {})[first_entry.entry_id] = {"agent": make_agent("first")}
+    hass.data.setdefault(DOMAIN, {})[second_entry.entry_id] = {
+        "agent": make_agent("second")
+    }
+    manager = IndexManager(hass)
+
+    assert await manager._infer_entity_types(list(_PATTERN_ENTITIES)) == {}
+    assert await manager._infer_entity_types(list(_PATTERN_ENTITIES)) == {}
+    assert seen_calls == ["first", "second"]
+    assert manager._last_inference_succeeded is False
+
+    manager._last_inference_at -= timedelta(
+        seconds=index_manager_module.GAP_FILL_FAILURE_RETRY_SECONDS + 1
+    )
+    await manager._infer_entity_types(list(_PATTERN_ENTITIES))
+    assert seen_calls == ["first", "second", "first", "second"]
