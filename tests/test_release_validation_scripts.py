@@ -29,3 +29,17 @@ def test_release_workflow_keeps_validation_jobs_read_only() -> None:
     assert jobs["hacs"]["permissions"] == {"contents": "read"}
     assert jobs["hassfest"]["permissions"] == {"contents": "read"}
     assert jobs["package"]["permissions"] == {"contents": "write"}
+
+
+def test_release_workflow_uploads_assets_before_publishing() -> None:
+    """Immutable releases reject asset uploads once published."""
+    workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["package"]["steps"]
+    publish = next(step for step in steps if step.get("name") == "Publish GitHub release")
+    script = publish["run"]
+
+    assert "softprops/action-gh-release" not in publish.get("uses", "")
+    assert "--draft" in script
+    assert "dist/mcp_assist.zip" in script
+    assert script.index("gh release create") < script.index("--draft=false")
+    assert script.index("gh release upload") < script.index("--draft=false")
