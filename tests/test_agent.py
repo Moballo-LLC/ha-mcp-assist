@@ -2412,6 +2412,8 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
         "Do not use other_tool but use sample_maintenance_status.",
         "Do not use `other_tool`—call `sample_maintenance_status` instead.",
         "Do not use other_tool: call sample_maintenance_status instead.",
+        "Do not use https://example.com: call sample_maintenance_status.",
+        "Do not use https://example.com/path: call sample_maintenance_status.",
         "Do not use other_tool - call sample_maintenance_status instead.",
         "Use weather, but not other_tool; call sample_maintenance_status.",
         "Use weather, but not other_tool but use sample_maintenance_status.",
@@ -2449,6 +2451,19 @@ async def test_adaptive_preload_preserves_positive_occurrences_of_negated_names(
         "Never multiply floats and do not use multiply for integers.",
     ):
         assert agent._select_initial_adaptive_tool_names([tool], query) == set()
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_excludes_tools_after_instead_of(
+    hass, profile_entry_factory
+) -> None:
+    """A rejected alternative cannot displace either requested tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("add", "subtract", "multiply")]
+    assert agent._select_initial_adaptive_tool_names(
+        tools, "Use add and subtract instead of multiply."
+    ) == {"add", "subtract"}
 
 
 @pytest.mark.asyncio

@@ -213,7 +213,8 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
-    r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|without|no|except(?:\s+for)?|"
+    r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|without|no|instead\s+of|"
+    r"except(?:\s+for)?|"
     r"avoid(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
@@ -807,7 +808,7 @@ def _mask_adaptive_tool_name_references(text: str) -> str:
 
     masked = list(text)
     for start, end in spans:
-        while end > start and text[end - 1] in ".!?;,":
+        while end > start and text[end - 1] in ".!?;,:–—":
             end -= 1
         for index in range(start, end):
             masked[index] = " "
