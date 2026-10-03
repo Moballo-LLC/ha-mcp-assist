@@ -232,7 +232,8 @@ Tool families have two levels of control:
 
 Use shared settings to enable capabilities for the whole integration. Use
 per-profile disables when one profile should be narrower, such as a read-only
-assistant or a room-specific voice profile.
+assistant or a room-specific voice profile. Built-in package prompt guidance is
+also omitted for packages disabled in that profile.
 
 See [Tool Reference](tool-reference.md) for the tool families.
 

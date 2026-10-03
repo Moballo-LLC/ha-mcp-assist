@@ -396,6 +396,9 @@ TOOLLESS_RESPONSE_PREFIXES = tuple(
         "देखता हूँ",
     )
 )
+_REQUEST_CHAT_LOG: ContextVar[tuple[Any, chat_log.ChatLog] | None] = ContextVar(
+    "mcp_assist_request_chat_log", default=None
+)
 _REQUEST_USER_INPUT: ContextVar[ConversationInput | None] = ContextVar(
     "mcp_assist_request_user_input", default=None
 )
@@ -550,7 +553,6 @@ class MCPAssistConversationEntity(ConversationEntity):
         self.hass = hass
         self.entry = entry
         self.history = ConversationHistory()
-        self._current_chat_log = None  # ChatLog for debug view tracking
         self._cached_profile_mcp_tools: list[dict[str, Any]] | None = None
         self._cached_profile_mcp_tools_key: tuple[Any, ...] | None = None
         self._cached_profile_mcp_tools_fetched_at = 0.0
@@ -1140,12 +1142,18 @@ class MCPAssistConversationEntity(ConversationEntity):
         if tools is None:
             return ""
 
+        profile_getter = getattr(tools, "get_builtin_prompt_instructions_for_packages", None)
         getter = getattr(tools, "get_builtin_prompt_instructions", None)
-        if not callable(getter):
-            return ""
-
         try:
-            return str(getter() or "").strip()
+            if callable(profile_getter):
+                package_ids = {
+                    spec.package_id for spec in self._get_builtin_toggle_specs()
+                    if self._is_builtin_package_enabled(spec)
+                }
+                return str(profile_getter(package_ids) or "").strip()
+            if callable(getter):
+                return str(getter() or "").strip()
+            return ""
         except Exception as err:
             _LOGGER.debug(
                 "Unable to read built-in packaged tool prompt instructions: %s",
@@ -1753,6 +1761,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         error_snippet = error_full.split("\n")[0][:100]
         return f"An unexpected error occurred while talking to {self._get_server_display_name()}. The error was: {error_snippet}. Check the Home Assistant logs for more details."
 
+    @property
+    def _current_chat_log(self) -> chat_log.ChatLog | None:
+        """Return only this agent's chat log for the current request."""
+        scoped = _REQUEST_CHAT_LOG.get()
+        return scoped[1] if scoped is not None and scoped[0] is self else None
+
     def _record_tool_calls_to_chatlog(self, tool_calls: List[Dict[str, Any]]) -> None:
         """Record tool calls to ChatLog for debug view."""
         if not self._current_chat_log:
@@ -2210,8 +2224,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             self._last_resolved_model_profile_reference = None
             self._last_resolved_model_profile_request = None
         self._publish_image_profile_metadata()
-        # Store ChatLog for tool execution methods to access
-        self._current_chat_log = chat_log_instance
+        request_chat_log_token = _REQUEST_CHAT_LOG.set((self, chat_log_instance))
         user_input_token: Token[ConversationInput | None] = _REQUEST_USER_INPUT.set(
             user_input
         )
@@ -2259,7 +2272,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             _REQUEST_TOOL_HISTORY_SUMMARIES.reset(tool_history_token)
             _REQUEST_CONVERSATION_ID.reset(conversation_id_token)
             _REQUEST_USER_INPUT.reset(user_input_token)
-            self._current_chat_log = None
+            _REQUEST_CHAT_LOG.reset(request_chat_log_token)
             self._publish_image_profile_metadata()
 
     async def _async_handle_message_inner(
@@ -4431,7 +4444,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             return fallback_response
 
     async def _test_streaming_basic(self) -> bool:
-        """Test basic streaming without tools to isolate connection issues."""
+        """Explicitly probe streaming without tools to diagnose connection issues."""
         provider = self._get_llm_provider()
         payload = provider.build_payload(
             [{"role": "user", "content": "Say hello"}],
@@ -4510,14 +4523,6 @@ class MCPAssistConversationEntity(ConversationEntity):
     async def _call_llm_streaming(self, messages: List[Dict[str, Any]]) -> str:
         """Stream LLM responses with immediate TTS feedback."""
         _LOGGER.info(f"🚀 Starting streaming {self.server_type} conversation")
-
-        # Test streaming once and cache result
-        if not hasattr(self, "_streaming_available"):
-            self._streaming_available = await self._test_streaming_basic()
-
-        if not self._streaming_available:
-            _LOGGER.debug("Streaming not available; using provider HTTP transport")
-            raise RecoverableStreamingFallbackError("Streaming not available")
 
         tools: list[dict[str, Any]] | None = None
         provider = self._get_llm_provider()

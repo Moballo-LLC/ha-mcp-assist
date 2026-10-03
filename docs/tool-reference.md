@@ -182,6 +182,10 @@ Results include readable text and `structuredContent` with `schema_version: 1`:
 | `bucket_count`, `buckets`, `truncated` | Full grouped bucket count, displayed rows capped by `limit` (1–100), and whether rows were omitted |
 | `source_coverage` | Optional bounded annotations reported by the entity's source |
 
+Displayed buckets follow absolute chronological order, including repeated local
+hours during daylight-saving transitions. The display limit keeps the earliest
+buckets.
+
 Summary values cover every returned valid source bucket even when displayed rows
 are capped. Duplicate timestamps, nonfinite values, and off-grid rows cannot
 establish complete coverage. Gaps produce observed subtotals. Change summaries

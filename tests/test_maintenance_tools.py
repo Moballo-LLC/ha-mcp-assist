@@ -8,7 +8,10 @@ import pytest
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
-from custom_components.mcp_assist.const import CONF_CONTROL_HA, DOMAIN
+from custom_components.mcp_assist.const import (
+    CONF_CONTEXT_MODE, CONF_CONTROL_HA, CONTEXT_MODE_ADAPTIVE, CONTEXT_MODE_LIGHT,
+    CONTEXT_MODE_STANDARD, DOMAIN,
+)
 from custom_components.mcp_assist.custom_tool_api import MCPAssistCustomToolManifest
 from custom_components.mcp_assist.tool_effects import ToolEffect, get_tool_effect
 from custom_components.mcp_assist.tools import CustomToolsLoader
@@ -193,5 +196,35 @@ async def test_disabled_default_package_not_loaded_or_advertised(hass, system_en
         assert "maintenance" not in {package.manifest.tool_id for package in loader.builtin_packages}
         assert "get_maintenance_status" not in {tool["name"] for tool in loader.get_tool_definitions()}
         assert "get_maintenance_status" not in loader.get_builtin_prompt_instructions()
+    finally:
+        await loader.shutdown()
+
+
+@pytest.mark.parametrize("context_mode", [
+    CONTEXT_MODE_STANDARD, CONTEXT_MODE_ADAPTIVE, CONTEXT_MODE_LIGHT,
+])
+async def test_profile_prompt_omits_disabled_package_guidance(
+    hass, system_entry_factory, profile_entry_factory, context_mode,
+):
+    shared = system_entry_factory(options={
+        "enable_maintenance_tools": True, "enable_calculator_tools": True,
+    })
+    loader = CustomToolsLoader(hass, shared)
+    await loader.initialize()
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(tools=loader)
+    try:
+        for enabled in (False, True):
+            agent = MCPAssistConversationEntity(hass, profile_entry_factory(options={
+                CONF_CONTEXT_MODE: context_mode, "profile_enable_maintenance_tools": enabled,
+            }))
+            instructions = agent._get_builtin_tool_instructions()
+            assert ("get_maintenance_status" in instructions) is enabled
+            assert "Calculator" in instructions
+            optional = agent._build_optional_technical_instructions("")
+            assert ("get_maintenance_status" in optional) is enabled
+            definitions = agent._filter_mcp_tools_for_profile(loader.get_tool_definitions())
+            advertised = enabled and context_mode != CONTEXT_MODE_LIGHT
+            assert ("get_maintenance_status" in {tool["name"] for tool in definitions}) is advertised
+        assert "get_maintenance_status" in loader.get_builtin_prompt_instructions()
     finally:
         await loader.shutdown()
