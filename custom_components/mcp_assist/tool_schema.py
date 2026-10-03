@@ -216,8 +216,9 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"\b(?:but\s+not|do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|"
     r"couldn['’]?t|unable\s+to|not\s+able\s+to|never|not|without|no|instead\s+of|"
     r"rather\s+than|"
-    r"except(?:\s+for)?|"
-    r"avoid(?:\s+(?:using|for|when))?)\b",
+    r"except(?:\s+for)?|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
+    r"disregard(?:ing)?|reject(?:ing)?|disallow(?:ing)?|forb(?:id|idding)|"
+    r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
@@ -908,6 +909,17 @@ def _adaptive_tool_name_polarity_tokens(
                 tool_group |= name_match.group() in {"tool", "tools", "anything", "everything"}
                 action_prefix |= name_match.group() in ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS
                 word_start = name_match.end()
+            if (
+                bare_negation
+                and not action_prefix
+                and name_match is not None
+                and name_match.group() not in known_tool_names
+                and (nested_negation := ADAPTIVE_TOOL_NAME_NEGATION_RE.match(
+                    masked_text, word_start
+                )) is not None
+            ):
+                covered_until = nested_negation.end()
+                continue
             if (
                 bare_negation
                 and not action_prefix

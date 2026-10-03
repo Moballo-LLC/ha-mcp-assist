@@ -2813,6 +2813,32 @@ async def test_adaptive_preload_preserves_positive_why_not_suggestions(
         assert agent._select_initial_adaptive_tool_names(tools, negative_query) == {"add"}
 
 
+@pytest.mark.parametrize(
+    "verb",
+    ["exclude", "excluding", "omit", "omitting", "skip", "skipping", "ignore", "ignoring",
+     "disregard", "disregarding", "reject", "rejecting", "disallow", "disallowing",
+     "forbid", "forbidding", "leave out", "leaving out", "avoid", "avoiding"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_direct_exclusions_and_positive_double_negations(
+    hass, profile_entry_factory, verb
+) -> None:
+    """Explicit rejection cannot consume a slot needed by a requested tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"Use add and subtract; {verb} multiply.",
+        f"{verb} MissingEngine or multiply, so call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        "Don't exclude multiply; do not use add or subtract.",
+        "Do not ever avoid multiply; omit add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
