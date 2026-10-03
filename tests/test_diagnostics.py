@@ -230,3 +230,23 @@ def test_prompt_mode_options_override_data_and_infer_localized_default(
     result = build_assist_diagnostics(hass, entry)
     assert result["prompts"]["system"]["mode"] == "default"
     assert localized not in json.dumps(result)
+
+
+@pytest.mark.parametrize("reference,expected", [(" \t\n", "explicit"), ("  example-profile  ", "profile")])
+@pytest.mark.parametrize("image", [False, True])
+@pytest.mark.parametrize("storage", ["data", "options"])
+def test_profile_reference_selection_matches_runtime_normalization(
+    hass, profile_entry_factory, reference, expected, image, storage,
+):
+    profile_key = "openai_image_model_profile" if image else "model_profile"
+    model_key = "openai_image_model" if image else "model_name"
+    entry = profile_entry_factory(
+        data={"server_type": "openai", **({profile_key: reference, model_key: "example-model"}
+                                        if storage == "data" else {})},
+        options={profile_key: reference, model_key: "example-model"} if storage == "options" else {},
+    )
+    result = build_assist_diagnostics(hass, entry)
+    assert result["image_model_selection" if image else "model_selection"] == expected
+    resolution = result["image_profile_resolution" if image else "model_profile_resolution"]
+    assert resolution == ("runtime_unavailable" if expected == "profile" else "not_applicable")
+    assert "example-profile" not in json.dumps(result)

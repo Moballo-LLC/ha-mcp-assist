@@ -16,7 +16,9 @@ prompt lengths, limits, and the size of its cached tool schemas. Shared settings
 report server presence and whether external tools and bearer authentication are
 configured. Prompt modes follow the conversation agent's backward-compatible
 inference when older entries do not store an explicit mode, including localized
-system defaults and per-profile option overrides.
+system defaults and per-profile option overrides. Model-profile references use
+the same whitespace normalization as the agent; blank references select the
+explicit model instead.
 
 The download omits credentials, endpoint addresses, profile/model names, prompts,
 entity data, paths, conversation history, and tool schemas. It reads existing

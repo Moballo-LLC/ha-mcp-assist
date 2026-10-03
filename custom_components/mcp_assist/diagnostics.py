@@ -76,7 +76,7 @@ def _choice(value: Any, choices: frozenset[str]) -> str:
 
 
 def _selection(entry: ConfigEntry, profile_key: str, model_key: str) -> str:
-    if _configured(entry, profile_key):
+    if str(_configured(entry, profile_key) or "").strip():
         return "profile"
     return "explicit" if _configured(entry, model_key) else "unset"
 
