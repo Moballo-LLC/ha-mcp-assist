@@ -56,6 +56,13 @@ enabled.
 | `get_assist_prompt` | Read Assist prompt context |
 | `get_assist_context_snapshot` | Inspect the current Assist context snapshot |
 
+Use `list_assist_tools` to find current names and argument schemas. Home Assistant
+may prefix native names, such as `homeassistant__GetLiveContext`. The bridge accepts
+older unqualified names when they identify exactly one tool and prefers exact
+matches. Missing or ambiguous names, invalid arguments, and unavailable native
+tools return MCP tool errors so the assistant can recover. Failed calls are not
+automatically retried, since a tool may have already performed an action.
+
 ## Third-Party LLM API Bridge Tools
 
 The LLM API Bridge exposes allowlisted third-party Home Assistant LLM APIs
