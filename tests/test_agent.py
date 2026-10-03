@@ -2546,6 +2546,31 @@ async def test_adaptive_preload_keeps_tools_for_positive_avoid_and_except_tasks(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_preload_preserves_allowed_negative_exceptions(
+    hass, profile_entry_factory
+) -> None:
+    """An exception to a prohibition permits a tool; positive exclusions still reject it."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "other_tool")]
+    for query in (
+        "Do not use any tool except multiply.",
+        "Don't use tools except for multiply.",
+        "Never call any other tools except multiply.",
+        "Do not use anything except multiply.",
+        "Do not use other_tool except multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query, limit=1) == {"multiply"}, query
+    for query in (
+        "Use all tools except multiply.",
+        "Use other_tool except for multiply.",
+        "I have no calculator; use other_tool except multiply.",
+        "Do not use other_tool. Use all tools except multiply.",
+    ):
+        assert "multiply" not in agent._select_initial_adaptive_tool_names(tools, query)
+
+
+@pytest.mark.asyncio
 async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
     hass, profile_entry_factory, monkeypatch
 ) -> None:

@@ -225,10 +225,12 @@ ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
+ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(r"\bexcept(?:\s+for)?\b", flags=re.IGNORECASE)
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
     {"a", "an", "the", "tool", "tools", "use", "using", "call", "calling",
-     "run", "running", "invoke", "invoking", "of", "or", "and", "for", "when"}
+     "run", "running", "invoke", "invoking", "of", "or", "and", "for", "when",
+     "any", "all", "other", "anything", "everything"}
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
     r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE
@@ -830,10 +832,14 @@ def _adaptive_tool_name_polarity_tokens(
     positive_text = list(masked_text)
     negative_words: set[str] = set()
     covered_until = 0
+    negative_exception_until = 0
     for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
         if match.start() < covered_until:
             continue
         negation = " ".join(match.group().casefold().split())
+        if negation.startswith("except") and match.start() < negative_exception_until:
+            negative_exception_until = 0
+            continue
         bare_negation = negation in {
             "don't",
             "dont",
@@ -850,6 +856,7 @@ def _adaptive_tool_name_polarity_tokens(
         ):
             continue
         if known_tool_names is not None:
+            tool_group = False
             while True:
                 while word_start < len(masked_text) and (
                     masked_text[word_start].isspace() or masked_text[word_start] in "`,'\""
@@ -866,8 +873,12 @@ def _adaptive_tool_name_polarity_tokens(
                     or name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
                 ):
                     break
+                tool_group |= name_match.group() in {"tool", "tools", "anything", "everything"}
                 word_start = name_match.end()
-            if name_match is None or name_match.group() not in known_tool_names:
+            if name_match is None or (
+                name_match.group() not in known_tool_names
+                and not (tool_group and name_match.group() == "except")
+            ):
                 continue
         clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
         clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
@@ -876,6 +887,13 @@ def _adaptive_tool_name_polarity_tokens(
         )
         if continuation is not None:
             clause_end_index = continuation.start()
+        if not negation.startswith("except"):
+            negative_exception_until = clause_end_index
+            exception = ADAPTIVE_TOOL_NAME_EXCEPTION_RE.search(
+                masked_text, match.end(), clause_end_index
+            )
+            if exception is not None:
+                clause_end_index = exception.start()
         covered_until = clause_end_index
         negative_words.update(
             ADAPTIVE_TOOL_NAME_TOKEN_RE.findall(masked_text, match.end(), clause_end_index)
@@ -988,7 +1006,11 @@ def _score_adaptive_tool_match(
         for clause_terms in negative_routing_clause_terms
     ):
         return 0
-    if prepared_query.negative_terms and prepared_query.negative_terms <= query_exclusion_terms:
+    if (
+        not exact_name_mentioned
+        and prepared_query.negative_terms
+        and prepared_query.negative_terms <= query_exclusion_terms
+    ):
         return 0
 
     score = (
