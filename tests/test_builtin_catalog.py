@@ -32,6 +32,7 @@ def test_builtin_catalog_loads_expected_manifest_packages() -> None:
         "calculator",
         "google_maps",
         "llm_api_bridge",
+        "maintenance",
         "memory",
         "music_assistant",
         "read_url",

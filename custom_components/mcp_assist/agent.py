@@ -1142,12 +1142,18 @@ class MCPAssistConversationEntity(ConversationEntity):
         if tools is None:
             return ""
 
+        profile_getter = getattr(tools, "get_builtin_prompt_instructions_for_packages", None)
         getter = getattr(tools, "get_builtin_prompt_instructions", None)
-        if not callable(getter):
-            return ""
-
         try:
-            return str(getter() or "").strip()
+            if callable(profile_getter):
+                package_ids = {
+                    spec.package_id for spec in self._get_builtin_toggle_specs()
+                    if self._is_builtin_package_enabled(spec)
+                }
+                return str(profile_getter(package_ids) or "").strip()
+            if callable(getter):
+                return str(getter() or "").strip()
+            return ""
         except Exception as err:
             _LOGGER.debug(
                 "Unable to read built-in packaged tool prompt instructions: %s",

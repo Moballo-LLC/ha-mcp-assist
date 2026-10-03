@@ -145,6 +145,23 @@ Other examples:
 - "How long has the basement deadbolt been locked?"
 - "What was the thermostat set to last night?"
 
+## Maintenance Status
+
+After enabling **Maintenance Status** in shared tool settings and exposing the
+relevant entities, ask:
+
+```text
+Which exposed devices have low batteries or report problems?
+Are any exposed entities unavailable or waiting for an update?
+```
+
+The assistant can call `get_maintenance_status` with `category: batteries` and
+`battery_threshold: 30`, or `category: all` for the combined signals. For a longer
+result, use `next_offset` to read the next page. No matching signals does not
+mean the whole home is healthy; unexposed entities and repair issues are outside
+this tool's scope. The tool reports status and never installs updates or repairs
+devices.
+
 ## Weather Forecast
 
 User:
