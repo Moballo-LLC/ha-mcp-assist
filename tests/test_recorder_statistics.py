@@ -697,3 +697,33 @@ def test_calendar_day_keeps_local_boundaries_across_dst(
     assert dt_util.as_local(start).hour == dt_util.as_local(end).hour == 0
     changes = {row["start"]: row["change"] for row in rows(start, count=hours, seconds=3600)}
     assert server._complete_statistic_period_totals(changes, start, end, "day") == [hours]
+
+
+@pytest.mark.parametrize("bucket,seconds,count", [("5minute", 300, 4), ("hour", 3600, 2)])
+@pytest.mark.parametrize("limit", [1, 100])
+async def test_fold_display_keeps_absolute_bucket_order(
+    statistics_server, monkeypatch, bucket, seconds, count, limit,
+):
+    """A repeated local hour must not move later samples ahead of earlier ones."""
+    server, query, _ = statistics_server
+    tz = ZoneInfo("Europe/Berlin")
+    monkeypatch.setattr(history.dt_util, "as_local", lambda value: value.astimezone(tz))
+    start = datetime(2026, 10, 25, 0, 50 if bucket == "5minute" else 0, tzinfo=timezone.utc)
+    end = start + timedelta(seconds=seconds * count)
+    samples = rows(start=start, count=count, seconds=seconds)
+    query.return_value = {ENTITY: list(reversed(with_comparison_baselines(
+        samples, start, seconds=seconds,
+    )))}
+    result = await server.tool_get_entity_statistics(arguments(
+        start=start, end=end, bucket=bucket, limit=limit,
+    ))
+    data = result["structuredContent"]
+    expected = [dt_util.as_local(row["start"]).isoformat(timespec="minutes")
+                for row in samples[:limit]]
+    assert [item["start"] for item in data["buckets"]] == expected
+    text = result["content"][0]["text"]
+    displayed_lines = text.split("summary covers all returned", 1)[1]
+    assert [line.split(": ", 1)[0] for line in displayed_lines.splitlines()[1:]] == expected
+    assert data["summary"]["change"] == count
+    assert data["bucket_count"] == count
+    assert data["truncated"] is (count > limit)

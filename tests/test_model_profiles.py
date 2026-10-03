@@ -23,7 +23,8 @@ from custom_components.mcp_assist.const import (
 )
 from custom_components.mcp_assist.llm_providers.openai import OpenAIProvider
 from custom_components.mcp_assist.model_profiles import (
-    ModelProfileResolutionError, async_resolve_model_profile, validate_model_profile,
+    ModelProfileResolutionError, REQUEST_RESOLVED_PROFILES, async_resolve_model_profile,
+    validate_model_profile,
 )
 from custom_components.mcp_assist.provider_runtime import resolve_provider_runtime_config
 
@@ -718,3 +719,40 @@ async def test_concurrent_standalone_no_tools_selections_remain_local(
     assert await first == "first-model"
     assert observed == [("second-model", "low"), ("first-model", "high")]
     assert calls == 2
+
+
+@pytest.mark.parametrize("same_entry", [True, False])
+async def test_no_tools_reuses_only_same_entry_mcp_snapshot(
+    hass, profile_entry_factory, monkeypatch, same_entry,
+):
+    entry = profile_entry_factory(data=entry_data())
+    agent = MCPAssistConversationEntity(hass, entry)
+    snapshot_entry = entry if same_entry else profile_entry_factory(data=entry_data())
+    frozen = validate_model_profile(policy("frozen-model", "low"), "assistant")
+    current = validate_model_profile(policy("current-model", "high"), "assistant")
+    lookup = AsyncMock(
+        side_effect=ModelProfileResolutionError() if same_entry else None,
+        return_value=current,
+    )
+    monkeypatch.setattr(agent_module, "async_resolve_model_profile", lookup)
+
+    async def generation(messages, provider, *, transport):
+        payload = provider.build_payload(messages)
+        assert payload["model"] == ("frozen-model" if same_entry else "current-model")
+        assert payload["reasoning_effort"] == ("low" if same_entry else "high")
+        return "Answer."
+
+    monkeypatch.setattr(agent, "_call_llm_without_tools", generation)
+    snapshot = (snapshot_entry, frozen, None)
+    token = REQUEST_RESOLVED_PROFILES.set(snapshot)
+    try:
+        assert agent._request_model_profile() is None
+        assert await agent.async_call_llm_without_tools([]) == "Answer."
+        assert REQUEST_RESOLVED_PROFILES.get() is snapshot
+        assert agent.resolved_model_profile is None
+    finally:
+        REQUEST_RESOLVED_PROFILES.reset(token)
+    if same_entry:
+        lookup.assert_not_awaited()
+    else:
+        lookup.assert_awaited_once()
