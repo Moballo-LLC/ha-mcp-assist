@@ -3356,7 +3356,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         entry: dict[str, Any] = {
             "name": tool_name,
             "summary": summary,
-            "schema_loaded": tool_name in _adaptive_loaded_tool_names(),
+            "schema_loaded": (
+                tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in _adaptive_loaded_tool_names()
+            ),
         }
         if family:
             entry["family"] = family
@@ -3579,8 +3582,15 @@ class MCPAssistConversationEntity(ConversationEntity):
                 minimum=1,
                 maximum=maximum_limit,
             )
+            candidate_tools = profile_tools
+            if query and not requested_names:
+                advertised_names = LIGHT_CONTEXT_TOOL_NAMES | _adaptive_loaded_tool_names()
+                candidate_tools = [
+                    tool for tool in profile_tools
+                    if self._tool_definition_name(tool) not in advertised_names
+                ]
             matches = self._match_adaptive_tool_definitions(
-                profile_tools,
+                candidate_tools,
                 query=query,
                 tool_names=requested_names,
                 limit=limit,
@@ -3600,6 +3610,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "next_step": (
                     "The loaded tool schemas will be available in the next model "
                     "call. Use the loaded tool directly if it is needed to answer."
+                    if matched_names else
+                    "No additional schemas matched. Use already advertised tools, "
+                    f"refine the query, or inspect {ADAPTIVE_TOOL_CATALOG_NAME}."
                 ),
             }
         else:

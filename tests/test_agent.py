@@ -1991,6 +1991,46 @@ async def test_adaptive_schema_loader_searches_by_query_without_catalog_call(
     assert "unit_convert" not in loaded_names
 
 
+@pytest.mark.asyncio
+async def test_adaptive_query_schema_loader_skips_advertised_tools_before_limit(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Focused queries advance beyond existing schemas while named loads stay explicit."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {**_tool(name), "llmDescription": "Get weather forecasts."}
+        for name in ("discover_entities", "weather_a", "weather_b", "weather_c")
+    ]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset({"weather_a", "weather_b"}))
+    try:
+        first = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+        )
+        first_payload = json.loads(first["content"][0]["text"])
+        assert [tool["name"] for tool in first_payload["loaded_tools"]] == ["weather_c"]
+        repeat = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+        )
+        repeat_payload = json.loads(repeat["content"][0]["text"])
+        assert repeat_payload["loaded_tools"] == []
+        assert "No additional schemas matched" in repeat_payload["next_step"]
+        named = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"tool_names": ["weather_a"]}
+        )
+        named_payload = json.loads(named["content"][0]["text"])
+        assert [tool["name"] for tool in named_payload["loaded_tools"]] == ["weather_a"]
+        catalog = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_CATALOG_NAME, {"query": "weather"}
+        )
+        entries = json.loads(catalog["content"][0]["text"])["tools"]
+        assert {tool["name"] for tool in entries} == {tool["name"] for tool in tools}
+        assert all(tool["schema_loaded"] for tool in entries)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
 @pytest.mark.parametrize("provided_limit", [None, 8])
 @pytest.mark.asyncio
 async def test_adaptive_query_schema_loader_caps_at_two(
@@ -2464,6 +2504,9 @@ async def test_adaptive_preload_excludes_tools_after_instead_of(
     assert agent._select_initial_adaptive_tool_names(
         tools, "Use add and subtract instead of multiply."
     ) == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        tools, "Use add and subtract rather than multiply."
+    ) == {"add", "subtract"}
 
 
 @pytest.mark.asyncio
@@ -2478,6 +2521,11 @@ async def test_adaptive_preload_keeps_tools_for_positive_avoid_and_except_tasks(
         ("How can I avoid wasting energy with energy_advisor?", "energy_advisor"),
         ("Avoid using excess energy with energy_advisor.", "energy_advisor"),
         ("Explain an except block using python_exception_help.", "python_exception_help"),
+        ("Without delay, call energy_advisor.", "energy_advisor"),
+        ("No idea how to use energy_advisor; please call it.", "energy_advisor"),
+        ("Don't worry about energy usage; call energy_advisor.", "energy_advisor"),
+        ("Not sure about energy_advisor; call it.", "energy_advisor"),
+        ("I have no calculator so call energy_advisor.", "energy_advisor"),
     ):
         assert agent._select_initial_adaptive_tool_names(tools, query, limit=1) == {name}
     for query in (

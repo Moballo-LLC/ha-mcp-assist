@@ -214,6 +214,7 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
 )
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|without|no|instead\s+of|"
+    r"rather\s+than|"
     r"except(?:\s+for)?|"
     r"avoid(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
@@ -225,6 +226,10 @@ ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
+ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
+    {"a", "an", "the", "tool", "tools", "use", "using", "call", "calling",
+     "run", "running", "invoke", "invoking", "of", "or", "and", "for", "when"}
+)
 ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
     r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE
 )
@@ -844,21 +849,21 @@ def _adaptive_tool_name_polarity_tokens(
             masked_text, word_start
         ):
             continue
-        if known_tool_names is not None and negation.startswith(("avoid", "except")):
+        if known_tool_names is not None:
             while True:
                 while word_start < len(masked_text) and (
-                    masked_text[word_start].isspace() or masked_text[word_start] in "`'\""
+                    masked_text[word_start].isspace() or masked_text[word_start] in "`,'\""
                 ):
+                    if masked_text[word_start] == "," and (
+                        ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.match(masked_text, word_start)
+                    ):
+                        break
                     word_start += 1
                 name_match = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(masked_text, word_start)
                 if (
                     name_match is None
                     or name_match.group() in known_tool_names
-                    or name_match.group() not in (
-                        {"a", "an", "the", "tool", "tools"}
-                        | ({"use", "using", "call", "calling", "run", "running",
-                            "invoke", "invoking", "of"} if negation.startswith("avoid") else set())
-                    )
+                    or name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
                 ):
                     break
                 word_start = name_match.end()
