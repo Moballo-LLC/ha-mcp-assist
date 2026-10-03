@@ -221,6 +221,15 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
+ADAPTIVE_TOOL_NAME_INVOCATION_RE = re.compile(
+    r"(?<![\w-])(?:use|using|call|calling|run|running|invoke|invoking|execute|executing|except)"
+    r"(?![\w-])", flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_BACKTICK_RE = re.compile(r"`(?P<name>[\w-]+)`")
+ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS = frozenset(
+    {"a", "an", "the", "tool", "tools", "function", "functions", "named", "called", "both",
+     "all", "just", "only", "and", "or", "for"}
+)
 ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
     r"\bwhy\s+(?P<negation>not)\b", flags=re.IGNORECASE
 )
@@ -837,6 +846,56 @@ def _mask_adaptive_tool_name_references(text: str) -> str:
     return "".join(masked)
 
 
+def _explicit_adaptive_tool_name_tokens(
+    text: str,
+    positive_words: frozenset[str],
+    known_tool_names: frozenset[str],
+) -> frozenset[str]:
+    """Give ambiguous words priority only when they identify an invoked tool."""
+    explicit = {
+        name for name in positive_words & known_tool_names if "_" in name or "-" in name
+    }
+    exact_query = text.strip().strip(".!?;:").strip()
+    if exact_query in known_tool_names:
+        explicit.add(exact_query)
+    explicit.update(
+        match.group("name")
+        for match in ADAPTIVE_TOOL_NAME_BACKTICK_RE.finditer(text)
+        if match.group("name") in known_tool_names
+    )
+    covered_until = 0
+    for invocation in ADAPTIVE_TOOL_NAME_INVOCATION_RE.finditer(text):
+        if invocation.start() < covered_until:
+            continue
+        cursor = invocation.end()
+        while cursor < len(text):
+            while cursor < len(text) and (text[cursor].isspace() or text[cursor] in "`'\""):
+                cursor += 1
+            token = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, cursor)
+            if token is None:
+                break
+            name = token.group()
+            if name not in known_tool_names:
+                if (
+                    name in ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS
+                    or name in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                    or name.endswith("ly")
+                ):
+                    cursor = token.end()
+                    continue
+                break
+            explicit.add(name)
+            cursor = token.end()
+            while cursor < len(text) and (text[cursor].isspace() or text[cursor] in "`'\""):
+                cursor += 1
+            connector = ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.match(text, cursor)
+            if connector is None:
+                break
+            cursor = connector.end()
+        covered_until = cursor
+    return frozenset(explicit)
+
+
 def _adaptive_tool_name_polarity_tokens(
     text: str,
     known_tool_names: frozenset[str] | None = None,
@@ -1011,8 +1070,16 @@ def _adaptive_tool_name_polarity_tokens(
         )
         for index in range(match.start(), clause_end_index):
             positive_text[index] = " "
-    positive_words = frozenset(ADAPTIVE_TOOL_NAME_TOKEN_RE.findall("".join(positive_text)))
-    return positive_words, frozenset(negative_words - positive_words)
+    positive_name_text = "".join(positive_text)
+    positive_words = frozenset(ADAPTIVE_TOOL_NAME_TOKEN_RE.findall(positive_name_text))
+    positive_names = (
+        positive_words
+        if known_tool_names is None
+        else _explicit_adaptive_tool_name_tokens(
+            positive_name_text, positive_words, known_tool_names
+        )
+    )
+    return positive_names, frozenset(negative_words - positive_words)
 
 
 def _prepare_adaptive_query(

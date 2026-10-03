@@ -2493,16 +2493,24 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
         )
 
     positive_idiom_queries = (
-        "Don't forget to multiply; calculate the product from value one and value two",
-        "Do not hesitate to call multiply; calculate the product from value one and value two",
-        "Do  not hesitate to call multiply; calculate the product from value one and value two",
-        "Dont forget to multiply; calculate the product from value one and value two",
-        "Never forget to multiply; calculate the product from value one and value two",
-        "Never hesitate to call multiply; calculate the product from value one and value two",
-        "Not only multiply but also calculate the product from value one and value two",
-        "Not just multiply; calculate the product from value one and value two",
+        ("Don't forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Do not hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Do  not hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Dont forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Never forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Never hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Not only multiply but also calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Not just multiply; calculate the product from value one and value two",
+         "calculate_expression"),
     )
-    for query in positive_idiom_queries:
+    for query, preferred_name in positive_idiom_queries:
         assert score_adaptive_tool_match(semantic_tool, query) > score_adaptive_tool_match(
             multiply_tool, query
         )
@@ -2511,7 +2519,11 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
             query,
             limit=1,
         )
-        assert result == {"multiply"}
+        assert result == {preferred_name}
+        candidates = tool_schema_module.rank_adaptive_tool_preloads(
+            [semantic_tool, multiply_tool], query, limit=8
+        )
+        assert "multiply" in {name for _score, name, _tool, _named in candidates}
 
     for query, tool in (
         ("Don't call forget.", _tool("forget")),
@@ -2837,6 +2849,75 @@ async def test_adaptive_preload_respects_direct_exclusions_and_positive_double_n
         "Do not ever avoid multiply; omit add and subtract.",
     ):
         assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
+
+
+@pytest.mark.asyncio
+async def test_adaptive_natural_verbs_do_not_displace_specific_semantic_tools(
+    hass, profile_entry_factory
+) -> None:
+    """Ordinary search/add wording cannot turn into unrelated exact-name priority."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("add"), _tool("search"),
+        {**_tool("search_music_assistant"), "llmDescription": "Search Music Assistant albums.",
+         "routingHints": {"keywords": ["music", "assistant", "album"]}},
+        {**_tool("add_music_to_queue"), "llmDescription": "Add Music Assistant albums to the queue.",
+         "routingHints": {"keywords": ["music", "assistant", "album", "queue"]}},
+    ]
+    query = "Search Music Assistant for an album and add it to the queue."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "search_music_assistant", "add_music_to_queue"
+    }
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query, limit=8)
+    assert all(not named for _score, name, _tool, named in ranked if name in {"add", "search"})
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [("Call add and subtract.", {"add", "subtract"}),
+     ("Use `add` and `subtract`.", {"add", "subtract"}),
+     ("Run the add and subtract tools.", {"add", "subtract"}),
+     ("Invoke both add, subtract, and multiply.", {"add", "subtract", "multiply"}),
+     ("Execute only add and subtract.", {"add", "subtract"}),
+     ("The `add` and `subtract` schemas are useful.", {"add", "subtract"}),
+     ("add", {"add"}),
+     ("Use get_sum and fetch-forecast.", {"get_sum", "fetch-forecast"})],
+)
+def test_adaptive_explicit_invocations_and_identifiers_retain_named_priority(query, expected):
+    tools = [_tool(name) for name in ("add", "subtract", "multiply", "get_sum", "fetch-forecast")]
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query, limit=8)
+    assert {name for _score, name, _tool, named in ranked if named} == expected
+
+
+def test_adaptive_invocation_priority_still_respects_negative_clauses_and_references():
+    tools = [_tool("add"), _tool("subtract"), _tool("get_sum")]
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(
+        tools, "Don't call `add`; call subtract. Read https://example.invalid/get_sum.", limit=8
+    )
+    assert {name for _score, name, _tool, named in ranked if named} == {"subtract"}
+    assert "add" not in {name for _score, name, _tool, _named in ranked}
+
+
+def test_adaptive_invocation_lists_have_bounded_work_when_a_name_is_an_action(monkeypatch):
+    """An invoked tool named run cannot restart parsing for every list item."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    query = "Call " + " and ".join(["run"] * 2000)
+    ranked = tool_schema_module.rank_adaptive_tool_preloads([_tool("run")], query)
+    assert [name for _score, name, _tool, _named in ranked] == ["run"]
+    assert calls < 2100
 
 
 @pytest.mark.asyncio
