@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from . import const
+from .localization import get_language_instruction
 
 _PROVIDERS = frozenset(
     value for name, value in vars(const).items() if name.startswith("SERVER_TYPE_")
@@ -78,6 +79,18 @@ def _selection(entry: ConfigEntry, profile_key: str, model_key: str) -> str:
     if _configured(entry, profile_key):
         return "profile"
     return "explicit" if _configured(entry, model_key) else "unset"
+
+
+def _prompt_mode(entry: ConfigEntry, mode_key: str, prompt_key: str, default_prompt: str) -> str:
+    """Infer legacy prompt modes using the same rules as the conversation agent."""
+    explicit_mode = _configured(entry, mode_key)
+    if explicit_mode in (const.PROMPT_MODE_DEFAULT, const.PROMPT_MODE_CUSTOM):
+        return explicit_mode
+    stored_prompt = _configured(entry, prompt_key)
+    return (
+        const.PROMPT_MODE_DEFAULT if stored_prompt in (None, "", default_prompt)
+        else const.PROMPT_MODE_CUSTOM
+    )
 
 
 def _cached_tools(agent: Any) -> dict[str, Any]:
@@ -167,14 +180,14 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
         )
     result["prompts"] = {
         label: {
-            "mode": _choice(
-                _configured(entry, mode_key, "default"), frozenset({"default", "custom"})
-            ),
+            "mode": _prompt_mode(entry, mode_key, prompt_key, default_prompt),
             "configured_characters": len(value) if isinstance(value, str) else None,
         }
-        for label, mode_key, prompt_key in (
-            ("system", const.CONF_SYSTEM_PROMPT_MODE, const.CONF_SYSTEM_PROMPT),
-            ("technical", const.CONF_TECHNICAL_PROMPT_MODE, const.CONF_TECHNICAL_PROMPT),
+        for label, mode_key, prompt_key, default_prompt in (
+            ("system", const.CONF_SYSTEM_PROMPT_MODE, const.CONF_SYSTEM_PROMPT,
+             get_language_instruction(hass.config.language) or const.DEFAULT_SYSTEM_PROMPT),
+            ("technical", const.CONF_TECHNICAL_PROMPT_MODE, const.CONF_TECHNICAL_PROMPT,
+             const.DEFAULT_TECHNICAL_PROMPT),
         )
         for value in (_configured(entry, prompt_key),)
     }

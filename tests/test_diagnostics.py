@@ -5,7 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from custom_components.mcp_assist import const
 from custom_components.mcp_assist import diagnostics as diagnostics_module
+from custom_components.mcp_assist.localization import get_language_instruction
 from custom_components.mcp_assist.diagnostics import (
     async_get_config_entry_diagnostics,
     build_assist_diagnostics,
@@ -186,3 +188,45 @@ def test_small_cached_schema_size_matches_compact_utf8_json(hass, profile_entry_
         "status": "cached", "count": 1,
         "schema_bytes": len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")).encode()),
     }
+
+
+@pytest.mark.parametrize("label", ["system", "technical"])
+@pytest.mark.parametrize("storage", ["data", "options"])
+@pytest.mark.parametrize("mode,prompt,expected", [
+    (None, "synthetic-custom-prompt", "custom"),
+    ("invalid-mode", "synthetic-custom-prompt", "custom"),
+    ("default", "synthetic-custom-prompt", "default"),
+    ("custom", None, "custom"),
+    (None, None, "default"),
+    (None, "", "default"),
+    (None, "builtin", "default"),
+])
+def test_prompt_modes_match_legacy_runtime_inference(
+    hass, profile_entry_factory, label, storage, mode, prompt, expected,
+):
+    default_prompt = (
+        get_language_instruction(hass.config.language) or const.DEFAULT_SYSTEM_PROMPT
+        if label == "system" else const.DEFAULT_TECHNICAL_PROMPT
+    )
+    values = {f"{label}_prompt": default_prompt if prompt == "builtin" else prompt}
+    if mode is not None:
+        values[f"{label}_prompt_mode"] = mode
+    entry = profile_entry_factory(**{storage: values})
+    result = build_assist_diagnostics(hass, entry)
+    assert result["prompts"][label]["mode"] == expected
+    assert "synthetic-custom-prompt" not in json.dumps(result)
+    assert "invalid-mode" not in json.dumps(result)
+
+
+def test_prompt_mode_options_override_data_and_infer_localized_default(
+    hass, profile_entry_factory,
+):
+    hass.config.language = "de"
+    localized = get_language_instruction("de")
+    entry = profile_entry_factory(
+        data={"system_prompt": "synthetic-custom-prompt", "system_prompt_mode": "custom"},
+        options={"system_prompt": localized, "system_prompt_mode": None},
+    )
+    result = build_assist_diagnostics(hass, entry)
+    assert result["prompts"]["system"]["mode"] == "default"
+    assert localized not in json.dumps(result)
