@@ -98,7 +98,12 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
         ),
         model_selection=model_selection,
         model_profile_resolution=_resolution(agent, model_selection, "resolved_model_profile"),
-        credential_configured=bool(_configured(entry, const.CONF_API_KEY)),
+        credential_configured=bool(_configured(
+            entry,
+            const.CONF_OPENCLAW_TOKEN
+            if provider == const.SERVER_TYPE_OPENCLAW
+            else const.CONF_API_KEY,
+        )),
         cached_tools=_cached_tools(agent),
     )
     if provider == const.SERVER_TYPE_OPENAI:

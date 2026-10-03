@@ -44,6 +44,11 @@ For cloud providers:
 - Check account quota, billing, and rate limits.
 - Check network connectivity from Home Assistant.
 
+Streaming starts with the actual conversation request; MCP Assist does not send
+an automatic test generation first. A recoverable stream failure may fall back
+to HTTP, while accepted stateful requests and terminal provider errors are not
+replayed automatically.
+
 ### OpenAI Stops or Temporarily Rejects a Request
 
 - `misalignment_policy_violation`: OpenAI stopped the conversation for review.

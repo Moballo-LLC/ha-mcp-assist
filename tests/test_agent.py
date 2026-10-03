@@ -450,7 +450,6 @@ async def test_openai_responses_terminal_stream_error_is_not_partial_success(
         },
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_fallback = AsyncMock(return_value="unexpected fallback")
@@ -4052,7 +4051,6 @@ async def test_stateful_stream_failure_does_not_fall_back_to_http(
         options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_mock = AsyncMock(return_value="unexpected fallback")
@@ -4101,7 +4099,6 @@ async def test_stream_fallback_remains_available_without_stateful_capability(
         }
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_mock = AsyncMock(return_value="Recovered over HTTP.")
@@ -4150,7 +4147,6 @@ async def test_later_stateful_stream_failure_does_not_send_a_final_request(
         options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(
         agent,
         "_get_mcp_tools",
@@ -4256,7 +4252,6 @@ async def test_stateful_stream_pre_header_timeout_does_not_fall_back_to_http(
         options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_mock = AsyncMock(return_value="unexpected fallback")
@@ -4312,7 +4307,6 @@ async def test_stateful_stream_connector_failure_can_fall_back_to_http(
         options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_mock = AsyncMock(return_value="Recovered over HTTP.")
@@ -4374,7 +4368,6 @@ async def test_stateful_stream_rejection_can_fall_back_to_http(
         options={CONF_STATEFUL_SESSION_ID: True},
     )
     agent = MCPAssistConversationEntity(hass, entry)
-    agent._streaming_available = True
     monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
     http_mock = AsyncMock(return_value="Recovered over HTTP.")
@@ -5178,9 +5171,49 @@ async def test_openai_streaming_probe_waits_for_terminal_event(
     )
     if outcome == "blocked":
         with pytest.raises(ProviderStreamError, match="misalignment_policy_violation"):
-            await agent._call_llm([{"role": "user", "content": "Check the lights."}])
+            await agent._test_streaming_basic()
     else:
         assert await agent._test_streaming_basic() is (
             outcome in {"completed", "empty_keepalive"}
         )
     assert len(posts) == 1
+
+
+@pytest.mark.parametrize("cached_probe", [None, False, True])
+async def test_streaming_starts_with_user_request_and_ignores_old_probe_result(
+    hass, profile_entry_factory, monkeypatch, cached_probe,
+) -> None:
+    """Real generations start immediately, including after a model change."""
+    entry = profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA, CONF_MODEL_NAME: "first-example-model",
+    })
+    agent = MCPAssistConversationEntity(hass, entry)
+    if cached_probe is not None:
+        agent._streaming_available = cached_probe
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+    posts: list[dict] = []
+    responses = [
+        _FakeStreamingResponse([
+            json.dumps({"message": {"role": "assistant", "content": answer}}),
+            json.dumps({"done": True}),
+        ])
+        for answer in ("First answer.", "Second answer.")
+    ]
+    monkeypatch.setattr(
+        agent_module.aiohttp, "ClientSession",
+        lambda **kwargs: _FakeAnthropicSession(responses, posts),
+    )
+    first = [{"role": "user", "content": "What is the first answer?"}]
+    second = [{"role": "user", "content": "What is the second answer?"}]
+    assert await agent._call_llm(first) == "First answer."
+    assert len(posts) == 1
+    assert posts[0]["json"]["messages"] == first
+    assert posts[0]["json"]["model"] == "first-example-model"
+    assert posts[0]["json"]["stream"] is True
+    hass.config_entries.async_update_entry(entry, options={CONF_MODEL_NAME: "second-example-model"})
+    assert await agent._call_llm(second) == "Second answer."
+    assert len(posts) == 2
+    assert posts[1]["json"]["messages"] == second
+    assert posts[1]["json"]["model"] == "second-example-model"
+    assert posts[1]["json"]["stream"] is True

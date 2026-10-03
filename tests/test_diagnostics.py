@@ -101,3 +101,43 @@ def test_non_openai_provider_ignores_inactive_profile_reference(hass, profile_en
     result = build_assist_diagnostics(hass, entry)
     assert result["model_selection"] == "explicit"
     assert result["model_profile_resolution"] == "not_applicable"
+
+
+def test_openclaw_credential_is_reported_as_boolean_without_exposing_token(
+    hass, profile_entry_factory,
+):
+    secret = "synthetic-openclaw-token"
+    entry = profile_entry_factory(data={
+        "server_type": "openclaw", "openclaw_token": secret, "api_key": "inactive-key",
+    })
+
+    result = build_assist_diagnostics(hass, entry)
+
+    assert result["credential_configured"] is True
+    assert secret not in json.dumps(result)
+    entry_without_token = profile_entry_factory(data={
+        "server_type": "openclaw", "api_key": "inactive-key",
+    })
+    assert build_assist_diagnostics(hass, entry_without_token)["credential_configured"] is False
+
+
+def test_cached_tool_schema_with_lone_surrogate_reports_size_unavailable(
+    hass, profile_entry_factory,
+):
+    entry = profile_entry_factory()
+    tools = [{"name": "bad-\ud800-schema"}]
+    hass.data["mcp_assist"] = {entry.entry_id: {"agent": SimpleNamespace(
+        entry=entry, _cached_profile_mcp_tools=tools,
+    )}}
+
+    result = build_assist_diagnostics(hass, entry)
+
+    assert result["cached_tools"] == {"status": "unavailable"}
+    assert "bad-" not in json.dumps(result)
+
+    tools[:] = [{"name": "valid schema"}]
+    result = build_assist_diagnostics(hass, entry)
+    assert result["cached_tools"]["status"] == "cached"
+    assert result["cached_tools"]["schema_bytes"] == len(
+        json.dumps(tools, ensure_ascii=False, separators=(",", ":")).encode()
+    )

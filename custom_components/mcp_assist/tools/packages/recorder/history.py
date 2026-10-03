@@ -1221,7 +1221,7 @@ class RecorderToolsMixin:
         # Essential qualifications precede bucket detail, which the conversation
         # agent may truncate to keep model context bounded.
         lines.append(f"Displayed {min(len(groups), limit)} of {len(groups)} {bucket} buckets; summary covers all returned {resolution_label} buckets:")
-        for key, grouped in list(sorted(groups.items()))[:limit]:
+        for key, grouped in sorted(groups.items(), key=lambda item: item[1][0]["start"])[:limit]:
             changes = [row["change"] for row in grouped if "change" in row]
             group_means = [row["mean"] for row in grouped if "mean" in row]
             details = [f"{len(grouped)} observed {'five-minute bucket(s)' if resolution == '5minute' else 'hour(s)'}"]
@@ -1272,7 +1272,7 @@ class RecorderToolsMixin:
             )
             groups.setdefault(key, []).append(row)
         displayed = []
-        for key, grouped in sorted(groups.items())[:limit]:
+        for key, grouped in sorted(groups.items(), key=lambda item: item[1][0]["start"])[:limit]:
             item = {"start": key, "sample_count": len(grouped)}
             for metric in sorted(metrics):
                 values = [row[metric] for row in grouped if metric in row]

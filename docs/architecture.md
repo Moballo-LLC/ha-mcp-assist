@@ -42,6 +42,11 @@ flowchart LR
   HA --> User
 ```
 
+Home Assistant chat logs belong to each conversation request. Overlapping requests
+using the same profile keep their assistant replies, tool calls, and tool results
+in their own logs. Request cleanup restores the previous log context, including
+when a request fails or is cancelled.
+
 ## Core MCP Server
 
 The MCP server exposes a stable set of core tools:
