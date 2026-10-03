@@ -734,10 +734,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             device_auth = hass.data[DOMAIN]["openclaw_device_auth"]
 
             client = OpenClawClient(
-                host=entry.data.get(CONF_OPENCLAW_HOST, "localhost"),
-                port=entry.data.get(CONF_OPENCLAW_PORT, 18789),
-                token=entry.data.get(CONF_OPENCLAW_TOKEN, ""),
-                use_ssl=entry.data.get(CONF_OPENCLAW_USE_SSL, True),
+                host=entry.options.get(
+                    CONF_OPENCLAW_HOST, entry.data.get(CONF_OPENCLAW_HOST, "localhost")
+                ),
+                port=entry.options.get(
+                    CONF_OPENCLAW_PORT, entry.data.get(CONF_OPENCLAW_PORT, 18789)
+                ),
+                token=entry.options.get(
+                    CONF_OPENCLAW_TOKEN, entry.data.get(CONF_OPENCLAW_TOKEN, "")
+                ),
+                use_ssl=entry.options.get(
+                    CONF_OPENCLAW_USE_SSL, entry.data.get(CONF_OPENCLAW_USE_SSL, True)
+                ),
                 device_auth=device_auth,
                 timeout=entry.options.get(
                     CONF_TIMEOUT, entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
