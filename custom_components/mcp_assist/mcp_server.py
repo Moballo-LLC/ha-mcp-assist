@@ -4406,16 +4406,30 @@ class MCPServer(
         """Call a native Home Assistant Assist tool directly."""
         tool_name = str(args.get("tool_name") or "").strip()
         if not tool_name:
-            raise ValueError("tool_name is required")
+            return self._build_text_tool_result("tool_name is required", is_error=True)
 
-        assist_arguments = args.get("arguments") or {}
+        assist_arguments = args.get("arguments", {})
         if not isinstance(assist_arguments, dict):
-            raise ValueError("arguments must be an object")
+            return self._build_text_tool_result("arguments must be an object", is_error=True)
 
-        llm_api = await self._get_assist_api_instance()
-        tool_response = await self._call_llm_api_tool(
-            llm_api, tool_name, assist_arguments
-        )
+        try:
+            llm_api = await self._get_assist_api_instance()
+            resolved_name = self._resolve_assist_tool_name(llm_api, tool_name)
+            if resolved_name is None:
+                return self._build_text_tool_result(
+                    "Native Assist tool name is unavailable or ambiguous. "
+                    "Use list_assist_tools to find its exact name.",
+                    is_error=True,
+                )
+            tool_response = await self._call_llm_api_tool(
+                llm_api, resolved_name, assist_arguments
+            )
+        except (HomeAssistantError, vol.Invalid):
+            return self._build_text_tool_result(
+                "Native Assist tool could not be called. Check its availability and "
+                "arguments with list_assist_tools. The call was not retried.",
+                is_error=True,
+            )
         serialized_response = self._serialize_service_response_value(tool_response)
 
         text_parts = [f"✅ Called native Assist tool `{tool_name}`."]
@@ -4444,8 +4458,14 @@ class MCPServer(
         """Get the native Home Assistant Assist live context snapshot."""
         del args
 
-        llm_api = await self._get_assist_api_instance()
-        if not self._assist_api_has_live_context_tool(llm_api):
+        try:
+            llm_api = await self._get_assist_api_instance()
+        except (HomeAssistantError, vol.Invalid):
+            return self._build_text_tool_result(
+                "Native Assist API is unavailable right now.", is_error=True
+            )
+        tool_name = self._resolve_assist_tool_name(llm_api, "GetLiveContext")
+        if tool_name is None:
             return {
                 "content": [
                     {
@@ -4459,15 +4479,20 @@ class MCPServer(
                 ]
             }
 
-        tool_response = await self._call_llm_api_tool(
-            llm_api, "GetLiveContext", {}
-        )
+        try:
+            tool_response = await self._call_llm_api_tool(llm_api, tool_name, {})
+        except (HomeAssistantError, vol.Invalid):
+            return self._build_text_tool_result(
+                "Assist context snapshot is unavailable right now.", is_error=True
+            )
         if (
             isinstance(tool_response, dict)
             and tool_response.get("success") is False
             and tool_response.get("error")
         ):
-            raise HomeAssistantError(str(tool_response["error"]))
+            return self._build_text_tool_result(
+                "Assist context snapshot is unavailable right now.", is_error=True
+            )
         snapshot = tool_response.get("result") if isinstance(tool_response, dict) else None
         if snapshot is None:
             snapshot = self._serialize_service_response_value(tool_response)
@@ -5097,7 +5122,19 @@ class MCPServer(
 
     def _assist_api_has_live_context_tool(self, llm_api: llm.APIInstance) -> bool:
         """Return whether the Assist API exposes GetLiveContext."""
-        return any(tool.name == "GetLiveContext" for tool in llm_api.tools)
+        return self._resolve_assist_tool_name(llm_api, "GetLiveContext") is not None
+
+    def _resolve_assist_tool_name(
+        self, llm_api: llm.APIInstance, tool_name: str
+    ) -> str | None:
+        """Prefer exact names; accept an unqualified name only when unambiguous."""
+        names = {tool.name for tool in llm_api.tools}
+        if tool_name in names:
+            return tool_name
+        if "__" in tool_name:
+            return None
+        matches = [name for name in names if name.rsplit("__", 1)[-1] == tool_name]
+        return matches[0] if len(matches) == 1 else None
 
     def _format_llm_tool_input_schema(
         self,
