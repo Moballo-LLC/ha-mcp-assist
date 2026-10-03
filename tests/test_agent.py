@@ -2031,6 +2031,78 @@ async def test_adaptive_query_schema_loader_skips_advertised_tools_before_limit(
         agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
 
+@pytest.mark.asyncio
+async def test_adaptive_queries_reach_all_visible_schemas_and_preserve_full_mode(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Compact startup does not remove capabilities needed by a deep request."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    optional_names = {f"weather_operation_{index}" for index in range(9)}
+    tools = [_tool("discover_entities")] + [
+        {**_tool(name), "llmDescription": "Read weather information."}
+        for name in sorted(optional_names)
+    ]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    preloaded = frozenset(sorted(optional_names)[:2])
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(preloaded)
+    try:
+        initial = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert initial & optional_names == preloaded
+        seen = set(preloaded)
+        for _ in range(5):
+            result = await agent._handle_adaptive_meta_tool(
+                ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+            )
+            payload = json.loads(result["content"][0]["text"])
+            loaded = {tool["name"] for tool in payload["loaded_tools"]}
+            assert len(loaded) <= 2
+            assert not loaded & seen
+            seen.update(loaded)
+        assert seen == optional_names
+        expanded = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert optional_names <= expanded
+        standard_entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
+        standard_agent = MCPAssistConversationEntity(hass, standard_entry)
+        standard = {
+            tool["function"]["name"]
+            for tool in standard_agent._build_llm_tools_for_context(tools)
+        }
+        assert standard == {tool["name"] for tool in tools}
+        assert standard <= expanded
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_explicit_eight_name_load_retains_profile_visibility(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Explicit large batches remain available without loading hidden names."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    names = [f"custom_operation_{index}" for index in range(8)]
+    monkeypatch.setattr(
+        agent, "_get_profile_mcp_tools", AsyncMock(return_value=[_tool(name) for name in names])
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": [*names, "hidden_tool"], "query": "custom operation", "limit": 8},
+        )
+        payload = json.loads(result["content"][0]["text"])
+        assert [tool["name"] for tool in payload["loaded_tools"]] == names
+        assert payload["not_found"] == ["hidden_tool"]
+        assert agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get() == set(names)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
 @pytest.mark.parametrize("provided_limit", [None, 8])
 @pytest.mark.asyncio
 async def test_adaptive_query_schema_loader_caps_at_two(
@@ -2571,6 +2643,47 @@ async def test_adaptive_preload_preserves_allowed_negative_exceptions(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_preload_excludes_known_alternatives_after_unknown_names(
+    hass, profile_entry_factory
+) -> None:
+    """An unavailable first alternative cannot hide later rejected tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("web_search")]
+    for query in (
+        "Don't use ExampleEngine or web_search.",
+        "Do not use ExampleEngine and web_search.",
+        "Never call ExampleEngine, the web_search tool.",
+        "Don't use ExampleEngine or missing_tool or web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == set(), query
+    for query in (
+        "Do not use ExampleEngine, call web_search instead.",
+        "Do not use ExampleEngine except for web_search.",
+        "Don't use ExampleEngine and call web_search instead.",
+        "I am not sure whether ExampleEngine or web_search is useful.",
+        "Don't worry about ExampleEngine or web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"web_search"}, query
+
+
+@pytest.mark.asyncio
+async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
+    hass, profile_entry_factory
+) -> None:
+    """Named priority cannot bypass a tool's negative routing metadata."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tool = {
+        **_tool("sample_lookup"),
+        "routingHints": {"negative_keywords": ["calendar"]},
+    }
+    assert agent._select_initial_adaptive_tool_names(
+        [tool], "Call sample_lookup to answer this calendar question."
+    ) == set()
+
+
+@pytest.mark.asyncio
 async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -2806,6 +2919,32 @@ def test_adaptive_preload_processes_repeated_negations_once_per_clause(monkeypat
 
     assert [name for _score, name, _tool, _named in ranked] == ["get_weather_forecast"]
     assert calls == 1
+
+
+def test_adaptive_unknown_alternative_scan_has_bounded_work(monkeypatch) -> None:
+    """Repeated list connectors cannot make exclusion scanning revisit the tail."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    tools = [
+        {"name": "web_search", "llmDescription": "Search the web."},
+        {"name": "weather", "llmDescription": "Read a forecast."},
+    ]
+    query = "Do not use MissingEngine " + "or " * 2000 + "web_search; call weather."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
+
+    assert [name for _score, name, _tool, _named in ranked] == ["weather"]
+    assert calls < 5000
 
 
 def test_adaptive_batch_scoring_prepares_query_once_and_reuses_no_tool_state(

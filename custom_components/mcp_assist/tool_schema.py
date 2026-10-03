@@ -225,6 +225,10 @@ ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
+ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE = re.compile(r"\b(?:or|and)\b|,", flags=re.IGNORECASE)
+ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS = frozenset(
+    {"use", "using", "call", "calling", "run", "running", "invoke", "invoking"}
+)
 ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(r"\bexcept(?:\s+for)?\b", flags=re.IGNORECASE)
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
@@ -857,6 +861,7 @@ def _adaptive_tool_name_polarity_tokens(
             continue
         if known_tool_names is not None:
             tool_group = False
+            action_prefix = negation.endswith("using")
             while True:
                 while word_start < len(masked_text) and (
                     masked_text[word_start].isspace() or masked_text[word_start] in "`,'\""
@@ -874,12 +879,56 @@ def _adaptive_tool_name_polarity_tokens(
                 ):
                     break
                 tool_group |= name_match.group() in {"tool", "tools", "anything", "everything"}
+                action_prefix |= name_match.group() in ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS
                 word_start = name_match.end()
             if name_match is None or (
                 name_match.group() not in known_tool_names
                 and not (tool_group and name_match.group() == "except")
             ):
-                continue
+                if name_match is None or not action_prefix:
+                    continue
+                next_negation = ADAPTIVE_TOOL_NAME_NEGATION_RE.search(masked_text, name_match.end())
+                scan_end = len(masked_text) if next_negation is None else next_negation.start()
+                boundary = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(
+                    masked_text, name_match.end(), scan_end
+                )
+                if boundary is not None:
+                    scan_end = boundary.start()
+                continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
+                    masked_text, match.end(), scan_end
+                )
+                if continuation is not None:
+                    scan_end = continuation.start()
+                known_alternative = (
+                    next_negation is not None
+                    and scan_end == next_negation.start()
+                    and next_negation.group().casefold().startswith("except")
+                )
+                for alternative in ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.finditer(
+                    masked_text, name_match.end(), scan_end
+                ):
+                    cursor = alternative.end()
+                    while cursor < scan_end:
+                        while cursor < scan_end and (
+                            masked_text[cursor].isspace() or masked_text[cursor] in "`'\""
+                        ):
+                            cursor += 1
+                        candidate = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(masked_text, cursor, scan_end)
+                        if candidate is None:
+                            break
+                        if candidate.group() in known_tool_names:
+                            known_alternative = True
+                            break
+                        if (
+                            candidate.group() in {"or", "and"}
+                            or candidate.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
+                        ):
+                            break
+                        cursor = candidate.end()
+                    if known_alternative:
+                        break
+                if not known_alternative:
+                    continue
         clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
         clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
         continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
