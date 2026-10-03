@@ -85,6 +85,45 @@ responses.
 
 For normal weather questions, prefer `get_weather_forecast`.
 
+## Maintenance Status
+
+| Tool | Purpose |
+| --- | --- |
+| `get_maintenance_status` | Read current native maintenance signals from exposed entities |
+
+Enable the optional **Maintenance Status** family in shared settings first. The
+tool is read-only and performs an on-demand state scan, without service calls or
+repair actions. It uses Home Assistant's conversation exposure controls; hiding
+an entity in the UI does not exclude it if it remains exposed.
+
+Arguments:
+
+- `category`: `all` (default), `batteries`, `updates`, `unavailable`, or `problems`.
+- `battery_threshold`: integer 1–100, default 30. Percentage battery sensors
+  match at or below the threshold; the value must be finite and within 0–100,
+  with native `battery` device class and `%` unit. Battery binary sensors match
+  when `on`.
+- `limit`: integer 1–100, default 25.
+- `offset`: nonnegative integer, default 0; use `next_offset` to read another page.
+
+Updates match native `update` entities when `on`; problems match native
+`binary_sensor` entities with `problem` device class when `on`. Any exposed
+entity whose current state is `unavailable` or `unknown` belongs to the
+`unavailable` category instead of being treated as healthy.
+
+`structuredContent` includes `schema_version: 1`, `scope: exposed_entities_only`,
+the checked `exposed_count`, full `matched_count`, `page_count`, `next_offset`,
+and `items`. Each item contains only `category`, `entity_id`, `friendly_name`,
+and `state`, plus `battery_percentage` for numeric battery matches. Results sort
+by category priority (problems, unavailable, batteries, updates), then entity ID.
+`truncated` means some matches were omitted from the current page; `next_offset`
+is null when there are no later matches. Paging reads current states again, so
+results may change between calls.
+
+An empty result means no matching signals were found among exposed entities. It
+does not establish whole-home health, scan unexposed devices, or inspect repair
+issues in Home Assistant's Repairs registry.
+
 ## Weather Forecast
 
 | Tool | Purpose |

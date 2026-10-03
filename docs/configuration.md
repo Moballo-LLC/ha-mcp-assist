@@ -232,9 +232,25 @@ Tool families have two levels of control:
 
 Use shared settings to enable capabilities for the whole integration. Use
 per-profile disables when one profile should be narrower, such as a read-only
-assistant or a room-specific voice profile.
+assistant or a room-specific voice profile. Built-in package prompt guidance is
+also omitted for packages disabled in that profile.
 
 See [Tool Reference](tool-reference.md) for the tool families.
+
+## Maintenance Status
+
+**Maintenance Status** is an optional built-in tool family, disabled in shared
+settings by default. Enable it under **Shared Tool Families** to read current
+maintenance signals from entities exposed to the conversation assistant. Profiles
+may use it by default once shared settings enable it; **Disable Maintenance
+Status** removes it from an individual profile. It also works when **Control
+Home Assistant** is disabled.
+
+The tool runs only when called. It checks native battery, update, unavailable,
+unknown, and problem states, without repairs, service calls, or remote queries.
+See [Maintenance Status](tool-reference.md#maintenance-status) for filters and
+paging. Results describe exposed entities only and cannot establish whole-home
+health.
 
 ## Web Search Configuration
 
@@ -393,7 +409,9 @@ lookup is limited to 15 seconds and 1 MiB.
 
 The concrete model, effort, and revision are frozen for the entire conversation
 request, including tool follow-ups. The next request resolves the current policy
-again. Missing profiles, authentication failures, and invalid policy responses
+again. Smart Entity Index gap filling also resolves the named text profile for
+standalone calls and reuses the frozen selection when called within a conversation.
+Missing profiles, authentication failures, and invalid policy responses
 stop the request before model generation; MCP Assist does not fall back to the
 saved model. The agent's read-only `resolved_model_profile` metadata reports the
 last resolved pair and revision, not proof that a model request succeeded.

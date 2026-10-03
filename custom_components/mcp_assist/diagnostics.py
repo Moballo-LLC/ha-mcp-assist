@@ -16,6 +16,54 @@ _PROVIDERS = frozenset(
 )
 _CONTEXT_MODES = frozenset({"standard", "adaptive", "light"})
 _MAX_CACHED_TOOLS = 1000
+_MAX_CACHED_SCHEMA_BYTES = 256 * 1024
+_MAX_CACHED_SCHEMA_NODES = 8192
+_MAX_CACHED_SCHEMA_DEPTH = 32
+
+
+class _CacheSizeLimit(ValueError):
+    """Cached schemas exceed the diagnostic measurement budget."""
+
+
+def _check_schema_budget(value: Any) -> None:
+    """Bound traversal and a conservative encoded size before serialization."""
+    remaining_bytes = _MAX_CACHED_SCHEMA_BYTES
+    remaining_nodes = _MAX_CACHED_SCHEMA_NODES
+
+    def visit(item: Any, depth: int) -> None:
+        nonlocal remaining_bytes, remaining_nodes
+        remaining_nodes -= 1
+        if remaining_nodes < 0 or depth > _MAX_CACHED_SCHEMA_DEPTH:
+            raise _CacheSizeLimit
+        if type(item) is str:
+            cost = 2 + 6 * len(item)
+        elif type(item) is int:
+            cost = 2 + item.bit_length() // 3
+        elif type(item) in (dict, list):
+            children = len(item) * (2 if type(item) is dict else 1)
+            if children > remaining_nodes:
+                raise _CacheSizeLimit
+            cost = 2 + max(0, len(item) - 1) + (len(item) if type(item) is dict else 0)
+        elif type(item) is float:
+            cost = 32
+        elif item is None or type(item) is bool:
+            cost = 5
+        else:
+            raise TypeError
+        remaining_bytes -= cost
+        if remaining_bytes < 0:
+            raise _CacheSizeLimit
+        if type(item) is dict:
+            for key, child in item.items():
+                if type(key) is not str:
+                    raise TypeError
+                visit(key, depth + 1)
+                visit(child, depth + 1)
+        elif type(item) is list:
+            for child in item:
+                visit(child, depth + 1)
+
+    visit(value, 0)
 
 
 def _configured(entry: ConfigEntry, key: str, default: Any = None) -> Any:
@@ -39,7 +87,10 @@ def _cached_tools(agent: Any) -> dict[str, Any]:
     if len(tools) > _MAX_CACHED_TOOLS:
         return {"status": "too_large", "count": len(tools)}
     try:
+        _check_schema_budget(tools)
         size = len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")).encode())
+    except _CacheSizeLimit:
+        return {"status": "too_large", "count": len(tools)}
     except (TypeError, ValueError, OverflowError, RecursionError):
         return {"status": "unavailable"}
     return {"status": "cached", "count": len(tools), "schema_bytes": size}

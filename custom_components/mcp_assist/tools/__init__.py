@@ -348,6 +348,15 @@ class CustomToolsLoader:
         """Return aggregated prompt additions from loaded built-in tool packages."""
         return self._builtin_prompt_instructions
 
+    def get_builtin_prompt_instructions_for_packages(self, package_ids: set[str]) -> str:
+        """Return prompt additions only for profile-enabled built-in packages."""
+        return combine_prompt_instructions(
+            [package for package in self.builtin_packages
+             if package.manifest.tool_id in package_ids],
+            heading="## Optional Built-In Tool Packages",
+            truncated_notice="[Built-in tool package instructions truncated.]",
+        )
+
     def get_external_prompt_instructions(self) -> str:
         """Return aggregated prompt additions from loaded external tool packages."""
         return self._external_prompt_instructions

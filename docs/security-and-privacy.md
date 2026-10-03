@@ -25,6 +25,20 @@ Recommendations:
   safety-sensitive entities.
 - Consider separate profiles for read-only and control-capable use cases.
 
+## Maintenance Status Data
+
+The optional `get_maintenance_status` tool scans current states only when called
+and checks Home Assistant's conversation exposure for every entity. Results
+contain entity IDs, friendly names, native matching states, and numeric battery
+percentages where applicable. Friendly names are intentional entity data and may
+contain personal details; review them before exposing entities. These results
+can reach the configured model provider or an external MCP client.
+
+Other attributes, including URLs, account details, update release metadata, and
+provider messages, are omitted. The tool does not query remote services, call
+Home Assistant services, inspect the Repairs registry, or change state. Its scope
+is exposed entities only; no matching results do not establish whole-home health.
+
 ## Action Control
 
 The **Control Home Assistant** profile setting determines whether a profile may

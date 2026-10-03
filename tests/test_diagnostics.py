@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from custom_components.mcp_assist import diagnostics as diagnostics_module
 from custom_components.mcp_assist.diagnostics import (
     async_get_config_entry_diagnostics,
     build_assist_diagnostics,
@@ -141,3 +142,47 @@ def test_cached_tool_schema_with_lone_surrogate_reports_size_unavailable(
     assert result["cached_tools"]["schema_bytes"] == len(
         json.dumps(tools, ensure_ascii=False, separators=(",", ":")).encode()
     )
+
+
+@pytest.mark.parametrize("shape", ["large_string", "many_strings", "wide", "deep", "large_number"])
+def test_oversized_cached_schemas_are_rejected_before_serialization(
+    hass, profile_entry_factory, monkeypatch, shape,
+):
+    if shape == "large_string":
+        schema = {"description": "private-description" * 100_000}
+    elif shape == "many_strings":
+        schema = {"enum": ["private-value" * 1000] * 100}
+    elif shape == "wide":
+        schema = {"enum": [None] * 100_000}
+    elif shape == "deep":
+        schema = {}
+        for _ in range(100):
+            schema = {"nested": schema}
+    else:
+        schema = {"default": 1 << 1_000_000}
+    entry = profile_entry_factory()
+    hass.data["mcp_assist"] = {entry.entry_id: {"agent": SimpleNamespace(
+        entry=entry, _cached_profile_mcp_tools=[{"inputSchema": schema}],
+    )}}
+    with monkeypatch.context() as context:
+        context.setattr(diagnostics_module.json, "dumps", lambda *args, **kwargs: (
+            pytest.fail("Oversized cache must be rejected before serialization")
+        ))
+        result = build_assist_diagnostics(hass, entry)
+    assert result["cached_tools"] == {"status": "too_large", "count": 1}
+    assert "private-" not in json.dumps(result)
+
+
+def test_small_cached_schema_size_matches_compact_utf8_json(hass, profile_entry_factory):
+    tools = [{"name": "example", "inputSchema": {"enum": [
+        "snowman \u2603", "\\quote\"\n", None, True, False, 3.14, -12345,
+    ]}}]
+    entry = profile_entry_factory()
+    hass.data["mcp_assist"] = {entry.entry_id: {"agent": SimpleNamespace(
+        entry=entry, _cached_profile_mcp_tools=tools,
+    )}}
+    result = build_assist_diagnostics(hass, entry)
+    assert result["cached_tools"] == {
+        "status": "cached", "count": 1,
+        "schema_bytes": len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")).encode()),
+    }

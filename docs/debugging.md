@@ -19,7 +19,10 @@ configured.
 The download omits credentials, endpoint addresses, profile/model names, prompts,
 entity data, paths, conversation history, and tool schemas. It reads existing
 configuration and caches on demand without discovery, network requests, or paid
-model calls. A tool cache that has not been built has no size yet. An unresolved
+model calls. A tool cache that has not been built has no size yet. Oversized or
+complex caches report `too_large` without serialization: measurement is limited
+to 1,000 tools, 8,192 nodes, 32 nesting levels, and a conservative 256 KiB encoded
+size budget. Smaller caches report their actual UTF-8 JSON size. An unresolved
 model profile can be normal before its first request; this report does not prove
 provider connectivity or successful device control.
 
