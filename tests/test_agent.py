@@ -2368,6 +2368,8 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
     for query in (
         "Don't call multiply.",
         "Never multiply.",
+        "Calculate without multiply.",
+        "No multiply.",
         "Do not use sensor.foo or sample_maintenance_status.",
         "Do not use sensor.foo, sample_maintenance_status.",
         "Do not use https://example.com or sample_maintenance_status.",
@@ -2408,6 +2410,9 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
     for query in (
         "Do not use https://example.com. Then call sample_maintenance_status.",
         "Do not use other_tool but use sample_maintenance_status.",
+        "Do not use `other_tool`—call `sample_maintenance_status` instead.",
+        "Do not use other_tool: call sample_maintenance_status instead.",
+        "Do not use other_tool - call sample_maintenance_status instead.",
         "Use weather, but not other_tool; call sample_maintenance_status.",
         "Use weather, but not other_tool but use sample_maintenance_status.",
         "Do not use other_tool, call sample_maintenance_status.",
@@ -2633,6 +2638,28 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_preload_processes_repeated_negations_once_per_clause(monkeypatch) -> None:
+    """Repeated exclusions cannot rescan the same clause for every negative word."""
+    calls = 0
+    mask_references = tool_schema_module._mask_adaptive_tool_name_references
+
+    def count_masks(text: str) -> str:
+        nonlocal calls
+        calls += 1
+        return mask_references(text)
+
+    monkeypatch.setattr(tool_schema_module, "_mask_adaptive_tool_name_references", count_masks)
+    tools = [
+        {"name": "multiply", "llmDescription": "Multiply two numbers."},
+        {"name": "get_weather_forecast", "llmDescription": "Read a forecast."},
+    ]
+    query = "Do not use " + "no " * 1000 + "multiply; call get_weather_forecast."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
+
+    assert [name for _score, name, _tool, _named in ranked] == ["get_weather_forecast"]
+    assert calls == 3
 
 
 def test_adaptive_batch_scoring_prepares_query_once_and_reuses_no_tool_state(

@@ -213,14 +213,18 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
-    r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|except(?:\s+for)?|"
+    r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|without|no|except(?:\s+for)?|"
     r"avoid(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
     r"\b(?:but\s+(?:use|call|run|invoke)|instead\s+(?:use|call)|"
-    r"then\s+(?:use|call))\b|,\s*(?:use|call|run|invoke)\b",
+    r"then\s+(?:use|call))\b|(?:[,:–—]|(?<=\s)-)\s*(?:use|call|run|invoke)\b",
     flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
+ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
+    r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE
 )
 ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS = frozenset(
     {
@@ -819,8 +823,10 @@ def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
     negative_words: set[str] = set()
     for text in texts:
         masked_text = _mask_adaptive_tool_name_references(text)
+        covered_until = 0
         for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
-            tail = masked_text[match.end() :]
+            if match.start() < covered_until:
+                continue
             bare_negation = " ".join(match.group().casefold().split()) in {
                 "don't",
                 "dont",
@@ -829,21 +835,22 @@ def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
                 "never",
                 "not",
             }
-            positive_idiom = re.match(
-                r"(?:forget|hesitate|only|just)\b",
-                tail.lstrip(),
-                re.IGNORECASE,
-            )
-            if bare_negation and positive_idiom:
+            word_start = match.end()
+            while word_start < len(masked_text) and masked_text[word_start].isspace():
+                word_start += 1
+            if bare_negation and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(
+                masked_text, word_start
+            ):
                 continue
-            clause_end = re.search(r"[.!?;\n]", tail)
-            clause_end_index = len(tail) if clause_end is None else clause_end.start()
+            clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
+            clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
             continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
-                tail[:clause_end_index]
+                masked_text, match.end(), clause_end_index
             )
             if continuation is not None:
                 clause_end_index = continuation.start()
-            clause = tail[:clause_end_index]
+            covered_until = clause_end_index
+            clause = masked_text[match.end() : clause_end_index]
             negative_words.update(_adaptive_tool_name_tokens(clause))
     return frozenset(negative_words)
 
