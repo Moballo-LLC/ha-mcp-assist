@@ -172,8 +172,8 @@ schemas; names in negated phrases, URLs, or Home Assistant entity IDs do not
 count as explicit mentions. Adaptive prepares request wording once for this
 preload matching step. When more schemas are needed, the model can call
 `load_tool_schemas` directly with exact tool names or a focused query and a
-limit of two. Use the tool catalog to compare candidates or refine an
-unsuccessful lookup.
+limit of two. Exact-name batches can load up to eight schemas. Use the tool
+catalog to compare candidates or refine an unsuccessful lookup.
 
 Light context mode keeps the profile's prompts but skips MCP Assist's optional
 tool-family prompt instructions, keeps at most two prior conversation turns, and

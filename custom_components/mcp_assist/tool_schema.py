@@ -213,9 +213,7 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
-    r"\b(?:but\s+not|do\s+not(?:\s+(?:use|call|run|invoke))?|"
-    r"don['’]?t(?:\s+(?:use|call|run|invoke))?|"
-    r"never(?:\s+(?:use|call|run|invoke))?|not|except(?:\s+for)?|"
+    r"\b(?:but\s+not|do\s+not|don['’]?t|never|not|except(?:\s+for)?|"
     r"avoid(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
@@ -823,6 +821,21 @@ def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
         masked_text = _mask_adaptive_tool_name_references(text)
         for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
             tail = masked_text[match.end() :]
+            bare_negation = " ".join(match.group().casefold().split()) in {
+                "don't",
+                "dont",
+                "don’t",
+                "do not",
+                "never",
+                "not",
+            }
+            positive_idiom = re.match(
+                r"\s+(?:(?:to\s+)?(?:forget|hesitate)|only|just)\b",
+                tail,
+                re.IGNORECASE,
+            )
+            if bare_negation and positive_idiom:
+                continue
             clause_end = re.search(r"[.!?;\n]", tail)
             clause_end_index = len(tail) if clause_end is None else clause_end.start()
             continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
@@ -1163,8 +1176,8 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": ADAPTIVE_TOOL_SCHEMA_NAME,
                 "description": (
-                    "Load schemas by exact tool_names, or search with a focused query "
-                    "and limit up to 2 when the tool names are unknown."
+                    "Load schemas by exact tool_names (up to 8), or search with a "
+                    "focused query (up to 2) when the tool names are unknown."
                 ),
                 "parameters": {
                     "type": "object",
@@ -1174,7 +1187,15 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
                             "items": {"type": "string"},
                         },
                         "query": {"type": "string"},
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 8,
+                            "description": (
+                                "Query searches load at most 2 schemas; explicit "
+                                "tool_names batches may load up to 8."
+                            ),
+                        },
                     },
                 },
             },

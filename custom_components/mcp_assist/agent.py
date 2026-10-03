@@ -3569,11 +3569,15 @@ class MCPAssistConversationEntity(ConversationEntity):
             requested_names = self._normalize_requested_tool_names(
                 arguments.get("tool_names")
             )
+            if requested_names or not query:
+                default_limit, maximum_limit = 8, 8
+            else:
+                default_limit, maximum_limit = 2, 2
             limit = self._bounded_int(
                 arguments.get("limit"),
-                default=8,
+                default=default_limit,
                 minimum=1,
-                maximum=8,
+                maximum=maximum_limit,
             )
             matches = self._match_adaptive_tool_definitions(
                 profile_tools,

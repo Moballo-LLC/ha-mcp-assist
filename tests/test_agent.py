@@ -1991,6 +1991,99 @@ async def test_adaptive_schema_loader_searches_by_query_without_catalog_call(
     assert "unit_convert" not in loaded_names
 
 
+@pytest.mark.parametrize("provided_limit", [None, 8])
+@pytest.mark.asyncio
+async def test_adaptive_query_schema_loader_caps_at_two(
+    hass, profile_entry_factory, monkeypatch, provided_limit
+) -> None:
+    """Query-based schema loading stays capped at two with default or larger limit."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    profile_tools = [_tool("discover_entities"), *weather_tools]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=profile_tools),
+    )
+    arguments = {"query": "weather"}
+    if provided_limit is not None:
+        arguments["limit"] = provided_limit
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            arguments,
+        )
+        payload = json.loads(result["content"][0]["text"])
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert len(payload["loaded_tools"]) == 2
+    assert len(payload["loaded_tools"]) < len(weather_tools)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_schema_loader_keeps_explicit_three_name_batch(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An explicit name batch can load three schemas even when it includes a query."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), *weather_tools]),
+    )
+    requested_names = [tool["name"] for tool in weather_tools]
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": requested_names, "query": "weather", "limit": 3},
+        )
+        payload = json.loads(result["content"][0]["text"])
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert [tool["name"] for tool in payload["loaded_tools"]] == requested_names
+
+
 @pytest.mark.asyncio
 async def test_adaptive_schema_load_survives_execute_tool_calls(
     hass, profile_entry_factory, monkeypatch
@@ -2249,6 +2342,29 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
         **_tool("sample_maintenance_status"),
         "llmDescription": "Handle a generic maintenance request.",
     }
+    semantic_tool = {
+        **_tool("calculate_expression"),
+        "llmDescription": (
+            "Calculate the product from value one and value two. Multiplication "
+            "uses the first value and second value. Do not forget to multiply "
+            "the values."
+        ),
+        "routingHints": {
+            "keywords": [
+                "calculate",
+                "product",
+                "value",
+                "values",
+                "one",
+                "two",
+                "first",
+                "second",
+                "multiplication",
+                "multiply",
+                "forget",
+            ]
+        },
+    }
     for query in (
         "Don't call multiply.",
         "Never multiply.",
@@ -2261,6 +2377,33 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
             agent._select_initial_adaptive_tool_names([maintenance_tool], query)
             == set()
         )
+
+    positive_idiom_queries = (
+        "Don't forget to multiply; calculate the product from value one and value two",
+        "Do not hesitate to call multiply; calculate the product from value one and value two",
+        "Do  not hesitate to call multiply; calculate the product from value one and value two",
+        "Dont forget to multiply; calculate the product from value one and value two",
+        "Never forget to multiply; calculate the product from value one and value two",
+        "Never hesitate to call multiply; calculate the product from value one and value two",
+        "Not only multiply but also calculate the product from value one and value two",
+        "Not just multiply; calculate the product from value one and value two",
+    )
+    for query in positive_idiom_queries:
+        assert score_adaptive_tool_match(semantic_tool, query) > score_adaptive_tool_match(
+            multiply_tool, query
+        )
+        result = agent._select_initial_adaptive_tool_names(
+            [semantic_tool, multiply_tool],
+            query,
+            limit=1,
+        )
+        assert result == {"multiply"}
+
+    for query, tool in (
+        ("Don't call forget.", _tool("forget")),
+        ("Don't forget to not use multiply.", multiply_tool),
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == set()
 
     for query in (
         "Do not use https://example.com. Then call sample_maintenance_status.",
