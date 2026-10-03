@@ -2922,7 +2922,8 @@ def test_adaptive_invocation_lists_have_bounded_work_when_a_name_is_an_action(mo
 
 @pytest.mark.parametrize(
     "verb", ["use", "using", "call", "calling", "run", "running", "invoke", "invoking",
-             "execute", "executing"]
+             "execute", "executing", "load", "loading", "preload", "preloading",
+             "select", "selecting", "choose", "choosing", "pick", "picking"]
 )
 @pytest.mark.parametrize("separator", [",", "and", "so", ":", "—"])
 @pytest.mark.asyncio
@@ -2940,6 +2941,35 @@ async def test_adaptive_preload_preserves_all_invocation_continuations(
         f"Never {verb} MissingTool or multiply; call add and subtract.",
     ):
         assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+
+
+@pytest.mark.parametrize(
+    "verb", ["load", "loading", "preload", "preloading", "select", "selecting",
+             "choose", "choosing", "pick", "picking"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_schema_selection_actions(
+    hass, profile_entry_factory, verb
+) -> None:
+    """Rejected schemas cannot displace requested tools in compact context."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Do not {verb} analyze_image; call add_music_to_queue and search_music_assistant.",
+        f"Do not {verb} the schemas for analyze_image; call add_music_to_queue and search_music_assistant.",
+        f"Don't {verb} MissingTool or analyze_image, {verb} add_music_to_queue and search_music_assistant.",
+        f"Do not {verb} the function named analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names, query
+    math_tools = [_tool(name) for name in ("add", "subtract", "multiply")]
+    query = f"{verb} the schemas for add and subtract."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(math_tools, query)
+    assert {name for _score, name, _tool, named in ranked if named} == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        math_tools, f"Do not {verb} any schema except multiply."
+    ) == {"multiply"}
 
 
 @pytest.mark.parametrize("phrase", ["anything but", "everything but", "all but"])

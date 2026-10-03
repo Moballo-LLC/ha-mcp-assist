@@ -223,7 +223,8 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
 )
 ADAPTIVE_TOOL_NAME_INVOCATION_WORDS = (
     "use", "using", "call", "calling", "run", "running", "invoke", "invoking",
-    "execute", "executing",
+    "execute", "executing", "load", "loading", "preload", "preloading",
+    "select", "selecting", "choose", "choosing", "pick", "picking",
 )
 ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN = (
     "(?:" + "|".join(ADAPTIVE_TOOL_NAME_INVOCATION_WORDS) + ")"
@@ -234,8 +235,8 @@ ADAPTIVE_TOOL_NAME_INVOCATION_RE = re.compile(
 )
 ADAPTIVE_TOOL_NAME_BACKTICK_RE = re.compile(r"`(?P<name>[\w-]+)`")
 ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS = frozenset(
-    {"a", "an", "the", "tool", "tools", "function", "functions", "named", "called", "both",
-     "all", "just", "only", "and", "or", "for"}
+    {"a", "an", "the", "tool", "tools", "function", "functions", "schema", "schemas",
+     "named", "called", "both", "all", "just", "only", "and", "or", "for", "of"}
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
     r"\bwhy\s+(?P<negation>not)\b", flags=re.IGNORECASE
@@ -258,7 +259,8 @@ ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(
 )
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS | {
-    "a", "an", "the", "tool", "tools", "of", "or", "and", "for", "when",
+    "a", "an", "the", "tool", "tools", "function", "functions", "schema", "schemas",
+    "named", "called", "both", "of", "or", "and", "for", "when",
     "any", "all", "other", "anything", "everything", "to"
 }
 ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
