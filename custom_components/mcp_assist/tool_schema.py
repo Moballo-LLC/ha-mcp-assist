@@ -230,6 +230,9 @@ ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE = re.compile(r"\b(?:or|and)\b|,", flags=re.IGN
 ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS = frozenset(
     {"use", "using", "call", "calling", "run", "running", "invoke", "invoking"}
 )
+ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS = frozenset(
+    {"ever", "even", "please", "again", "at", "under", "circumstances", "reason", "on", "account"}
+)
 ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(r"\bexcept(?:\s+for)?\b", flags=re.IGNORECASE)
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
@@ -886,12 +889,22 @@ def _adaptive_tool_name_polarity_tokens(
                 if (
                     name_match is None
                     or name_match.group() in known_tool_names
-                    or name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
+                    or (
+                        name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
+                        and name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                        and not name_match.group().endswith("ly")
+                    )
                 ):
                     break
                 tool_group |= name_match.group() in {"tool", "tools", "anything", "everything"}
                 action_prefix |= name_match.group() in ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS
                 word_start = name_match.end()
+            if (
+                bare_negation
+                and not action_prefix
+                and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(masked_text, word_start)
+            ):
+                continue
             if name_match is None or (
                 name_match.group() not in known_tool_names
                 and not (tool_group and name_match.group() == "except")

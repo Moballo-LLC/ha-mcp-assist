@@ -170,13 +170,13 @@ avoid an extra schema-discovery turn. Exact mentions of profile-visible tool
 names receive priority in this bounded preload, which is limited to two
 schemas. Names inside URLs or Home Assistant entity IDs do not count as
 explicit tool mentions. Recognized tool exclusions skip rejected names, while
-a separate positive request for the same tool remains eligible. Adaptive prepares request wording once for this
-preload matching step. When more schemas are needed, the model can call
+a separate positive request for the same tool remains eligible. Adaptive prepares
+request wording once for this preload matching step. When more schemas are needed, the model can call
 `load_tool_schemas` directly with exact tool names or a focused query and a
 limit of two. Query loads skip schemas already advertised to the model so
 subsequent queries can find additional tools. Exact-name batches can load up
-to eight schemas. Use the tool
-catalog to compare candidates or refine an unsuccessful lookup.
+to eight schemas. Use the tool catalog to compare candidates or refine an
+unsuccessful lookup.
 
 Light context mode keeps the profile's prompts but skips MCP Assist's optional
 tool-family prompt instructions, keeps at most two prior conversation turns, and

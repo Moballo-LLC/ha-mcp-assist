@@ -2718,6 +2718,31 @@ async def test_adaptive_preload_excludes_unavailable_tools_and_retains_positive_
     ) == {"multiply"}
 
 
+@pytest.mark.parametrize(
+    "modifier",
+    ["ever", "even", "please", "really", "actually", "directly", "explicitly", "deliberately",
+     "under any circumstances", "for any reason"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_scans_exclusion_modifiers_without_swallowing_positive_tasks(
+    hass, profile_entry_factory, modifier
+) -> None:
+    """Modifiers cannot hide a rejected name or change a positive idiom's meaning."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for prefix in ("Do not", "Never", "I cannot"):
+        query = f"{prefix} {modifier} use multiply; use add and subtract."
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"Do not {modifier} forget to call multiply.",
+        "I am not really sure whether multiply works.",
+        "Don't actually worry about multiply.",
+        "Avoid overheating by calling multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
