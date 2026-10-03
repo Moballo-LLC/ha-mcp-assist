@@ -228,7 +228,8 @@ ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
 ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE = re.compile(r"\b(?:or|and)\b|,", flags=re.IGNORECASE)
 ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS = frozenset(
-    {"use", "using", "call", "calling", "run", "running", "invoke", "invoking"}
+    {"use", "using", "call", "calling", "run", "running", "invoke", "invoking",
+     "need", "needing", "want", "wanting", "require", "requiring", "prefer", "preferring"}
 )
 ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS = frozenset(
     {"ever", "even", "please", "again", "at", "under", "circumstances", "reason", "on", "account"}
@@ -238,7 +239,8 @@ ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
     {"a", "an", "the", "tool", "tools", "use", "using", "call", "calling",
      "run", "running", "invoke", "invoking", "of", "or", "and", "for", "when",
-     "any", "all", "other", "anything", "everything"}
+     "any", "all", "other", "anything", "everything", "to", "need", "needing", "want",
+     "wanting", "require", "requiring", "prefer", "preferring"}
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
     r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE

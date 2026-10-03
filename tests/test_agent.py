@@ -2760,6 +2760,37 @@ async def test_adaptive_preload_preserves_causal_positive_continuations(
         assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
 
 
+@pytest.mark.parametrize(
+    "phrase",
+    ["don't need", "do not want", "don't require", "do not prefer", "don't need to use",
+     "do not want to call"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_requirement_and_preference_exclusions(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """A rejected exact name must not displace semantically requested tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("multiply"),
+        {**_tool("add"), "llmDescription": "Compute the sum of numbers.",
+         "routingHints": {"keywords": ["sum"]}},
+        {**_tool("subtract"), "llmDescription": "Compute the difference of numbers.",
+         "routingHints": {"keywords": ["difference"]}},
+    ]
+    for query in (
+        f"I {phrase} multiply; calculate the sum and difference.",
+        f"I {phrase} MissingEngine or multiply; use add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"I {phrase} an explanation of how multiply works; call multiply.",
+        "I don't need to know why, just call multiply.",
+    ):
+        assert "multiply" in agent._select_initial_adaptive_tool_names(tools, query)
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
