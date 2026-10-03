@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 ADAPTIVE_TOOL_CATALOG_NAME = "list_available_tools"
@@ -209,6 +210,18 @@ ADAPTIVE_BARE_DOMAIN_INTENT_RE = re.compile(
 ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     r"\b(?:but\s+not|do\s+not\s+use\s+(?:for|when)|not\s+(?:for|when)|"
     r"avoid\s+(?:for|when)|except\s+(?:for|when))\b",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
+    r"\b(?:but\s+not|do\s+not(?:\s+(?:use|call|run|invoke))?|"
+    r"don['’]?t(?:\s+(?:use|call|run|invoke))?|"
+    r"never(?:\s+(?:use|call|run|invoke))?|not|except(?:\s+for)?|"
+    r"avoid(?:\s+(?:using|for|when))?)\b",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
+    r"\b(?:but\s+(?:use|call|run|invoke)|instead\s+(?:use|call)|"
+    r"then\s+(?:use|call))\b|,\s*(?:use|call|run|invoke)\b",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS = frozenset(
@@ -758,21 +771,115 @@ def _routing_hint_text(tool: dict[str, Any], *keys: str) -> str:
     return " ".join(parts).casefold()
 
 
-def score_adaptive_tool_match(
+@dataclass(frozen=True, slots=True)
+class _PreparedAdaptiveQuery:
+    normalized_query: str
+    positive_query: str
+    positive_terms: tuple[str, ...]
+    negative_terms: frozenset[str]
+    entity_domains: frozenset[str]
+    entity_reference_terms: frozenset[str]
+    outside_entity_reference_terms: frozenset[str]
+    positive_name_tokens: frozenset[str]
+    negative_name_tokens: frozenset[str]
+
+
+def _mask_adaptive_tool_name_references(text: str) -> str:
+    """Mask recognized URLs and entity references while preserving delimiters."""
+    spans: list[tuple[int, int]] = []
+    spans.extend(
+        (match.start(), match.end())
+        for match in ADAPTIVE_EXPLICIT_URL_INTENT_RE.finditer(text)
+    )
+    for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text):
+        if _is_adaptive_entity_id_like_host(
+            match.group("host"), text=text, match=match
+        ):
+            spans.append((match.start(), match.end()))
+    if _has_adaptive_url_intent(text):
+        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text):
+            if not _is_adaptive_entity_id_like_host(
+                match.group("host"), text=text, match=match
+            ):
+                spans.append((match.start(), match.end()))
+
+    masked = list(text)
+    for start, end in spans:
+        while end > start and text[end - 1] in ".!?;,":
+            end -= 1
+        for index in range(start, end):
+            masked[index] = " "
+    return "".join(masked)
+
+
+def _adaptive_tool_name_tokens(text: str) -> frozenset[str]:
+    masked_text = _mask_adaptive_tool_name_references(text)
+    return frozenset(re.findall(r"[\w-]+", masked_text.casefold(), flags=re.UNICODE))
+
+
+def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
+    negative_words: set[str] = set()
+    for text in texts:
+        masked_text = _mask_adaptive_tool_name_references(text)
+        for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
+            tail = masked_text[match.end() :]
+            clause_end = re.search(r"[.!?;\n]", tail)
+            clause_end_index = len(tail) if clause_end is None else clause_end.start()
+            continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
+                tail[:clause_end_index]
+            )
+            if continuation is not None:
+                clause_end_index = continuation.start()
+            clause = tail[:clause_end_index]
+            negative_words.update(_adaptive_tool_name_tokens(clause))
+    return frozenset(negative_words)
+
+
+def _prepare_adaptive_query(query: str) -> _PreparedAdaptiveQuery:
+    raw_normalized_query = str(query or "").casefold()
+    normalized_query = " ".join(raw_normalized_query.split())
+    positive_query, negative_query = _split_negative_routing_text(normalized_query)
+    return _PreparedAdaptiveQuery(
+        normalized_query=normalized_query,
+        positive_query=positive_query,
+        positive_terms=tuple(normalize_adaptive_query_terms(positive_query)),
+        negative_terms=frozenset(
+            set(normalize_adaptive_query_terms(negative_query))
+            - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
+        ),
+        entity_domains=frozenset(_adaptive_entity_reference_domains(positive_query)),
+        entity_reference_terms=frozenset(
+            _adaptive_entity_reference_terms(positive_query)
+            | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
+        ),
+        outside_entity_reference_terms=frozenset(
+            _adaptive_text_terms(_strip_adaptive_entity_references(positive_query))
+        ),
+        positive_name_tokens=_adaptive_tool_name_tokens(raw_normalized_query),
+        negative_name_tokens=_adaptive_negative_tool_name_tokens(raw_normalized_query),
+    )
+
+
+def _is_adaptive_tool_name_mentioned(
+    prepared_query: _PreparedAdaptiveQuery,
+    tool_name: str,
+) -> bool:
+    normalized_name = tool_name.casefold()
+    return (
+        normalized_name in prepared_query.positive_name_tokens
+        and normalized_name not in prepared_query.negative_name_tokens
+    )
+
+
+def _score_adaptive_tool_match(
     tool: dict[str, Any],
-    query: str,
+    prepared_query: _PreparedAdaptiveQuery,
     *,
     base_tool_names: frozenset[str] = frozenset(),
+    exact_name_mentioned: bool = False,
 ) -> int:
-    """Score how well a raw tool definition matches an adaptive query."""
-    normalized_query = " ".join(str(query or "").split()).casefold()
-    positive_query, negative_query = _split_negative_routing_text(normalized_query)
-    terms = normalize_adaptive_query_terms(positive_query)
-    negative_query_terms = (
-        set(normalize_adaptive_query_terms(negative_query))
-        - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
-    )
-    if not normalized_query and not terms:
+    """Score a raw tool definition against prepared request-local query terms."""
+    if not prepared_query.normalized_query and not prepared_query.positive_terms:
         return 0
 
     name = tool_definition_name(tool).casefold()
@@ -814,6 +921,7 @@ def score_adaptive_tool_match(
     description_terms = _adaptive_text_terms(description)
     query_exclusion_terms = name_terms | keyword_terms
 
+    terms = prepared_query.positive_terms
     term_set = set(terms)
     if term_set & negative_keyword_terms:
         return 0
@@ -822,11 +930,15 @@ def score_adaptive_tool_match(
         for clause_terms in negative_routing_clause_terms
     ):
         return 0
-    if negative_query_terms and negative_query_terms <= query_exclusion_terms:
+    if prepared_query.negative_terms and prepared_query.negative_terms <= query_exclusion_terms:
         return 0
 
-    score = 0
-    if positive_query and positive_query == name:
+    score = (
+        100
+        if exact_name_mentioned and prepared_query.positive_query != name
+        else 0
+    )
+    if prepared_query.positive_query and prepared_query.positive_query == name:
         score += 100
     if terms and all(term in name_terms for term in terms):
         score += 40
@@ -852,25 +964,87 @@ def score_adaptive_tool_match(
             matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
-        entity_domains = _adaptive_entity_reference_domains(positive_query)
-        entity_reference_terms = (
-            _adaptive_entity_reference_terms(positive_query)
-            | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
-        )
-        outside_entity_reference_terms = _adaptive_text_terms(
-            _strip_adaptive_entity_references(positive_query)
-        )
         if (
             matched_terms
             and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
-            and entity_domains
-            and matched_terms <= entity_reference_terms
-            and not (matched_terms & outside_entity_reference_terms)
-            and not (matched_name_terms & entity_domains)
+            and prepared_query.entity_domains
+            and matched_terms <= prepared_query.entity_reference_terms
+            and not (matched_terms & prepared_query.outside_entity_reference_terms)
+            and not (matched_name_terms & prepared_query.entity_domains)
         ):
             return 0
         score += 1
     return score
+
+
+def score_adaptive_tool_match(
+    tool: dict[str, Any],
+    query: str,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> int:
+    """Score how well a raw tool definition matches an adaptive query."""
+    return _score_adaptive_tool_match(
+        tool,
+        _prepare_adaptive_query(query),
+        base_tool_names=base_tool_names,
+    )
+
+
+def score_adaptive_tool_matches(
+    tools: list[dict[str, Any]],
+    query: str,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> list[int]:
+    """Score a batch of raw tool definitions after preparing the query once."""
+    if not tools:
+        return []
+    prepared_query = _prepare_adaptive_query(query)
+    return [
+        _score_adaptive_tool_match(
+            tool,
+            prepared_query,
+            base_tool_names=base_tool_names,
+        )
+        for tool in tools
+    ]
+
+
+def rank_adaptive_tool_preloads(
+    tools: list[dict[str, Any]],
+    query: str,
+    *,
+    limit: int = 2,
+    minimum_score: int = 18,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> list[tuple[int, str, dict[str, Any], bool]]:
+    """Rank bounded initial preload candidates, prioritizing valid exact mentions."""
+    if not tools or limit <= 0:
+        return []
+    prepared_query = _prepare_adaptive_query(query)
+    ranked: list[tuple[int, str, dict[str, Any], bool]] = []
+    for tool in tools:
+        tool_name = tool_definition_name(tool)
+        if (
+            not tool_name
+            or tool_name in base_tool_names
+            or tool_name in ADAPTIVE_META_TOOL_NAMES
+            or tool_name.casefold() in prepared_query.negative_name_tokens
+        ):
+            continue
+        is_named = _is_adaptive_tool_name_mentioned(prepared_query, tool_name)
+        score = _score_adaptive_tool_match(
+            tool,
+            prepared_query,
+            base_tool_names=base_tool_names,
+            exact_name_mentioned=is_named,
+        )
+        if (is_named and score > 0) or score >= minimum_score:
+            ranked.append((score, tool_name, tool, is_named))
+
+    ranked.sort(key=lambda item: (-item[3], -item[0], item[1]))
+    return ranked[:limit]
 
 
 def match_adaptive_tool_definitions(
@@ -906,12 +1080,12 @@ def match_adaptive_tool_definitions(
         ][:limit]
 
     scored: list[tuple[int, str, dict[str, Any]]] = []
-    for tool in visible_tools:
-        score = score_adaptive_tool_match(
-            tool,
-            query,
-            base_tool_names=base_tool_names,
-        )
+    scores = score_adaptive_tool_matches(
+        visible_tools,
+        query,
+        base_tool_names=base_tool_names,
+    )
+    for tool, score in zip(visible_tools, scores):
         if score > 0:
             scored.append((score, tool_definition_name(tool), tool))
 
@@ -972,8 +1146,8 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": ADAPTIVE_TOOL_CATALOG_NAME,
                 "description": (
-                    "Search optional, built-in, and custom MCP tools before loading "
-                    "their full schemas."
+                    "Compare optional, built-in, and custom MCP tool candidates or "
+                    "refine an unsuccessful schema lookup."
                 ),
                 "parameters": {
                     "type": "object",
@@ -989,8 +1163,8 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": ADAPTIVE_TOOL_SCHEMA_NAME,
                 "description": (
-                    "Load full schemas for specific optional/custom tools so they can "
-                    "be called on the next turn."
+                    "Load schemas by exact tool_names, or search with a focused query "
+                    "and limit up to 2 when the tool names are unknown."
                 ),
                 "parameters": {
                     "type": "object",

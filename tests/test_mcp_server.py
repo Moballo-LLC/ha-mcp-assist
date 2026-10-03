@@ -1010,6 +1010,62 @@ async def test_external_tool_diagnostics_prefers_external_loader_payload(
     }
 
 
+def test_adaptive_query_projection_prioritizes_exact_names_with_limit(
+    hass, profile_entry_factory
+) -> None:
+    """Diagnostics mirror initial preload ranking for exact names and caps results."""
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    multiply_tool = {
+        "name": "multiply",
+        "llmDescription": "Multiply two numbers.",
+        "routingHints": {"keywords": ["multiplication", "product"]},
+    }
+    calculate_tool = {
+        "name": "calculate_expression",
+        "llmDescription": "Calculate arithmetic expressions and products.",
+        "routingHints": {
+            "keywords": ["calculate", "times", "multiply", "arithmetic", "product"]
+        },
+    }
+    numeric_tool = {
+        "name": "numeric_summary",
+        "llmDescription": "Summarize numeric calculations and results.",
+        "routingHints": {"keywords": ["calculate", "number", "result"]},
+    }
+    query = (
+        "Use multiply to calculate 247 times 83. Reply with the number only. "
+        "Do not change any state."
+    )
+    multiply_preloads = server._select_adaptive_query_preloads(
+        [calculate_tool, multiply_tool, numeric_tool],
+        query=query,
+        preload_limit=2,
+    )
+
+    assert multiply_preloads[0]["name"] == "multiply"
+    assert len(multiply_preloads) == 2
+    assert isinstance(multiply_preloads[0]["score"], int)
+
+    named_preloads = server._select_adaptive_query_preloads(
+        [
+            {
+                "name": "sample_maintenance_status",
+                "llmDescription": "Handle a generic maintenance request.",
+            },
+            calculate_tool,
+            numeric_tool,
+        ],
+        query=(
+            "Call sample_maintenance_status with only category assist_readiness. "
+            "Do not change any state."
+        ),
+        preload_limit=2,
+    )
+
+    assert named_preloads[0]["name"] == "sample_maintenance_status"
+    assert len(named_preloads) <= 2
+
+
 @pytest.mark.asyncio
 async def test_prompt_overhead_diagnostics_reports_metadata_only(
     hass, profile_entry_factory, system_entry_factory

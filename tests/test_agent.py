@@ -78,6 +78,7 @@ from custom_components.mcp_assist.const import (
 )
 
 
+from custom_components.mcp_assist import tool_schema as tool_schema_module
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
@@ -85,6 +86,7 @@ from custom_components.mcp_assist.tool_schema import (
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
     score_adaptive_tool_match,
+    score_adaptive_tool_matches,
 )
 from custom_components.mcp_assist.tools.packages.recorder.recorder import (
     RECORDER_TOOL_DEFINITIONS,
@@ -1149,6 +1151,7 @@ async def test_adaptive_prompt_uses_compact_tool_loading_guidance(
     assert "Adaptive Tool Loading" in prompt
     assert ADAPTIVE_TOOL_CATALOG_NAME in prompt
     assert ADAPTIVE_TOOL_SCHEMA_NAME in prompt
+    assert "focused query and limit: 2" in prompt
     assert "sample_tool_status" not in prompt
 
 
@@ -1935,6 +1938,60 @@ async def test_adaptive_meta_tools_catalog_and_load_schemas(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_schema_loader_searches_by_query_without_catalog_call(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A focused schema query loads at most two visible tools directly."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    profile_tools = [_tool("discover_entities"), *weather_tools, _tool("unit_convert")]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=profile_tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"query": "weather", "limit": 2},
+        )
+        payload = json.loads(result["content"][0]["text"])
+        loaded_names = {tool["name"] for tool in payload["loaded_tools"]}
+        advertised_names = {
+            tool["function"]["name"]
+            for tool in agent._build_llm_tools_for_context(profile_tools)
+        }
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    expected_names = {tool["name"] for tool in weather_tools}
+    assert score_adaptive_tool_match(weather_tools[2], "weather") >= 18
+    assert len(loaded_names) == 2
+    assert loaded_names <= expected_names
+    assert loaded_names <= advertised_names
+    assert "unit_convert" not in loaded_names
+
+
+@pytest.mark.asyncio
 async def test_adaptive_schema_load_survives_execute_tool_calls(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -2054,6 +2111,169 @@ async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
         agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
     assert "get_weather_forecast" in loaded_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_prioritizes_exact_tool_name_mentions(
+    hass, profile_entry_factory
+) -> None:
+    """An exact eligible name mention outranks semantic candidates within the cap."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    multiply_tool = {
+        **_tool("multiply"),
+        "llmDescription": "Multiply two numbers.",
+        "routingHints": {"keywords": ["multiplication", "product"]},
+    }
+    tools = [
+        _tool("discover_entities"),
+        {
+            **_tool("calculate_expression"),
+            "llmDescription": "Calculate arithmetic expressions and products.",
+            "routingHints": {
+                "keywords": ["calculate", "times", "multiply", "arithmetic", "product"]
+            },
+        },
+        multiply_tool,
+        {
+            **_tool("numeric_summary"),
+            "llmDescription": "Summarize numeric calculations and results.",
+            "routingHints": {"keywords": ["calculate", "number", "result"]},
+        },
+    ]
+    query = (
+        "Use multiply to calculate 247 times 83. Reply with the number only. "
+        "Do not change any state."
+    )
+    assert score_adaptive_tool_match(tools[1], query) > score_adaptive_tool_match(
+        multiply_tool, query
+    )
+    result = agent._select_initial_adaptive_tool_names(tools, query)
+
+    assert "multiply" in result
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_prioritizes_hyphenated_tool_name(
+    hass, profile_entry_factory
+) -> None:
+    """Hyphenated eligible names stay whole and outrank semantic candidates."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    named_tool = {
+        **_tool("weather-forecast"),
+        "llmDescription": "Return weather forecast information.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    semantic_tool = {
+        **_tool("weather_summary"),
+        "llmDescription": (
+            "Summarize weather, forecast, temperature, humidity, wind, pressure, "
+            "and hourly conditions."
+        ),
+        "routingHints": {
+            "keywords": ["weather", "forecast", "temperature", "humidity", "wind", "pressure", "hourly"]
+        },
+    }
+    query = (
+        "Call weather-forecast and include temperature, humidity, wind, pressure, "
+        "and hourly conditions."
+    )
+
+    assert score_adaptive_tool_match(semantic_tool, query) > score_adaptive_tool_match(
+        named_tool, query
+    )
+    result = agent._select_initial_adaptive_tool_names(
+        [_tool("discover_entities"), semantic_tool, named_tool],
+        query,
+    )
+
+    assert "weather-forecast" in result
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_exact_snake_case_name_below_score_threshold(
+    hass, profile_entry_factory
+) -> None:
+    """An exact snake-case tool name can preload when metadata scores poorly."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    named_tool = {
+        **_tool("sample_maintenance_status"),
+        "llmDescription": "Handle a generic maintenance request.",
+        "description": "Return a generic result.",
+    }
+    tools = [_tool("discover_entities"), named_tool]
+    query = (
+        "Call sample_maintenance_status with only category assist_readiness. "
+        "Do not change any state."
+    )
+
+    assert score_adaptive_tool_match(named_tool, query) < 18
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "sample_maintenance_status"
+    }
+
+
+def test_adaptive_preload_name_tokens_exclude_negation_urls_and_entity_ids() -> None:
+    """Only positive exact tool-name tokens can receive preload priority."""
+    for query, excluded_names in (
+        ("Use weather, but do not use multiply.", ["multiply"]),
+        ("Don't call multiply.", ["multiply"]),
+        ("Never multiply.", ["multiply"]),
+        ("What is sensor.foo?", ["sensor", "foo"]),
+        ("Summarize https://example.com", ["example", "com", "example_com"]),
+    ):
+        prepared = tool_schema_module._prepare_adaptive_query(query)
+        assert all(
+            not tool_schema_module._is_adaptive_tool_name_mentioned(prepared, name)
+            for name in excluded_names
+        )
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_skips_negated_exact_tool_name(
+    hass, profile_entry_factory
+) -> None:
+    """A negated exact tool name cannot preload from that same clause."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    multiply_tool = {
+        **_tool("multiply"),
+        "llmDescription": "Multiply numbers and calculate a product.",
+        "routingHints": {"keywords": ["multiply", "calculate", "product"]},
+    }
+    maintenance_tool = {
+        **_tool("sample_maintenance_status"),
+        "llmDescription": "Handle a generic maintenance request.",
+    }
+    for query in (
+        "Don't call multiply.",
+        "Never multiply.",
+        "Do not use sensor.foo or sample_maintenance_status.",
+        "Do not use sensor.foo, sample_maintenance_status.",
+        "Do not use https://example.com or sample_maintenance_status.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([multiply_tool], query) == set()
+        assert (
+            agent._select_initial_adaptive_tool_names([maintenance_tool], query)
+            == set()
+        )
+
+    for query in (
+        "Do not use https://example.com. Then call sample_maintenance_status.",
+        "Do not use other_tool but use sample_maintenance_status.",
+        "Use weather, but not other_tool; call sample_maintenance_status.",
+        "Use weather, but not other_tool but use sample_maintenance_status.",
+        "Do not use other_tool, call sample_maintenance_status.",
+    ):
+        result = agent._select_initial_adaptive_tool_names(
+            [maintenance_tool, _tool("other_tool")],
+            query,
+        )
+        assert result == {"sample_maintenance_status"}
 
 
 @pytest.mark.asyncio
@@ -2270,6 +2490,65 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_batch_scoring_prepares_query_once_and_reuses_no_tool_state(
+    monkeypatch,
+) -> None:
+    """Batch scoring shares query work only within a call and reflects new schemas."""
+    tools = [
+        {
+            "name": "get_weather_forecast",
+            "llmDescription": "Get weather forecasts.",
+            "description": "Get weather for the requested date.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            "name": "analyze_entity_history",
+            "llmDescription": "Analyze entity history and event counts.",
+            "description": "Review recorded state changes.",
+            "routingHints": {"keywords": ["history", "recorder"]},
+        },
+        {
+            "name": "web_search",
+            "llmDescription": "Search the web for pages.",
+            "description": "Find information online.",
+            "routingHints": {"keywords": ["search", "web"]},
+        },
+    ]
+    queries = (
+        "Weather today, but not tomorrow",
+        "¿Qué tiempo hará mañana?",
+        "What is sensor.compressor_power?",
+    )
+
+    for query in queries:
+        expected = [score_adaptive_tool_match(tool, query) for tool in tools]
+        assert score_adaptive_tool_matches(tools, query) == expected
+
+    calls = 0
+    original_normalize = tool_schema_module.normalize_adaptive_query_terms
+
+    def count_normalize(query: str) -> list[str]:
+        nonlocal calls
+        calls += 1
+        return original_normalize(query)
+
+    monkeypatch.setattr(
+        tool_schema_module,
+        "normalize_adaptive_query_terms",
+        count_normalize,
+    )
+    score_adaptive_tool_matches(tools, "What is the weather tomorrow?")
+    assert calls == 2
+
+    tools[0]["name"] = "custom_lookup"
+    tools[0]["llmDescription"] = "Look up a generic value."
+    tools[0]["description"] = "Return a generic result."
+    tools[0]["routingHints"] = {"keywords": ["lookup", "value"]}
+    calls = 0
+    assert score_adaptive_tool_matches(tools[:1], "What is the weather tomorrow?") == [0]
+    assert calls == 2
 
 
 def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:

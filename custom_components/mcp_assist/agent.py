@@ -59,6 +59,7 @@ from .tool_schema import (
     json_size_bytes,
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
+    rank_adaptive_tool_preloads,
     score_adaptive_tool_match,
     tool_definition_name,
 )
@@ -1245,8 +1246,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             "## Adaptive Tool Loading\n"
             "- Start with the advertised Home Assistant tools for entity discovery and control.\n"
             "- When a request needs optional, built-in package, or custom tools, "
-            f"call {ADAPTIVE_TOOL_CATALOG_NAME} with a short query, then call "
-            f"{ADAPTIVE_TOOL_SCHEMA_NAME} for the exact tool names you need.\n"
+            f"call {ADAPTIVE_TOOL_SCHEMA_NAME} directly with exact tool_names when "
+            "known, or a focused query and limit: 2.\n"
+            f"- Use {ADAPTIVE_TOOL_CATALOG_NAME} to compare candidates or refine an "
+            "unsuccessful lookup.\n"
             "- Do not ask the user to approve tool discovery; use these routing "
             "tools in the same turn when needed."
         )
@@ -3385,7 +3388,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         minimum_score: int = 18,
     ) -> frozenset[str]:
         """Return highly likely optional tool schemas to preload for this request."""
-        scored: list[tuple[int, str]] = []
+        eligible_tools: list[tuple[str, Dict[str, Any]]] = []
         loaded_names = _adaptive_loaded_tool_names()
         for tool in tools:
             tool_name = self._tool_definition_name(tool)
@@ -3396,16 +3399,16 @@ class MCPAssistConversationEntity(ConversationEntity):
                 or tool_name in ADAPTIVE_META_TOOL_NAMES
             ):
                 continue
-            score = score_adaptive_tool_match(
-                tool,
-                user_text,
-                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
-            )
-            if score >= minimum_score:
-                scored.append((score, tool_name))
+            eligible_tools.append((tool_name, tool))
 
-        scored.sort(key=lambda item: (-item[0], item[1]))
-        return frozenset(name for _score, name in scored[:limit])
+        ranked = rank_adaptive_tool_preloads(
+            [tool for _tool_name, tool in eligible_tools],
+            user_text,
+            limit=limit,
+            minimum_score=minimum_score,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
+        return frozenset(tool_name for _score, tool_name, _tool, _named in ranked)
 
     @staticmethod
     def _is_bounded_adaptive_follow_up(user_text: str) -> bool:
