@@ -2873,6 +2873,38 @@ async def test_adaptive_natural_verbs_do_not_displace_specific_semantic_tools(
     assert all(not named for _score, name, _tool, named in ranked if name in {"add", "search"})
 
 
+@pytest.mark.parametrize("excluded_name", ["search", "add"])
+@pytest.mark.asyncio
+async def test_adaptive_ordinary_verbs_cannot_cancel_explicit_tool_exclusions(
+    hass, profile_entry_factory, excluded_name
+) -> None:
+    """An ordinary task verb cannot re-enable a rejected one-word tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {**_tool(excluded_name), "llmDescription": "Search Music Assistant albums and add to queue.",
+         "routingHints": {"keywords": ["search", "music", "assistant", "album", "add", "queue"]}},
+        {**_tool("search_music_assistant"), "llmDescription": "Search Music Assistant albums.",
+         "routingHints": {"keywords": ["music", "assistant", "album"]}},
+        {**_tool("add_music_to_queue"), "llmDescription": "Add Music Assistant albums to the queue.",
+         "routingHints": {"keywords": ["music", "assistant", "album", "queue"]}},
+    ]
+    query = (
+        f"Do not use {excluded_name}; search Music Assistant for an album "
+        "and add it to the queue."
+    )
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "search_music_assistant", "add_music_to_queue"
+    }
+    for query in (
+        f"Do not use {excluded_name} for web content; call {excluded_name} for Music Assistant.",
+        f"Do not use {excluded_name} for web content; use `{excluded_name}` for Music Assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            tools, query, limit=1
+        ) == {excluded_name}
+
+
 @pytest.mark.parametrize(
     ("query", "expected"),
     [("Call add and subtract.", {"add", "subtract"}),
@@ -2970,6 +3002,50 @@ async def test_adaptive_preload_respects_schema_selection_actions(
     assert agent._select_initial_adaptive_tool_names(
         math_tools, f"Do not {verb} any schema except multiply."
     ) == {"multiply"}
+
+
+@pytest.mark.parametrize(
+    "modifier", ["please", "directly", "quietly", "really", "actually", "please directly",
+                 "why not", "why not please"]
+)
+@pytest.mark.parametrize("separator", [",", "and", "so"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_polite_and_modified_positive_continuations(
+    hass, profile_entry_factory, modifier, separator
+) -> None:
+    """Polite wording cannot extend an exclusion over the next requested action."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    query = (
+        f"Do not use analyze_image {separator} {modifier} call "
+        "add_music_to_queue and search_music_assistant."
+    )
+    assert agent._select_initial_adaptive_tool_names(tools, query) == music_names
+
+
+def test_adaptive_modified_continuation_scan_has_bounded_work(monkeypatch):
+    """Long conjunction lists must not restart unbounded modifier scans."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    query = "Do not use multiply " + "and please " * 2000 + "and please call add and subtract."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(
+        [_tool(name) for name in ("multiply", "add", "subtract")], query
+    )
+    assert {name for _score, name, _tool, _named in ranked} == {"add", "subtract"}
+    assert calls < 10000
 
 
 @pytest.mark.parametrize("phrase", ["anything but", "everything but", "all but"])

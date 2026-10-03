@@ -241,9 +241,8 @@ ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS = frozenset(
 ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
     r"\bwhy\s+(?P<negation>not)\b", flags=re.IGNORECASE
 )
-ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
-    rf"\b(?:but|and|so|therefore|thus|hence|then|instead)\s+{ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN}\b|"
-    rf"(?:[,:–—]|(?<=\s)-)\s*{ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN}\b",
+ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE = re.compile(
+    r"\b(?:but|and|so|therefore|thus|hence|then|instead)\b|[,:–—]|(?<=\s)-",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
@@ -904,6 +903,38 @@ def _explicit_adaptive_tool_name_tokens(
     return frozenset(explicit)
 
 
+def _find_adaptive_tool_name_positive_continuation(
+    text: str, start: int, end: int | None = None, *, match_only: bool = False
+) -> re.Match[str] | None:
+    end = len(text) if end is None else end
+    anchors = (
+        (ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE.match(text, start, end),)
+        if match_only
+        else ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE.finditer(text, start, end)
+    )
+    for anchor in anchors:
+        if anchor is None:
+            continue
+        cursor = anchor.end()
+        for _ in range(5):
+            while cursor < end and text[cursor].isspace():
+                cursor += 1
+            suggestion = ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE.match(text, cursor, end)
+            if suggestion is not None:
+                cursor = suggestion.end()
+                continue
+            token = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, cursor, end)
+            if token is None:
+                break
+            word = token.group().casefold()
+            if word in ADAPTIVE_TOOL_NAME_INVOCATION_WORDS:
+                return anchor
+            if word not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS and not word.endswith("ly"):
+                break
+            cursor = token.end()
+    return None
+
+
 def _adaptive_tool_name_polarity_tokens(
     text: str,
     known_tool_names: frozenset[str] | None = None,
@@ -959,7 +990,9 @@ def _adaptive_tool_name_polarity_tokens(
                     masked_text[word_start].isspace() or masked_text[word_start] in "`,'\""
                 ):
                     if masked_text[word_start] == "," and (
-                        ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.match(masked_text, word_start)
+                        _find_adaptive_tool_name_positive_continuation(
+                            masked_text, word_start, match_only=True
+                        )
                     ):
                         break
                     word_start += 1
@@ -1026,7 +1059,7 @@ def _adaptive_tool_name_polarity_tokens(
                 )
                 if boundary is not None:
                     scan_end = boundary.start()
-                continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
+                continuation = _find_adaptive_tool_name_positive_continuation(
                     masked_text, match.end(), scan_end
                 )
                 if continuation is not None:
@@ -1065,7 +1098,7 @@ def _adaptive_tool_name_polarity_tokens(
                     continue
         clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
         clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
-        continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
+        continuation = _find_adaptive_tool_name_positive_continuation(
             masked_text, match.end(), clause_end_index
         )
         if continuation is not None:
@@ -1092,7 +1125,7 @@ def _adaptive_tool_name_polarity_tokens(
             positive_name_text, positive_words, known_tool_names
         )
     )
-    return positive_names, frozenset(negative_words - positive_words)
+    return positive_names, frozenset(negative_words - positive_names)
 
 
 def _prepare_adaptive_query(
