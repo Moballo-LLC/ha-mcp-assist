@@ -221,8 +221,8 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
-    r"\b(?:(?:but|and)\s+(?:use|call|run|invoke)|instead\s+(?:use|call)|"
-    r"then\s+(?:use|call))\b|(?:[,:–—]|(?<=\s)-)\s*(?:use|call|run|invoke)\b",
+    r"\b(?:but|and|so|therefore|thus|hence|then|instead)\s+(?:use|call|run|invoke)\b|"
+    r"(?:[,:–—]|(?<=\s)-)\s*(?:use|call|run|invoke)\b",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")

@@ -2743,6 +2743,23 @@ async def test_adaptive_preload_scans_exclusion_modifiers_without_swallowing_pos
         assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
 
 
+@pytest.mark.parametrize("connector", ["so", "therefore", "thus", "hence", "then", "instead"])
+@pytest.mark.parametrize("action", ["use", "call", "run", "invoke"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_causal_positive_continuations(
+    hass, profile_entry_factory, connector, action
+) -> None:
+    """A rejected tool cannot swallow the next requested action in its clause."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"Do not use multiply, {connector} {action} add and subtract.",
+        f"Never use MissingEngine or multiply {connector} {action} add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
