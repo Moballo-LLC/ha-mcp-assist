@@ -830,8 +830,8 @@ def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
                 "not",
             }
             positive_idiom = re.match(
-                r"\s+(?:(?:to\s+)?(?:forget|hesitate)|only|just)\b",
-                tail,
+                r"(?:forget|hesitate|only|just)\b",
+                tail.lstrip(),
                 re.IGNORECASE,
             )
             if bare_negation and positive_idiom:
