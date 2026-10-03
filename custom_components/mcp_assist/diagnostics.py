@@ -71,6 +71,19 @@ def _configured(entry: ConfigEntry, key: str, default: Any = None) -> Any:
     return entry.options.get(key, entry.data.get(key, default))
 
 
+def _shared_setting(entry: ConfigEntry, server: Any, key: str, default: Any) -> Any:
+    """Read shared configuration with the running server's legacy profile fallback."""
+    value = _configured(entry, key)
+    if value is not None:
+        return value
+    profile = getattr(server, "entry", None)
+    if isinstance(profile, ConfigEntry):
+        value = _configured(profile, key)
+        if value is not None:
+            return value
+    return default
+
+
 def _choice(value: Any, choices: frozenset[str]) -> str:
     return value if isinstance(value, str) and value in choices else "unknown"
 
@@ -139,12 +152,15 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
         "boundary": "configuration_and_cached_metadata_not_provider_or_device_health",
     }
     if shared:
-        result["server_runtime_present"] = domain_data.get("shared_mcp_server") is not None
-        result["external_tools_enabled"] = _configured(
-            entry, const.CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+        server = domain_data.get("shared_mcp_server")
+        result["server_runtime_present"] = server is not None
+        result["external_tools_enabled"] = bool(_shared_setting(
+            entry, server, const.CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
             const.DEFAULT_ENABLE_EXTERNAL_CUSTOM_TOOLS,
-        ) is True
-        result["bearer_auth_configured"] = bool(_configured(entry, const.CONF_MCP_BEARER_TOKEN))
+        ))
+        result["bearer_auth_configured"] = bool(str(_shared_setting(
+            entry, server, const.CONF_MCP_BEARER_TOKEN, const.DEFAULT_MCP_BEARER_TOKEN,
+        ) or "").strip())
         return result
     provider = _choice(
         _configured(entry, const.CONF_SERVER_TYPE, const.DEFAULT_SERVER_TYPE), _PROVIDERS

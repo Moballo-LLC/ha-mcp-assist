@@ -18,7 +18,10 @@ configured. Prompt modes follow the conversation agent's backward-compatible
 inference when older entries do not store an explicit mode, including localized
 system defaults and per-profile option overrides. Model-profile references use
 the same whitespace normalization as the agent; blank references select the
-explicit model instead.
+explicit model instead. Shared diagnostics preserve the running server's legacy
+fallback to its owning profile when a system setting is absent or null; explicit
+system overrides still take precedence. Whitespace-only bearer values do not
+enable MCP bearer authentication.
 
 The download omits credentials, endpoint addresses, profile/model names, prompts,
 entity data, paths, conversation history, and tool schemas. It reads existing

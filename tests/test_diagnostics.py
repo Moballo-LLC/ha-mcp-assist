@@ -8,6 +8,7 @@ import pytest
 from custom_components.mcp_assist import const
 from custom_components.mcp_assist import diagnostics as diagnostics_module
 from custom_components.mcp_assist.localization import get_language_instruction
+from custom_components.mcp_assist.mcp_server import MCPServer
 from custom_components.mcp_assist.diagnostics import (
     async_get_config_entry_diagnostics,
     build_assist_diagnostics,
@@ -250,3 +251,46 @@ def test_profile_reference_selection_matches_runtime_normalization(
     resolution = result["image_profile_resolution" if image else "model_profile_resolution"]
     assert resolution == ("runtime_unavailable" if expected == "profile" else "not_applicable")
     assert "example-profile" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("system_values", [
+    {},
+    {"enable_external_custom_tools": None, "mcp_bearer_token": None},
+    {"enable_external_custom_tools": False, "mcp_bearer_token": ""},
+    {"enable_external_custom_tools": True, "mcp_bearer_token": " \t\n"},
+])
+@pytest.mark.parametrize("system_storage", ["data", "options"])
+@pytest.mark.parametrize("profile_storage", ["data", "options"])
+def test_shared_diagnostics_match_legacy_server_setting_precedence(
+    hass, system_entry_factory, profile_entry_factory,
+    system_values, system_storage, profile_storage,
+):
+    fallback = {"enable_external_custom_tools": True, "mcp_bearer_token": "synthetic-shared-secret"}
+    profile = profile_entry_factory(**{profile_storage: fallback})
+    entry = system_entry_factory()
+    data = {key: value for key, value in entry.data.items() if key not in fallback}
+    hass.config_entries.async_update_entry(
+        entry,
+        data={**data, **system_values} if system_storage == "data" else data,
+        options=system_values if system_storage == "options" else {},
+    )
+    server = MCPServer(hass, 8099, profile)
+    hass.data["mcp_assist"] = {"shared_mcp_server": server}
+    result = build_assist_diagnostics(hass, entry)
+    assert result["external_tools_enabled"] is bool(server._get_shared_setting(
+        "enable_external_custom_tools", False,
+    ))
+    assert result["bearer_auth_configured"] is bool(str(server._get_shared_setting(
+        "mcp_bearer_token", "",
+    ) or "").strip())
+    assert server.tools is None
+    assert "synthetic-shared-secret" not in json.dumps(result)
+
+
+def test_unloaded_shared_diagnostics_without_settings_use_defaults(hass, system_entry_factory):
+    entry = system_entry_factory()
+    hass.config_entries.async_update_entry(entry, data={})
+    result = build_assist_diagnostics(hass, entry)
+    assert result["server_runtime_present"] is False
+    assert result["external_tools_enabled"] is False
+    assert result["bearer_auth_configured"] is False
