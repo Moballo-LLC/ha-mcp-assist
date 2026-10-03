@@ -2920,6 +2920,28 @@ def test_adaptive_invocation_lists_have_bounded_work_when_a_name_is_an_action(mo
     assert calls < 2100
 
 
+@pytest.mark.parametrize(
+    "verb", ["use", "using", "call", "calling", "run", "running", "invoke", "invoking",
+             "execute", "executing"]
+)
+@pytest.mark.parametrize("separator", [",", "and", "so", ":", "—"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_all_invocation_continuations(
+    hass, profile_entry_factory, verb, separator
+) -> None:
+    """Invocation verbs share the same polarity boundaries and named priority."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    query = f"Do not use multiply {separator} {verb} add and subtract."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"Do not {verb} multiply; call add and subtract.",
+        f"Never {verb} MissingTool or multiply; call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+
+
 @pytest.mark.parametrize("phrase", ["anything but", "everything but", "all but"])
 @pytest.mark.asyncio
 async def test_adaptive_preload_handles_anything_but_exclusions_and_permissions(
