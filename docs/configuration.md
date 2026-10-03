@@ -58,8 +58,10 @@ OpenClaw uses gateway settings instead of the generic server URL field. Configur
 the gateway host, port, bearer token, and SSL setting from your OpenClaw gateway.
 The default gateway port is `18789`. MCP Assist uses OpenClaw gateway protocol 4
 device authentication, while retaining protocol 3 as its minimum negotiation
-version. The gateway challenge must be received and signed before a new device
-can appear for pairing approval.
+version. Changes to gateway host, port, bearer credential, and SSL in a profile's
+options take precedence over the original saved values when the profile reloads.
+The gateway challenge must be received and signed before a new device can appear
+for pairing approval.
 
 Hermes Agent support is experimental. Configure its API-server URL, normally
 `http://localhost:8642`, an optional API key, and a stable **Memory Session

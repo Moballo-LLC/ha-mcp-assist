@@ -18,6 +18,7 @@ from custom_components.mcp_assist import (
     async_unload_entry,
     ensure_system_entry,
 )
+from custom_components.mcp_assist.diagnostics import build_assist_diagnostics
 from custom_components.mcp_assist.const import (
     CONF_ALLOWED_IPS,
     CONF_ALLOW_QUERY_TOKEN_AUTH,
@@ -681,3 +682,44 @@ async def test_release_rebinds_server_when_owner_entry_removed(
     # IP/auth state is refreshed so the survivor's host is allowed post-rebind.
     mcp_server._refresh_allowed_ips_from_settings.assert_called_once()
     mcp_server._refresh_mcp_auth_from_settings.assert_called_once()
+
+
+@pytest.mark.parametrize("overrides", [
+    {},
+    {"openclaw_host": "options.example.invalid", "openclaw_port": 18889,
+     "openclaw_token": "synthetic-option-token", "openclaw_use_ssl": False},
+    {"openclaw_token": ""},
+])
+async def test_openclaw_setup_and_diagnostics_use_effective_connection_options(
+    hass, profile_entry_factory, system_entry_factory, overrides,
+):
+    saved = {"openclaw_host": "saved.example.invalid", "openclaw_port": 18789,
+             "openclaw_token": "synthetic-saved-token", "openclaw_use_ssl": True}
+    entry = profile_entry_factory(data={"server_type": "openclaw", **saved}, options=overrides)
+    system_entry_factory()
+    device_auth = object()
+    hass.data.setdefault(DOMAIN, {})["openclaw_device_auth"] = device_auth
+    client = SimpleNamespace(connect=AsyncMock())
+    with (
+        patch("custom_components.mcp_assist.IndexManager", return_value=SimpleNamespace(
+            start=AsyncMock(),
+        )),
+        patch("custom_components.mcp_assist.MCPServer", return_value=SimpleNamespace(
+            start=AsyncMock(), stop=AsyncMock(),
+        )),
+        patch(
+            "custom_components.mcp_assist.openclaw_client.OpenClawClient", return_value=client,
+        ) as factory,
+        patch.object(
+            hass.config_entries, "async_forward_entry_setups", AsyncMock(return_value=True),
+        ),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+    expected = {**saved, **overrides}
+    for field in ("host", "port", "token", "use_ssl"):
+        assert factory.call_args.kwargs[field] == expected[f"openclaw_{field}"]
+    assert factory.call_args.kwargs["device_auth"] is device_auth
+    client.connect.assert_awaited_once()
+    diagnostics = build_assist_diagnostics(hass, entry)
+    assert diagnostics["credential_configured"] is bool(factory.call_args.kwargs["token"])
+    assert "synthetic-" not in str(diagnostics)
