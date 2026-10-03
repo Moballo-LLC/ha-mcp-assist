@@ -224,6 +224,7 @@ ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
+ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
     r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE
 )
@@ -815,7 +816,10 @@ def _mask_adaptive_tool_name_references(text: str) -> str:
     return "".join(masked)
 
 
-def _adaptive_tool_name_polarity_tokens(text: str) -> tuple[frozenset[str], frozenset[str]]:
+def _adaptive_tool_name_polarity_tokens(
+    text: str,
+    known_tool_names: frozenset[str] | None = None,
+) -> tuple[frozenset[str], frozenset[str]]:
     """Separate positive occurrences from bounded excluded name clauses."""
     masked_text = _mask_adaptive_tool_name_references(text)
     positive_text = list(masked_text)
@@ -824,7 +828,8 @@ def _adaptive_tool_name_polarity_tokens(text: str) -> tuple[frozenset[str], froz
     for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
         if match.start() < covered_until:
             continue
-        bare_negation = " ".join(match.group().casefold().split()) in {
+        negation = " ".join(match.group().casefold().split())
+        bare_negation = negation in {
             "don't",
             "dont",
             "don’t",
@@ -839,6 +844,26 @@ def _adaptive_tool_name_polarity_tokens(text: str) -> tuple[frozenset[str], froz
             masked_text, word_start
         ):
             continue
+        if known_tool_names is not None and negation.startswith(("avoid", "except")):
+            while True:
+                while word_start < len(masked_text) and (
+                    masked_text[word_start].isspace() or masked_text[word_start] in "`'\""
+                ):
+                    word_start += 1
+                name_match = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(masked_text, word_start)
+                if (
+                    name_match is None
+                    or name_match.group() in known_tool_names
+                    or name_match.group() not in (
+                        {"a", "an", "the", "tool", "tools"}
+                        | ({"use", "using", "call", "calling", "run", "running",
+                            "invoke", "invoking", "of"} if negation.startswith("avoid") else set())
+                    )
+                ):
+                    break
+                word_start = name_match.end()
+            if name_match is None or name_match.group() not in known_tool_names:
+                continue
         clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
         clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
         continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
@@ -848,20 +873,24 @@ def _adaptive_tool_name_polarity_tokens(text: str) -> tuple[frozenset[str], froz
             clause_end_index = continuation.start()
         covered_until = clause_end_index
         negative_words.update(
-            re.findall(r"[\w-]+", masked_text[match.end() : clause_end_index], flags=re.UNICODE)
+            ADAPTIVE_TOOL_NAME_TOKEN_RE.findall(masked_text, match.end(), clause_end_index)
         )
         for index in range(match.start(), clause_end_index):
             positive_text[index] = " "
-    positive_words = frozenset(re.findall(r"[\w-]+", "".join(positive_text), flags=re.UNICODE))
+    positive_words = frozenset(ADAPTIVE_TOOL_NAME_TOKEN_RE.findall("".join(positive_text)))
     return positive_words, frozenset(negative_words - positive_words)
 
 
-def _prepare_adaptive_query(query: str) -> _PreparedAdaptiveQuery:
+def _prepare_adaptive_query(
+    query: str,
+    *,
+    known_tool_names: frozenset[str] | None = None,
+) -> _PreparedAdaptiveQuery:
     raw_normalized_query = str(query or "").casefold()
     normalized_query = " ".join(raw_normalized_query.split())
     positive_query, negative_query = _split_negative_routing_text(normalized_query)
     positive_name_tokens, negative_name_tokens = _adaptive_tool_name_polarity_tokens(
-        raw_normalized_query
+        raw_normalized_query, known_tool_names
     )
     return _PreparedAdaptiveQuery(
         normalized_query=normalized_query,
@@ -1046,7 +1075,10 @@ def rank_adaptive_tool_preloads(
     """Rank bounded initial preload candidates, prioritizing valid exact mentions."""
     if not tools or limit <= 0:
         return []
-    prepared_query = _prepare_adaptive_query(query)
+    prepared_query = _prepare_adaptive_query(
+        query,
+        known_tool_names=frozenset(tool_definition_name(tool).casefold() for tool in tools),
+    )
     ranked: list[tuple[int, str, dict[str, Any], bool]] = []
     for tool in tools:
         tool_name = tool_definition_name(tool)

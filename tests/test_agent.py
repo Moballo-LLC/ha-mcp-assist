@@ -2467,6 +2467,37 @@ async def test_adaptive_preload_excludes_tools_after_instead_of(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_preload_keeps_tools_for_positive_avoid_and_except_tasks(
+    hass, profile_entry_factory
+) -> None:
+    """Task descriptions cannot turn a later named tool into an exclusion."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("energy_advisor", "python_exception_help")]
+    for query, name in (
+        ("How can I avoid wasting energy with energy_advisor?", "energy_advisor"),
+        ("Avoid using excess energy with energy_advisor.", "energy_advisor"),
+        ("Explain an except block using python_exception_help.", "python_exception_help"),
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query, limit=1) == {name}
+    for query in (
+        "Avoid energy_advisor.",
+        "Avoid using `energy_advisor`.",
+        "Avoid the energy_advisor tool.",
+        "Avoid using the tool energy_advisor.",
+        "Avoid calling energy_advisor.",
+        "Avoid invoking energy_advisor.",
+        "Avoid running energy_advisor.",
+        "Avoid use of energy_advisor.",
+        "Use energy_advisor except python_exception_help.",
+        "Use energy_advisor except for 'python_exception_help'.",
+        "Use energy_advisor except for the tool python_exception_help.",
+    ):
+        selected = agent._select_initial_adaptive_tool_names(tools, query)
+        assert selected == ({"energy_advisor"} if query.startswith("Use") else set())
+
+
+@pytest.mark.asyncio
 async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
