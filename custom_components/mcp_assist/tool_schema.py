@@ -885,8 +885,25 @@ def _adaptive_tool_name_polarity_tokens(
                 name_match.group() not in known_tool_names
                 and not (tool_group and name_match.group() == "except")
             ):
-                if name_match is None or not action_prefix:
+                if name_match is None:
                     continue
+                if not action_prefix:
+                    if bare_negation:
+                        continue
+                    alternative_start = name_match.end()
+                    while (
+                        alternative_start < len(masked_text)
+                        and (
+                            masked_text[alternative_start].isspace()
+                            or masked_text[alternative_start] in "`'\""
+                        )
+                    ):
+                        alternative_start += 1
+                    if not (
+                        ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.match(masked_text, alternative_start)
+                        or ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, alternative_start)
+                    ):
+                        continue
                 next_negation = ADAPTIVE_TOOL_NAME_NEGATION_RE.search(masked_text, name_match.end())
                 scan_end = len(masked_text) if next_negation is None else next_negation.start()
                 boundary = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(

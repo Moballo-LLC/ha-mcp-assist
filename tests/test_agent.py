@@ -2668,6 +2668,34 @@ async def test_adaptive_preload_excludes_known_alternatives_after_unknown_names(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_preload_scans_actionless_exclusion_alternatives(
+    hass, profile_entry_factory
+) -> None:
+    """Unknown list items remain excluded without swallowing uncertainty phrases."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("web_search")]
+    for query in (
+        "Without ExampleEngine or web_search.",
+        "No ExampleEngine or web_search.",
+        "Avoid ExampleEngine and web_search.",
+        "Instead of ExampleEngine or web_search, use a local answer.",
+        "Without ExampleEngine, web_search, or missing_tool.",
+        "Without `ExampleEngine` or `web_search`.",
+        "No 'ExampleEngine' or \"web_search\".",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == set(), query
+    for query in (
+        "No idea whether ExampleEngine or web_search can help.",
+        "Without knowing whether ExampleEngine or web_search is available, call web_search.",
+        "Avoid overheating while checking ExampleEngine or web_search for advice.",
+        "Without ExampleEngine, call web_search instead.",
+        "No ExampleEngine except for web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"web_search"}, query
+
+
+@pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
 ) -> None:
@@ -2921,7 +2949,8 @@ def test_adaptive_preload_processes_repeated_negations_once_per_clause(monkeypat
     assert calls == 1
 
 
-def test_adaptive_unknown_alternative_scan_has_bounded_work(monkeypatch) -> None:
+@pytest.mark.parametrize("prefix", ["Do not use", "No", "Without", "Avoid"])
+def test_adaptive_unknown_alternative_scan_has_bounded_work(monkeypatch, prefix) -> None:
     """Repeated list connectors cannot make exclusion scanning revisit the tail."""
     original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
     calls = 0
@@ -2940,7 +2969,7 @@ def test_adaptive_unknown_alternative_scan_has_bounded_work(monkeypatch) -> None
         {"name": "web_search", "llmDescription": "Search the web."},
         {"name": "weather", "llmDescription": "Read a forecast."},
     ]
-    query = "Do not use MissingEngine " + "or " * 2000 + "web_search; call weather."
+    query = prefix + " MissingEngine " + "or " * 2000 + "web_search; call weather."
     ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
 
     assert [name for _score, name, _tool, _named in ranked] == ["weather"]
