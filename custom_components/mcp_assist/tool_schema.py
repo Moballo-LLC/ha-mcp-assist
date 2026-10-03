@@ -216,13 +216,14 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"\b(?:but\s+not|do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|"
     r"couldn['’]?t|unable\s+to|not\s+able\s+to|never|not|without|no|instead\s+of|"
     r"rather\s+than|"
-    r"except(?:\s+for)?|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
+    r"except(?:\s+for)?|(?:anything|everything|all)\s+but|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
     r"disregard(?:ing)?|reject(?:ing)?|disallow(?:ing)?|forb(?:id|idding)|"
     r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_INVOCATION_RE = re.compile(
-    r"(?<![\w-])(?:use|using|call|calling|run|running|invoke|invoking|execute|executing|except)"
+    r"(?<![\w-])(?:use|using|call|calling|run|running|invoke|invoking|execute|executing|except|"
+    r"(?:anything|everything|all)\s+but)"
     r"(?![\w-])", flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_BACKTICK_RE = re.compile(r"`(?P<name>[\w-]+)`")
@@ -247,7 +248,9 @@ ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS = frozenset(
 ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS = frozenset(
     {"ever", "even", "please", "again", "at", "under", "circumstances", "reason", "on", "account"}
 )
-ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(r"\bexcept(?:\s+for)?\b", flags=re.IGNORECASE)
+ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(
+    r"\b(?:except(?:\s+for)?|(?:anything|everything|all)\s+but)\b", flags=re.IGNORECASE
+)
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = frozenset(
     {"a", "an", "the", "tool", "tools", "use", "using", "call", "calling",
@@ -914,7 +917,8 @@ def _adaptive_tool_name_polarity_tokens(
         if match.start() < covered_until or match.start() in positive_suggestion_offsets:
             continue
         negation = " ".join(match.group().casefold().split())
-        if negation.startswith("except") and match.start() < negative_exception_until:
+        is_exception = negation.startswith("except") or negation.endswith(" but")
+        if is_exception and match.start() < negative_exception_until:
             negative_exception_until = 0
             continue
         bare_negation = negation in {
@@ -965,7 +969,9 @@ def _adaptive_tool_name_polarity_tokens(
                     )
                 ):
                     break
-                tool_group |= name_match.group() in {"tool", "tools", "anything", "everything"}
+                tool_group |= name_match.group() in {
+                    "tool", "tools", "anything", "everything", "any", "all"
+                }
                 action_prefix |= name_match.group() in ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS
                 word_start = name_match.end()
             if (
@@ -987,7 +993,7 @@ def _adaptive_tool_name_polarity_tokens(
                 continue
             if name_match is None or (
                 name_match.group() not in known_tool_names
-                and not (tool_group and name_match.group() == "except")
+                and not (tool_group and name_match.group() in {"except", "but"})
             ):
                 if name_match is None:
                     continue
@@ -1023,7 +1029,9 @@ def _adaptive_tool_name_polarity_tokens(
                 known_alternative = (
                     next_negation is not None
                     and scan_end == next_negation.start()
-                    and next_negation.group().casefold().startswith("except")
+                    and ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(
+                        masked_text, next_negation.start()
+                    ) is not None
                 )
                 for alternative in ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.finditer(
                     masked_text, name_match.end(), scan_end
@@ -1057,7 +1065,7 @@ def _adaptive_tool_name_polarity_tokens(
         )
         if continuation is not None:
             clause_end_index = continuation.start()
-        if not negation.startswith("except"):
+        if not is_exception:
             negative_exception_until = clause_end_index
             exception = ADAPTIVE_TOOL_NAME_EXCEPTION_RE.search(
                 masked_text, match.end(), clause_end_index

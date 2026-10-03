@@ -2920,6 +2920,31 @@ def test_adaptive_invocation_lists_have_bounded_work_when_a_name_is_an_action(mo
     assert calls < 2100
 
 
+@pytest.mark.parametrize("phrase", ["anything but", "everything but", "all but"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_handles_anything_but_exclusions_and_permissions(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """The excluded identifier cannot displace requested music schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Use add_music_to_queue and search_music_assistant, {phrase} analyze_image.",
+        f"{phrase} MissingTool or analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names
+    permission_tools = [_tool("multiply"), _tool("other_tool")]
+    for query in (
+        f"Do not use {phrase} multiply.",
+        f"I don't want {phrase} multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            permission_tools, query, limit=1
+        ) == {"multiply"}, query
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
