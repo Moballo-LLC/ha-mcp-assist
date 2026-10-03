@@ -2416,12 +2416,39 @@ async def test_adaptive_preload_skips_negated_exact_tool_name(
         "Use weather, but not other_tool; call sample_maintenance_status.",
         "Use weather, but not other_tool but use sample_maintenance_status.",
         "Do not use other_tool, call sample_maintenance_status.",
+        "Avoid other_tool and call sample_maintenance_status instead.",
+        "Avoid other_tool and use sample_maintenance_status instead.",
+        "Avoid other_tool and run sample_maintenance_status instead.",
+        "Avoid other_tool and invoke sample_maintenance_status instead.",
     ):
         result = agent._select_initial_adaptive_tool_names(
             [maintenance_tool, _tool("other_tool")],
             query,
         )
         assert result == {"sample_maintenance_status"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_positive_occurrences_of_negated_names(
+    hass, profile_entry_factory
+) -> None:
+    """A scoped exclusion cannot hide the same tool requested elsewhere."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tool = {**_tool("multiply"), "llmDescription": "Multiply two numbers."}
+    for query in (
+        "Do not use multiply for floats; call multiply for integers.",
+        "Call multiply for integers; do not use multiply for floats.",
+        "Avoid multiply for floats and call multiply for integers instead.",
+        "Without multiply for floats. Use multiply for integers.",
+        "Never multiply floats; never multiply integers. Call multiply for decimals.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == {"multiply"}
+    for query in (
+        "Do not use multiply for floats; never multiply integers.",
+        "Never multiply floats and do not use multiply for integers.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == set()
 
 
 @pytest.mark.asyncio
@@ -2659,7 +2686,7 @@ def test_adaptive_preload_processes_repeated_negations_once_per_clause(monkeypat
     ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
 
     assert [name for _score, name, _tool, _named in ranked] == ["get_weather_forecast"]
-    assert calls == 3
+    assert calls == 1
 
 
 def test_adaptive_batch_scoring_prepares_query_once_and_reuses_no_tool_state(

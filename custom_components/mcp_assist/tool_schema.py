@@ -218,7 +218,7 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
-    r"\b(?:but\s+(?:use|call|run|invoke)|instead\s+(?:use|call)|"
+    r"\b(?:(?:but|and)\s+(?:use|call|run|invoke)|instead\s+(?:use|call)|"
     r"then\s+(?:use|call))\b|(?:[,:–—]|(?<=\s)-)\s*(?:use|call|run|invoke)\b",
     flags=re.IGNORECASE,
 )
@@ -814,51 +814,54 @@ def _mask_adaptive_tool_name_references(text: str) -> str:
     return "".join(masked)
 
 
-def _adaptive_tool_name_tokens(text: str) -> frozenset[str]:
+def _adaptive_tool_name_polarity_tokens(text: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Separate positive occurrences from bounded excluded name clauses."""
     masked_text = _mask_adaptive_tool_name_references(text)
-    return frozenset(re.findall(r"[\w-]+", masked_text.casefold(), flags=re.UNICODE))
-
-
-def _adaptive_negative_tool_name_tokens(*texts: str) -> frozenset[str]:
+    positive_text = list(masked_text)
     negative_words: set[str] = set()
-    for text in texts:
-        masked_text = _mask_adaptive_tool_name_references(text)
-        covered_until = 0
-        for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
-            if match.start() < covered_until:
-                continue
-            bare_negation = " ".join(match.group().casefold().split()) in {
-                "don't",
-                "dont",
-                "don’t",
-                "do not",
-                "never",
-                "not",
-            }
-            word_start = match.end()
-            while word_start < len(masked_text) and masked_text[word_start].isspace():
-                word_start += 1
-            if bare_negation and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(
-                masked_text, word_start
-            ):
-                continue
-            clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
-            clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
-            continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
-                masked_text, match.end(), clause_end_index
-            )
-            if continuation is not None:
-                clause_end_index = continuation.start()
-            covered_until = clause_end_index
-            clause = masked_text[match.end() : clause_end_index]
-            negative_words.update(_adaptive_tool_name_tokens(clause))
-    return frozenset(negative_words)
+    covered_until = 0
+    for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
+        if match.start() < covered_until:
+            continue
+        bare_negation = " ".join(match.group().casefold().split()) in {
+            "don't",
+            "dont",
+            "don’t",
+            "do not",
+            "never",
+            "not",
+        }
+        word_start = match.end()
+        while word_start < len(masked_text) and masked_text[word_start].isspace():
+            word_start += 1
+        if bare_negation and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(
+            masked_text, word_start
+        ):
+            continue
+        clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
+        clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
+        continuation = ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE.search(
+            masked_text, match.end(), clause_end_index
+        )
+        if continuation is not None:
+            clause_end_index = continuation.start()
+        covered_until = clause_end_index
+        negative_words.update(
+            re.findall(r"[\w-]+", masked_text[match.end() : clause_end_index], flags=re.UNICODE)
+        )
+        for index in range(match.start(), clause_end_index):
+            positive_text[index] = " "
+    positive_words = frozenset(re.findall(r"[\w-]+", "".join(positive_text), flags=re.UNICODE))
+    return positive_words, frozenset(negative_words - positive_words)
 
 
 def _prepare_adaptive_query(query: str) -> _PreparedAdaptiveQuery:
     raw_normalized_query = str(query or "").casefold()
     normalized_query = " ".join(raw_normalized_query.split())
     positive_query, negative_query = _split_negative_routing_text(normalized_query)
+    positive_name_tokens, negative_name_tokens = _adaptive_tool_name_polarity_tokens(
+        raw_normalized_query
+    )
     return _PreparedAdaptiveQuery(
         normalized_query=normalized_query,
         positive_query=positive_query,
@@ -875,8 +878,8 @@ def _prepare_adaptive_query(query: str) -> _PreparedAdaptiveQuery:
         outside_entity_reference_terms=frozenset(
             _adaptive_text_terms(_strip_adaptive_entity_references(positive_query))
         ),
-        positive_name_tokens=_adaptive_tool_name_tokens(raw_normalized_query),
-        negative_name_tokens=_adaptive_negative_tool_name_tokens(raw_normalized_query),
+        positive_name_tokens=positive_name_tokens,
+        negative_name_tokens=negative_name_tokens,
     )
 
 

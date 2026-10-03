@@ -168,8 +168,9 @@ capabilities. For obvious requests, Adaptive may preload a small number of
 high-confidence optional tool schemas from the user's wording so the model can
 avoid an extra schema-discovery turn. Exact mentions of profile-visible tool
 names receive priority in this bounded preload, which is limited to two
-schemas; names in negated phrases, URLs, or Home Assistant entity IDs do not
-count as explicit mentions. Adaptive prepares request wording once for this
+schemas. Names found only in negated phrases, URLs, or Home Assistant entity
+IDs do not count as explicit mentions. A separate positive request for the
+same tool remains eligible. Adaptive prepares request wording once for this
 preload matching step. When more schemas are needed, the model can call
 `load_tool_schemas` directly with exact tool names or a focused query and a
 limit of two. Exact-name batches can load up to eight schemas. Use the tool
