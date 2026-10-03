@@ -59,6 +59,7 @@ from .tool_schema import (
     json_size_bytes,
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
+    rank_adaptive_tool_preloads,
     score_adaptive_tool_match,
     tool_definition_name,
 )
@@ -1245,8 +1246,10 @@ class MCPAssistConversationEntity(ConversationEntity):
             "## Adaptive Tool Loading\n"
             "- Start with the advertised Home Assistant tools for entity discovery and control.\n"
             "- When a request needs optional, built-in package, or custom tools, "
-            f"call {ADAPTIVE_TOOL_CATALOG_NAME} with a short query, then call "
-            f"{ADAPTIVE_TOOL_SCHEMA_NAME} for the exact tool names you need.\n"
+            f"call {ADAPTIVE_TOOL_SCHEMA_NAME} directly with exact tool_names when "
+            "known, or a focused query and limit: 2.\n"
+            f"- Use {ADAPTIVE_TOOL_CATALOG_NAME} to compare candidates or refine an "
+            "unsuccessful lookup.\n"
             "- Do not ask the user to approve tool discovery; use these routing "
             "tools in the same turn when needed."
         )
@@ -3353,7 +3356,10 @@ class MCPAssistConversationEntity(ConversationEntity):
         entry: dict[str, Any] = {
             "name": tool_name,
             "summary": summary,
-            "schema_loaded": tool_name in _adaptive_loaded_tool_names(),
+            "schema_loaded": (
+                tool_name in LIGHT_CONTEXT_TOOL_NAMES
+                or tool_name in _adaptive_loaded_tool_names()
+            ),
         }
         if family:
             entry["family"] = family
@@ -3385,7 +3391,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         minimum_score: int = 18,
     ) -> frozenset[str]:
         """Return highly likely optional tool schemas to preload for this request."""
-        scored: list[tuple[int, str]] = []
+        eligible_tools: list[tuple[str, Dict[str, Any]]] = []
         loaded_names = _adaptive_loaded_tool_names()
         for tool in tools:
             tool_name = self._tool_definition_name(tool)
@@ -3396,16 +3402,16 @@ class MCPAssistConversationEntity(ConversationEntity):
                 or tool_name in ADAPTIVE_META_TOOL_NAMES
             ):
                 continue
-            score = score_adaptive_tool_match(
-                tool,
-                user_text,
-                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
-            )
-            if score >= minimum_score:
-                scored.append((score, tool_name))
+            eligible_tools.append((tool_name, tool))
 
-        scored.sort(key=lambda item: (-item[0], item[1]))
-        return frozenset(name for _score, name in scored[:limit])
+        ranked = rank_adaptive_tool_preloads(
+            [tool for _tool_name, tool in eligible_tools],
+            user_text,
+            limit=limit,
+            minimum_score=minimum_score,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
+        return frozenset(tool_name for _score, tool_name, _tool, _named in ranked)
 
     @staticmethod
     def _is_bounded_adaptive_follow_up(user_text: str) -> bool:
@@ -3566,14 +3572,25 @@ class MCPAssistConversationEntity(ConversationEntity):
             requested_names = self._normalize_requested_tool_names(
                 arguments.get("tool_names")
             )
+            if requested_names or not query:
+                default_limit, maximum_limit = 8, 8
+            else:
+                default_limit, maximum_limit = 2, 2
             limit = self._bounded_int(
                 arguments.get("limit"),
-                default=8,
+                default=default_limit,
                 minimum=1,
-                maximum=8,
+                maximum=maximum_limit,
             )
+            candidate_tools = profile_tools
+            if query and not requested_names:
+                advertised_names = LIGHT_CONTEXT_TOOL_NAMES | _adaptive_loaded_tool_names()
+                candidate_tools = [
+                    tool for tool in profile_tools
+                    if self._tool_definition_name(tool) not in advertised_names
+                ]
             matches = self._match_adaptive_tool_definitions(
-                profile_tools,
+                candidate_tools,
                 query=query,
                 tool_names=requested_names,
                 limit=limit,
@@ -3593,6 +3610,9 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "next_step": (
                     "The loaded tool schemas will be available in the next model "
                     "call. Use the loaded tool directly if it is needed to answer."
+                    if matched_names else
+                    "No additional schemas matched. Use already advertised tools, "
+                    f"refine the query, or inspect {ADAPTIVE_TOOL_CATALOG_NAME}."
                 ),
             }
         else:
