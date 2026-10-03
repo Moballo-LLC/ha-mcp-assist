@@ -2791,6 +2791,28 @@ async def test_adaptive_preload_respects_requirement_and_preference_exclusions(
         assert "multiply" in agent._select_initial_adaptive_tool_names(tools, query)
 
 
+@pytest.mark.parametrize(
+    "query",
+    ["Why not call multiply to calculate this?", "Why not use multiply instead of add?",
+     "Why not just run multiply?", "WHY\nNOT invoke multiply?",
+     "Why not call multiply, but don't call add?"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_positive_why_not_suggestions(
+    hass, profile_entry_factory, query
+) -> None:
+    """Positive suggestions stay eligible while independent exclusions still apply."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add")]
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}
+    for negative_query in (
+        "I cannot use multiply; why not call add?",
+        "Why not avoid multiply and call add?",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, negative_query) == {"add"}
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory

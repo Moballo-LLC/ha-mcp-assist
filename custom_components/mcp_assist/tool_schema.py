@@ -220,6 +220,9 @@ ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"avoid(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
 )
+ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
+    r"\bwhy\s+(?P<negation>not)\b", flags=re.IGNORECASE
+)
 ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_RE = re.compile(
     r"\b(?:but|and|so|therefore|thus|hence|then|instead)\s+(?:use|call|run|invoke)\b|"
     r"(?:[,:–—]|(?<=\s)-)\s*(?:use|call|run|invoke)\b",
@@ -839,12 +842,16 @@ def _adaptive_tool_name_polarity_tokens(
 ) -> tuple[frozenset[str], frozenset[str]]:
     """Separate positive occurrences from bounded excluded name clauses."""
     masked_text = _mask_adaptive_tool_name_references(text)
+    positive_suggestion_offsets = frozenset(
+        match.start("negation")
+        for match in ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE.finditer(masked_text)
+    )
     positive_text = list(masked_text)
     negative_words: set[str] = set()
     covered_until = 0
     negative_exception_until = 0
     for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
-        if match.start() < covered_until:
+        if match.start() < covered_until or match.start() in positive_suggestion_offsets:
             continue
         negation = " ".join(match.group().casefold().split())
         if negation.startswith("except") and match.start() < negative_exception_until:
