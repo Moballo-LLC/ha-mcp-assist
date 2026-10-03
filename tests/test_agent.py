@@ -2695,6 +2695,29 @@ async def test_adaptive_preload_scans_actionless_exclusion_alternatives(
         assert agent._select_initial_adaptive_tool_names(tools, query) == {"web_search"}, query
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    ["can't", "can’t", "cant", "cannot", "could not", "couldn't", "couldn’t", "couldnt",
+     "unable to", "not able to"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_excludes_unavailable_tools_and_retains_positive_idioms(
+    hass, profile_entry_factory, prefix
+) -> None:
+    """Inability wording must not crowd requested alternatives out of the preload."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"I {prefix} use multiply; use add and subtract.",
+        f"I {prefix} use MissingEngine or multiply; use add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        tools, f"I {prefix} forget to call multiply."
+    ) == {"multiply"}
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory
