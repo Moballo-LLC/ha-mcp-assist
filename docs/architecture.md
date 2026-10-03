@@ -49,6 +49,10 @@ when a request fails or is cancelled.
 
 ## Core MCP Server
 
+Supported JSON-RPC methods accept named parameter objects. Malformed parameter
+envelopes, tool arguments, or tool contexts return `-32602` (invalid params)
+before dispatch. They do not execute tools or prevent later valid requests.
+
 The MCP server exposes a stable set of core tools:
 
 - indexing and entity discovery

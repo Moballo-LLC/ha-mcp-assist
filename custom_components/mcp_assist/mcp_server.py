@@ -2190,6 +2190,22 @@ class MCPServer(
         params = data.get("params", {})
         msg_id = data.get("id")
 
+        if method in ("initialize", "tools/list", "tools/call") and (
+            not isinstance(params, dict)
+            or (
+                method == "tools/call"
+                and (
+                    not isinstance(params.get("arguments", {}), dict)
+                    or ("context" in params and not isinstance(params["context"], dict))
+                )
+            )
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": "Invalid params: expected objects"},
+                "id": msg_id,
+            }
+
         _LOGGER.debug(
             "Processing MCP method: %s",
             _sanitize_log_value(method),
