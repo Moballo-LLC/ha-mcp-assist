@@ -3073,6 +3073,38 @@ async def test_adaptive_preload_handles_anything_but_exclusions_and_permissions(
         ) == {"multiply"}, query
 
 
+@pytest.mark.parametrize(
+    "phrase", ["with the exception of", "with exception of", "with the exceptions of",
+               "other than", "apart from", "save for", "barring"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_handles_exception_phrases_and_permitted_tools(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """Exception wording rejects alternatives but permits exceptions to a prohibition."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Use add_music_to_queue and search_music_assistant, {phrase} analyze_image.",
+        f"{phrase} MissingTool or analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names, query
+    permission_tools = [_tool("multiply"), _tool("other_tool")]
+    for query in (
+        f"Do not use any tool {phrase} multiply.",
+        f"I don't want any tool {phrase} multiply.",
+        f"Do not use MissingTool {phrase} multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            permission_tools, query, limit=1
+        ) == {"multiply"}, query
+    assert agent._select_initial_adaptive_tool_names(
+        permission_tools, f"Use other_tool {phrase} multiply."
+    ) == {"other_tool"}
+
+
 @pytest.mark.asyncio
 async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     hass, profile_entry_factory

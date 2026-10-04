@@ -212,11 +212,15 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     r"avoid\s+(?:for|when)|except\s+(?:for|when))\b",
     flags=re.IGNORECASE,
 )
+ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN = (
+    r"(?:except(?:\s+for)?|with\s+(?:the\s+)?exceptions?\s+of|other\s+than|"
+    r"apart\s+from|save\s+for|barring|(?:anything|everything|all)\s+but)"
+)
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     r"\b(?:but\s+not|do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|"
     r"couldn['’]?t|unable\s+to|not\s+able\s+to|never|not|without|no|instead\s+of|"
     r"rather\s+than|"
-    r"except(?:\s+for)?|(?:anything|everything|all)\s+but|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
+    rf"{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN}|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
     r"disregard(?:ing)?|reject(?:ing)?|disallow(?:ing)?|forb(?:id|idding)|"
     r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
     flags=re.IGNORECASE,
@@ -230,8 +234,8 @@ ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN = (
     "(?:" + "|".join(ADAPTIVE_TOOL_NAME_INVOCATION_WORDS) + ")"
 )
 ADAPTIVE_TOOL_NAME_INVOCATION_RE = re.compile(
-    rf"(?<![\w-])(?:{ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN}|except|"
-    r"(?:anything|everything|all)\s+but)(?![\w-])", flags=re.IGNORECASE,
+    rf"(?<![\w-])(?:{ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN}|"
+    rf"{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN})(?![\w-])", flags=re.IGNORECASE,
 )
 ADAPTIVE_TOOL_NAME_BACKTICK_RE = re.compile(r"`(?P<name>[\w-]+)`")
 ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS = frozenset(
@@ -254,7 +258,7 @@ ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS = frozenset(
     {"ever", "even", "please", "again", "at", "under", "circumstances", "reason", "on", "account"}
 )
 ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(
-    r"\b(?:except(?:\s+for)?|(?:anything|everything|all)\s+but)\b", flags=re.IGNORECASE
+    rf"\b{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN}\b", flags=re.IGNORECASE
 )
 ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
 ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS | {
@@ -953,7 +957,7 @@ def _adaptive_tool_name_polarity_tokens(
         if match.start() < covered_until or match.start() in positive_suggestion_offsets:
             continue
         negation = " ".join(match.group().casefold().split())
-        is_exception = negation.startswith("except") or negation.endswith(" but")
+        is_exception = ADAPTIVE_TOOL_NAME_EXCEPTION_RE.fullmatch(negation) is not None
         if is_exception and match.start() < negative_exception_until:
             negative_exception_until = 0
             continue
@@ -1001,6 +1005,11 @@ def _adaptive_tool_name_polarity_tokens(
                     name_match is None
                     or name_match.group() in known_tool_names
                     or (
+                        tool_group
+                        and ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, word_start)
+                        is not None
+                    )
+                    or (
                         name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
                         and name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
                         and not name_match.group().endswith("ly")
@@ -1031,7 +1040,13 @@ def _adaptive_tool_name_polarity_tokens(
                 continue
             if name_match is None or (
                 name_match.group() not in known_tool_names
-                and not (tool_group and name_match.group() in {"except", "but"})
+                and not (
+                    tool_group and (
+                        name_match.group() in {"except", "but"}
+                        or ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, word_start)
+                        is not None
+                    )
+                )
             ):
                 if name_match is None:
                     continue
