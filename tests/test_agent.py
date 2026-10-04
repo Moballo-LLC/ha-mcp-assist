@@ -78,6 +78,7 @@ from custom_components.mcp_assist.const import (
 )
 
 
+from custom_components.mcp_assist import tool_schema as tool_schema_module
 from custom_components.mcp_assist.tool_schema import (
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
@@ -85,6 +86,7 @@ from custom_components.mcp_assist.tool_schema import (
     match_adaptive_tool_definitions,
     normalize_adaptive_query_terms,
     score_adaptive_tool_match,
+    score_adaptive_tool_matches,
 )
 from custom_components.mcp_assist.tools.packages.recorder.recorder import (
     RECORDER_TOOL_DEFINITIONS,
@@ -1149,6 +1151,7 @@ async def test_adaptive_prompt_uses_compact_tool_loading_guidance(
     assert "Adaptive Tool Loading" in prompt
     assert ADAPTIVE_TOOL_CATALOG_NAME in prompt
     assert ADAPTIVE_TOOL_SCHEMA_NAME in prompt
+    assert "focused query and limit: 2" in prompt
     assert "sample_tool_status" not in prompt
 
 
@@ -1935,6 +1938,265 @@ async def test_adaptive_meta_tools_catalog_and_load_schemas(
 
 
 @pytest.mark.asyncio
+async def test_adaptive_schema_loader_searches_by_query_without_catalog_call(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A focused schema query loads at most two visible tools directly."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    profile_tools = [_tool("discover_entities"), *weather_tools, _tool("unit_convert")]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=profile_tools),
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"query": "weather", "limit": 2},
+        )
+        payload = json.loads(result["content"][0]["text"])
+        loaded_names = {tool["name"] for tool in payload["loaded_tools"]}
+        advertised_names = {
+            tool["function"]["name"]
+            for tool in agent._build_llm_tools_for_context(profile_tools)
+        }
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    expected_names = {tool["name"] for tool in weather_tools}
+    assert score_adaptive_tool_match(weather_tools[2], "weather") >= 18
+    assert len(loaded_names) == 2
+    assert loaded_names <= expected_names
+    assert loaded_names <= advertised_names
+    assert "unit_convert" not in loaded_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_query_schema_loader_skips_advertised_tools_before_limit(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Focused queries advance beyond existing schemas while named loads stay explicit."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {**_tool(name), "llmDescription": "Get weather forecasts."}
+        for name in ("discover_entities", "weather_a", "weather_b", "weather_c")
+    ]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset({"weather_a", "weather_b"}))
+    try:
+        first = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+        )
+        first_payload = json.loads(first["content"][0]["text"])
+        assert [tool["name"] for tool in first_payload["loaded_tools"]] == ["weather_c"]
+        repeat = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+        )
+        repeat_payload = json.loads(repeat["content"][0]["text"])
+        assert repeat_payload["loaded_tools"] == []
+        assert "No additional schemas matched" in repeat_payload["next_step"]
+        named = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"tool_names": ["weather_a"]}
+        )
+        named_payload = json.loads(named["content"][0]["text"])
+        assert [tool["name"] for tool in named_payload["loaded_tools"]] == ["weather_a"]
+        catalog = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_CATALOG_NAME, {"query": "weather"}
+        )
+        entries = json.loads(catalog["content"][0]["text"])["tools"]
+        assert {tool["name"] for tool in entries} == {tool["name"] for tool in tools}
+        assert all(tool["schema_loaded"] for tool in entries)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_queries_reach_all_visible_schemas_and_preserve_full_mode(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Compact startup does not remove capabilities needed by a deep request."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    optional_names = {f"weather_operation_{index}" for index in range(9)}
+    tools = [_tool("discover_entities")] + [
+        {**_tool(name), "llmDescription": "Read weather information."}
+        for name in sorted(optional_names)
+    ]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    preloaded = frozenset(sorted(optional_names)[:2])
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(preloaded)
+    try:
+        initial = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert initial & optional_names == preloaded
+        seen = set(preloaded)
+        for _ in range(5):
+            result = await agent._handle_adaptive_meta_tool(
+                ADAPTIVE_TOOL_SCHEMA_NAME, {"query": "weather"}
+            )
+            payload = json.loads(result["content"][0]["text"])
+            loaded = {tool["name"] for tool in payload["loaded_tools"]}
+            assert len(loaded) <= 2
+            assert not loaded & seen
+            seen.update(loaded)
+        assert seen == optional_names
+        expanded = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert optional_names <= expanded
+        standard_entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_STANDARD})
+        standard_agent = MCPAssistConversationEntity(hass, standard_entry)
+        standard = {
+            tool["function"]["name"]
+            for tool in standard_agent._build_llm_tools_for_context(tools)
+        }
+        assert standard == {tool["name"] for tool in tools}
+        assert standard <= expanded
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_explicit_eight_name_load_retains_profile_visibility(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """Explicit large batches remain available without loading hidden names."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    names = [f"custom_operation_{index}" for index in range(8)]
+    monkeypatch.setattr(
+        agent, "_get_profile_mcp_tools", AsyncMock(return_value=[_tool(name) for name in names])
+    )
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": [*names, "hidden_tool"], "query": "custom operation", "limit": 8},
+        )
+        payload = json.loads(result["content"][0]["text"])
+        assert [tool["name"] for tool in payload["loaded_tools"]] == names
+        assert payload["not_found"] == ["hidden_tool"]
+        assert agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get() == set(names)
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
+@pytest.mark.parametrize("provided_limit", [None, 8])
+@pytest.mark.asyncio
+async def test_adaptive_query_schema_loader_caps_at_two(
+    hass, profile_entry_factory, monkeypatch, provided_limit
+) -> None:
+    """Query-based schema loading stays capped at two with default or larger limit."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    profile_tools = [_tool("discover_entities"), *weather_tools]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=profile_tools),
+    )
+    arguments = {"query": "weather"}
+    if provided_limit is not None:
+        arguments["limit"] = provided_limit
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            arguments,
+        )
+        payload = json.loads(result["content"][0]["text"])
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert len(payload["loaded_tools"]) == 2
+    assert len(payload["loaded_tools"]) < len(weather_tools)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_schema_loader_keeps_explicit_three_name_batch(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """An explicit name batch can load three schemas even when it includes a query."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    weather_tools = [
+        {
+            **_tool("get_weather_forecast"),
+            "llmDescription": "Get a weather forecast.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            **_tool("compare_weather_sources"),
+            "llmDescription": "Compare weather reports.",
+            "routingHints": {"keywords": ["weather", "reports"]},
+        },
+        {
+            **_tool("weather_alerts"),
+            "llmDescription": "Find weather alerts.",
+            "routingHints": {"keywords": ["weather", "alerts"]},
+        },
+    ]
+    monkeypatch.setattr(
+        agent,
+        "_get_profile_mcp_tools",
+        AsyncMock(return_value=[_tool("discover_entities"), *weather_tools]),
+    )
+    requested_names = [tool["name"] for tool in weather_tools]
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+
+    try:
+        result = await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME,
+            {"tool_names": requested_names, "query": "weather", "limit": 3},
+        )
+        payload = json.loads(result["content"][0]["text"])
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+    assert [tool["name"] for tool in payload["loaded_tools"]] == requested_names
+
+
+@pytest.mark.asyncio
 async def test_adaptive_schema_load_survives_execute_tool_calls(
     hass, profile_entry_factory, monkeypatch
 ) -> None:
@@ -2054,6 +2316,910 @@ async def test_adaptive_preloads_obvious_optional_tool_from_user_query(
         agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
     assert "get_weather_forecast" in loaded_names
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_prioritizes_exact_tool_name_mentions(
+    hass, profile_entry_factory
+) -> None:
+    """An exact eligible name mention outranks semantic candidates within the cap."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    multiply_tool = {
+        **_tool("multiply"),
+        "llmDescription": "Multiply two numbers.",
+        "routingHints": {"keywords": ["multiplication", "product"]},
+    }
+    tools = [
+        _tool("discover_entities"),
+        {
+            **_tool("calculate_expression"),
+            "llmDescription": "Calculate arithmetic expressions and products.",
+            "routingHints": {
+                "keywords": ["calculate", "times", "multiply", "arithmetic", "product"]
+            },
+        },
+        multiply_tool,
+        {
+            **_tool("numeric_summary"),
+            "llmDescription": "Summarize numeric calculations and results.",
+            "routingHints": {"keywords": ["calculate", "number", "result"]},
+        },
+    ]
+    query = (
+        "Use multiply to calculate 247 times 83. Reply with the number only. "
+        "Do not change any state."
+    )
+    assert score_adaptive_tool_match(tools[1], query) > score_adaptive_tool_match(
+        multiply_tool, query
+    )
+    result = agent._select_initial_adaptive_tool_names(tools, query)
+
+    assert "multiply" in result
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_prioritizes_hyphenated_tool_name(
+    hass, profile_entry_factory
+) -> None:
+    """Hyphenated eligible names stay whole and outrank semantic candidates."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    named_tool = {
+        **_tool("weather-forecast"),
+        "llmDescription": "Return weather forecast information.",
+        "routingHints": {"keywords": ["weather", "forecast"]},
+    }
+    semantic_tool = {
+        **_tool("weather_summary"),
+        "llmDescription": (
+            "Summarize weather, forecast, temperature, humidity, wind, pressure, "
+            "and hourly conditions."
+        ),
+        "routingHints": {
+            "keywords": ["weather", "forecast", "temperature", "humidity", "wind", "pressure", "hourly"]
+        },
+    }
+    query = (
+        "Call weather-forecast and include temperature, humidity, wind, pressure, "
+        "and hourly conditions."
+    )
+
+    assert score_adaptive_tool_match(semantic_tool, query) > score_adaptive_tool_match(
+        named_tool, query
+    )
+    result = agent._select_initial_adaptive_tool_names(
+        [_tool("discover_entities"), semantic_tool, named_tool],
+        query,
+    )
+
+    assert "weather-forecast" in result
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preloads_exact_snake_case_name_below_score_threshold(
+    hass, profile_entry_factory
+) -> None:
+    """An exact snake-case tool name can preload when metadata scores poorly."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    named_tool = {
+        **_tool("sample_maintenance_status"),
+        "llmDescription": "Handle a generic maintenance request.",
+        "description": "Return a generic result.",
+    }
+    tools = [_tool("discover_entities"), named_tool]
+    query = (
+        "Call sample_maintenance_status with only category assist_readiness. "
+        "Do not change any state."
+    )
+
+    assert score_adaptive_tool_match(named_tool, query) < 18
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "sample_maintenance_status"
+    }
+
+
+def test_adaptive_preload_name_tokens_exclude_negation_urls_and_entity_ids() -> None:
+    """Only positive exact tool-name tokens can receive preload priority."""
+    for query, excluded_names in (
+        ("Use weather, but do not use multiply.", ["multiply"]),
+        ("Don't call multiply.", ["multiply"]),
+        ("Never multiply.", ["multiply"]),
+        ("What is sensor.foo?", ["sensor", "foo"]),
+        ("Summarize https://example.com", ["example", "com", "example_com"]),
+    ):
+        prepared = tool_schema_module._prepare_adaptive_query(query)
+        assert all(
+            not tool_schema_module._is_adaptive_tool_name_mentioned(prepared, name)
+            for name in excluded_names
+        )
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_skips_negated_exact_tool_name(
+    hass, profile_entry_factory
+) -> None:
+    """A negated exact tool name cannot preload from that same clause."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    multiply_tool = {
+        **_tool("multiply"),
+        "llmDescription": "Multiply numbers and calculate a product.",
+        "routingHints": {"keywords": ["multiply", "calculate", "product"]},
+    }
+    maintenance_tool = {
+        **_tool("sample_maintenance_status"),
+        "llmDescription": "Handle a generic maintenance request.",
+    }
+    semantic_tool = {
+        **_tool("calculate_expression"),
+        "llmDescription": (
+            "Calculate the product from value one and value two. Multiplication "
+            "uses the first value and second value. Do not forget to multiply "
+            "the values."
+        ),
+        "routingHints": {
+            "keywords": [
+                "calculate",
+                "product",
+                "value",
+                "values",
+                "one",
+                "two",
+                "first",
+                "second",
+                "multiplication",
+                "multiply",
+                "forget",
+            ]
+        },
+    }
+    for query in (
+        "Don't call multiply.",
+        "Never multiply.",
+        "Calculate without multiply.",
+        "No multiply.",
+        "Do not use sensor.foo or sample_maintenance_status.",
+        "Do not use sensor.foo, sample_maintenance_status.",
+        "Do not use https://example.com or sample_maintenance_status.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([multiply_tool], query) == set()
+        assert (
+            agent._select_initial_adaptive_tool_names([maintenance_tool], query)
+            == set()
+        )
+
+    positive_idiom_queries = (
+        ("Don't forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Do not hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Do  not hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Dont forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Never forget to multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Never hesitate to call multiply; calculate the product from value one and value two",
+         "multiply"),
+        ("Not only multiply but also calculate the product from value one and value two",
+         "calculate_expression"),
+        ("Not just multiply; calculate the product from value one and value two",
+         "calculate_expression"),
+    )
+    for query, preferred_name in positive_idiom_queries:
+        assert score_adaptive_tool_match(semantic_tool, query) > score_adaptive_tool_match(
+            multiply_tool, query
+        )
+        result = agent._select_initial_adaptive_tool_names(
+            [semantic_tool, multiply_tool],
+            query,
+            limit=1,
+        )
+        assert result == {preferred_name}
+        candidates = tool_schema_module.rank_adaptive_tool_preloads(
+            [semantic_tool, multiply_tool], query, limit=8
+        )
+        assert "multiply" in {name for _score, name, _tool, _named in candidates}
+
+    for query, tool in (
+        ("Don't call forget.", _tool("forget")),
+        ("Don't forget to not use multiply.", multiply_tool),
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == set()
+
+    for query in (
+        "Do not use https://example.com. Then call sample_maintenance_status.",
+        "Do not use other_tool but use sample_maintenance_status.",
+        "Do not use `other_tool`—call `sample_maintenance_status` instead.",
+        "Do not use other_tool: call sample_maintenance_status instead.",
+        "Do not use https://example.com: call sample_maintenance_status.",
+        "Do not use https://example.com/path: call sample_maintenance_status.",
+        "Do not use other_tool - call sample_maintenance_status instead.",
+        "Use weather, but not other_tool; call sample_maintenance_status.",
+        "Use weather, but not other_tool but use sample_maintenance_status.",
+        "Do not use other_tool, call sample_maintenance_status.",
+        "Avoid other_tool and call sample_maintenance_status instead.",
+        "Avoid other_tool and use sample_maintenance_status instead.",
+        "Avoid other_tool and run sample_maintenance_status instead.",
+        "Avoid other_tool and invoke sample_maintenance_status instead.",
+    ):
+        result = agent._select_initial_adaptive_tool_names(
+            [maintenance_tool, _tool("other_tool")],
+            query,
+        )
+        assert result == {"sample_maintenance_status"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_positive_occurrences_of_negated_names(
+    hass, profile_entry_factory
+) -> None:
+    """A scoped exclusion cannot hide the same tool requested elsewhere."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tool = {**_tool("multiply"), "llmDescription": "Multiply two numbers."}
+    for query in (
+        "Do not use multiply for floats; call multiply for integers.",
+        "Call multiply for integers; do not use multiply for floats.",
+        "Avoid multiply for floats and call multiply for integers instead.",
+        "Without multiply for floats. Use multiply for integers.",
+        "Never multiply floats; never multiply integers. Call multiply for decimals.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == {"multiply"}
+    for query in (
+        "Do not use multiply for floats; never multiply integers.",
+        "Never multiply floats and do not use multiply for integers.",
+    ):
+        assert agent._select_initial_adaptive_tool_names([tool], query) == set()
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_excludes_tools_after_instead_of(
+    hass, profile_entry_factory
+) -> None:
+    """A rejected alternative cannot displace either requested tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("add", "subtract", "multiply")]
+    assert agent._select_initial_adaptive_tool_names(
+        tools, "Use add and subtract instead of multiply."
+    ) == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        tools, "Use add and subtract rather than multiply."
+    ) == {"add", "subtract"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_keeps_tools_for_positive_avoid_and_except_tasks(
+    hass, profile_entry_factory
+) -> None:
+    """Task descriptions cannot turn a later named tool into an exclusion."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("energy_advisor", "python_exception_help")]
+    for query, name in (
+        ("How can I avoid wasting energy with energy_advisor?", "energy_advisor"),
+        ("Avoid using excess energy with energy_advisor.", "energy_advisor"),
+        ("Explain an except block using python_exception_help.", "python_exception_help"),
+        ("Without delay, call energy_advisor.", "energy_advisor"),
+        ("No idea how to use energy_advisor; please call it.", "energy_advisor"),
+        ("Don't worry about energy usage; call energy_advisor.", "energy_advisor"),
+        ("Not sure about energy_advisor; call it.", "energy_advisor"),
+        ("I have no calculator so call energy_advisor.", "energy_advisor"),
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query, limit=1) == {name}
+    for query in (
+        "Avoid energy_advisor.",
+        "Avoid using `energy_advisor`.",
+        "Avoid the energy_advisor tool.",
+        "Avoid using the tool energy_advisor.",
+        "Avoid calling energy_advisor.",
+        "Avoid invoking energy_advisor.",
+        "Avoid running energy_advisor.",
+        "Avoid use of energy_advisor.",
+        "Use energy_advisor except python_exception_help.",
+        "Use energy_advisor except for 'python_exception_help'.",
+        "Use energy_advisor except for the tool python_exception_help.",
+    ):
+        selected = agent._select_initial_adaptive_tool_names(tools, query)
+        assert selected == ({"energy_advisor"} if query.startswith("Use") else set())
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_allowed_negative_exceptions(
+    hass, profile_entry_factory
+) -> None:
+    """An exception to a prohibition permits a tool; positive exclusions still reject it."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "other_tool")]
+    for query in (
+        "Do not use any tool except multiply.",
+        "Don't use tools except for multiply.",
+        "Never call any other tools except multiply.",
+        "Do not use anything except multiply.",
+        "Do not use other_tool except multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query, limit=1) == {"multiply"}, query
+    for query in (
+        "Use all tools except multiply.",
+        "Use other_tool except for multiply.",
+        "I have no calculator; use other_tool except multiply.",
+        "Do not use other_tool. Use all tools except multiply.",
+    ):
+        assert "multiply" not in agent._select_initial_adaptive_tool_names(tools, query)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_excludes_known_alternatives_after_unknown_names(
+    hass, profile_entry_factory
+) -> None:
+    """An unavailable first alternative cannot hide later rejected tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("web_search")]
+    for query in (
+        "Don't use ExampleEngine or web_search.",
+        "Do not use ExampleEngine and web_search.",
+        "Never call ExampleEngine, the web_search tool.",
+        "Don't use ExampleEngine or missing_tool or web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == set(), query
+    for query in (
+        "Do not use ExampleEngine, call web_search instead.",
+        "Do not use ExampleEngine except for web_search.",
+        "Don't use ExampleEngine and call web_search instead.",
+        "I am not sure whether ExampleEngine or web_search is useful.",
+        "Don't worry about ExampleEngine or web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"web_search"}, query
+
+
+@pytest.mark.asyncio
+async def test_adaptive_preload_scans_actionless_exclusion_alternatives(
+    hass, profile_entry_factory
+) -> None:
+    """Unknown list items remain excluded without swallowing uncertainty phrases."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("web_search")]
+    for query in (
+        "Without ExampleEngine or web_search.",
+        "No ExampleEngine or web_search.",
+        "Avoid ExampleEngine and web_search.",
+        "Instead of ExampleEngine or web_search, use a local answer.",
+        "Without ExampleEngine, web_search, or missing_tool.",
+        "Without `ExampleEngine` or `web_search`.",
+        "No 'ExampleEngine' or \"web_search\".",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == set(), query
+    for query in (
+        "No idea whether ExampleEngine or web_search can help.",
+        "Without knowing whether ExampleEngine or web_search is available, call web_search.",
+        "Avoid overheating while checking ExampleEngine or web_search for advice.",
+        "Without ExampleEngine, call web_search instead.",
+        "No ExampleEngine except for web_search.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"web_search"}, query
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ["can't", "can’t", "cant", "cannot", "could not", "couldn't", "couldn’t", "couldnt",
+     "unable to", "not able to"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_excludes_unavailable_tools_and_retains_positive_idioms(
+    hass, profile_entry_factory, prefix
+) -> None:
+    """Inability wording must not crowd requested alternatives out of the preload."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"I {prefix} use multiply; use add and subtract.",
+        f"I {prefix} use MissingEngine or multiply; use add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        tools, f"I {prefix} forget to call multiply."
+    ) == {"multiply"}
+
+
+@pytest.mark.parametrize(
+    "prefix", ["won't", "won’t", "wont", "will not", "wouldn't", "wouldn’t", "wouldnt",
+               "would not", "shouldn't", "shouldn’t", "shouldnt", "should not", "mustn't",
+               "mustn’t", "mustnt", "must not", "needn't", "needn’t", "neednt", "need not",
+               "mightn't", "mightn’t", "mightnt", "might not", "shan't", "shan’t", "shant",
+               "shall not", "may not"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_modal_exclusions_and_positive_context(
+    hass, profile_entry_factory, prefix
+) -> None:
+    """Modal contractions cannot promote a rejected tool over requested alternatives."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    for query in (
+        f"I {prefix} use multiply; call add and subtract.",
+        f"I {prefix} call MissingTool or multiply, so call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}, query
+    for query in (
+        f"I {prefix} forget to call multiply.",
+        f"I {prefix} use any tool except multiply.",
+        f"I {prefix} worry about multiply; call multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            tools, query, limit=1
+        ) == {"multiply"}, query
+
+
+@pytest.mark.parametrize(
+    "modifier",
+    ["ever", "even", "please", "really", "actually", "directly", "explicitly", "deliberately",
+     "under any circumstances", "for any reason"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_scans_exclusion_modifiers_without_swallowing_positive_tasks(
+    hass, profile_entry_factory, modifier
+) -> None:
+    """Modifiers cannot hide a rejected name or change a positive idiom's meaning."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for prefix in ("Do not", "Never", "I cannot"):
+        query = f"{prefix} {modifier} use multiply; use add and subtract."
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"Do not {modifier} forget to call multiply.",
+        "I am not really sure whether multiply works.",
+        "Don't actually worry about multiply.",
+        "Avoid overheating by calling multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
+
+
+@pytest.mark.parametrize("connector", ["so", "therefore", "thus", "hence", "then", "instead"])
+@pytest.mark.parametrize("action", ["use", "call", "run", "invoke"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_causal_positive_continuations(
+    hass, profile_entry_factory, connector, action
+) -> None:
+    """A rejected tool cannot swallow the next requested action in its clause."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"Do not use multiply, {connector} {action} add and subtract.",
+        f"Never use MissingEngine or multiply {connector} {action} add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    ["don't need", "do not want", "don't require", "do not prefer", "don't need to use",
+     "do not want to call"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_requirement_and_preference_exclusions(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """A rejected exact name must not displace semantically requested tools."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("multiply"),
+        {**_tool("add"), "llmDescription": "Compute the sum of numbers.",
+         "routingHints": {"keywords": ["sum"]}},
+        {**_tool("subtract"), "llmDescription": "Compute the difference of numbers.",
+         "routingHints": {"keywords": ["difference"]}},
+    ]
+    for query in (
+        f"I {phrase} multiply; calculate the sum and difference.",
+        f"I {phrase} MissingEngine or multiply; use add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"I {phrase} an explanation of how multiply works; call multiply.",
+        "I don't need to know why, just call multiply.",
+    ):
+        assert "multiply" in agent._select_initial_adaptive_tool_names(tools, query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["Why not call multiply to calculate this?", "Why not use multiply instead of add?",
+     "Why not just run multiply?", "WHY\nNOT invoke multiply?",
+     "Why not call multiply, but don't call add?"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_positive_why_not_suggestions(
+    hass, profile_entry_factory, query
+) -> None:
+    """Positive suggestions stay eligible while independent exclusions still apply."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add")]
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}
+    for negative_query in (
+        "I cannot use multiply; why not call add?",
+        "Why not avoid multiply and call add?",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, negative_query) == {"add"}
+
+
+@pytest.mark.parametrize(
+    "verb",
+    ["exclude", "excluding", "omit", "omitting", "skip", "skipping", "ignore", "ignoring",
+     "disregard", "disregarding", "reject", "rejecting", "disallow", "disallowing",
+     "forbid", "forbidding", "leave out", "leaving out", "avoid", "avoiding"],
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_direct_exclusions_and_positive_double_negations(
+    hass, profile_entry_factory, verb
+) -> None:
+    """Explicit rejection cannot consume a slot needed by a requested tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool("multiply"), _tool("add"), _tool("subtract")]
+    for query in (
+        f"Use add and subtract; {verb} multiply.",
+        f"{verb} MissingEngine or multiply, so call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        "Don't exclude multiply; do not use add or subtract.",
+        "Do not ever avoid multiply; omit add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"multiply"}, query
+
+
+@pytest.mark.asyncio
+async def test_adaptive_natural_verbs_do_not_displace_specific_semantic_tools(
+    hass, profile_entry_factory
+) -> None:
+    """Ordinary search/add wording cannot turn into unrelated exact-name priority."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        _tool("add"), _tool("search"),
+        {**_tool("search_music_assistant"), "llmDescription": "Search Music Assistant albums.",
+         "routingHints": {"keywords": ["music", "assistant", "album"]}},
+        {**_tool("add_music_to_queue"), "llmDescription": "Add Music Assistant albums to the queue.",
+         "routingHints": {"keywords": ["music", "assistant", "album", "queue"]}},
+    ]
+    query = "Search Music Assistant for an album and add it to the queue."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "search_music_assistant", "add_music_to_queue"
+    }
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query, limit=8)
+    assert all(not named for _score, name, _tool, named in ranked if name in {"add", "search"})
+
+
+@pytest.mark.parametrize("excluded_name", ["search", "add"])
+@pytest.mark.asyncio
+async def test_adaptive_ordinary_verbs_cannot_cancel_explicit_tool_exclusions(
+    hass, profile_entry_factory, excluded_name
+) -> None:
+    """An ordinary task verb cannot re-enable a rejected one-word tool."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [
+        {**_tool(excluded_name), "llmDescription": "Search Music Assistant albums and add to queue.",
+         "routingHints": {"keywords": ["search", "music", "assistant", "album", "add", "queue"]}},
+        {**_tool("search_music_assistant"), "llmDescription": "Search Music Assistant albums.",
+         "routingHints": {"keywords": ["music", "assistant", "album"]}},
+        {**_tool("add_music_to_queue"), "llmDescription": "Add Music Assistant albums to the queue.",
+         "routingHints": {"keywords": ["music", "assistant", "album", "queue"]}},
+    ]
+    query = (
+        f"Do not use {excluded_name}; search Music Assistant for an album "
+        "and add it to the queue."
+    )
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {
+        "search_music_assistant", "add_music_to_queue"
+    }
+    for query in (
+        f"Do not use {excluded_name} for web content; call {excluded_name} for Music Assistant.",
+        f"Do not use {excluded_name} for web content; use `{excluded_name}` for Music Assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            tools, query, limit=1
+        ) == {excluded_name}
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [("Call add and subtract.", {"add", "subtract"}),
+     ("Use `add` and `subtract`.", {"add", "subtract"}),
+     ("Run the add and subtract tools.", {"add", "subtract"}),
+     ("Invoke both add, subtract, and multiply.", {"add", "subtract", "multiply"}),
+     ("Execute only add and subtract.", {"add", "subtract"}),
+     ("The `add` and `subtract` schemas are useful.", {"add", "subtract"}),
+     ("add", {"add"}),
+     ("Use get_sum and fetch-forecast.", {"get_sum", "fetch-forecast"})],
+)
+def test_adaptive_explicit_invocations_and_identifiers_retain_named_priority(query, expected):
+    tools = [_tool(name) for name in ("add", "subtract", "multiply", "get_sum", "fetch-forecast")]
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query, limit=8)
+    assert {name for _score, name, _tool, named in ranked if named} == expected
+
+
+def test_adaptive_invocation_priority_still_respects_negative_clauses_and_references():
+    tools = [_tool("add"), _tool("subtract"), _tool("get_sum")]
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(
+        tools, "Don't call `add`; call subtract. Read https://example.invalid/get_sum.", limit=8
+    )
+    assert {name for _score, name, _tool, named in ranked if named} == {"subtract"}
+    assert "add" not in {name for _score, name, _tool, _named in ranked}
+
+
+def test_adaptive_invocation_lists_have_bounded_work_when_a_name_is_an_action(monkeypatch):
+    """An invoked tool named run cannot restart parsing for every list item."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    query = "Call " + " and ".join(["run"] * 2000)
+    ranked = tool_schema_module.rank_adaptive_tool_preloads([_tool("run")], query)
+    assert [name for _score, name, _tool, _named in ranked] == ["run"]
+    assert calls < 2100
+
+
+@pytest.mark.parametrize(
+    "verb", ["use", "using", "call", "calling", "run", "running", "invoke", "invoking",
+             "execute", "executing", "load", "loading", "preload", "preloading",
+             "select", "selecting", "choose", "choosing", "pick", "picking"]
+)
+@pytest.mark.parametrize("separator", [",", "and", "so", ":", "—"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_all_invocation_continuations(
+    hass, profile_entry_factory, verb, separator
+) -> None:
+    """Invocation verbs share the same polarity boundaries and named priority."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    query = f"Do not use multiply {separator} {verb} add and subtract."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+    for query in (
+        f"Do not {verb} multiply; call add and subtract.",
+        f"Never {verb} MissingTool or multiply; call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}
+
+
+@pytest.mark.parametrize(
+    "verb", ["load", "loading", "preload", "preloading", "select", "selecting",
+             "choose", "choosing", "pick", "picking"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_schema_selection_actions(
+    hass, profile_entry_factory, verb
+) -> None:
+    """Rejected schemas cannot displace requested tools in compact context."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Do not {verb} analyze_image; call add_music_to_queue and search_music_assistant.",
+        f"Do not {verb} the schemas for analyze_image; call add_music_to_queue and search_music_assistant.",
+        f"Don't {verb} MissingTool or analyze_image, {verb} add_music_to_queue and search_music_assistant.",
+        f"Do not {verb} the function named analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names, query
+    math_tools = [_tool(name) for name in ("add", "subtract", "multiply")]
+    query = f"{verb} the schemas for add and subtract."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(math_tools, query)
+    assert {name for _score, name, _tool, named in ranked if named} == {"add", "subtract"}
+    assert agent._select_initial_adaptive_tool_names(
+        math_tools, f"Do not {verb} any schema except multiply."
+    ) == {"multiply"}
+
+
+@pytest.mark.parametrize(
+    "modifier", ["please", "directly", "quietly", "really", "actually", "please directly",
+                 "why not", "why not please"]
+)
+@pytest.mark.parametrize("separator", [",", "and", "so"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_polite_and_modified_positive_continuations(
+    hass, profile_entry_factory, modifier, separator
+) -> None:
+    """Polite wording cannot extend an exclusion over the next requested action."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    query = (
+        f"Do not use analyze_image {separator} {modifier} call "
+        "add_music_to_queue and search_music_assistant."
+    )
+    assert agent._select_initial_adaptive_tool_names(tools, query) == music_names
+
+
+@pytest.mark.parametrize(
+    "phrase", ["don't forget to", "do not hesitate to", "never forget to", "won't forget to",
+               "can't forget to", "not only", "not just", "just", "I don't forget to",
+               "I won't forget to", "I will", "we can", "you should", "don't really forget to"]
+)
+@pytest.mark.parametrize("separator", [",", "but", "and"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_nested_positive_continuations(
+    hass, profile_entry_factory, phrase, separator
+) -> None:
+    """A positive idiom after an exclusion cannot hide newly requested schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    query = f"Don't use multiply {separator} {phrase} call add and subtract."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}, query
+    for query in (
+        f"Don't use multiply {separator} don't forget to not call add; call subtract.",
+        f"Don't use multiply {separator} I will not call add; call subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"subtract"}, query
+
+
+@pytest.mark.parametrize("fragment", ["and please ", "and don't really "])
+def test_adaptive_modified_continuation_scan_has_bounded_work(monkeypatch, fragment):
+    """Long conjunction lists must not restart unbounded modifier scans."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    query = "Do not use multiply " + fragment * 2000 + "and please call add and subtract."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(
+        [_tool(name) for name in ("multiply", "add", "subtract")], query
+    )
+    assert {name for _score, name, _tool, _named in ranked} == {"add", "subtract"}
+    assert calls < 10000
+
+
+@pytest.mark.parametrize("phrase", ["anything but", "everything but", "all but"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_handles_anything_but_exclusions_and_permissions(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """The excluded identifier cannot displace requested music schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Use add_music_to_queue and search_music_assistant, {phrase} analyze_image.",
+        f"{phrase} MissingTool or analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names
+    permission_tools = [_tool("multiply"), _tool("other_tool")]
+    for query in (
+        f"Do not use {phrase} multiply.",
+        f"I don't want {phrase} multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            permission_tools, query, limit=1
+        ) == {"multiply"}, query
+
+
+@pytest.mark.parametrize(
+    "phrase", ["with the exception of", "with exception of", "with the exceptions of",
+               "other than", "apart from", "save for", "barring"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_handles_exception_phrases_and_permitted_tools(
+    hass, profile_entry_factory, phrase
+) -> None:
+    """Exception wording rejects alternatives but permits exceptions to a prohibition."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    music_names = {"add_music_to_queue", "search_music_assistant"}
+    tools = [_tool(name) for name in (*sorted(music_names), "analyze_image")]
+    for query in (
+        f"Use add_music_to_queue and search_music_assistant, {phrase} analyze_image.",
+        f"{phrase} MissingTool or analyze_image; call add_music_to_queue and search_music_assistant.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == music_names, query
+    permission_tools = [_tool("multiply"), _tool("other_tool")]
+    for query in (
+        f"Do not use any tool {phrase} multiply.",
+        f"I don't want any tool {phrase} multiply.",
+        f"Do not use MissingTool {phrase} multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            permission_tools, query, limit=1
+        ) == {"multiply"}, query
+    assert agent._select_initial_adaptive_tool_names(
+        permission_tools, f"Use other_tool {phrase} multiply."
+    ) == {"other_tool"}
+
+
+@pytest.mark.asyncio
+async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
+    hass, profile_entry_factory
+) -> None:
+    """Named priority cannot bypass a tool's negative routing metadata."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tool = {
+        **_tool("sample_lookup"),
+        "routingHints": {"negative_keywords": ["calendar"]},
+    }
+    assert agent._select_initial_adaptive_tool_names(
+        [tool], "Call sample_lookup to answer this calendar question."
+    ) == set()
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_names"),
+    [("What about that?", {"prior_first", "prior_second"}),
+     ("What about fresh_first?", {"fresh_first", "prior_second"}),
+     ("What about fresh_first and fresh_second?", {"fresh_first", "fresh_second"}),
+     ("What about prior_second?", {"prior_first", "prior_second"}),
+     ("What about fresh_first; do not use prior_second?", {"fresh_first", "prior_first"}),
+     ("What about fresh_first; not prior_first or prior_second?", {"fresh_first"})],
+)
+@pytest.mark.asyncio
+async def test_adaptive_follow_up_caps_combined_schemas_and_keeps_deep_loading(
+    hass, profile_entry_factory, monkeypatch, query, expected_names
+) -> None:
+    """Current requests and carryover share startup slots, while later loading remains available."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    optional_names = {"prior_first", "prior_second", "fresh_first", "fresh_second"}
+    tools = [_tool("discover_entities")] + [_tool(name) for name in sorted(optional_names)]
+    history = [{
+        "user": "Read prior samples.",
+        "assistant": "Done.",
+        "actions": [
+            {"type": "mcp_tool", "tool": "prior_first", "status": "ok"},
+            {"type": "mcp_tool", "tool": "prior_second", "status": "ok"},
+        ],
+    }]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+    try:
+        await agent._prepare_adaptive_tools_for_request(query, history=history)
+        assert agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get() == expected_names
+        advertised = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert advertised & optional_names == expected_names
+        assert len(advertised & optional_names) <= 2
+        await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"tool_names": sorted(optional_names)}
+        )
+        expanded = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert expanded & optional_names == optional_names
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
 
 
 @pytest.mark.asyncio
@@ -2270,6 +3436,114 @@ def test_adaptive_tool_scoring_avoids_substring_false_positives() -> None:
     )
 
     assert [tool["name"] for tool in matches] == ["home_access_history"]
+
+
+def test_adaptive_preload_processes_repeated_negations_once_per_clause(monkeypatch) -> None:
+    """Repeated exclusions cannot rescan the same clause for every negative word."""
+    calls = 0
+    mask_references = tool_schema_module._mask_adaptive_tool_name_references
+
+    def count_masks(text: str) -> str:
+        nonlocal calls
+        calls += 1
+        return mask_references(text)
+
+    monkeypatch.setattr(tool_schema_module, "_mask_adaptive_tool_name_references", count_masks)
+    tools = [
+        {"name": "multiply", "llmDescription": "Multiply two numbers."},
+        {"name": "get_weather_forecast", "llmDescription": "Read a forecast."},
+    ]
+    query = "Do not use " + "no " * 1000 + "multiply; call get_weather_forecast."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
+
+    assert [name for _score, name, _tool, _named in ranked] == ["get_weather_forecast"]
+    assert calls == 1
+
+
+@pytest.mark.parametrize("prefix", ["Do not use", "No", "Without", "Avoid"])
+def test_adaptive_unknown_alternative_scan_has_bounded_work(monkeypatch, prefix) -> None:
+    """Repeated list connectors cannot make exclusion scanning revisit the tail."""
+    original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
+    calls = 0
+
+    class CountedTokens:
+        def match(self, *args):
+            nonlocal calls
+            calls += 1
+            return original.match(*args)
+
+        def findall(self, *args):
+            return original.findall(*args)
+
+    monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
+    tools = [
+        {"name": "web_search", "llmDescription": "Search the web."},
+        {"name": "weather", "llmDescription": "Read a forecast."},
+    ]
+    query = prefix + " MissingEngine " + "or " * 2000 + "web_search; call weather."
+    ranked = tool_schema_module.rank_adaptive_tool_preloads(tools, query)
+
+    assert [name for _score, name, _tool, _named in ranked] == ["weather"]
+    assert calls < 5000
+
+
+def test_adaptive_batch_scoring_prepares_query_once_and_reuses_no_tool_state(
+    monkeypatch,
+) -> None:
+    """Batch scoring shares query work only within a call and reflects new schemas."""
+    tools = [
+        {
+            "name": "get_weather_forecast",
+            "llmDescription": "Get weather forecasts.",
+            "description": "Get weather for the requested date.",
+            "routingHints": {"keywords": ["weather", "forecast"]},
+        },
+        {
+            "name": "analyze_entity_history",
+            "llmDescription": "Analyze entity history and event counts.",
+            "description": "Review recorded state changes.",
+            "routingHints": {"keywords": ["history", "recorder"]},
+        },
+        {
+            "name": "web_search",
+            "llmDescription": "Search the web for pages.",
+            "description": "Find information online.",
+            "routingHints": {"keywords": ["search", "web"]},
+        },
+    ]
+    queries = (
+        "Weather today, but not tomorrow",
+        "¿Qué tiempo hará mañana?",
+        "What is sensor.compressor_power?",
+    )
+
+    for query in queries:
+        expected = [score_adaptive_tool_match(tool, query) for tool in tools]
+        assert score_adaptive_tool_matches(tools, query) == expected
+
+    calls = 0
+    original_normalize = tool_schema_module.normalize_adaptive_query_terms
+
+    def count_normalize(query: str) -> list[str]:
+        nonlocal calls
+        calls += 1
+        return original_normalize(query)
+
+    monkeypatch.setattr(
+        tool_schema_module,
+        "normalize_adaptive_query_terms",
+        count_normalize,
+    )
+    score_adaptive_tool_matches(tools, "What is the weather tomorrow?")
+    assert calls == 2
+
+    tools[0]["name"] = "custom_lookup"
+    tools[0]["llmDescription"] = "Look up a generic value."
+    tools[0]["description"] = "Return a generic result."
+    tools[0]["routingHints"] = {"keywords": ["lookup", "value"]}
+    calls = 0
+    assert score_adaptive_tool_matches(tools[:1], "What is the weather tomorrow?") == [0]
+    assert calls == 2
 
 
 def test_adaptive_tool_scoring_honors_negative_routing_hints() -> None:

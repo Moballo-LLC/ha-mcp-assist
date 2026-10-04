@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 ADAPTIVE_TOOL_CATALOG_NAME = "list_available_tools"
@@ -210,6 +211,75 @@ ADAPTIVE_NEGATIVE_ROUTING_CLAUSE_RE = re.compile(
     r"\b(?:but\s+not|do\s+not\s+use\s+(?:for|when)|not\s+(?:for|when)|"
     r"avoid\s+(?:for|when)|except\s+(?:for|when))\b",
     flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN = (
+    r"(?:except(?:\s+for)?|with\s+(?:the\s+)?exceptions?\s+of|other\s+than|"
+    r"apart\s+from|save\s+for|barring|(?:anything|everything|all)\s+but)"
+)
+ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN = (
+    r"(?:do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|couldn['’]?t|"
+    r"(?:will|would|should|must|need|might|shall|may)\s+not|won['’]?t|"
+    r"(?:would|should|must|need|might)n['’]?t|shan['’]?t|"
+    r"unable\s+to|not\s+able\s+to|never|not)"
+)
+ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE = re.compile(
+    rf"\b{ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN}\b", flags=re.IGNORECASE
+)
+ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
+    rf"\b(?:but\s+not|{ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN}|without|no|"
+    r"instead\s+of|rather\s+than|"
+    rf"{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN}|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
+    r"disregard(?:ing)?|reject(?:ing)?|disallow(?:ing)?|forb(?:id|idding)|"
+    r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_INVOCATION_WORDS = (
+    "use", "using", "call", "calling", "run", "running", "invoke", "invoking",
+    "execute", "executing", "load", "loading", "preload", "preloading",
+    "select", "selecting", "choose", "choosing", "pick", "picking",
+)
+ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN = (
+    "(?:" + "|".join(ADAPTIVE_TOOL_NAME_INVOCATION_WORDS) + ")"
+)
+ADAPTIVE_TOOL_NAME_INVOCATION_RE = re.compile(
+    rf"(?<![\w-])(?:{ADAPTIVE_TOOL_NAME_INVOCATION_PATTERN}|"
+    rf"{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN})(?![\w-])", flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_BACKTICK_RE = re.compile(r"`(?P<name>[\w-]+)`")
+ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS = frozenset(
+    {"a", "an", "the", "tool", "tools", "function", "functions", "schema", "schemas",
+     "named", "called", "both", "all", "just", "only", "and", "or", "for", "of"}
+)
+ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
+    r"\bwhy\s+(?P<negation>not)\b", flags=re.IGNORECASE
+)
+ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE = re.compile(
+    r"\b(?:but|and|so|therefore|thus|hence|then|instead)\b|[,:–—]|(?<=\s)-",
+    flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_CONTINUATION_PREFIX_WORDS = frozenset(
+    {"i", "we", "you", "they", "he", "she", "it", "will", "would", "should", "must",
+     "need", "might", "shall", "may", "can", "could", "to", "just", "only"}
+)
+ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
+ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE = re.compile(r"\b(?:or|and)\b|,", flags=re.IGNORECASE)
+ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS = frozenset(ADAPTIVE_TOOL_NAME_INVOCATION_WORDS) | {
+    "need", "needing", "want", "wanting", "require", "requiring", "prefer", "preferring"
+}
+ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS = frozenset(
+    {"ever", "even", "please", "again", "at", "under", "circumstances", "reason", "on", "account"}
+)
+ADAPTIVE_TOOL_NAME_EXCEPTION_RE = re.compile(
+    rf"\b{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN}\b", flags=re.IGNORECASE
+)
+ADAPTIVE_TOOL_NAME_TOKEN_RE = re.compile(r"[\w-]+", flags=re.UNICODE)
+ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS = ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS | {
+    "a", "an", "the", "tool", "tools", "function", "functions", "schema", "schemas",
+    "named", "called", "both", "of", "or", "and", "for", "when",
+    "any", "all", "other", "anything", "everything", "to"
+}
+ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE = re.compile(
+    r"(?:forget|hesitate|only|just)\b", flags=re.IGNORECASE
 )
 ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS = frozenset(
     {
@@ -758,21 +828,396 @@ def _routing_hint_text(tool: dict[str, Any], *keys: str) -> str:
     return " ".join(parts).casefold()
 
 
-def score_adaptive_tool_match(
-    tool: dict[str, Any],
+@dataclass(frozen=True, slots=True)
+class _PreparedAdaptiveQuery:
+    normalized_query: str
+    positive_query: str
+    positive_terms: tuple[str, ...]
+    negative_terms: frozenset[str]
+    entity_domains: frozenset[str]
+    entity_reference_terms: frozenset[str]
+    outside_entity_reference_terms: frozenset[str]
+    positive_name_tokens: frozenset[str]
+    negative_name_tokens: frozenset[str]
+
+
+def _mask_adaptive_tool_name_references(text: str) -> str:
+    """Mask recognized URLs and entity references while preserving delimiters."""
+    spans: list[tuple[int, int]] = []
+    spans.extend(
+        (match.start(), match.end())
+        for match in ADAPTIVE_EXPLICIT_URL_INTENT_RE.finditer(text)
+    )
+    for match in ADAPTIVE_ENTITY_ID_REFERENCE_RE.finditer(text):
+        if _is_adaptive_entity_id_like_host(
+            match.group("host"), text=text, match=match
+        ):
+            spans.append((match.start(), match.end()))
+    if _has_adaptive_url_intent(text):
+        for match in ADAPTIVE_BARE_DOMAIN_INTENT_RE.finditer(text):
+            if not _is_adaptive_entity_id_like_host(
+                match.group("host"), text=text, match=match
+            ):
+                spans.append((match.start(), match.end()))
+
+    masked = list(text)
+    for start, end in spans:
+        while end > start and text[end - 1] in ".!?;,:–—":
+            end -= 1
+        for index in range(start, end):
+            masked[index] = " "
+    return "".join(masked)
+
+
+def _explicit_adaptive_tool_name_tokens(
+    text: str,
+    positive_words: frozenset[str],
+    known_tool_names: frozenset[str],
+) -> frozenset[str]:
+    """Give ambiguous words priority only when they identify an invoked tool."""
+    explicit = {
+        name for name in positive_words & known_tool_names if "_" in name or "-" in name
+    }
+    exact_query = text.strip().strip(".!?;:").strip()
+    if exact_query in known_tool_names:
+        explicit.add(exact_query)
+    explicit.update(
+        match.group("name")
+        for match in ADAPTIVE_TOOL_NAME_BACKTICK_RE.finditer(text)
+        if match.group("name") in known_tool_names
+    )
+    covered_until = 0
+    for invocation in ADAPTIVE_TOOL_NAME_INVOCATION_RE.finditer(text):
+        if invocation.start() < covered_until:
+            continue
+        cursor = invocation.end()
+        while cursor < len(text):
+            while cursor < len(text) and (text[cursor].isspace() or text[cursor] in "`'\""):
+                cursor += 1
+            token = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, cursor)
+            if token is None:
+                break
+            name = token.group()
+            if name not in known_tool_names:
+                if (
+                    name in ADAPTIVE_TOOL_NAME_INVOCATION_PREFIX_WORDS
+                    or name in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                    or name.endswith("ly")
+                ):
+                    cursor = token.end()
+                    continue
+                break
+            explicit.add(name)
+            cursor = token.end()
+            while cursor < len(text) and (text[cursor].isspace() or text[cursor] in "`'\""):
+                cursor += 1
+            connector = ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.match(text, cursor)
+            if connector is None:
+                break
+            cursor = connector.end()
+        covered_until = cursor
+    return frozenset(explicit)
+
+
+def _find_adaptive_tool_name_positive_continuation(
+    text: str, start: int, end: int | None = None, *, match_only: bool = False
+) -> re.Match[str] | None:
+    end = len(text) if end is None else end
+    anchors = (
+        (ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE.match(text, start, end),)
+        if match_only
+        else ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE.finditer(text, start, end)
+    )
+    for anchor in anchors:
+        if anchor is None:
+            continue
+        cursor = anchor.end()
+        for _ in range(5):
+            while cursor < end and text[cursor].isspace():
+                cursor += 1
+            suggestion = ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE.match(text, cursor, end)
+            if suggestion is not None:
+                cursor = suggestion.end()
+                continue
+            negation = ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.match(text, cursor, end)
+            if negation is not None:
+                idiom_cursor = negation.end()
+                for _ in range(3):
+                    while idiom_cursor < end and text[idiom_cursor].isspace():
+                        idiom_cursor += 1
+                    idiom = ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(text, idiom_cursor, end)
+                    if idiom is not None:
+                        cursor = idiom.end()
+                        break
+                    modifier = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, idiom_cursor, end)
+                    if modifier is None or (
+                        modifier.group().casefold() not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                        and not modifier.group().casefold().endswith("ly")
+                    ):
+                        break
+                    idiom_cursor = modifier.end()
+                else:
+                    idiom = None
+                if idiom is not None:
+                    continue
+            token = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, cursor, end)
+            if token is None:
+                break
+            word = token.group().casefold()
+            if word in ADAPTIVE_TOOL_NAME_INVOCATION_WORDS:
+                return anchor
+            if (
+                word not in ADAPTIVE_TOOL_NAME_CONTINUATION_PREFIX_WORDS
+                and word not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                and not word.endswith("ly")
+            ):
+                break
+            cursor = token.end()
+    return None
+
+
+def _adaptive_tool_name_polarity_tokens(
+    text: str,
+    known_tool_names: frozenset[str] | None = None,
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Separate positive occurrences from bounded excluded name clauses."""
+    masked_text = _mask_adaptive_tool_name_references(text)
+    positive_suggestion_offsets = frozenset(
+        match.start("negation")
+        for match in ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE.finditer(masked_text)
+    )
+    positive_text = list(masked_text)
+    negative_words: set[str] = set()
+    covered_until = 0
+    negative_exception_until = 0
+    for match in ADAPTIVE_TOOL_NAME_NEGATION_RE.finditer(masked_text):
+        if match.start() < covered_until or match.start() in positive_suggestion_offsets:
+            continue
+        negation = " ".join(match.group().casefold().split())
+        is_exception = ADAPTIVE_TOOL_NAME_EXCEPTION_RE.fullmatch(negation) is not None
+        if is_exception and match.start() < negative_exception_until:
+            negative_exception_until = 0
+            continue
+        bare_negation = (
+            ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.fullmatch(negation) is not None
+            or negation == "but not"
+        )
+        word_start = match.end()
+        while word_start < len(masked_text) and masked_text[word_start].isspace():
+            word_start += 1
+        if bare_negation and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(
+            masked_text, word_start
+        ):
+            continue
+        if known_tool_names is not None:
+            tool_group = False
+            action_prefix = negation.endswith("using")
+            while True:
+                while word_start < len(masked_text) and (
+                    masked_text[word_start].isspace() or masked_text[word_start] in "`,'\""
+                ):
+                    if masked_text[word_start] == "," and (
+                        _find_adaptive_tool_name_positive_continuation(
+                            masked_text, word_start, match_only=True
+                        )
+                    ):
+                        break
+                    word_start += 1
+                name_match = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(masked_text, word_start)
+                if (
+                    name_match is None
+                    or name_match.group() in known_tool_names
+                    or (
+                        tool_group
+                        and ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, word_start)
+                        is not None
+                    )
+                    or (
+                        name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
+                        and name_match.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                        and not name_match.group().endswith("ly")
+                    )
+                ):
+                    break
+                tool_group |= name_match.group() in {
+                    "tool", "tools", "anything", "everything", "any", "all"
+                }
+                action_prefix |= name_match.group() in ADAPTIVE_TOOL_NAME_ACTION_PREFIX_WORDS
+                word_start = name_match.end()
+            if (
+                bare_negation
+                and not action_prefix
+                and name_match is not None
+                and name_match.group() not in known_tool_names
+                and (nested_negation := ADAPTIVE_TOOL_NAME_NEGATION_RE.match(
+                    masked_text, word_start
+                )) is not None
+            ):
+                covered_until = nested_negation.end()
+                continue
+            if (
+                bare_negation
+                and not action_prefix
+                and ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(masked_text, word_start)
+            ):
+                continue
+            if name_match is None or (
+                name_match.group() not in known_tool_names
+                and not (
+                    tool_group and (
+                        name_match.group() in {"except", "but"}
+                        or ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, word_start)
+                        is not None
+                    )
+                )
+            ):
+                if name_match is None:
+                    continue
+                if not action_prefix:
+                    if bare_negation:
+                        continue
+                    alternative_start = name_match.end()
+                    while (
+                        alternative_start < len(masked_text)
+                        and (
+                            masked_text[alternative_start].isspace()
+                            or masked_text[alternative_start] in "`'\""
+                        )
+                    ):
+                        alternative_start += 1
+                    if not (
+                        ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.match(masked_text, alternative_start)
+                        or ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(masked_text, alternative_start)
+                    ):
+                        continue
+                next_negation = ADAPTIVE_TOOL_NAME_NEGATION_RE.search(masked_text, name_match.end())
+                scan_end = len(masked_text) if next_negation is None else next_negation.start()
+                boundary = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(
+                    masked_text, name_match.end(), scan_end
+                )
+                if boundary is not None:
+                    scan_end = boundary.start()
+                continuation = _find_adaptive_tool_name_positive_continuation(
+                    masked_text, match.end(), scan_end
+                )
+                if continuation is not None:
+                    scan_end = continuation.start()
+                known_alternative = (
+                    next_negation is not None
+                    and scan_end == next_negation.start()
+                    and ADAPTIVE_TOOL_NAME_EXCEPTION_RE.match(
+                        masked_text, next_negation.start()
+                    ) is not None
+                )
+                for alternative in ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE.finditer(
+                    masked_text, name_match.end(), scan_end
+                ):
+                    cursor = alternative.end()
+                    while cursor < scan_end:
+                        while cursor < scan_end and (
+                            masked_text[cursor].isspace() or masked_text[cursor] in "`'\""
+                        ):
+                            cursor += 1
+                        candidate = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(masked_text, cursor, scan_end)
+                        if candidate is None:
+                            break
+                        if candidate.group() in known_tool_names:
+                            known_alternative = True
+                            break
+                        if (
+                            candidate.group() in {"or", "and"}
+                            or candidate.group() not in ADAPTIVE_TOOL_NAME_EXCLUSION_PREFIX_WORDS
+                        ):
+                            break
+                        cursor = candidate.end()
+                    if known_alternative:
+                        break
+                if not known_alternative:
+                    continue
+        clause_end = ADAPTIVE_TOOL_NAME_CLAUSE_END_RE.search(masked_text, match.end())
+        clause_end_index = len(masked_text) if clause_end is None else clause_end.start()
+        continuation = _find_adaptive_tool_name_positive_continuation(
+            masked_text, match.end(), clause_end_index
+        )
+        if continuation is not None:
+            clause_end_index = continuation.start()
+        if not is_exception:
+            negative_exception_until = clause_end_index
+            exception = ADAPTIVE_TOOL_NAME_EXCEPTION_RE.search(
+                masked_text, match.end(), clause_end_index
+            )
+            if exception is not None:
+                clause_end_index = exception.start()
+        covered_until = clause_end_index
+        negative_words.update(
+            ADAPTIVE_TOOL_NAME_TOKEN_RE.findall(masked_text, match.end(), clause_end_index)
+        )
+        for index in range(match.start(), clause_end_index):
+            positive_text[index] = " "
+    positive_name_text = "".join(positive_text)
+    positive_words = frozenset(ADAPTIVE_TOOL_NAME_TOKEN_RE.findall(positive_name_text))
+    positive_names = (
+        positive_words
+        if known_tool_names is None
+        else _explicit_adaptive_tool_name_tokens(
+            positive_name_text, positive_words, known_tool_names
+        )
+    )
+    return positive_names, frozenset(negative_words - positive_names)
+
+
+def _prepare_adaptive_query(
     query: str,
     *,
-    base_tool_names: frozenset[str] = frozenset(),
-) -> int:
-    """Score how well a raw tool definition matches an adaptive query."""
-    normalized_query = " ".join(str(query or "").split()).casefold()
+    known_tool_names: frozenset[str] | None = None,
+) -> _PreparedAdaptiveQuery:
+    raw_normalized_query = str(query or "").casefold()
+    normalized_query = " ".join(raw_normalized_query.split())
     positive_query, negative_query = _split_negative_routing_text(normalized_query)
-    terms = normalize_adaptive_query_terms(positive_query)
-    negative_query_terms = (
-        set(normalize_adaptive_query_terms(negative_query))
-        - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
+    positive_name_tokens, negative_name_tokens = _adaptive_tool_name_polarity_tokens(
+        raw_normalized_query, known_tool_names
     )
-    if not normalized_query and not terms:
+    return _PreparedAdaptiveQuery(
+        normalized_query=normalized_query,
+        positive_query=positive_query,
+        positive_terms=tuple(normalize_adaptive_query_terms(positive_query)),
+        negative_terms=frozenset(
+            set(normalize_adaptive_query_terms(negative_query))
+            - ADAPTIVE_NEGATIVE_ROUTING_BOILERPLATE_TERMS
+        ),
+        entity_domains=frozenset(_adaptive_entity_reference_domains(positive_query)),
+        entity_reference_terms=frozenset(
+            _adaptive_entity_reference_terms(positive_query)
+            | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
+        ),
+        outside_entity_reference_terms=frozenset(
+            _adaptive_text_terms(_strip_adaptive_entity_references(positive_query))
+        ),
+        positive_name_tokens=positive_name_tokens,
+        negative_name_tokens=negative_name_tokens,
+    )
+
+
+def _is_adaptive_tool_name_mentioned(
+    prepared_query: _PreparedAdaptiveQuery,
+    tool_name: str,
+) -> bool:
+    normalized_name = tool_name.casefold()
+    return (
+        normalized_name in prepared_query.positive_name_tokens
+        and normalized_name not in prepared_query.negative_name_tokens
+    )
+
+
+def _score_adaptive_tool_match(
+    tool: dict[str, Any],
+    prepared_query: _PreparedAdaptiveQuery,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+    exact_name_mentioned: bool = False,
+) -> int:
+    """Score a raw tool definition against prepared request-local query terms."""
+    if not prepared_query.normalized_query and not prepared_query.positive_terms:
         return 0
 
     name = tool_definition_name(tool).casefold()
@@ -814,6 +1259,7 @@ def score_adaptive_tool_match(
     description_terms = _adaptive_text_terms(description)
     query_exclusion_terms = name_terms | keyword_terms
 
+    terms = prepared_query.positive_terms
     term_set = set(terms)
     if term_set & negative_keyword_terms:
         return 0
@@ -822,11 +1268,19 @@ def score_adaptive_tool_match(
         for clause_terms in negative_routing_clause_terms
     ):
         return 0
-    if negative_query_terms and negative_query_terms <= query_exclusion_terms:
+    if (
+        not exact_name_mentioned
+        and prepared_query.negative_terms
+        and prepared_query.negative_terms <= query_exclusion_terms
+    ):
         return 0
 
-    score = 0
-    if positive_query and positive_query == name:
+    score = (
+        100
+        if exact_name_mentioned and prepared_query.positive_query != name
+        else 0
+    )
+    if prepared_query.positive_query and prepared_query.positive_query == name:
         score += 100
     if terms and all(term in name_terms for term in terms):
         score += 40
@@ -852,25 +1306,90 @@ def score_adaptive_tool_match(
             matched_terms.add(term)
 
     if name not in base_tool_names and score > 0:
-        entity_domains = _adaptive_entity_reference_domains(positive_query)
-        entity_reference_terms = (
-            _adaptive_entity_reference_terms(positive_query)
-            | ADAPTIVE_ENTITY_REFERENCE_ONLY_TERMS
-        )
-        outside_entity_reference_terms = _adaptive_text_terms(
-            _strip_adaptive_entity_references(positive_query)
-        )
         if (
             matched_terms
             and matched_terms <= ADAPTIVE_GENERIC_ENTITY_QUERY_TERMS
-            and entity_domains
-            and matched_terms <= entity_reference_terms
-            and not (matched_terms & outside_entity_reference_terms)
-            and not (matched_name_terms & entity_domains)
+            and prepared_query.entity_domains
+            and matched_terms <= prepared_query.entity_reference_terms
+            and not (matched_terms & prepared_query.outside_entity_reference_terms)
+            and not (matched_name_terms & prepared_query.entity_domains)
         ):
             return 0
         score += 1
     return score
+
+
+def score_adaptive_tool_match(
+    tool: dict[str, Any],
+    query: str,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> int:
+    """Score how well a raw tool definition matches an adaptive query."""
+    return _score_adaptive_tool_match(
+        tool,
+        _prepare_adaptive_query(query),
+        base_tool_names=base_tool_names,
+    )
+
+
+def score_adaptive_tool_matches(
+    tools: list[dict[str, Any]],
+    query: str,
+    *,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> list[int]:
+    """Score a batch of raw tool definitions after preparing the query once."""
+    if not tools:
+        return []
+    prepared_query = _prepare_adaptive_query(query)
+    return [
+        _score_adaptive_tool_match(
+            tool,
+            prepared_query,
+            base_tool_names=base_tool_names,
+        )
+        for tool in tools
+    ]
+
+
+def rank_adaptive_tool_preloads(
+    tools: list[dict[str, Any]],
+    query: str,
+    *,
+    limit: int = 2,
+    minimum_score: int = 18,
+    base_tool_names: frozenset[str] = frozenset(),
+) -> list[tuple[int, str, dict[str, Any], bool]]:
+    """Rank bounded initial preload candidates, prioritizing valid exact mentions."""
+    if not tools or limit <= 0:
+        return []
+    prepared_query = _prepare_adaptive_query(
+        query,
+        known_tool_names=frozenset(tool_definition_name(tool).casefold() for tool in tools),
+    )
+    ranked: list[tuple[int, str, dict[str, Any], bool]] = []
+    for tool in tools:
+        tool_name = tool_definition_name(tool)
+        if (
+            not tool_name
+            or tool_name in base_tool_names
+            or tool_name in ADAPTIVE_META_TOOL_NAMES
+            or tool_name.casefold() in prepared_query.negative_name_tokens
+        ):
+            continue
+        is_named = _is_adaptive_tool_name_mentioned(prepared_query, tool_name)
+        score = _score_adaptive_tool_match(
+            tool,
+            prepared_query,
+            base_tool_names=base_tool_names,
+            exact_name_mentioned=is_named,
+        )
+        if (is_named and score > 0) or score >= minimum_score:
+            ranked.append((score, tool_name, tool, is_named))
+
+    ranked.sort(key=lambda item: (-item[3], -item[0], item[1]))
+    return ranked[:limit]
 
 
 def match_adaptive_tool_definitions(
@@ -906,12 +1425,12 @@ def match_adaptive_tool_definitions(
         ][:limit]
 
     scored: list[tuple[int, str, dict[str, Any]]] = []
-    for tool in visible_tools:
-        score = score_adaptive_tool_match(
-            tool,
-            query,
-            base_tool_names=base_tool_names,
-        )
+    scores = score_adaptive_tool_matches(
+        visible_tools,
+        query,
+        base_tool_names=base_tool_names,
+    )
+    for tool, score in zip(visible_tools, scores):
         if score > 0:
             scored.append((score, tool_definition_name(tool), tool))
 
@@ -972,8 +1491,8 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": ADAPTIVE_TOOL_CATALOG_NAME,
                 "description": (
-                    "Search optional, built-in, and custom MCP tools before loading "
-                    "their full schemas."
+                    "Compare optional, built-in, and custom MCP tool candidates or "
+                    "refine an unsuccessful schema lookup."
                 ),
                 "parameters": {
                     "type": "object",
@@ -989,8 +1508,8 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": ADAPTIVE_TOOL_SCHEMA_NAME,
                 "description": (
-                    "Load full schemas for specific optional/custom tools so they can "
-                    "be called on the next turn."
+                    "Load schemas by exact tool_names (up to 8), or search with a "
+                    "focused query (up to 2) when the tool names are unknown."
                 ),
                 "parameters": {
                     "type": "object",
@@ -1000,7 +1519,15 @@ def build_adaptive_meta_tools() -> list[dict[str, Any]]:
                             "items": {"type": "string"},
                         },
                         "query": {"type": "string"},
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 8,
+                            "description": (
+                                "Query searches load at most 2 schemas; explicit "
+                                "tool_names batches may load up to 8."
+                            ),
+                        },
                     },
                 },
             },

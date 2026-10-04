@@ -166,7 +166,23 @@ and load optional, built-in package, or external custom tool schemas only when a
 request needs them. This keeps first-prompt overhead low without disabling those
 capabilities. For obvious requests, Adaptive may preload a small number of
 high-confidence optional tool schemas from the user's wording so the model can
-avoid an extra schema-discovery turn.
+avoid an extra schema-discovery turn. Exact mentions of profile-visible tool
+names receive priority in this bounded preload, which is limited to two
+schemas including carryover from a short follow-up. Current-request matches take
+priority, and recently used schemas fill the remaining slots without duplicates.
+Carryover also honors recognized tool exclusions in the current request.
+Underscored and hyphenated identifiers count directly. For one-word
+names such as `add` or `search`, priority requires an invocation such as
+"call add", backticks, or a request containing only the name. Ordinary verbs
+continue to use semantic routing. Names inside URLs or Home Assistant entity IDs
+do not count as explicit tool mentions. Recognized tool exclusions skip rejected names, while
+a separate positive request for the same tool remains eligible. Adaptive prepares
+request wording once for this preload matching step. When more schemas are
+needed, the model can call `load_tool_schemas` directly with exact tool names or
+a focused query. Query loads are limited to two and skip schemas already
+advertised to the model so subsequent queries can find additional tools. Exact-name batches can load up
+to eight schemas. Use the tool catalog to compare candidates or refine an
+unsuccessful lookup.
 
 Light context mode keeps the profile's prompts but skips MCP Assist's optional
 tool-family prompt instructions, keeps at most two prior conversation turns, and

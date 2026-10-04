@@ -127,7 +127,7 @@ from .tool_schema import (
     build_adaptive_llm_tools,
     convert_mcp_tools_to_llm_tools,
     estimate_tokens_from_bytes,
-    score_adaptive_tool_match,
+    rank_adaptive_tool_preloads,
     tool_definition_name,
 )
 from .tool_effects import annotate_tool_effect
@@ -1183,27 +1183,16 @@ class MCPServer(
         minimum_score: int = 18,
     ) -> list[dict[str, Any]]:
         """Return high-confidence adaptive preload candidates for diagnostics."""
-        scored: list[tuple[int, str, dict[str, Any]]] = []
-        for tool in tools:
-            tool_name = tool_definition_name(tool)
-            if (
-                not tool_name
-                or tool_name in LIGHT_CONTEXT_TOOL_NAMES
-                or tool_name in ADAPTIVE_META_TOOL_NAMES
-            ):
-                continue
-            score = score_adaptive_tool_match(
-                tool,
-                query,
-                base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
-            )
-            if score >= minimum_score:
-                scored.append((score, tool_name, tool))
-
-        scored.sort(key=lambda item: (-item[0], item[1]))
+        scored = rank_adaptive_tool_preloads(
+            tools,
+            query,
+            limit=preload_limit,
+            minimum_score=minimum_score,
+            base_tool_names=LIGHT_CONTEXT_TOOL_NAMES,
+        )
         return [
             {"name": tool_name, "score": score, "tool": tool}
-            for score, tool_name, tool in scored[:preload_limit]
+            for score, tool_name, tool, _is_named in scored
         ]
 
     def _build_adaptive_query_projection(
