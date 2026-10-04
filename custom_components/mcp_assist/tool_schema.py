@@ -223,7 +223,7 @@ ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN = (
     r"unable\s+to|not\s+able\s+to|never|not)"
 )
 ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE = re.compile(
-    ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN, flags=re.IGNORECASE
+    rf"\b{ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN}\b", flags=re.IGNORECASE
 )
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
     rf"\b(?:but\s+not|{ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN}|without|no|"
@@ -256,6 +256,10 @@ ADAPTIVE_TOOL_NAME_POSITIVE_SUGGESTION_RE = re.compile(
 ADAPTIVE_TOOL_NAME_POSITIVE_CONTINUATION_ANCHOR_RE = re.compile(
     r"\b(?:but|and|so|therefore|thus|hence|then|instead)\b|[,:–—]|(?<=\s)-",
     flags=re.IGNORECASE,
+)
+ADAPTIVE_TOOL_NAME_CONTINUATION_PREFIX_WORDS = frozenset(
+    {"i", "we", "you", "they", "he", "she", "it", "will", "would", "should", "must",
+     "need", "might", "shall", "may", "can", "could", "to", "just", "only"}
 )
 ADAPTIVE_TOOL_NAME_CLAUSE_END_RE = re.compile(r"[.!?;\n]")
 ADAPTIVE_TOOL_NAME_ALTERNATIVE_RE = re.compile(r"\b(?:or|and)\b|,", flags=re.IGNORECASE)
@@ -935,13 +939,38 @@ def _find_adaptive_tool_name_positive_continuation(
             if suggestion is not None:
                 cursor = suggestion.end()
                 continue
+            negation = ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.match(text, cursor, end)
+            if negation is not None:
+                idiom_cursor = negation.end()
+                for _ in range(3):
+                    while idiom_cursor < end and text[idiom_cursor].isspace():
+                        idiom_cursor += 1
+                    idiom = ADAPTIVE_TOOL_NAME_POSITIVE_IDIOM_RE.match(text, idiom_cursor, end)
+                    if idiom is not None:
+                        cursor = idiom.end()
+                        break
+                    modifier = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, idiom_cursor, end)
+                    if modifier is None or (
+                        modifier.group().casefold() not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                        and not modifier.group().casefold().endswith("ly")
+                    ):
+                        break
+                    idiom_cursor = modifier.end()
+                else:
+                    idiom = None
+                if idiom is not None:
+                    continue
             token = ADAPTIVE_TOOL_NAME_TOKEN_RE.match(text, cursor, end)
             if token is None:
                 break
             word = token.group().casefold()
             if word in ADAPTIVE_TOOL_NAME_INVOCATION_WORDS:
                 return anchor
-            if word not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS and not word.endswith("ly"):
+            if (
+                word not in ADAPTIVE_TOOL_NAME_CONTINUATION_PREFIX_WORDS
+                and word not in ADAPTIVE_TOOL_NAME_EXCLUSION_MODIFIER_WORDS
+                and not word.endswith("ly")
+            ):
                 break
             cursor = token.end()
     return None
@@ -969,7 +998,10 @@ def _adaptive_tool_name_polarity_tokens(
         if is_exception and match.start() < negative_exception_until:
             negative_exception_until = 0
             continue
-        bare_negation = ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.fullmatch(negation) is not None
+        bare_negation = (
+            ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.fullmatch(negation) is not None
+            or negation == "but not"
+        )
         word_start = match.end()
         while word_start < len(masked_text) and masked_text[word_start].isspace():
             word_start += 1

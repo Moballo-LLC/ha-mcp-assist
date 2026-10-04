@@ -3055,7 +3055,31 @@ async def test_adaptive_preload_preserves_polite_and_modified_positive_continuat
     assert agent._select_initial_adaptive_tool_names(tools, query) == music_names
 
 
-def test_adaptive_modified_continuation_scan_has_bounded_work(monkeypatch):
+@pytest.mark.parametrize(
+    "phrase", ["don't forget to", "do not hesitate to", "never forget to", "won't forget to",
+               "can't forget to", "not only", "not just", "just", "I don't forget to",
+               "I won't forget to", "I will", "we can", "you should", "don't really forget to"]
+)
+@pytest.mark.parametrize("separator", [",", "but", "and"])
+@pytest.mark.asyncio
+async def test_adaptive_preload_preserves_nested_positive_continuations(
+    hass, profile_entry_factory, phrase, separator
+) -> None:
+    """A positive idiom after an exclusion cannot hide newly requested schemas."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    query = f"Don't use multiply {separator} {phrase} call add and subtract."
+    assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}, query
+    for query in (
+        f"Don't use multiply {separator} don't forget to not call add; call subtract.",
+        f"Don't use multiply {separator} I will not call add; call subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"subtract"}, query
+
+
+@pytest.mark.parametrize("fragment", ["and please ", "and don't really "])
+def test_adaptive_modified_continuation_scan_has_bounded_work(monkeypatch, fragment):
     """Long conjunction lists must not restart unbounded modifier scans."""
     original = tool_schema_module.ADAPTIVE_TOOL_NAME_TOKEN_RE
     calls = 0
@@ -3070,7 +3094,7 @@ def test_adaptive_modified_continuation_scan_has_bounded_work(monkeypatch):
             return original.findall(*args)
 
     monkeypatch.setattr(tool_schema_module, "ADAPTIVE_TOOL_NAME_TOKEN_RE", CountedTokens())
-    query = "Do not use multiply " + "and please " * 2000 + "and please call add and subtract."
+    query = "Do not use multiply " + fragment * 2000 + "and please call add and subtract."
     ranked = tool_schema_module.rank_adaptive_tool_preloads(
         [_tool(name) for name in ("multiply", "add", "subtract")], query
     )
