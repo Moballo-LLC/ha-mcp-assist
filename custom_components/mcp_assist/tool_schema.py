@@ -216,10 +216,18 @@ ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN = (
     r"(?:except(?:\s+for)?|with\s+(?:the\s+)?exceptions?\s+of|other\s+than|"
     r"apart\s+from|save\s+for|barring|(?:anything|everything|all)\s+but)"
 )
+ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN = (
+    r"(?:do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|couldn['’]?t|"
+    r"(?:will|would|should|must|need|might|shall|may)\s+not|won['’]?t|"
+    r"(?:would|should|must|need|might)n['’]?t|shan['’]?t|"
+    r"unable\s+to|not\s+able\s+to|never|not)"
+)
+ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE = re.compile(
+    ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN, flags=re.IGNORECASE
+)
 ADAPTIVE_TOOL_NAME_NEGATION_RE = re.compile(
-    r"\b(?:but\s+not|do\s+not|don['’]?t|cannot|can['’]?t|could\s+not|"
-    r"couldn['’]?t|unable\s+to|not\s+able\s+to|never|not|without|no|instead\s+of|"
-    r"rather\s+than|"
+    rf"\b(?:but\s+not|{ADAPTIVE_TOOL_NAME_BARE_NEGATION_PATTERN}|without|no|"
+    r"instead\s+of|rather\s+than|"
     rf"{ADAPTIVE_TOOL_NAME_EXCEPTION_PATTERN}|exclud(?:e|ing)|omit(?:ting)?|skip(?:ping)?|ignor(?:e|ing)|"
     r"disregard(?:ing)?|reject(?:ing)?|disallow(?:ing)?|forb(?:id|idding)|"
     r"leav(?:e|ing)\s+out|avoid(?:ing)?(?:\s+(?:using|for|when))?)\b",
@@ -961,24 +969,7 @@ def _adaptive_tool_name_polarity_tokens(
         if is_exception and match.start() < negative_exception_until:
             negative_exception_until = 0
             continue
-        bare_negation = negation in {
-            "don't",
-            "dont",
-            "don’t",
-            "do not",
-            "cannot",
-            "can't",
-            "cant",
-            "can’t",
-            "could not",
-            "couldn't",
-            "couldnt",
-            "couldn’t",
-            "unable to",
-            "not able to",
-            "never",
-            "not",
-        }
+        bare_negation = ADAPTIVE_TOOL_NAME_BARE_NEGATION_RE.fullmatch(negation) is not None
         word_start = match.end()
         while word_start < len(masked_text) and masked_text[word_start].isspace():
             word_start += 1

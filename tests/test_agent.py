@@ -2731,6 +2731,36 @@ async def test_adaptive_preload_excludes_unavailable_tools_and_retains_positive_
 
 
 @pytest.mark.parametrize(
+    "prefix", ["won't", "won’t", "wont", "will not", "wouldn't", "wouldn’t", "wouldnt",
+               "would not", "shouldn't", "shouldn’t", "shouldnt", "should not", "mustn't",
+               "mustn’t", "mustnt", "must not", "needn't", "needn’t", "neednt", "need not",
+               "mightn't", "mightn’t", "mightnt", "might not", "shan't", "shan’t", "shant",
+               "shall not", "may not"]
+)
+@pytest.mark.asyncio
+async def test_adaptive_preload_respects_modal_exclusions_and_positive_context(
+    hass, profile_entry_factory, prefix
+) -> None:
+    """Modal contractions cannot promote a rejected tool over requested alternatives."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    tools = [_tool(name) for name in ("multiply", "add", "subtract")]
+    for query in (
+        f"I {prefix} use multiply; call add and subtract.",
+        f"I {prefix} call MissingTool or multiply, so call add and subtract.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(tools, query) == {"add", "subtract"}, query
+    for query in (
+        f"I {prefix} forget to call multiply.",
+        f"I {prefix} use any tool except multiply.",
+        f"I {prefix} worry about multiply; call multiply.",
+    ):
+        assert agent._select_initial_adaptive_tool_names(
+            tools, query, limit=1
+        ) == {"multiply"}, query
+
+
+@pytest.mark.parametrize(
     "modifier",
     ["ever", "even", "please", "really", "actually", "directly", "explicitly", "deliberately",
      "under any circumstances", "for any reason"],
