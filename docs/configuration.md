@@ -168,7 +168,10 @@ capabilities. For obvious requests, Adaptive may preload a small number of
 high-confidence optional tool schemas from the user's wording so the model can
 avoid an extra schema-discovery turn. Exact mentions of profile-visible tool
 names receive priority in this bounded preload, which is limited to two
-schemas. Underscored and hyphenated identifiers count directly. For one-word
+schemas including carryover from a short follow-up. Current-request matches take
+priority, and recently used schemas fill the remaining slots without duplicates.
+Carryover also honors recognized tool exclusions in the current request.
+Underscored and hyphenated identifiers count directly. For one-word
 names such as `add` or `search`, priority requires an invocation such as
 "call add", backticks, or a request containing only the name. Ordinary verbs
 continue to use semantic routing. Names inside URLs or Home Assistant entity IDs

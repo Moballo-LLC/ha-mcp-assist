@@ -51,6 +51,7 @@ from .tool_schema import (
     ADAPTIVE_META_TOOL_NAMES,
     ADAPTIVE_TOOL_CATALOG_NAME,
     ADAPTIVE_TOOL_SCHEMA_NAME,
+    _adaptive_tool_name_polarity_tokens,
     build_adaptive_llm_tools,
     build_tool_routing_summary,
     compact_schema_for_llm,
@@ -208,7 +209,8 @@ class StatefulStreamingRequestError(Exception):
 # Tool schemas are invalidated by settings and custom-tool signatures; this TTL is
 # just a safety refresh, not the primary change detector.
 MCP_TOOL_CACHE_TTL_SECONDS = 300.0
-ADAPTIVE_RETAINED_SCHEMA_LIMIT = 2
+ADAPTIVE_PRELOAD_SCHEMA_LIMIT = 2
+ADAPTIVE_RETAINED_SCHEMA_LIMIT = ADAPTIVE_PRELOAD_SCHEMA_LIMIT
 ADAPTIVE_FOLLOW_UP_MAX_WORDS = 8
 ADAPTIVE_FOLLOW_UP_PREFIXES = (
     "and ",
@@ -3387,7 +3389,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         tools: List[Dict[str, Any]],
         user_text: str,
         *,
-        limit: int = 2,
+        limit: int = ADAPTIVE_PRELOAD_SCHEMA_LIMIT,
         minimum_score: int = 18,
     ) -> frozenset[str]:
         """Return highly likely optional tool schemas to preload for this request."""
@@ -3429,9 +3431,12 @@ class MCPAssistConversationEntity(ConversationEntity):
         tools: List[Dict[str, Any]],
         user_text: str,
         history: List[Dict[str, Any]],
+        *,
+        limit: int = ADAPTIVE_RETAINED_SCHEMA_LIMIT,
+        exclude_names: frozenset[str] = frozenset(),
     ) -> frozenset[str]:
         """Retain recently used optional schemas for a same-topic follow-up."""
-        if not history:
+        if not history or limit <= 0:
             return frozenset()
 
         previous_turn = history[-1]
@@ -3444,6 +3449,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             for tool in tools
             if self._tool_definition_name(tool)
         }
+        _, excluded_tool_names = _adaptive_tool_name_polarity_tokens(
+            user_text.casefold(), frozenset(name.casefold() for name in available_tools)
+        )
         candidate_names: list[str] = []
         for action in reversed(actions):
             if not isinstance(action, dict) or action.get("type") != "mcp_tool":
@@ -3454,11 +3462,13 @@ class MCPAssistConversationEntity(ConversationEntity):
                 or tool_name in LIGHT_CONTEXT_TOOL_NAMES
                 or tool_name in ADAPTIVE_META_TOOL_NAMES
                 or tool_name not in available_tools
+                or tool_name in exclude_names
+                or tool_name.casefold() in excluded_tool_names
                 or tool_name in candidate_names
             ):
                 continue
             candidate_names.append(tool_name)
-            if len(candidate_names) >= ADAPTIVE_RETAINED_SCHEMA_LIMIT:
+            if len(candidate_names) >= limit:
                 break
 
         if not candidate_names:
@@ -3494,12 +3504,14 @@ class MCPAssistConversationEntity(ConversationEntity):
             return
 
         tools = await self._get_profile_mcp_tools() or []
+        preload_names = self._select_initial_adaptive_tool_names(tools, user_text)
         retained_names = self._select_retained_adaptive_tool_names(
             tools,
             user_text,
             history or [],
+            limit=ADAPTIVE_PRELOAD_SCHEMA_LIMIT - len(preload_names),
+            exclude_names=preload_names,
         )
-        preload_names = self._select_initial_adaptive_tool_names(tools, user_text)
         selected_names = retained_names | preload_names
         if not selected_names:
             return

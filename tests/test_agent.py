@@ -3089,6 +3089,53 @@ async def test_adaptive_named_preload_retains_metadata_routing_exclusions(
     ) == set()
 
 
+@pytest.mark.parametrize(
+    ("query", "expected_names"),
+    [("What about that?", {"prior_first", "prior_second"}),
+     ("What about fresh_first?", {"fresh_first", "prior_second"}),
+     ("What about fresh_first and fresh_second?", {"fresh_first", "fresh_second"}),
+     ("What about prior_second?", {"prior_first", "prior_second"}),
+     ("What about fresh_first; do not use prior_second?", {"fresh_first", "prior_first"}),
+     ("What about fresh_first; not prior_first or prior_second?", {"fresh_first"})],
+)
+@pytest.mark.asyncio
+async def test_adaptive_follow_up_caps_combined_schemas_and_keeps_deep_loading(
+    hass, profile_entry_factory, monkeypatch, query, expected_names
+) -> None:
+    """Current requests and carryover share startup slots, while later loading remains available."""
+    entry = profile_entry_factory(options={CONF_CONTEXT_MODE: CONTEXT_MODE_ADAPTIVE})
+    agent = MCPAssistConversationEntity(hass, entry)
+    optional_names = {"prior_first", "prior_second", "fresh_first", "fresh_second"}
+    tools = [_tool("discover_entities")] + [_tool(name) for name in sorted(optional_names)]
+    history = [{
+        "user": "Read prior samples.",
+        "assistant": "Done.",
+        "actions": [
+            {"type": "mcp_tool", "tool": "prior_first", "status": "ok"},
+            {"type": "mcp_tool", "tool": "prior_second", "status": "ok"},
+        ],
+    }]
+    monkeypatch.setattr(agent, "_get_profile_mcp_tools", AsyncMock(return_value=tools))
+    token = agent_module._ADAPTIVE_LOADED_TOOL_NAMES.set(frozenset())
+    try:
+        await agent._prepare_adaptive_tools_for_request(query, history=history)
+        assert agent_module._ADAPTIVE_LOADED_TOOL_NAMES.get() == expected_names
+        advertised = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert advertised & optional_names == expected_names
+        assert len(advertised & optional_names) <= 2
+        await agent._handle_adaptive_meta_tool(
+            ADAPTIVE_TOOL_SCHEMA_NAME, {"tool_names": sorted(optional_names)}
+        )
+        expanded = {
+            tool["function"]["name"] for tool in agent._build_llm_tools_for_context(tools)
+        }
+        assert expanded & optional_names == optional_names
+    finally:
+        agent_module._ADAPTIVE_LOADED_TOOL_NAMES.reset(token)
+
+
 @pytest.mark.asyncio
 async def test_adaptive_retains_last_used_schema_for_same_topic_follow_up(
     hass, profile_entry_factory, monkeypatch
