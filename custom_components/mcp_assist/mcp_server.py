@@ -2195,6 +2195,18 @@ class MCPServer(
                 "id": msg_id,
             }
 
+        if method == "tools/call":
+            tool_name = params.get("name")
+            if not isinstance(tool_name, str) or not tool_name.strip():
+                return {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32602,
+                        "message": "Invalid params: tool name must be a non-empty string",
+                    },
+                    "id": msg_id,
+                }
+
         _LOGGER.debug(
             "Processing MCP method: %s",
             _sanitize_log_value(method),
