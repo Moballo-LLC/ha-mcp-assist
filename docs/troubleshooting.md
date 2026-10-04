@@ -16,6 +16,14 @@ Check:
 
 If the port is in use, change **MCP Server Port** in the shared settings.
 
+## Invalid MCP Tool Request
+
+A `tools/call` request needs a non-empty string `name`. Its `arguments` and
+optional `context` must be objects. Missing, blank, or non-string names and
+non-object arguments or context receive JSON-RPC error `-32602` before a tool
+runs. Correct the request and retry; the next valid call can use the same
+connection.
+
 ## HACS Install Does Not Show HA MCP Assist
 
 Check:

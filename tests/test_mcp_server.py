@@ -4662,6 +4662,48 @@ class _FakeWebSocketResponse:
         return None
 
 
+@pytest.mark.parametrize(
+    "params",
+    [{}, {"name": None}, {"name": 7}, {"name": True}, {"name": ["multiply"]},
+     {"name": {"tool": "multiply"}}, {"name": ""}, {"name": "   "}],
+)
+@pytest.mark.parametrize("transport", ["http", "websocket"])
+@pytest.mark.asyncio
+async def test_mcp_rejects_invalid_tool_names_before_dispatch_and_recovers(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, caplog, params, transport
+) -> None:
+    """Malformed tool names are protocol errors; the next valid call still dispatches."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    result = {"content": [{"type": "text", "text": "319"}]}
+    server.handle_tool_call = AsyncMock(return_value=result)
+    invalid = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}
+    valid_params = {"name": "multiply", "arguments": {"a": 29, "b": 11}}
+    valid = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": valid_params}
+    if transport == "http":
+        responses = [
+            json.loads((await server.handle_mcp_request(_FakeJsonRequest(body))).text)
+            for body in (invalid, valid)
+        ]
+    else:
+        ws = _FakeWebSocketResponse([
+            SimpleNamespace(type=WSMsgType.TEXT, data=json.dumps(body))
+            for body in (invalid, valid)
+        ])
+        monkeypatch.setattr(mcp_server_module.web, "WebSocketResponse", lambda: ws)
+        await server.handle_websocket(SimpleNamespace(remote="127.0.0.1", headers={}, query={}))
+        responses = [json.loads(body) for body in ws.sent]
+    assert responses[0]["id"] == 1
+    assert responses[0]["error"]["code"] == -32602
+    assert "result" not in responses[0]
+    assert responses[1] == {"jsonrpc": "2.0", "id": 2, "result": result}
+    server.handle_tool_call.assert_awaited_once_with(valid_params)
+    assert not any(
+        record.levelno >= logging.ERROR and record.name == mcp_server_module._LOGGER.name
+        for record in caplog.records
+    )
+
+
 @pytest.mark.asyncio
 async def test_handle_mcp_request_rejects_non_object_body(
     hass, profile_entry_factory, system_entry_factory
