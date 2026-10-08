@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import llm
 import pytest
 import voluptuous as vol
 
@@ -112,4 +113,17 @@ async def test_native_cancellation_propagates_without_retry(bridge):
     api.async_call_tool.side_effect = asyncio.CancelledError
     with pytest.raises(asyncio.CancelledError):
         await call(server, "call_assist_tool", {"tool_name": "GetLiveContext"})
+    api.async_call_tool.assert_awaited_once()
+
+
+async def test_native_failed_context_result_is_sanitized(bridge, caplog):
+    if not hasattr(llm, "ToolResult"):
+        pytest.skip("Native ToolResult was introduced in HA 2026.10")
+    server, api = bridge
+    api.async_call_tool.return_value = llm.ToolResult(
+        data={"result": "example-secret-canary"}, error=True
+    )
+    response = await call(server, "get_assist_context_snapshot", {})
+    assert response["result"]["isError"] is True
+    assert "example-secret-canary" not in json.dumps(response) + caplog.text
     api.async_call_tool.assert_awaited_once()

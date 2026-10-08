@@ -233,6 +233,30 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Optional Music Assistant config entry ID. Use this when multiple Music Assistant instances exist.",
                 },
+                "within_media_content_id": {
+                    "type": "string",
+                    "description": "Optional media_content_id copied from a prior media_player.search_media result. When provided, search inside that result instead of running a global Music Assistant search.",
+                },
+                "within_media_content_type": {
+                    "type": "string",
+                    "description": "Optional media_content_type copied from the same prior search result. Required with within_media_content_id.",
+                },
+                "media_player": {
+                    "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
+                    "description": "Optional Music Assistant player entity, name, or alias used for contextual media search.",
+                },
+                "area": {
+                    "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
+                    "description": "Optional area selector for contextual media search.",
+                },
+                "floor": {
+                    "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
+                    "description": "Optional floor selector for contextual media search.",
+                },
+                "label": {
+                    "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
+                    "description": "Optional label selector for contextual media search.",
+                },
                 "instance": {
                     "type": "string",
                     "description": "Optional Music Assistant instance title/name. Use list_music_assistant_instances first if needed.",
@@ -569,6 +593,23 @@ def summarize_music_assistant_response(service: str, response: Any) -> List[str]
     return []
 
 
+def _media_search_response_has_error(response: Any) -> bool:
+    """Recognize explicit service errors while preserving the full response."""
+    if not isinstance(response, dict):
+        return False
+    if response.get("isError") is True:
+        return True
+    if "error" in response and (
+        response.get("success") is False or "result" not in response
+    ):
+        return True
+    return any(
+        _media_search_response_has_error(value)
+        for value in response.values()
+        if isinstance(value, dict)
+    )
+
+
 class MusicAssistantTool:
     """Built-in packaged Music Assistant tools."""
 
@@ -826,6 +867,23 @@ class MusicAssistantTool:
         except ValueError as err:
             return self._text_result(f"❌ Error: {err}")
 
+        within_id = str(args.get("within_media_content_id") or "").strip()
+        within_type = str(args.get("within_media_content_type") or "").strip()
+        if bool(within_id) != bool(within_type):
+            return self._text_result(
+                "❌ Error: within_media_content_id and within_media_content_type "
+                "must be copied together from the same media search result.",
+                is_error=True,
+            )
+        if within_id:
+            return await self._search_music_assistant_within_result(
+                args,
+                config_entry_id=config_entry.entry_id,
+                query=name,
+                media_content_id=within_id,
+                media_content_type=within_type,
+            )
+
         service_data: Dict[str, Any] = {
             "config_entry_id": config_entry.entry_id,
             "name": name,
@@ -855,6 +913,66 @@ class MusicAssistantTool:
             service="search",
             service_data=service_data,
             summary_label=f"Music Assistant search for {name}",
+        )
+
+    async def _search_music_assistant_within_result(
+        self,
+        args: Dict[str, Any],
+        *,
+        config_entry_id: str,
+        query: str,
+        media_content_id: str,
+        media_content_type: str,
+    ) -> Dict[str, Any]:
+        """Use HA's native media search service for a contextual MA search."""
+        try:
+            player_ids, resolution_text = await self._resolve_music_assistant_player_targets(
+                area=args.get("area"),
+                floor=args.get("floor"),
+                label=args.get("label"),
+                media_player=args.get("media_player"),
+                config_entry_id=config_entry_id,
+            )
+        except ValueError as err:
+            return self._text_result(f"❌ Error: {err}", is_error=True)
+
+        if not self.hass.services.has_service("media_player", "search_media"):
+            return self._text_result(
+                "Home Assistant does not expose media_player.search_media.",
+                is_error=True,
+            )
+        try:
+            response = await self.hass.services.async_call(
+                "media_player",
+                "search_media",
+                {
+                    "entity_id": player_ids,
+                    "search_query": query,
+                    "media_content_id": media_content_id,
+                    "media_content_type": media_content_type,
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:
+            _LOGGER.exception("Music Assistant contextual media search failed")
+            return self._text_result(
+                f"❌ Error: contextual Music Assistant search failed ({type(err).__name__}).",
+                is_error=True,
+            )
+
+        serialized = self._serialize_service_response_value(response)
+        result_error = _media_search_response_has_error(serialized)
+        introduction = (
+            "❌ Home Assistant returned an error for the contextual media search."
+            if result_error
+            else "✅ Searched within the selected Music Assistant result."
+        )
+        return self._text_result(
+            f"{introduction}\n{resolution_text}\n\nResponse:\n"
+            + json.dumps(serialized, indent=2, ensure_ascii=False),
+            is_error=result_error,
+            response=serialized,
         )
 
     async def tool_get_music_assistant_library(
@@ -1486,9 +1604,15 @@ class MusicAssistantTool:
         floor: Any = None,
         label: Any = None,
         media_player: Any = None,
+        config_entry_id: str | None = None,
     ) -> Tuple[List[str], str]:
         """Resolve selectors to concrete Music Assistant player entity IDs."""
         catalog = self._get_music_assistant_player_catalog()
+        if config_entry_id:
+            catalog = [
+                record for record in catalog
+                if record["entity_info"].get("config_entry_id") == config_entry_id
+            ]
         if not catalog:
             raise ValueError("No exposed Music Assistant players are available.")
 

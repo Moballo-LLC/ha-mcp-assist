@@ -8,7 +8,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from probatio import to_field_list
+try:
+    from probatio import to_field_list
+except ImportError:
+    from voluptuous_serialize import convert as to_field_list
+
 import pytest
 import voluptuous as vol
 from homeassistant.data_entry_flow import FlowResultType, section
