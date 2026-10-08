@@ -1991,12 +1991,35 @@ class MCPAssistConversationEntity(ConversationEntity):
             return
 
         try:
-            result_content = chat_log.ToolResultContent(
-                agent_id=self.entity_id,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
-                tool_result=redact_secrets(tool_result),
-            )
+            result_data = redact_secrets(tool_result)
+            tool_result_content = chat_log.ToolResultContent
+            if hasattr(llm, "ToolResult"):
+                try:
+                    result_content = tool_result_content(
+                        agent_id=self.entity_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        result=llm.ToolResult(
+                            data=result_data,
+                            error=bool(tool_result.get("isError")),
+                        ),
+                    )
+                except TypeError as err:
+                    if "result" not in str(err):
+                        raise
+                    result_content = tool_result_content(
+                        agent_id=self.entity_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        tool_result=result_data,
+                    )
+            else:
+                result_content = tool_result_content(
+                    agent_id=self.entity_id,
+                    tool_call_id=tool_call_id,
+                    tool_name=tool_name,
+                    tool_result=result_data,
+                )
             # Use callback method to add tool result
             self._current_chat_log.async_add_assistant_content_without_tools(
                 result_content

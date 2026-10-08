@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from homeassistant.components.conversation import ConversationInput
@@ -6171,6 +6171,30 @@ async def test_execute_single_tool_call_redacts_result_before_model_and_chat_log
     assert canary not in str(record)
     assert "[redacted]" in str(result)
     assert "[redacted]" in str(record)
+
+
+def test_chat_log_records_native_toolresult_content(hass, profile_entry_factory) -> None:
+    """HA 2026.10 ChatLog entries use ToolResultContent.result."""
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    add_content = Mock()
+    request_chat_log = SimpleNamespace(
+        async_add_assistant_content_without_tools=add_content,
+    )
+    token = agent_module._REQUEST_CHAT_LOG.set((agent, request_chat_log))
+
+    try:
+        agent._record_tool_result_to_chatlog(
+            "call-1", "native_tool", {"items": ["kept"], "isError": True}
+        )
+    finally:
+        agent_module._REQUEST_CHAT_LOG.reset(token)
+
+    content = add_content.call_args.args[0]
+    if hasattr(agent_module.llm, "ToolResult"):
+        assert content.result.data == {"items": ["kept"], "isError": True}
+        assert content.result.error is True
+    else:
+        assert content.tool_result == {"items": ["kept"], "isError": True}
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.core import SupportsResponse
@@ -360,3 +361,74 @@ async def test_search_music_assistant_supports_audiobook_and_podcast_filters(
         }
     ]
     assert "The Helpful Home" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_search_music_assistant_can_search_within_native_media_result(
+    hass, monkeypatch
+) -> None:
+    """A copied native media result scopes search to its Music Assistant player."""
+    entry = _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    resolver = AsyncMock(return_value=(["media_player.office"], "Resolved Office"))
+    monkeypatch.setattr(tool, "_resolve_music_assistant_player_targets", resolver)
+    responses = [{"media_player.office": {"result": [{"title": "Example track"}]}}]
+    calls = []
+
+    async def search_media_service(call):
+        calls.append(dict(call.data))
+        return responses[0]
+
+    hass.services.async_register(
+        "media_player",
+        "search_media",
+        search_media_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    result = await tool.handle_call(
+        "search_music_assistant",
+        {
+            "name": "track",
+            "config_entry_id": entry.entry_id,
+            "within_media_content_id": "artist/example",
+            "within_media_content_type": "artist",
+            "media_player": "Office",
+        },
+    )
+
+    assert result["isError"] is False
+    assert result["response"] == {
+        "media_player.office": {"result": [{"title": "Example track"}]}
+    }
+    resolver.assert_awaited_once_with(
+        area=None,
+        floor=None,
+        label=None,
+        media_player="Office",
+        config_entry_id=entry.entry_id,
+    )
+    expected_service_data = {
+            "entity_id": ["media_player.office"],
+            "search_query": "track",
+            "media_content_id": "artist/example",
+            "media_content_type": "artist",
+        }
+    assert calls == [expected_service_data]
+
+    service_error = {"media_player.office": {"error": "search unavailable"}}
+    responses[0] = service_error
+    error_result = await tool.handle_call(
+        "search_music_assistant",
+        {
+            "name": "track",
+            "config_entry_id": entry.entry_id,
+            "within_media_content_id": "artist/example",
+            "within_media_content_type": "artist",
+            "media_player": "Office",
+        },
+    )
+    assert error_result["isError"] is True
+    assert error_result["response"] == service_error
+    assert "❌ Home Assistant returned an error" in error_result["content"][0]["text"]
+    assert calls == [expected_service_data, expected_service_data]

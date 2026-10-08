@@ -26,6 +26,7 @@ from ....const import (
 )
 from ....openapi import to_openapi
 from ...tool_runtime import HomeAssistantToolRuntime
+from ....llm_tool_result import normalize_llm_tool_result
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -254,14 +255,17 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
             raise ValueError("arguments must be an object")
 
         llm_api = await self._get_llm_api_bridge_api_instance(args.get("api_id"))
-        tool_response = await self._call_llm_api_tool(
+        tool_response, is_error = await self._call_llm_api_tool(
             llm_api, tool_name, tool_arguments
         )
         serialized_response = self._serialize_service_response_value(tool_response)
 
-        text_parts = [
-            f"✅ Called third-party LLM API `{llm_api.api.id}` tool `{tool_name}`."
-        ]
+        introduction = (
+            f"❌ Third-party LLM API `{llm_api.api.id}` tool `{tool_name}` reported an error."
+            if is_error
+            else f"✅ Called third-party LLM API `{llm_api.api.id}` tool `{tool_name}`."
+        )
+        text_parts = [introduction]
         summary_lines = self._build_assist_tool_response_summary(serialized_response)
         if summary_lines:
             text_parts.append("")
@@ -270,7 +274,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         text_parts.append("Response:")
         text_parts.append(json.dumps(serialized_response, indent=2, ensure_ascii=False))
 
-        return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
+        return self._text_result("\n".join(text_parts), is_error=is_error)
 
     async def tool_get_llm_api_prompt(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get prompt text for an allowlisted third-party LLM API."""
@@ -296,6 +300,13 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
                     + json.dumps(payload, indent=2, ensure_ascii=False),
                 }
             ]
+        }
+
+    def _text_result(self, text: str, *, is_error: bool = False) -> dict[str, Any]:
+        """Build an MCP text result and retain native tool error status."""
+        return {
+            "content": [{"type": "text", "text": text}],
+            "isError": is_error,
         }
 
     def _get_shared_setting(self, key: str, default: Any = None) -> Any:
@@ -417,7 +428,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         llm_api: llm.APIInstance,
         tool_name: str,
         arguments: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], bool]:
         """Call a Home Assistant LLM API tool safely."""
         tool_input = self._create_llm_tool_input(
             tool_name,
@@ -433,9 +444,8 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
                 f"'{llm_api.api.id}' tool '{tool_name}': {err}"
             ) from err
 
-        if not isinstance(result, dict):
-            return {"result": self._serialize_service_response_value(result)}
-        return result
+        data, is_error = normalize_llm_tool_result(result)
+        return self._serialize_service_response_value(data), is_error
 
     def _create_llm_tool_input(
         self,

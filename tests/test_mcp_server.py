@@ -72,6 +72,8 @@ from custom_components.mcp_assist.const import (
     SERVER_TYPE_ANTHROPIC,
 )
 from custom_components.mcp_assist.mcp_server import MCPServer
+from custom_components.mcp_assist.llm_tool_result import normalize_llm_tool_result
+from custom_components.mcp_assist.registry_compat import iter_registry_items
 
 BUILTIN_SPECS = load_builtin_tool_toggle_specs()
 SECRET_CANARY = "not-a-real-secret-canary-12345"
@@ -1671,6 +1673,79 @@ async def test_llm_api_bridge_can_inspect_call_and_read_prompt(
         )
     finally:
         unregister()
+
+
+def test_normalize_llm_tool_result_supports_toolresult_and_legacy_dict() -> None:
+    """Normalize the new HA result while retaining legacy JSON-object results."""
+    data = {"items": [{"name": "Example"}]}
+
+    assert normalize_llm_tool_result(data) == (data, False)
+    if hasattr(llm, "ToolResult"):
+        assert normalize_llm_tool_result(llm.ToolResult(data=data, error=True)) == (
+            data,
+            True,
+        )
+
+
+def test_iter_registry_items_supports_mapping_and_collection() -> None:
+    """Registry iteration avoids deprecated mapping calls on new collections."""
+    entry = object()
+
+    class Collection:
+        def __iter__(self):
+            return iter([entry])
+
+        def values(self):
+            raise AssertionError("collection API must be iterated directly")
+
+    assert list(iter_registry_items({"entry": entry})) == [entry]
+    assert list(iter_registry_items(Collection())) == [entry]
+
+
+@pytest.mark.asyncio
+async def test_llm_api_bridge_preserves_toolresult_data_and_error(
+    hass, profile_entry_factory
+) -> None:
+    """Native ToolResult data and errors survive both MCP bridge paths."""
+    if not hasattr(llm, "ToolResult"):
+        pytest.skip("Home Assistant has not added llm.ToolResult yet")
+
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    api = _FakeLLMAPI(hass=hass, id="llm_intents", name="LLM Intents")
+    api_instance = await api.async_get_api_instance(
+        server._create_assist_llm_context()
+    )
+    api_instance.async_call_tool = AsyncMock(
+        return_value=llm.ToolResult(data={"items": ["kept"]}, error=True)
+    )
+    data, is_error = await server._call_llm_api_tool(
+        api_instance, "EchoIntent", {"value": "hello"}
+    )
+
+    assert data == {"items": ["kept"]}
+    assert is_error is True
+
+    bridge = LLMApiBridgeTool(hass)
+    bridge._get_llm_api_bridge_api_instance = AsyncMock(return_value=api_instance)
+    bridge_result = await bridge.tool_call_llm_api_tool(
+        {"api_id": "llm_intents", "tool_name": "EchoIntent", "arguments": {}}
+    )
+    assert bridge_result["isError"] is True
+    assert "✅ Called" not in bridge_result["content"][0]["text"]
+    assert '"items": [\n    "kept"\n  ]' in bridge_result["content"][0]["text"]
+
+    assist_api = _FakeLLMAPI(hass=hass, id="assist", name="Home Assistant")
+    assist_instance = await assist_api.async_get_api_instance(api_instance.llm_context)
+    assist_instance.async_call_tool = AsyncMock(
+        return_value=llm.ToolResult(data={"items": ["kept"]}, error=True)
+    )
+    server._get_assist_api_instance = AsyncMock(return_value=assist_instance)
+    assist_result = await server.tool_call_assist_tool(
+        {"tool_name": "EchoIntent", "arguments": {}}
+    )
+    assert assist_result["isError"] is True
+    assert "✅ Called" not in assist_result["content"][0]["text"]
+    assert '"items": [\n    "kept"\n  ]' in assist_result["content"][0]["text"]
 
 
 @pytest.mark.asyncio

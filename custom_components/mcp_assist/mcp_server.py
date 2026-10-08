@@ -55,6 +55,7 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_shared_settings,
 )
 from .openapi import to_openapi
+from .llm_tool_result import normalize_llm_tool_result
 from .model_profiles import (
     MCP_PROFILE_REQUEST_HEADER,
     ModelProfileResolutionError,
@@ -4438,7 +4439,7 @@ class MCPServer(
                     "Use list_assist_tools to find its exact name.",
                     is_error=True,
                 )
-            tool_response = await self._call_llm_api_tool(
+            tool_response, is_error = await self._call_llm_api_tool(
                 llm_api, resolved_name, assist_arguments
             )
         except (HomeAssistantError, vol.Invalid):
@@ -4449,7 +4450,12 @@ class MCPServer(
             )
         serialized_response = self._serialize_service_response_value(tool_response)
 
-        text_parts = [f"✅ Called native Assist tool `{tool_name}`."]
+        introduction = (
+            f"❌ Native Assist tool `{tool_name}` reported an error."
+            if is_error
+            else f"✅ Called native Assist tool `{tool_name}`."
+        )
+        text_parts = [introduction]
         summary_lines = self._build_assist_tool_response_summary(serialized_response)
         if summary_lines:
             text_parts.append("")
@@ -4458,7 +4464,9 @@ class MCPServer(
         text_parts.append("Response:")
         text_parts.append(json.dumps(serialized_response, indent=2, ensure_ascii=False))
 
-        return {"content": [{"type": "text", "text": "\n".join(text_parts)}]}
+        return self._build_text_tool_result(
+            "\n".join(text_parts), is_error=is_error
+        )
 
     async def tool_get_assist_prompt(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Get the native Home Assistant Assist prompt text."""
@@ -4497,33 +4505,33 @@ class MCPServer(
             }
 
         try:
-            tool_response = await self._call_llm_api_tool(llm_api, tool_name, {})
+            tool_response, is_error = await self._call_llm_api_tool(
+                llm_api, tool_name, {}
+            )
         except (HomeAssistantError, vol.Invalid):
             return self._build_text_tool_result(
                 "Assist context snapshot is unavailable right now.", is_error=True
             )
-        if (
+        is_error = is_error or (
             isinstance(tool_response, dict)
             and tool_response.get("success") is False
             and tool_response.get("error")
-        ):
-            return self._build_text_tool_result(
-                "Assist context snapshot is unavailable right now.", is_error=True
-            )
+        )
         snapshot = tool_response.get("result") if isinstance(tool_response, dict) else None
         if snapshot is None:
             snapshot = self._serialize_service_response_value(tool_response)
         if not isinstance(snapshot, str):
             snapshot = json.dumps(snapshot, indent=2, ensure_ascii=False)
 
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": "Assist context snapshot:\n\n" + snapshot,
-                }
-            ]
-        }
+        return self._build_text_tool_result(
+            "Assist context snapshot:\n\n" + snapshot,
+            is_error=bool(is_error),
+            structured_content=(
+                self._serialize_service_response_value(tool_response)
+                if isinstance(tool_response, dict)
+                else None
+            ),
+        )
 
     async def tool_perform_action(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Perform an action on Home Assistant entities with progress notifications."""
@@ -5182,7 +5190,7 @@ class MCPServer(
         llm_api: llm.APIInstance,
         tool_name: str,
         arguments: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], bool]:
         """Call a Home Assistant LLM API tool safely."""
         tool_input = self._create_llm_tool_input(
             tool_name,
@@ -5208,9 +5216,8 @@ class MCPServer(
                 f"'{llm_api.api.id}' tool '{tool_name}': {err}"
             ) from err
 
-        if not isinstance(result, dict):
-            return {"result": self._serialize_service_response_value(result)}
-        return result
+        data, is_error = normalize_llm_tool_result(result)
+        return self._serialize_service_response_value(data), is_error
 
     def _create_llm_tool_input(
         self,

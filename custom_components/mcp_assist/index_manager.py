@@ -49,6 +49,7 @@ from .const import (
     SERVER_TYPE_VLLM,
     SYSTEM_ENTRY_UNIQUE_ID,
 )
+from .registry_compat import iter_registry_items
 
 try:
     from homeassistant.helpers import floor_registry as fr
@@ -554,7 +555,7 @@ class IndexManager:
                 label_areas[label_id].add(area_entry.id)
 
         label_devices = defaultdict(set)
-        for device_entry in device_reg.devices.values():
+        for device_entry in iter_registry_items(device_reg.devices):
             for label_id in getattr(device_entry, "labels", set()) or set():
                 label_devices[label_id].add(device_entry.id)
 
@@ -613,7 +614,7 @@ class IndexManager:
         by_floor = defaultdict(int)
         manufacturers = defaultdict(int)
 
-        for device_entry in device_reg.devices.values():
+        for device_entry in iter_registry_items(device_reg.devices):
             if device_entry.id not in device_domains:
                 continue
 

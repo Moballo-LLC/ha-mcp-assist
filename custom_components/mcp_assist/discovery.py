@@ -33,6 +33,7 @@ except ImportError:  # pragma: no cover - older Home Assistant versions
     WeatherEntityFeature = None
 
 from .const import MAX_ENTITIES_PER_DISCOVERY
+from .registry_compat import iter_registry_items
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -824,7 +825,7 @@ class SmartDiscovery:
             if not entity_entry or not entity_entry.device_id:
                 continue
 
-            if entity_entry.device_id not in device_registry.devices:
+            if not device_registry.async_get(entity_entry.device_id):
                 continue
 
             entity_summary = {
@@ -1978,7 +1979,7 @@ class SmartDiscovery:
         device_entities_map = self._build_device_entity_map(entity_registry, device_registry)
         devices_with_score: List[Tuple[int, str, Dict[str, Any]]] = []
 
-        for device_entry in device_registry.devices.values():
+        for device_entry in iter_registry_items(device_registry.devices):
             device_entities = device_entities_map.get(device_entry.id, [])
             if not device_entities:
                 continue

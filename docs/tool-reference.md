@@ -77,7 +77,9 @@ registered by other integrations. It is disabled by default.
 
 Use `list_llm_api_tools` before `call_llm_api_tool` so arguments match the
 third-party API's schema. The built-in Home Assistant `assist` API stays on the
-Assist Bridge tools.
+Assist Bridge tools. Native tool results retain their structured data and error
+status in MCP Assist, including Home Assistant's `ToolResult` API and older
+JSON-object return values.
 
 ## Response-Service Read Tools
 
@@ -351,6 +353,11 @@ Use player names, areas, floors, labels, or entity IDs to narrow ambiguous
 player requests. Search and library browsing support Music Assistant tracks,
 albums, artists, playlists, radio, audiobooks, and podcasts when those media
 types are available from the configured Music Assistant instance.
+For a contextual follow-up, copy both `media_content_id` and
+`media_content_type` from a native media search result and pass them as
+`within_media_content_id` and `within_media_content_type`; select a player when
+the chosen Music Assistant instance has more than one exposed player. Searches
+without these fields keep using Music Assistant's global search.
 
 ## Image Tools
 
