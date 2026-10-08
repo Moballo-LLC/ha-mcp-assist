@@ -14,6 +14,7 @@ detail.
 | [Tool Reference](tool-reference.md) | What each core and optional tool family does |
 | [Usage Examples](examples.md) | Example requests and the tool flow behind them |
 | [Model Compatibility](model-compatibility.md) | Choosing and validating models that can use tools well |
+| [Release verification](releases.md#home-assistant-version-matrix) | CI Home Assistant versions, matching test harnesses, and local reproduction |
 | [Troubleshooting](troubleshooting.md) | Common failures and practical checks |
 | [Security and Privacy](security-and-privacy.md) | Exposure controls, API keys, network access, memory, and external tools |
 | [External Custom Tools](custom-tools.md) | Building installation-specific MCP tool packages |

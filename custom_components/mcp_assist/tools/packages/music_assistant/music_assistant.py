@@ -1611,7 +1611,7 @@ class MusicAssistantTool:
         if config_entry_id:
             catalog = [
                 record for record in catalog
-                if record.get("config_entry_id") == config_entry_id
+                if record["entity_info"].get("config_entry_id") == config_entry_id
             ]
         if not catalog:
             raise ValueError("No exposed Music Assistant players are available.")

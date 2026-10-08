@@ -127,6 +127,13 @@ For the complete setup walkthrough, see
 See [Model Compatibility](docs/model-compatibility.md) before spending much time
 tuning a small local model.
 
+CI runs the full integration test suite against Home Assistant 2026.10.0,
+2026.9.3, and 2026.8.3 using a matching test harness for each release. This
+checks those selected versions; it does not claim full-suite coverage across
+the entire Home Assistant 2024.1+ runtime support floor. See
+[release verification](docs/releases.md#home-assistant-version-matrix) for the
+exact harness pins and reproducible local commands.
+
 ## Documentation
 
 | Guide | Use it for |

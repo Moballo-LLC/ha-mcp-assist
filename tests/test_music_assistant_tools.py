@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.core import SupportsResponse
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mcp_assist.tools.packages.music_assistant.music_assistant import MusicAssistantTool
@@ -432,3 +433,57 @@ async def test_search_music_assistant_can_search_within_native_media_result(
     assert error_result["response"] == service_error
     assert "❌ Home Assistant returned an error" in error_result["content"][0]["text"]
     assert calls == [expected_service_data, expected_service_data]
+
+
+@pytest.mark.parametrize("selector", [None, "media_player.office"])
+async def test_contextual_search_uses_real_catalog_and_selected_instance(
+    hass, monkeypatch, selector
+):
+    """Registry-backed searches keep only exposed players in the chosen instance."""
+    entry = _add_music_assistant_entry(hass)
+    other = _add_music_assistant_entry(hass, entry_id="ma_other", title="Other")
+    registry = er.async_get(hass)
+    for name, config_entry in [("office", entry), ("hidden", entry), ("other", other)]:
+        entity = registry.async_get_or_create(
+            "media_player", "music_assistant", name,
+            suggested_object_id=name, config_entry=config_entry,
+        )
+        hass.states.async_set(entity.entity_id, "idle", {"friendly_name": name.title()})
+    monkeypatch.setattr(
+        "custom_components.mcp_assist.tools.packages.music_assistant.music_assistant.async_should_expose",
+        lambda _hass, _assistant, entity_id: entity_id != "media_player.hidden",
+    )
+    tool = MusicAssistantTool(hass)
+    calls = []
+    response = {"media_player.office": {"result": [{
+        "title": "Example Track", "media_content_id": "track/example",
+        "media_content_type": "track",
+    }]}}
+
+    async def search_service(call):
+        calls.append(dict(call.data))
+        return response
+
+    hass.services.async_register(
+        "media_player", "search_media", search_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+    arguments = {
+        "name": "track", "config_entry_id": entry.entry_id,
+        "within_media_content_id": "artist/example",
+        "within_media_content_type": "artist",
+    }
+    if selector:
+        arguments["media_player"] = selector
+    result = await tool.handle_call("search_music_assistant", arguments)
+    assert result["isError"] is False
+    assert result["response"] == response
+    assert calls == [{
+        "entity_id": ["media_player.office"], "search_query": "track",
+        "media_content_id": "artist/example", "media_content_type": "artist",
+    }]
+
+    arguments["media_player"] = "media_player.other"
+    rejected = await tool.handle_call("search_music_assistant", arguments)
+    assert rejected["isError"] is True
+    assert len(calls) == 1

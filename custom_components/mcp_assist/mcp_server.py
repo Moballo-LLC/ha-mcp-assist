@@ -4517,6 +4517,10 @@ class MCPServer(
             and tool_response.get("success") is False
             and tool_response.get("error")
         )
+        if is_error:
+            return self._build_text_tool_result(
+                "Assist context snapshot is unavailable right now.", is_error=True
+            )
         snapshot = tool_response.get("result") if isinstance(tool_response, dict) else None
         if snapshot is None:
             snapshot = self._serialize_service_response_value(tool_response)
