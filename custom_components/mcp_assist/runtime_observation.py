@@ -7,6 +7,8 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import wraps
 
+from aiohttp import ClientConnectionError
+
 _STAGES = frozenset({"conversation", "provider", "tool"})
 _MAX_COUNT = 2**31 - 1
 _ATTRIBUTE = "_ordinary_request_outcomes"
@@ -28,7 +30,7 @@ def _failure_type(error: BaseException) -> str:
         return "timeout"
     if "auth" in name:
         return "authorization"
-    if isinstance(error, ConnectionError) or "connection" in name:
+    if isinstance(error, (ConnectionError, ClientConnectionError)) or "connection" in name:
         return "connection"
     if isinstance(error, ProviderResponseError):
         return "provider"

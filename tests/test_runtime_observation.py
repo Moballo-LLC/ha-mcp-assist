@@ -1,10 +1,12 @@
 """Ordinary lifecycle, privacy and diagnostic read boundaries."""
 
 import asyncio
+import errno
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import aiohttp
 import pytest
 
 from custom_components.mcp_assist import runtime_observation as observation
@@ -124,6 +126,81 @@ async def test_timeout_caught_by_dispatch_is_typed_and_uncertain():
     assert value["failure"] == value["uncertain"] == 1
     assert value["last_failure_type"] == "timeout"
     assert "private timeout" not in json.dumps(project_request_outcomes(owner))
+
+
+def _transport_errors():
+    key = aiohttp.client_reqrep.ConnectionKey(
+        host="example.invalid", port=80, is_ssl=False, ssl=True,
+        proxy=None, proxy_auth=None, proxy_headers_hash=None,
+    )
+    errors = [
+        ("connector", aiohttp.ClientConnectorError(key, OSError("private canary")), "connection", False),
+        ("disconnected", aiohttp.ServerDisconnectedError("private canary"), "connection", False),
+        ("client_os", aiohttp.ClientOSError(errno.ECONNRESET, "private canary"), "connection", False),
+        ("timeout", aiohttp.ServerTimeoutError("private canary"), "timeout", True),
+        ("invalid_url", aiohttp.InvalidURL("private canary"), "validation", False),
+        ("unknown", RuntimeError("private canary"), "unknown", False),
+    ]
+    dns_error = getattr(aiohttp, "ClientConnectorDNSError", None)
+    if dns_error is not None:
+        error = dns_error(key, OSError("private canary"))
+        errors.insert(1, ("dns", error, "connection", False))
+    return errors
+
+
+@pytest.mark.parametrize("case,error,failure,uncertain", _transport_errors())
+async def test_transport_failure_categories_preserve_error_and_recover(
+    case, error, failure, uncertain,
+):
+    owner = Worker()
+    with pytest.raises(type(error)) as caught:
+        await owner.fail(error)
+    assert caught.value is error
+    value = stage(owner, "tool")
+    assert value["started"] == value["failure"] == 1
+    assert value["uncertain"] == int(uncertain)
+    assert value["active"] == 0
+    assert value["last_failure_type"] == failure
+    assert value["last_terminal_uncertain"] is uncertain
+    assert "private canary" not in json.dumps(project_request_outcomes(owner))
+    result = {"content": []}
+    assert await owner.tool(result) is result
+    assert stage(owner, "tool")["started"] == 2
+    assert stage(owner, "tool")["active"] == 0
+
+
+@pytest.mark.parametrize("error", [
+    aiohttp.ClientConnectorError(
+        aiohttp.client_reqrep.ConnectionKey(
+            host="example.invalid", port=80, is_ssl=False, ssl=True,
+            proxy=None, proxy_auth=None, proxy_headers_hash=None,
+        ),
+        OSError("private provider canary"),
+    ),
+    aiohttp.ServerDisconnectedError("private provider canary"),
+])
+async def test_actual_http_provider_dispatch_preserves_transport_failure(
+    hass, profile_entry_factory, monkeypatch, error,
+):
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    monkeypatch.setattr(
+        agent, "_get_llm_provider", Mock(return_value=SimpleNamespace(supports_streaming=False)),
+    )
+    http_call = AsyncMock(side_effect=error)
+    monkeypatch.setattr(agent, "_call_llm_http", http_call)
+    with pytest.raises(type(error)) as caught:
+        await agent._call_llm([{"role": "user", "content": "private input"}])
+    assert caught.value is error
+    assert http_call.await_count == 1
+    value = stage(agent, "provider")
+    assert value["started"] == value["failure"] == 1
+    assert value["active"] == 0
+    assert value["last_failure_type"] == "connection"
+    assert "private" not in json.dumps(project_request_outcomes(agent))
+    monkeypatch.setattr(agent, "_call_llm_http", AsyncMock(return_value="recovered reply"))
+    assert await agent._call_llm([]) == "recovered reply"
+    assert stage(agent, "provider")["started"] == 2
+    assert stage(agent, "provider")["active"] == 0
 
 
 async def test_unknown_result_remains_uncertain_and_diagnostic_reads_do_not_freshen():
