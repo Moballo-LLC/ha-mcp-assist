@@ -170,7 +170,7 @@ from .const import (
     DEFAULT_HERMES_SESSION_KEY,
 )
 from .runtime_observation import (
-    note_request_failure, note_request_uncertain, observe, observe_request,
+    ProviderResponseError, note_request_failure, note_request_uncertain, observe, observe_request,
 )
 from .conversation_history import ConversationHistory
 
@@ -450,10 +450,6 @@ class ProviderHttpResponse:
     status: int
     data: dict[str, Any] | None = None
     error_text: str = ""
-
-
-class ProviderResponseError(Exception):
-    """A non-success provider response recorded before returning a fallback."""
 
 
 class ProviderResponseTimeoutError(Exception):
@@ -4485,7 +4481,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             if response.status != 200:
                 if fallback_response is None:
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"No-tools provider response failed with status {response.status}: "
                         f"{_provider_log_snippet(response.error_text)}"
                     )
@@ -4752,6 +4748,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                                         transport="streaming_invalid_tool_final",
                                     )
                                 if invalid_tool_retry_used:
+                                    note_request_uncertain(self, "provider")
                                     return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                                 self._append_invalid_tool_call_retry_messages(
                                     conversation_messages,
@@ -4774,7 +4771,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 "Provider streaming error response: %s",
                                 _provider_log_snippet(error_text),
                             )
-                            raise Exception(
+                            raise ProviderResponseError(
                                 f"Streaming failed: {_provider_log_snippet(error_text)}"
                             )  # Raise to trigger fallback
 
@@ -5036,6 +5033,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 if not valid_tool_calls:
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5189,6 +5187,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 transport="streaming_iteration_final",
             )
         else:
+            note_request_uncertain(self, "provider")
             return TOOL_BUDGET_FALLBACK_RESPONSE
 
     @observe("provider")
@@ -5342,6 +5341,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                             transport="http_invalid_tool_final",
                         )
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5357,7 +5357,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     http_response.status,
                     error_snippet,
                 )
-                raise Exception(
+                raise ProviderResponseError(
                     f"{self.server_type} API error {http_response.status}: {error_snippet}"
                 )
 
@@ -5384,6 +5384,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 if not valid_raw_tool_calls:
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5513,6 +5514,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 provider,
                 transport="http_iteration_final",
             )
+        note_request_uncertain(self, "provider")
         return TOOL_BUDGET_FALLBACK_RESPONSE
 
     async def _execute_actions(

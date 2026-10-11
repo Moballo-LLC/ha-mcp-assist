@@ -49,8 +49,10 @@ a recent protocol failure and a later completed request. Provider dispatch
 includes the normal streaming/HTTP fallback pipeline, Hermes and OpenClaw sends,
 and media provider operations. Nested provider helpers count once. Profile tool
 calls and server dispatches are separate boundaries; do not add their counts
-as if they represented independent device actions. Requests that never reach
-these dispatch boundaries have no outcome here.
+as if they represented independent device actions. Built-in replies returned
+after malformed tool calls or an exhausted model-turn guard remain uncertain;
+provider HTTP failures are categorized separately from input validation.
+Requests that never reach these dispatch boundaries have no outcome here.
 
 A successful count means that the normal operation returned a recognized
 protocol result. It does not prove a device changed state or a remote action

@@ -13,6 +13,10 @@ _ATTRIBUTE = "_ordinary_request_outcomes"
 _ACTIVE: ContextVar[tuple] = ContextVar("mcp_assist_observed_requests", default=())
 
 
+class ProviderResponseError(ValueError):
+    """A provider HTTP failure that retains ValueError compatibility."""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -26,6 +30,8 @@ def _failure_type(error: BaseException) -> str:
         return "authorization"
     if isinstance(error, ConnectionError) or "connection" in name:
         return "connection"
+    if isinstance(error, ProviderResponseError):
+        return "provider"
     if isinstance(error, (ValueError, TypeError)):
         return "validation"
     if "provider" in name or "stream" in name:

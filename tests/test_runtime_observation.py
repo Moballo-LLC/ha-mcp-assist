@@ -317,3 +317,259 @@ async def test_actual_no_tools_provider_outcomes_and_recovery(
     assert recovered["last_failure_type"] is None
     assert recovered["last_terminal_uncertain"] is False
     assert post.call_count == attempts + 1
+
+
+class _StreamLines:
+    def __init__(self, lines):
+        self.lines = iter(line.encode() for line in lines)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.lines)
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+
+def _mock_responses(monkeypatch, aiohttp_module, specs):
+    posts = []
+    contexts = []
+    for status, payload, lines in specs:
+        response = SimpleNamespace(
+            status=status,
+            headers={},
+            content=_StreamLines(lines),
+            json=AsyncMock(return_value=payload),
+            text=AsyncMock(return_value=json.dumps(payload)),
+        )
+        contexts.append(Mock(
+            __aenter__=AsyncMock(return_value=response),
+            __aexit__=AsyncMock(return_value=False),
+        ))
+
+    session = Mock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+
+    def post(url, **kwargs):
+        posts.append({"url": url, **kwargs})
+        return contexts.pop(0)
+
+    session.post = Mock(side_effect=post)
+    monkeypatch.setattr(aiohttp_module, "ClientSession", Mock(return_value=session))
+    return posts
+
+
+def _tool_response(transport, arguments, *, status=200, payload_error=None):
+    payload = (
+        {"error": payload_error}
+        if payload_error is not None
+        else {"message": {
+            "role": "assistant",
+            "tool_calls": [{
+                "id": "call-1",
+                "function": {"name": "list_available_tools", "arguments": arguments},
+            }],
+        }}
+    )
+    lines = (
+        [json.dumps(payload), json.dumps({"done": True})]
+        if transport == "streaming" and status == 200 else []
+    )
+    return status, payload, lines
+
+
+def _text_response(transport, text):
+    payload = {"message": {"content": text}}
+    lines = [json.dumps(payload), json.dumps({"done": True})] if transport == "streaming" else []
+    return 200, payload, lines
+
+
+@pytest.mark.parametrize("transport", ["streaming", "http"])
+@pytest.mark.parametrize("trigger", ["http_error", "malformed_tool_call"])
+async def test_invalid_tool_fallback_is_uncertain_and_recovers(
+    hass, profile_entry_factory, monkeypatch, transport, trigger
+):
+    from custom_components.mcp_assist import agent as agent_module
+
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(
+        data={"server_type": "ollama"},
+        options={"context_mode": "light"},
+    ))
+    provider = agent._get_llm_provider()
+    monkeypatch.setattr(agent, "_get_llm_provider", Mock(return_value=provider))
+    if transport == "http":
+        provider.supports_streaming = False
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[{
+        "type": "function",
+        "function": {"name": "list_available_tools", "parameters": {"type": "object"}},
+    }]))
+    execute = AsyncMock(return_value=[])
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute)
+
+    if trigger == "http_error":
+        repeated = [
+            _tool_response(
+                transport, "", status=500,
+                payload_error="invalid tool call arguments: invalid JSON",
+            )
+            for _ in range(2)
+        ]
+    else:
+        repeated = [
+            _tool_response(transport, 1),
+            _tool_response(transport, 2),
+        ]
+    posts = _mock_responses(
+        monkeypatch, agent_module.aiohttp,
+        repeated + [_text_response(transport, "Recovered.")],
+    )
+    messages = [{"role": "user", "content": "private request"}]
+
+    assert await agent._call_llm(messages) == agent_module.INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
+    assert len(posts) == 2
+    assert "invalid JSON arguments" in posts[1]["json"]["messages"][-1]["content"]
+    value = stage(agent, "provider")
+    assert value["started"] == value["uncertain"] == 1
+    assert value["success"] == value["failure"] == value["active"] == 0
+    assert value["last_outcome"] == "uncertain"
+    assert value["last_terminal_uncertain"] is True
+    execute.assert_not_awaited()
+
+    assert await agent._call_llm(messages) == "Recovered."
+    value = stage(agent, "provider")
+    assert len(posts) == 3
+    assert value["started"] == 2
+    assert value["success"] == 1
+    assert value["failure"] == 0
+    assert value["uncertain"] == 1
+    assert value["last_outcome"] == "success"
+    assert value["last_terminal_uncertain"] is False
+    assert value["active"] == 0
+
+
+@pytest.mark.parametrize("transport", ["streaming", "http"])
+async def test_iteration_guard_fallback_is_uncertain_and_recovers(
+    hass, profile_entry_factory, monkeypatch, transport
+):
+    from custom_components.mcp_assist import agent as agent_module
+
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(
+        data={"server_type": "ollama", "max_iterations": 1},
+        options={"context_mode": "light", "max_iterations": 1},
+    ))
+    provider = agent._get_llm_provider()
+    monkeypatch.setattr(agent, "_get_llm_provider", Mock(return_value=provider))
+    if transport == "http":
+        provider.supports_streaming = False
+    monkeypatch.setattr(agent, "_get_mcp_tools", AsyncMock(return_value=[{
+        "type": "function",
+        "function": {"name": "list_available_tools", "parameters": {"type": "object"}},
+    }]))
+    execute = AsyncMock(return_value=[{"content": "completed without a tool-role message"}])
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute)
+    posts = _mock_responses(
+        monkeypatch, agent_module.aiohttp,
+        [_tool_response(transport, "{}") for _ in range(2)]
+        + [_text_response(transport, "Recovered.")],
+    )
+    messages = [{"role": "user", "content": "private request"}]
+
+    assert await agent._call_llm(messages) == agent_module.TOOL_BUDGET_FALLBACK_RESPONSE
+    assert len(posts) == 2
+    assert execute.await_count == 2
+    value = stage(agent, "provider")
+    assert value["started"] == value["uncertain"] == 1
+    assert value["success"] == value["failure"] == value["active"] == 0
+    assert value["last_outcome"] == "uncertain"
+    assert value["last_terminal_uncertain"] is True
+
+    assert await agent._call_llm(messages) == "Recovered."
+    value = stage(agent, "provider")
+    assert len(posts) == 3
+    assert value["started"] == 2
+    assert value["success"] == 1
+    assert value["failure"] == 0
+    assert value["uncertain"] == 1
+    assert value["last_outcome"] == "success"
+    assert value["last_terminal_uncertain"] is False
+    assert value["active"] == 0
+
+
+@pytest.mark.parametrize(
+    ("operation", "media_provider"),
+    [
+        ("no_tools", "ollama"),
+        ("analyze", "ollama"),
+        ("analyze", "openai"),
+        ("generate", "ollama"),
+        ("unsupported_image", "ollama"),
+    ],
+)
+async def test_provider_http_and_local_image_failures_keep_distinct_categories(
+    hass, profile_entry_factory, monkeypatch, operation, media_provider
+):
+    from custom_components.mcp_assist import agent as agent_module
+    from custom_components.mcp_assist import mcp_server as server_module
+
+    if operation == "no_tools":
+        owner = MCPAssistConversationEntity(
+            hass, profile_entry_factory(data={"server_type": "ollama"})
+        )
+        async def call():
+            return await owner.async_call_llm_without_tools([
+                {"role": "user", "content": "private request"}
+            ])
+        posts = _mock_responses(
+            monkeypatch, agent_module.aiohttp,
+            [(503, {"error": "provider unavailable"}, [])],
+        )
+    else:
+        owner = MCPServer(hass, 12345, profile_entry_factory())
+
+        def image_url():
+            if operation == "unsupported_image":
+                raise NotImplementedError
+            return "https://provider.example.invalid/api/images"
+
+        provider = SimpleNamespace(
+            server_type=media_provider,
+            model_name="example-model",
+            image_model="example-image-model",
+            display_name="Example provider",
+            settings=SimpleNamespace(timeout=10, provider_options={}),
+            headers=lambda: {},
+            chat_url=lambda: "https://provider.example.invalid/api/chat",
+            image_generation_url=image_url,
+        )
+        monkeypatch.setattr(owner, "_get_model_provider", Mock(return_value=provider))
+        monkeypatch.setattr(owner, "_get_image_model_provider", AsyncMock(return_value=provider))
+        if operation == "analyze":
+            async def call():
+                return await owner._analyze_image_with_provider(
+                    question="private question", image_bytes=b"image",
+                    mime_type="image/png", detail="auto", context=None,
+                )
+        else:
+            async def call():
+                return await owner._generate_image_with_provider(
+                    prompt="private prompt", size=None, quality=None, style=None,
+                    background=None, context=None,
+                )
+        specs = [] if operation == "unsupported_image" else [
+            (503, {"error": "provider unavailable"}, [])
+        ]
+        posts = _mock_responses(monkeypatch, server_module.aiohttp, specs)
+
+    with pytest.raises(ValueError):
+        await call()
+
+    value = stage(owner, "provider")
+    assert value["failure"] == 1
+    assert value["success"] == value["uncertain"] == value["active"] == 0
+    assert value["last_failure_type"] == (
+        "validation" if operation == "unsupported_image" else "provider"
+    )
+    assert len(posts) == (0 if operation == "unsupported_image" else 1)

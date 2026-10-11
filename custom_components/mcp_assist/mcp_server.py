@@ -107,7 +107,7 @@ from .const import (
     get_optional_tool_family,
     parse_llm_api_allowlist,
 )
-from .runtime_observation import observe
+from .runtime_observation import ProviderResponseError, observe
 from .discovery import EntityDiscovery
 from .secret_redaction import redact_exception, redact_secrets
 from .domain_registry import (
@@ -3512,7 +3512,7 @@ class MCPServer(
                             "Image analysis provider error: status=%s",
                             response.status,
                         )
-                        raise ValueError(
+                        raise ProviderResponseError(
                             f"Image analysis failed for {server_type}: HTTP {response.status}"
                         )
                     data = await response.json()
@@ -3551,7 +3551,7 @@ class MCPServer(
                         "Image analysis provider error: status=%s",
                         response.status,
                     )
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"Image analysis failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
@@ -3650,7 +3650,7 @@ class MCPServer(
                         "Image generation provider error: status=%s",
                         response.status,
                     )
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"Image generation failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
