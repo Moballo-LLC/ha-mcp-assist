@@ -452,6 +452,10 @@ class ProviderHttpResponse:
     error_text: str = ""
 
 
+class ProviderResponseError(Exception):
+    """A non-success provider response recorded before returning a fallback."""
+
+
 class ProviderResponseTimeoutError(Exception):
     """Expected provider timeout surfaced without a noisy traceback."""
 
@@ -4492,6 +4496,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     response.status,
                     _provider_log_snippet(response.error_text),
                 )
+                note_request_failure(self, "provider", ProviderResponseError())
                 return fallback_response
 
             data = response.data or {}
@@ -4503,8 +4508,11 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             message = provider.parse_http_message(data)
             final_content = str(message.get("content") or "").strip()
-            if final_content or fallback_response is not None:
-                return final_content or str(fallback_response)
+            if final_content:
+                return final_content
+            if fallback_response is not None:
+                note_request_uncertain(self, "provider")
+                return str(fallback_response)
             raise ValueError("No-tools provider response was empty")
         except ProviderStreamError:
             raise
@@ -4517,6 +4525,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 transport,
                 _exception_log_snippet(err),
             )
+            note_request_failure(self, "provider", err)
             return fallback_response
 
     async def _test_streaming_basic(self) -> bool:

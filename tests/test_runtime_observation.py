@@ -228,3 +228,92 @@ async def test_actual_client_unknown_reply_and_caught_timeout(
         assert value["last_failure_type"] == "timeout"
     assert "private" not in json.dumps(project_request_outcomes(agent))
     assert post.call_count == 1
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize(
+    "reply, outcome, failure, uncertain, attempts",
+    [
+        ("success", "success", None, False, 1),
+        ("non_200", "failure", "provider", False, 1),
+        ("empty", "uncertain", None, True, 1),
+        ("timeout", "failure", "timeout", True, 2),
+        ("connection", "failure", "connection", False, 1),
+        ("malformed", "failure", "validation", False, 1),
+    ],
+)
+async def test_actual_no_tools_provider_outcomes_and_recovery(
+    hass, profile_entry_factory, monkeypatch, nested,
+    reply, outcome, failure, uncertain, attempts,
+):
+    """Fallback text cannot turn a failed normal provider dispatch into success."""
+    from custom_components.mcp_assist import agent as agent_module
+
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(data={
+        "server_type": "ollama", "lmstudio_url": "http://provider.example.invalid",
+    }))
+    provider = agent._get_llm_provider()
+    response = SimpleNamespace(
+        status=503 if reply == "non_200" else 200,
+        text=AsyncMock(return_value="private response details"),
+        json=AsyncMock(return_value={"message": {
+            "role": "assistant", "content": "normal reply" if reply == "success" else "",
+        }}),
+    )
+    if reply == "malformed":
+        response.json.side_effect = ValueError("private response details")
+    response_context = Mock(
+        __aenter__=AsyncMock(return_value=response), __aexit__=AsyncMock(return_value=False),
+    )
+    errors = {"timeout": TimeoutError, "connection": ConnectionError}
+    post = Mock(
+        side_effect=errors[reply]("private transport details") if reply in errors else None,
+        return_value=response_context,
+    )
+    session_context = Mock(
+        __aenter__=AsyncMock(return_value=SimpleNamespace(post=post)),
+        __aexit__=AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", Mock(return_value=session_context))
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", Mock())
+
+    async def final_response(messages):
+        return await agent._call_llm_final_response_without_tools(
+            messages, provider, transport="test_final",
+        )
+
+    if nested:
+        monkeypatch.setattr(agent, "_call_llm_streaming", final_response)
+        request = agent._call_llm
+    else:
+        request = final_response
+    messages = [{"role": "user", "content": "private input"}]
+    expected = "normal reply" if reply == "success" else agent_module.TOOL_BUDGET_FALLBACK_RESPONSE
+    assert await request(messages) == expected
+    value = stage(agent, "provider")
+    assert value["started"] == value[outcome] == 1
+    assert value["success"] == (1 if outcome == "success" else 0)
+    assert value["failure"] == (1 if outcome == "failure" else 0)
+    assert value["uncertain"] == (1 if uncertain else 0)
+    assert value["active"] == 0
+    assert value["last_outcome"] == outcome
+    assert value["last_failure_type"] == failure
+    assert value["last_terminal_uncertain"] is uncertain
+    assert post.call_count == attempts
+    assert "private" not in json.dumps(project_request_outcomes(agent))
+
+    post.side_effect = None
+    response.status = 200
+    response.json.side_effect = None
+    response.json.return_value = {"message": {"role": "assistant", "content": "recovered reply"}}
+    assert await request(messages) == "recovered reply"
+    recovered = stage(agent, "provider")
+    assert recovered["started"] == 2
+    assert recovered["active"] == 0
+    assert recovered["success"] == value["success"] + 1
+    assert recovered["failure"] == value["failure"]
+    assert recovered["uncertain"] == value["uncertain"]
+    assert recovered["last_outcome"] == "success"
+    assert recovered["last_failure_type"] is None
+    assert recovered["last_terminal_uncertain"] is False
+    assert post.call_count == attempts + 1

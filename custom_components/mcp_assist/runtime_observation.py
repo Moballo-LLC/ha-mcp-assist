@@ -134,9 +134,13 @@ class observe_request:
         return self
 
     def complete(self, result: object) -> None:
-        self.outcome, failure = ("uncertain", None) if self.uncertain_result else _result_outcome(self.stage, result)
-        if self.failure is None:
-            self.failure = failure
+        if self.failure is not None:
+            self.outcome = "failure"
+        else:
+            self.outcome, self.failure = (
+                ("uncertain", None) if self.uncertain_result
+                else _result_outcome(self.stage, result)
+            )
 
     def __exit__(self, error_type, error, traceback):
         if self.counters is not None:
@@ -155,7 +159,7 @@ def note_request_failure(owner: object, stage: str, error: BaseException) -> Non
     """Retain a typed failure when a normal dispatcher returns an error result."""
     for scope in reversed(_ACTIVE.get()):
         if scope.key == (id(owner), stage):
-            scope.failure = _failure_type(error)
+            scope.outcome, scope.failure = "failure", _failure_type(error)
             return
 
 
