@@ -169,6 +169,9 @@ from .const import (
     CONF_HERMES_SESSION_KEY,
     DEFAULT_HERMES_SESSION_KEY,
 )
+from .runtime_observation import (
+    ProviderResponseError, note_request_failure, note_request_uncertain, observe, observe_request,
+)
 from .conversation_history import ConversationHistory
 
 _REQUEST_MODEL_PROFILE: ContextVar[tuple[Any, ResolvedModelProfile | None, str, object] | None] = (
@@ -2227,6 +2230,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             return ""
         return "Tool context: " + "; ".join(parts[-6:])
 
+    @observe("conversation")
     async def _async_handle_message(
         self, user_input: ConversationInput, chat_log_instance: chat_log.ChatLog
     ) -> ConversationResult:
@@ -2497,7 +2501,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             raise RuntimeError("OpenClaw client not available — check integration setup")
 
         _LOGGER.info("📡 Sending to OpenClaw gateway")
-        response_text = await client.send_message(user_input.text, self.session_key)
+        with observe_request(self, "provider") as outcome:
+            response_text = await client.send_message(user_input.text, self.session_key)
+            outcome.complete(response_text)
         _LOGGER.info(
             "✅ OpenClaw response received, length: %d", len(response_text)
         )
@@ -2543,11 +2549,13 @@ class MCPAssistConversationEntity(ConversationEntity):
             history_limit = min(history_limit, LIGHT_CONTEXT_MAX_HISTORY)
         history = self.history.get_history(conversation_id)
         history = history[-history_limit:] if history_limit else []
-        response_text = await self._get_hermes_client().send_message(
-            user_input.text,
-            conversation_id,
-            history,
-        )
+        with observe_request(self, "provider") as outcome:
+            response_text = await self._get_hermes_client().send_message(
+                user_input.text,
+                conversation_id,
+                history,
+            )
+            outcome.complete(response_text)
         _LOGGER.info(
             "✅ Hermes Agent response received, length: %d",
             len(response_text),
@@ -3693,6 +3701,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         _LOGGER.info("Profile-visible MCP tools: %s", ", ".join(filtered_names))
         return filtered_tools
 
+    @observe("tool")
     async def _call_mcp_tool(
         self,
         tool_name: str,
@@ -3817,9 +3826,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                         )
                     if "error" in data:
                         return redact_secrets({"error": data["error"]})
+                    note_request_uncertain(self, "tool")
                     return redact_secrets({"result": str(data.get("result", ""))})
 
         except Exception as err:
+            note_request_failure(self, "tool", err)
             safe_error = redact_exception(err)
             _LOGGER.error(
                 "Error calling MCP tool %s (%s)",
@@ -4431,6 +4442,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             transport=transport,
         )
 
+    @observe("provider")
     async def _call_llm_without_tools(
         self,
         conversation_messages: List[Dict[str, Any]],
@@ -4469,7 +4481,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             if response.status != 200:
                 if fallback_response is None:
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"No-tools provider response failed with status {response.status}: "
                         f"{_provider_log_snippet(response.error_text)}"
                     )
@@ -4480,6 +4492,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     response.status,
                     _provider_log_snippet(response.error_text),
                 )
+                note_request_failure(self, "provider", ProviderResponseError())
                 return fallback_response
 
             data = response.data or {}
@@ -4491,8 +4504,11 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
             message = provider.parse_http_message(data)
             final_content = str(message.get("content") or "").strip()
-            if final_content or fallback_response is not None:
-                return final_content or str(fallback_response)
+            if final_content:
+                return final_content
+            if fallback_response is not None:
+                note_request_uncertain(self, "provider")
+                return str(fallback_response)
             raise ValueError("No-tools provider response was empty")
         except ProviderStreamError:
             raise
@@ -4505,6 +4521,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 transport,
                 _exception_log_snippet(err),
             )
+            note_request_failure(self, "provider", err)
             return fallback_response
 
     async def _test_streaming_basic(self) -> bool:
@@ -4731,6 +4748,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                                         transport="streaming_invalid_tool_final",
                                     )
                                 if invalid_tool_retry_used:
+                                    note_request_uncertain(self, "provider")
                                     return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                                 self._append_invalid_tool_call_retry_messages(
                                     conversation_messages,
@@ -4753,7 +4771,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                                 "Provider streaming error response: %s",
                                 _provider_log_snippet(error_text),
                             )
-                            raise Exception(
+                            raise ProviderResponseError(
                                 f"Streaming failed: {_provider_log_snippet(error_text)}"
                             )  # Raise to trigger fallback
 
@@ -5015,6 +5033,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 if not valid_tool_calls:
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5168,8 +5187,10 @@ class MCPAssistConversationEntity(ConversationEntity):
                 transport="streaming_iteration_final",
             )
         else:
+            note_request_uncertain(self, "provider")
             return TOOL_BUDGET_FALLBACK_RESPONSE
 
+    @observe("provider")
     async def _call_llm(self, messages: List[Dict[str, Any]]) -> str:
         """Call LLM API with MCP tools and handle tool execution loop."""
         provider = self._get_llm_provider()
@@ -5320,6 +5341,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                             transport="http_invalid_tool_final",
                         )
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5335,7 +5357,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                     http_response.status,
                     error_snippet,
                 )
-                raise Exception(
+                raise ProviderResponseError(
                     f"{self.server_type} API error {http_response.status}: {error_snippet}"
                 )
 
@@ -5362,6 +5384,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
                 if not valid_raw_tool_calls:
                     if invalid_tool_retry_used:
+                        note_request_uncertain(self, "provider")
                         return INVALID_TOOL_ARGUMENT_FALLBACK_RESPONSE
                     self._append_invalid_tool_call_retry_messages(
                         conversation_messages,
@@ -5491,6 +5514,7 @@ class MCPAssistConversationEntity(ConversationEntity):
                 provider,
                 transport="http_iteration_final",
             )
+        note_request_uncertain(self, "provider")
         return TOOL_BUDGET_FALLBACK_RESPONSE
 
     async def _execute_actions(

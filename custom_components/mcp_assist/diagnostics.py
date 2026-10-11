@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from . import const
 from .localization import get_language_instruction
+from .runtime_observation import project_request_outcomes
 
 _PROVIDERS = frozenset(
     value for name, value in vars(const).items() if name.startswith("SERVER_TYPE_")
@@ -154,6 +155,7 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
     if shared:
         server = domain_data.get("shared_mcp_server")
         result["server_runtime_present"] = server is not None
+        result["ordinary_outcomes"] = project_request_outcomes(server)
         result["external_tools_enabled"] = bool(_shared_setting(
             entry, server, const.CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
             const.DEFAULT_ENABLE_EXTERNAL_CUSTOM_TOOLS,
@@ -173,6 +175,7 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
     result.update(
         provider=provider,
         agent_runtime_present=agent is not None,
+        ordinary_outcomes=project_request_outcomes(agent),
         context_mode=_choice(
             _configured(entry, const.CONF_CONTEXT_MODE, const.DEFAULT_CONTEXT_MODE), _CONTEXT_MODES
         ),

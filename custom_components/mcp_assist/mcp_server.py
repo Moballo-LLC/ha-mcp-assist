@@ -107,6 +107,7 @@ from .const import (
     get_optional_tool_family,
     parse_llm_api_allowlist,
 )
+from .runtime_observation import ProviderResponseError, observe
 from .discovery import EntityDiscovery
 from .secret_redaction import redact_exception, redact_secrets
 from .domain_registry import (
@@ -2707,6 +2708,7 @@ class MCPServer(
         # nextCursor is optional - omit if not paginating
         return {"tools": tools}
 
+    @observe("tool")
     async def handle_tool_call(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle a tool call and enforce redaction at the dispatcher boundary."""
         return redact_secrets(await self._handle_tool_call(params))
@@ -3474,6 +3476,7 @@ class MCPServer(
             "data": base64.b64encode(image_bytes).decode("ascii"),
         }
 
+    @observe("provider")
     async def _analyze_image_with_provider(
         self,
         *,
@@ -3509,7 +3512,7 @@ class MCPServer(
                             "Image analysis provider error: status=%s",
                             response.status,
                         )
-                        raise ValueError(
+                        raise ProviderResponseError(
                             f"Image analysis failed for {server_type}: HTTP {response.status}"
                         )
                     data = await response.json()
@@ -3548,7 +3551,7 @@ class MCPServer(
                         "Image analysis provider error: status=%s",
                         response.status,
                     )
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"Image analysis failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()
@@ -3563,6 +3566,7 @@ class MCPServer(
             )
         return self._extract_provider_message_text(message).strip()
 
+    @observe("provider")
     async def _generate_image_with_provider(
         self,
         *,
@@ -3646,7 +3650,7 @@ class MCPServer(
                         "Image generation provider error: status=%s",
                         response.status,
                     )
-                    raise ValueError(
+                    raise ProviderResponseError(
                         f"Image generation failed for {server_type}: HTTP {response.status}"
                     )
                 data = await response.json()

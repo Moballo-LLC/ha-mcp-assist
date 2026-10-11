@@ -33,6 +33,36 @@ size budget. Smaller caches report their actual UTF-8 JSON size. An unresolved
 model profile can be normal before its first request; this report does not prove
 provider connectivity or successful device control.
 
+## Ordinary request outcomes
+
+Downloaded diagnostics include `ordinary_outcomes` for each loaded conversation
+agent and the shared MCP server. Before ordinary use, its status is
+`not_observed`. Requests record three fixed groups: conversation, provider and
+tool, with counts for started, active, success, failure, cancellation and
+uncertainty. Failures use a fixed category rather than exception details.
+The original start and terminal timestamps remain unchanged when diagnostics
+are downloaded. Counters belong to the current agent or server object and start
+again when that object is replaced; they are not persisted history.
+
+These observations help distinguish an unused profile, an in-flight request,
+a recent protocol failure and a later completed request. Provider dispatch
+includes the normal streaming/HTTP fallback pipeline, Hermes and OpenClaw sends,
+and media provider operations. Nested provider helpers count once. Profile tool
+calls and server dispatches are separate boundaries; do not add their counts
+as if they represented independent device actions. Built-in replies returned
+after malformed tool calls or an exhausted model-turn guard remain uncertain;
+provider HTTP failures are categorized separately from input validation.
+Requests that never reach these dispatch boundaries have no outcome here.
+
+A successful count means that the normal operation returned a recognized
+protocol result. It does not prove a device changed state or a remote action
+completed. Cancellation and timeout also increase uncertainty because the
+remote outcome can remain unknown. Later success updates the latest outcome
+while preserving earlier cancellation, failure and uncertainty counts and
+timestamps. Unknown result shapes remain uncertain. Saturated counters are
+explicitly marked and cannot support exact totals. Reading these counters
+performs no discovery, provider request, tool call, retry or file scan.
+
 ## Debug Mode
 
 Use Debug Mode when you need to inspect provider behavior, prompt construction,

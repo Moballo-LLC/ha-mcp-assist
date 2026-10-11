@@ -5,6 +5,15 @@ to model providers, and optionally use web, memory, media, image, and custom
 tool integrations. Configure it with the same care you would use for any Home
 Assistant automation that can inspect or control your home.
 
+## Passive request diagnostics
+
+Ordinary request counters in downloaded diagnostics retain only fixed outcome
+categories, bounded counts and timestamps. They do not retain request arguments,
+conversation IDs, entity IDs, prompts, results, model names or exception text.
+The counters provide troubleshooting metadata and grant no permission to retry
+a cancelled or timed-out action. A completed protocol result is not proof of
+successful physical device control.
+
 ## Entity Exposure
 
 MCP Assist follows Home Assistant's conversation exposure controls. If an entity
