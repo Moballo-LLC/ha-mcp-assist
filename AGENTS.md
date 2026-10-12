@@ -32,6 +32,9 @@ editing this repository. It applies to the whole repository.
   dependencies unless there is a proven breakage and a plan to remove the cap.
 - Keep older Home Assistant compatibility shims when they exist in code, such as
   guarded imports for APIs that moved between HA versions.
+- Describe CI coverage as the specific Home Assistant releases tested. Matrix
+  selections do not change the declared runtime support floor or imply coverage
+  for every supported release.
 
 ## Dependency Surfaces
 
@@ -90,13 +93,15 @@ For local validation, prefer the repo's existing Python environment when
 available:
 
 ```bash
-/tmp/ha-mcp-assist-py314-venv/bin/python -m pytest -q tests
-/tmp/ha-mcp-assist-py314-venv/bin/ruff check custom_components tests
-/tmp/ha-mcp-assist-py314-venv/bin/python -m compileall -q custom_components tests
+.venv/bin/python -m pytest -q tests
+.venv/bin/ruff check custom_components tests
+.venv/bin/python -m compileall -q custom_components tests
 git diff --check
 ```
 
-If that venv is not available, create a fresh virtual environment and install
+If that venv is not available, create a fresh virtual environment and run
+`scripts/install_test_dependencies.sh default "" .venv/bin/python`. The installer
+uses the selected Core release's conversation dependency manifest as well as
 `requirements_test.txt`. The system `python` on a developer machine may be too
 old or may not have pytest installed.
 

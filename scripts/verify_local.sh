@@ -30,8 +30,8 @@ find_python() {
     return
   fi
 
-  if [[ -x /tmp/ha-mcp-assist-py314-venv/bin/python ]]; then
-    echo /tmp/ha-mcp-assist-py314-venv/bin/python
+  if [[ -x "$ROOT/.venv/bin/python" ]]; then
+    echo "$ROOT/.venv/bin/python"
     return
   fi
 
@@ -50,14 +50,14 @@ PYTHON_BIN="$(find_python)"
 
 if [[ "${INSTALL_DEPS:-0}" == "1" ]]; then
   "$PYTHON_BIN" -m pip install --upgrade pip wheel
-  "$PYTHON_BIN" -m pip install -r requirements_test.txt
+  scripts/install_test_dependencies.sh default "" "$PYTHON_BIN"
 fi
 
 echo "Using Python: $("$PYTHON_BIN" --version)"
 
 if [[ "$RUN_STATIC" == "1" ]]; then
   "$PYTHON_BIN" scripts/check_manifest_core_dependencies.py
-  "$PYTHON_BIN" -m ruff check custom_components tests
+  "$PYTHON_BIN" -m ruff check custom_components tests scripts
   "$PYTHON_BIN" -m compileall -q custom_components tests
   "$PYTHON_BIN" -m json.tool custom_components/mcp_assist/strings.json >/dev/null
   "$PYTHON_BIN" -m json.tool custom_components/mcp_assist/translations/en.json >/dev/null
