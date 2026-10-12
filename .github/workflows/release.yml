@@ -62,23 +62,42 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: Bootstrap Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14"
+
+      - name: Resolve default test environment
+        id: environment
+        run: |
+          if [[ -f scripts/test_environment.py ]]; then
+            python scripts/test_environment.py resolve default --output "$RUNNER_TEMP/ha-test-environment.json" --github-output "$GITHUB_OUTPUT"
+          else
+            # Existing tags retain their original pinned dependency setup.
+            echo "python=3.14" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up target Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "${{ steps.environment.outputs.python }}"
           cache: pip
           cache-dependency-path: requirements_test.txt
 
       - name: Install test dependencies
         run: |
-          python -m pip install --upgrade pip wheel
-          pip install -r requirements_test.txt
+          if [[ -f scripts/test_environment.py ]]; then
+            scripts/install_test_dependencies.sh --environment "$RUNNER_TEMP/ha-test-environment.json"
+          else
+            python -m pip install --upgrade pip wheel
+            python -m pip install -r requirements_test.txt
+          fi
 
       - name: Validate release candidate
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           REQUIRE_MAIN_ANCESTOR: "1"
-        run: scripts/verify_release_candidate.sh
+        run: PYTHON="$(command -v python)" scripts/verify_release_candidate.sh
 
       # Releases are immutable once published, so assets must be attached while
       # the release is still a draft. Create (or reuse) a draft, upload the

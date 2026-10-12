@@ -36,6 +36,10 @@ def stable_releases(metadata: dict) -> list[str]:
     return sorted(versions, key=lambda v: tuple(map(int, v.split("."))), reverse=True)
 
 
+def has_published_distribution(metadata: dict) -> bool:
+    return any(not file.get("yanked", False) for file in metadata.get("urls") or [])
+
+
 def harness_ha(metadata: dict) -> str:
     versions = set()
     for requirement in metadata["info"].get("requires_dist") or []:
@@ -76,8 +80,10 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         harness = BASELINES[target]
         if expected_harness is not None and expected_harness != harness:
             raise ValueError("Requested harness does not match the selected baseline")
-        return validate_environment({"homeassistant": target, "harness": harness, "python": "3.14"})
-    if target == "default":
+        ha = target
+        harness_metadata = fetch_metadata(HARNESS, harness)
+        core_metadata = fetch_metadata("homeassistant", ha)
+    elif target == "default":
         requirements = (ROOT / "requirements_test.txt").read_text()
         match = re.search(r"^pytest-homeassistant-custom-component==([0-9.]+)$", requirements, re.M)
         if not match:
@@ -98,6 +104,8 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         harness_index = fetch_metadata(HARNESS)
         for harness in stable_releases(harness_index):
             harness_metadata = fetch_metadata(HARNESS, harness)
+            if not has_published_distribution(harness_metadata):
+                continue
             try:
                 matched = harness_ha(harness_metadata) == ha
             except ValueError:
@@ -110,6 +118,11 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
             raise ValueError("Requested harness does not match latest stable Home Assistant")
     else:
         raise ValueError("Unknown test target; use a maintained baseline, default, or latest")
+    for package, metadata in (("homeassistant", core_metadata), (HARNESS, harness_metadata)):
+        if not has_published_distribution(metadata):
+            raise ValueError(f"No published non-yanked distribution for {package}")
+    if harness_ha(harness_metadata) != ha:
+        raise ValueError("The selected test harness does not match Home Assistant")
     return validate_environment({"homeassistant": ha, "harness": harness,
                                  "python": python_minor(core_metadata, harness_metadata)})
 

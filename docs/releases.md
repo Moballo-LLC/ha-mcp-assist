@@ -82,6 +82,14 @@ PYTHON=.venv/bin/python scripts/verify_local.sh
 ```
 
 The installer uses the pinned default harness from `requirements_test.txt`.
+The release workflow resolves that same default environment, selects its
+Python version, and installs the selected Core conversation dependencies from
+its manifest before running release-candidate validation. Resolution and
+installation share one saved version snapshot. Verification explicitly uses
+the interpreter selected by CI, including when a future release needs a newer
+Python minor. Existing tags created before the resolver was added retain
+their original Python 3.14 and pinned-requirements setup when manually
+packaged through the current workflow.
 The verification script uses `PYTHON` when set; it runs Ruff, Python
 compilation, JSON validation, checks that integration runtime requirements do
 not duplicate direct Home Assistant Core dependencies, `git diff --check`, and
@@ -106,7 +114,8 @@ versions in each row's uploaded artifact. It excludes beta and yanked harness
 releases. If no compatible published harness exists, resolution fails the row;
 CI does not silently override Home Assistant or skip the test. The full `tests`
 suite runs for each row, and the aggregate test check requires every row,
-including `latest`, to pass. The workflow runs daily so the moving latest row
+including `latest`, to pass. Pinned baseline and default pairs are also checked
+for published, non-yanked distributions. The workflow runs daily so the moving latest row
 continues to provide current compatibility coverage.
 
 `requirements_test.txt` retains one pinned current harness for the default

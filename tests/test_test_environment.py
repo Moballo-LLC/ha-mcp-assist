@@ -12,7 +12,8 @@ from scripts import test_environment as setup
 
 
 def package_info(ha: str = "2026.10.1", python: str = ">=3.14") -> dict:
-    return {"info": {"requires_dist": [f"homeassistant=={ha}"], "requires_python": python}}
+    return {"info": {"requires_dist": [f"homeassistant=={ha}"], "requires_python": python},
+            "urls": [{"yanked": False}]}
 
 
 def index(*versions: str) -> dict:
@@ -159,3 +160,39 @@ def test_install_keeps_pair_in_one_resolution_and_reads_selected_core_dependenci
     assert setup.HARNESS not in common[0]
     assert calls[1][-2:] == ["hassil==3.12.1", "gazetteer-matcher==1.1.0"]
     assert calls[2][-1] == "check"
+
+
+@pytest.mark.parametrize("target", ["2026.8.3", "2026.9.3", "default"])
+@pytest.mark.parametrize("package", ["homeassistant", setup.HARNESS])
+@pytest.mark.parametrize("files", [[], [{"yanked": True}]])
+def test_pinned_environments_reject_missing_or_yanked_distributions(
+    monkeypatch, tmp_path, target, package, files,
+) -> None:
+    (tmp_path / "requirements_test.txt").write_text(
+        "pytest-homeassistant-custom-component==0.13.372\n"
+    )
+    monkeypatch.setattr(setup, "ROOT", tmp_path)
+    ha = "2026.10.1" if target == "default" else target
+    harness = "0.13.372" if target == "default" else setup.BASELINES[target]
+    responses = {
+        ("homeassistant", ha): package_info(ha),
+        (setup.HARNESS, harness): package_info(ha),
+    }
+    responses[package, ha if package == "homeassistant" else harness]["urls"] = files
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    with pytest.raises(ValueError, match=f"No published non-yanked distribution for {package}"):
+        setup.resolve_environment(target)
+
+
+def test_baseline_validates_actual_pair_and_python_metadata(monkeypatch) -> None:
+    responses = {
+        (setup.HARNESS, "0.13.357"): package_info("2026.8.3", ">=3.15"),
+        ("homeassistant", "2026.8.3"): package_info("2026.8.3", ">=3.14.2"),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    assert setup.resolve_environment("2026.8.3") == {
+        "homeassistant": "2026.8.3", "harness": "0.13.357", "python": "3.15",
+    }
+    responses[setup.HARNESS, "0.13.357"] = package_info("2026.9.3")
+    with pytest.raises(ValueError, match="does not match Home Assistant"):
+        setup.resolve_environment("2026.8.3")

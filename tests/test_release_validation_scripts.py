@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
+import textwrap
 
+import pytest
 import yaml
 
 
@@ -45,6 +47,25 @@ def test_release_workflow_uploads_assets_before_publishing() -> None:
     assert "dist/mcp_assist.zip" in script
     assert script.index("gh release create") < script.index("--draft=false")
     assert script.index("gh release upload") < script.index("--draft=false")
+
+
+def test_release_workflow_installs_resolved_core_conversation_dependencies() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text())
+    steps = workflow["jobs"]["package"]["steps"]
+    resolve = next(step for step in steps if step.get("id") == "environment")
+    install = next(step for step in steps if step.get("name") == "Install test dependencies")
+    validate = next(step for step in steps if step.get("name") == "Validate release candidate")
+    assert "test_environment.py resolve default" in resolve["run"]
+    assert "--github-output" in resolve["run"]
+    snapshot = '"$RUNNER_TEMP/ha-test-environment.json"'
+    assert f"--output {snapshot}" in resolve["run"]
+    assert f"scripts/install_test_dependencies.sh --environment {snapshot}" in install["run"]
+    target_python = next(step for step in steps if
+                         step.get("with", {}).get("python-version") ==
+                         "${{ steps.environment.outputs.python }}")
+    assert steps.index(resolve) < steps.index(target_python) < steps.index(install)
+    assert steps.index(install) < steps.index(validate)
+    assert validate["run"] == 'PYTHON="$(command -v python)" scripts/verify_release_candidate.sh'
 
 
 def test_test_workflow_runs_full_suite_with_independent_latest_resolution() -> None:
@@ -94,3 +115,62 @@ def test_test_workflow_preserves_required_fail_closed_aggregate_status() -> None
             env=os.environ | {"MATRIX_RESULT": result},
         )
         assert completed.returncode == expected_returncode
+
+
+def test_all_workflow_verifiers_use_the_selected_python() -> None:
+    for filename in ("tests.yml", "release.yml"):
+        workflow = yaml.safe_load((Path(".github/workflows") / filename).read_text())
+        verifiers = [step["run"] for job in workflow["jobs"].values()
+                     for step in job["steps"]
+                     if "scripts/verify_" in step.get("run", "")]
+        assert verifiers
+        for run in verifiers:
+            verify_lines = [line.strip() for line in run.splitlines() if "scripts/verify_" in line]
+            assert all(line.startswith('PYTHON="$(command -v python)" ') for line in verify_lines)
+
+
+@pytest.mark.parametrize("modern", [False, True])
+def test_release_environment_setup_supports_existing_tags(tmp_path, modern) -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text())
+    steps = workflow["jobs"]["package"]["steps"]
+    resolve = next(step for step in steps if step.get("id") == "environment")
+    install = next(step for step in steps if step.get("name") == "Install test dependencies")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    if modern:
+        (scripts / "test_environment.py").touch()
+        installer = scripts / "install_test_dependencies.sh"
+        installer.write_text('#!/bin/bash\nprintf "%s\\n" "installer $*" >> "$COMMAND_LOG"\n')
+        installer.chmod(0o755)
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    python = binary / "python"
+    python.write_text(textwrap.dedent("""\
+        #!/bin/bash
+        printf '%s\\n' "python $*" >> "$COMMAND_LOG"
+        if [[ "$1" == "scripts/test_environment.py" ]]; then
+          echo '{"homeassistant":"2026.10.1","harness":"0.13.372","python":"3.15"}' > "$RUNNER_TEMP/ha-test-environment.json"
+          echo "python=3.15" >> "$GITHUB_OUTPUT"
+        fi
+    """))
+    python.chmod(0o755)
+    log = tmp_path / "commands.log"
+    output = tmp_path / "outputs"
+    environment = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
+                   "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": str(output),
+                   "COMMAND_LOG": str(log)}
+    for step in (resolve, install):
+        subprocess.run(["bash", "-e", "-c", step["run"]], cwd=tmp_path,
+                       env=environment, check=True, capture_output=True, text=True)
+    if modern:
+        assert output.read_text().strip() == "python=3.15"
+        assert log.read_text().splitlines() == [
+            f"python scripts/test_environment.py resolve default --output {tmp_path}/ha-test-environment.json --github-output {output}",
+            f"installer --environment {tmp_path}/ha-test-environment.json",
+        ]
+    else:
+        assert output.read_text().strip() == "python=3.14"
+        assert log.read_text().splitlines() == [
+            "python -m pip install --upgrade pip wheel",
+            "python -m pip install -r requirements_test.txt",
+        ]

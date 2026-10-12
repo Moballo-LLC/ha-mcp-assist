@@ -44,7 +44,7 @@ jobs:
         run: scripts/install_test_dependencies.sh --environment "$RUNNER_TEMP/ha-test-environment.json"
 
       - name: Static validation
-        run: scripts/verify_local.sh --static
+        run: PYTHON="$(command -v python)" scripts/verify_local.sh --static
 
   test:
     name: Test HA ${{ matrix.homeassistant }}
@@ -86,7 +86,7 @@ jobs:
         run: |
           mkdir -p test-results
           cp "$RUNNER_TEMP/ha-test-environment.json" test-results/environment.json
-          scripts/verify_local.sh --pytest
+          PYTHON="$(command -v python)" scripts/verify_local.sh --pytest
 
       - name: Upload pytest results
         if: always()
