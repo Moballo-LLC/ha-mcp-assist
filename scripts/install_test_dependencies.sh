@@ -10,9 +10,10 @@ HA_VERSION="$1"
 PYTHON_BIN="${3:-python}"
 
 case "$HA_VERSION" in
-  2026.10.0) HARNESS_VERSION="0.13.371" ;;
-  2026.9.3) HARNESS_VERSION="0.13.366" ;;
   2026.8.3) HARNESS_VERSION="0.13.357" ;;
+  2026.9.3) HARNESS_VERSION="0.13.366" ;;
+  2026.10.0) HARNESS_VERSION="0.13.371" ;;
+  2026.10.1) HARNESS_VERSION="0.13.372" ;;
   *)
     echo "Unsupported HA version: $HA_VERSION" >&2
     exit 2

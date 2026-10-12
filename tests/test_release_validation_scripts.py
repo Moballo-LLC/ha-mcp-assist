@@ -54,10 +54,16 @@ def test_test_workflow_runs_full_suite_with_version_matched_harnesses() -> None:
     matrix = test_job["strategy"]["matrix"]["include"]
 
     rows = {(item["homeassistant"], item["harness-version"]) for item in matrix}
-    assert len(rows) == len(matrix) == 3
+    assert len(rows) == len(matrix) == 4
+    assert rows == {
+        ("2026.8.3", "0.13.357"),
+        ("2026.9.3", "0.13.366"),
+        ("2026.10.0", "0.13.371"),
+        ("2026.10.1", "0.13.372"),
+    }
     assert all(version.startswith("2026.") and harness.startswith("0.13.") for version, harness in rows)
     current_harness = next(line.split("==", 1)[1] for line in Path("requirements_test.txt").read_text().splitlines() if line.startswith("pytest-homeassistant-custom-component=="))
-    assert ("2026.10.0", current_harness) in rows
+    assert ("2026.10.1", current_harness) in rows
     install_step = next(step for step in test_job["steps"] if step.get("name") == "Install test dependencies")
     pytest_step = next(step for step in test_job["steps"] if step.get("name") == "Run full pytest suite")
     artifact_step = next(step for step in test_job["steps"] if step.get("name") == "Upload pytest results")
@@ -133,7 +139,7 @@ def _run_test_installer(*args: str, fail_version_check: bool = False) -> tuple[s
 
 def test_versioned_test_installer_rejects_unknown_and_mismatched_pairs_before_pip() -> None:
     unsupported, unsupported_calls, _ = _run_test_installer("2026.7.0")
-    mismatched, mismatched_calls, _ = _run_test_installer("2026.9.3", "0.13.371")
+    mismatched, mismatched_calls, _ = _run_test_installer("2026.10.0", "0.13.372")
 
     assert unsupported.returncode == 2
     assert "Unsupported HA version" in unsupported.stderr
@@ -144,16 +150,22 @@ def test_versioned_test_installer_rejects_unknown_and_mismatched_pairs_before_pi
 
 
 def test_versioned_test_installer_filters_default_and_installs_matching_harness() -> None:
-    result, calls, common_requirements = _run_test_installer("2026.9.3", "0.13.366")
+    for ha_version, harness_version in (
+        ("2026.8.3", "0.13.357"),
+        ("2026.9.3", "0.13.366"),
+        ("2026.10.0", "0.13.371"),
+        ("2026.10.1", "0.13.372"),
+    ):
+        result, calls, common_requirements = _run_test_installer(ha_version, harness_version)
 
-    assert result.returncode == 0, result.stderr
-    assert "pytest-homeassistant-custom-component==" not in common_requirements
-    assert "pytest-homeassistant-custom-component==0.13.366" in calls
-    assert "Verified Home Assistant 2026.9.3 with harness 0.13.366" in result.stdout
+        assert result.returncode == 0, result.stderr
+        assert "pytest-homeassistant-custom-component==" not in common_requirements
+        assert f"pytest-homeassistant-custom-component=={harness_version}" in calls
+        assert f"Verified Home Assistant {ha_version} with harness {harness_version}" in result.stdout
 
 
 def test_versioned_test_installer_fails_when_harness_readback_fails() -> None:
-    result, calls, _ = _run_test_installer("2026.8.3", "0.13.357", fail_version_check=True)
+    result, calls, _ = _run_test_installer("2026.10.1", "0.13.372", fail_version_check=True)
 
     assert result.returncode == 1
-    assert "- 2026.8.3 0.13.357" in calls
+    assert "- 2026.10.1 0.13.372" in calls
