@@ -96,7 +96,7 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         ha = versions[0]
         core_metadata = fetch_metadata("homeassistant", ha)
         harness_index = fetch_metadata(HARNESS)
-        for harness in stable_releases(harness_index)[:30]:
+        for harness in stable_releases(harness_index):
             harness_metadata = fetch_metadata(HARNESS, harness)
             try:
                 matched = harness_ha(harness_metadata) == ha

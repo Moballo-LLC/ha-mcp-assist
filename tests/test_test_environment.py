@@ -49,6 +49,52 @@ def test_latest_does_not_fall_back_when_harness_lags(monkeypatch) -> None:
         setup.resolve_environment("latest")
 
 
+def test_latest_searches_past_thirty_harnesses_and_stops_at_match(monkeypatch) -> None:
+    candidates = [f"0.13.{version}" for version in range(410, 374, -1)]
+    harness = index(*candidates, "0.13.374", "0.13.411", "0.14.0b1")
+    harness["releases"]["0.13.411"][0]["yanked"] = True
+    match = "0.13.375"
+    responses = {
+        ("homeassistant", None): index("2026.10.1"),
+        ("homeassistant", "2026.10.1"): package_info(python=">=3.14.2"),
+        (setup.HARNESS, None): harness,
+        **{(setup.HARNESS, version): package_info("2026.9.3") for version in candidates[:35]},
+        (setup.HARNESS, match): package_info("2026.10.1", ">=3.14.1"),
+    }
+    lookup = Mock(side_effect=lambda package, version=None: responses[package, version])
+    monkeypatch.setattr(setup, "fetch_metadata", lookup)
+
+    assert setup.resolve_environment("latest") == {
+        "homeassistant": "2026.10.1", "harness": match, "python": "3.14",
+    }
+    queried = [call.args[1] for call in lookup.call_args_list
+               if call.args[0] == setup.HARNESS and len(call.args) > 1]
+    assert queried == [*candidates[:35], match]
+    assert "0.13.411" not in queried
+    assert "0.13.374" not in queried
+
+
+def test_latest_exhausts_more_than_thirty_harnesses_without_match(monkeypatch) -> None:
+    candidates = [f"0.13.{version}" for version in range(410, 374, -1)]
+    harness = index(*candidates, "0.13.411", "0.14.0b1")
+    harness["releases"]["0.13.411"][0]["yanked"] = True
+    responses = {
+        ("homeassistant", None): index("2026.10.1"),
+        ("homeassistant", "2026.10.1"): package_info(),
+        (setup.HARNESS, None): harness,
+        **{(setup.HARNESS, version): package_info("2026.9.3") for version in candidates},
+    }
+    lookup = Mock(side_effect=lambda package, version=None: responses[package, version])
+    monkeypatch.setattr(setup, "fetch_metadata", lookup)
+
+    with pytest.raises(ValueError, match="No published stable test harness matches Home Assistant 2026.10.1"):
+        setup.resolve_environment("latest")
+    queried = [call.args[1] for call in lookup.call_args_list
+               if call.args[0] == setup.HARNESS and len(call.args) > 1]
+    assert queried == candidates
+    assert "0.13.411" not in queried
+
+
 def test_default_uses_pinned_harness_and_future_python_minimum(monkeypatch, tmp_path) -> None:
     (tmp_path / "requirements_test.txt").write_text("pytest-homeassistant-custom-component==0.13.372\n")
     monkeypatch.setattr(setup, "ROOT", tmp_path)
