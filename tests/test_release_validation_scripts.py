@@ -54,8 +54,10 @@ def test_test_workflow_runs_full_suite_with_version_matched_harnesses() -> None:
     matrix = test_job["strategy"]["matrix"]["include"]
 
     rows = {(item["homeassistant"], item["harness-version"]) for item in matrix}
-    assert len(rows) == len(matrix) == 2
+    assert len(rows) == len(matrix) == 4
     assert rows == {
+        ("2026.8.3", "0.13.357"),
+        ("2026.9.3", "0.13.366"),
         ("2026.10.0", "0.13.371"),
         ("2026.10.1", "0.13.372"),
     }
@@ -149,6 +151,8 @@ def test_versioned_test_installer_rejects_unknown_and_mismatched_pairs_before_pi
 
 def test_versioned_test_installer_filters_default_and_installs_matching_harness() -> None:
     for ha_version, harness_version in (
+        ("2026.8.3", "0.13.357"),
+        ("2026.9.3", "0.13.366"),
         ("2026.10.0", "0.13.371"),
         ("2026.10.1", "0.13.372"),
     ):

@@ -99,11 +99,13 @@ scripts/verify_local.sh --pytest
 
 ### Home Assistant Version Matrix
 
-The full pytest suite runs with a harness built for each selected Home
-Assistant release. The CI matrix pairs:
+The public CI matrix runs the full pytest suite with a harness built for each
+selected Home Assistant release. It pairs:
 
 | Home Assistant | `pytest-homeassistant-custom-component` |
 | --- | --- |
+| `2026.8.3` | `0.13.357` |
+| `2026.9.3` | `0.13.366` |
 | `2026.10.0` | `0.13.371` |
 | `2026.10.1` | `0.13.372` |
 
@@ -124,12 +126,12 @@ scripts/install_test_dependencies.sh 2026.10.1 0.13.372 /private/tmp/mcp-assist-
 /private/tmp/mcp-assist-ha-2026.10.1/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
 ```
 
-Use the corresponding version and harness from the table for the baseline
+Use the corresponding version and harness from the table for any other matrix
 entry.
 The installer checks that Home Assistant reports the requested version before
-tests run. These selected releases provide evidence for those two versions
-only; they do not claim that the full suite has been tested across the entire
-runtime support floor of Home Assistant 2024.1+.
+tests run. This public CI matrix samples four selected releases; it does not
+claim that the full suite has been tested across the entire runtime support
+floor of Home Assistant 2024.1+.
 
 Before creating a release tag, run the release-candidate gate:
 
