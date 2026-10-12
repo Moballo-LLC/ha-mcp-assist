@@ -1,0 +1,115 @@
+"""Compatibility setup follows the selected release, including moving stable HA."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+
+from scripts import test_environment as setup
+
+
+def package_info(ha: str = "2026.10.1", python: str = ">=3.14") -> dict:
+    return {"info": {"requires_dist": [f"homeassistant=={ha}"], "requires_python": python}}
+
+
+def index(*versions: str) -> dict:
+    return {"releases": {version: [{"yanked": False}] for version in versions}}
+
+
+def test_latest_ignores_beta_yanked_and_mismatched_harnesses(monkeypatch) -> None:
+    core = index("2026.10.1", "2026.11.0b0", "2026.10.2")
+    core["releases"]["2026.10.2"][0]["yanked"] = True
+    harness = index("0.13.372", "0.13.373", "0.13.374", "0.14.0b1")
+    harness["releases"]["0.13.374"][0]["yanked"] = True
+    responses = {
+        ("homeassistant", None): core,
+        ("homeassistant", "2026.10.1"): package_info(python=">=3.14.2"),
+        (setup.HARNESS, None): harness,
+        (setup.HARNESS, "0.13.373"): package_info("2026.11.0b0"),
+        (setup.HARNESS, "0.13.372"): package_info(),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    assert setup.resolve_environment("latest") == {
+        "homeassistant": "2026.10.1", "harness": "0.13.372", "python": "3.14",
+    }
+
+
+def test_latest_does_not_fall_back_when_harness_lags(monkeypatch) -> None:
+    responses = {
+        ("homeassistant", None): index("2026.11.0", "2026.10.1"),
+        ("homeassistant", "2026.11.0"): package_info("2026.11.0"),
+        (setup.HARNESS, None): index("0.13.372"),
+        (setup.HARNESS, "0.13.372"): package_info(),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    with pytest.raises(ValueError, match="No published stable test harness matches Home Assistant 2026.11.0"):
+        setup.resolve_environment("latest")
+
+
+def test_default_uses_pinned_harness_and_future_python_minimum(monkeypatch, tmp_path) -> None:
+    (tmp_path / "requirements_test.txt").write_text("pytest-homeassistant-custom-component==0.13.372\n")
+    monkeypatch.setattr(setup, "ROOT", tmp_path)
+    responses = {
+        (setup.HARNESS, "0.13.372"): package_info("2026.11.0", ">=3.15"),
+        ("homeassistant", "2026.11.0"): package_info("2026.11.0", ">=3.15.1"),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    assert setup.resolve_environment("default")["python"] == "3.15"
+
+
+def test_unknown_target_and_mismatched_baseline_fail_before_network(monkeypatch) -> None:
+    fetch = Mock()
+    monkeypatch.setattr(setup, "fetch_metadata", fetch)
+    with pytest.raises(ValueError, match="Unknown test target"):
+        setup.resolve_environment("2026.7.0")
+    with pytest.raises(ValueError, match="does not match"):
+        setup.resolve_environment("2026.9.3", "0.13.372")
+    fetch.assert_not_called()
+
+
+@pytest.mark.parametrize("value", [
+    {"homeassistant": "2026.10.1", "harness": "0.13.372", "python": "3.14", "private": "hidden"},
+    {"homeassistant": "2026.11.0b0", "harness": "0.13.372", "python": "3.14"},
+    {"homeassistant": "2026.10.1", "harness": "0.13.372\nunsafe=value", "python": "3.14"},
+])
+def test_environment_artifact_rejects_nonpublic_or_unstable_fields(value) -> None:
+    with pytest.raises(ValueError):
+        setup.validate_environment(value)
+
+
+def test_install_keeps_pair_in_one_resolution_and_reads_selected_core_dependencies(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "requirements_test.txt").write_text("pytest-homeassistant-custom-component==0.13.999\nruff>=0.17\n")
+    package = tmp_path / "homeassistant"
+    manifest = package / "components" / "conversation" / "manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"requirements": ["hassil==3.12.1", "gazetteer-matcher==1.1.0"]}))
+    calls = []
+    common = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if "-r" in command:
+            common.append(Path(command[command.index("-r") + 1]).read_text())
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(setup, "ROOT", root)
+    monkeypatch.setattr(setup.subprocess, "run", run)
+    monkeypatch.setattr(setup.importlib.util, "find_spec", lambda _: SimpleNamespace(origin=str(package / "__init__.py")))
+    monkeypatch.setattr(setup.importlib.metadata, "version", lambda _: "0.13.372")
+    from homeassistant import const as core_const
+    from pytest_homeassistant_custom_component import const as harness_const
+    monkeypatch.setattr(core_const, "__version__", "2026.10.1")
+    monkeypatch.setattr(harness_const, "MAJOR_VERSION", 2026)
+    monkeypatch.setattr(harness_const, "MINOR_VERSION", 10)
+    monkeypatch.setattr(harness_const, "PATCH_VERSION", 1)
+    setup.install_environment({"homeassistant": "2026.10.1", "harness": "0.13.372", "python": "3.14"})
+    assert "homeassistant==2026.10.1" in calls[0]
+    assert "pytest-homeassistant-custom-component==0.13.372" in calls[0]
+    assert setup.HARNESS not in common[0]
+    assert calls[1][-2:] == ["hassil==3.12.1", "gazetteer-matcher==1.1.0"]
+    assert calls[2][-1] == "check"

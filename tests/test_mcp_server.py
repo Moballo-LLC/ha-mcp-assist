@@ -2976,7 +2976,7 @@ async def test_statistics_reports_unsupported_metrics_and_unavailable_recorder(
 
     for metric in ("change", "mean"):
         result = await server.tool_get_entity_statistics(
-            {"entity_id": "sensor.example", "period": "today", "metric": metric}
+            {"entity_id": "sensor.example", "period": "yesterday", "metric": metric}
         )
         assert metric in result["content"][0]["text"].casefold()
         assert "not supported" in result["content"][0]["text"].casefold()
@@ -2990,7 +2990,7 @@ async def test_statistics_reports_unsupported_metrics_and_unavailable_recorder(
         Mock(side_effect=RuntimeError("database details must not be shown")),
     )
     unavailable = await server.tool_get_entity_statistics(
-        {"entity_id": "sensor.example", "period": "today"}
+        {"entity_id": "sensor.example", "period": "yesterday"}
     )
     assert unavailable["isError"] is True
     assert "could not read recorder statistics" in unavailable["content"][0]["text"]

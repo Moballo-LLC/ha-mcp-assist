@@ -1,7 +1,4 @@
 # CI pins the current Home Assistant test harness; these are not runtime support bounds.
 pytest-homeassistant-custom-component==0.13.372
 ruff>=0.17.0,<1.0
-gazetteer-matcher>=1.2.0
-hassil>=3.12.1
-# Keep CI on a current Home Assistant-era intents package without capping forward support.
-home-assistant-intents>=2026.10.6
+# Core conversation dependencies are installed from the selected Core manifest.

@@ -71,24 +71,21 @@ stale or skipped checks.
 
 ## Local Verification
 
-Before pushing a PR branch, run the local CI mirror:
+Before running the local CI mirror, create and activate a virtual environment
+to keep test dependencies isolated:
 
 ```bash
-scripts/verify_local.sh
+python3.14 -m venv .venv
+source .venv/bin/activate
+scripts/install_test_dependencies.sh
+PYTHON=.venv/bin/python scripts/verify_local.sh
 ```
 
-The script uses `PYTHON` when set, otherwise it prefers the shared local test
-environment at `/tmp/ha-mcp-assist-py314-venv/bin/python`, then `python3.14`,
-`python3`, and `python`. It runs Ruff, Python compilation, JSON validation,
-checks that integration runtime requirements do not duplicate direct
-Home Assistant Core dependencies, `git diff --check`, and the full pytest
-suite with a JUnit file under `test-results/`.
-
-To install or refresh test dependencies in the selected environment first:
-
-```bash
-INSTALL_DEPS=1 scripts/verify_local.sh
-```
+The installer uses the pinned default harness from `requirements_test.txt`.
+The verification script uses `PYTHON` when set; it runs Ruff, Python
+compilation, JSON validation, checks that integration runtime requirements do
+not duplicate direct Home Assistant Core dependencies, `git diff --check`, and
+the full pytest suite with a JUnit file under `test-results/`.
 
 For focused CI-equivalent slices:
 
@@ -99,39 +96,47 @@ scripts/verify_local.sh --pytest
 
 ### Home Assistant Version Matrix
 
-The public CI matrix runs the full pytest suite with a harness built for each
-selected Home Assistant release. It pairs:
+The public CI matrix runs the full pytest suite against two older monthly
+baselines (`2026.8.3` and `2026.9.3`) and `latest`, which resolves to the latest
+stable Home Assistant release available when that row starts. It does not add
+duplicate patch rows from the current month. The resolver selects a published
+`pytest-homeassistant-custom-component` release that embeds the exact selected
+Home Assistant version and records Home Assistant, harness, and Python
+versions in each row's uploaded artifact. It excludes beta and yanked harness
+releases. If no compatible published harness exists, resolution fails the row;
+CI does not silently override Home Assistant or skip the test. The full `tests`
+suite runs for each row, and the aggregate test check requires every row,
+including `latest`, to pass. The workflow runs daily so the moving latest row
+continues to provide current compatibility coverage.
 
-| Home Assistant | `pytest-homeassistant-custom-component` |
-| --- | --- |
-| `2026.8.3` | `0.13.357` |
-| `2026.9.3` | `0.13.366` |
-| `2026.10.0` | `0.13.371` |
-| `2026.10.1` | `0.13.372` |
+`requirements_test.txt` retains one pinned current harness for the default
+local setup and lint job. The matrix installer uses the resolved environment
+snapshot so a moving `latest` selection cannot change between resolution and
+installation.
 
-These exact PyPI harness releases embed the matching Home Assistant versions.
-The matrix does not install one harness and then override its Home Assistant
-dependency. It runs the entire `tests` suite on Python 3.14 for each pair and
-uploads a separate `pytest-results-ha-VERSION` artifact. The single version in
-`requirements_test.txt` remains the default current harness used by static
-validation and ordinary local verification.
-
-To reproduce a matrix entry locally, use an isolated environment for that
+To reproduce a matrix entry locally, use a fresh virtual environment for each
 entry so package state cannot leak between Home Assistant versions:
 
 ```bash
-python3.14 -m venv /private/tmp/mcp-assist-ha-2026.10.1
-/private/tmp/mcp-assist-ha-2026.10.1/bin/python -m pip install --upgrade pip wheel
-scripts/install_test_dependencies.sh 2026.10.1 0.13.372 /private/tmp/mcp-assist-ha-2026.10.1/bin/python
-/private/tmp/mcp-assist-ha-2026.10.1/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
+python3.14 -m venv .venv
+.venv/bin/python scripts/test_environment.py resolve 2026.9.3 \
+  --output .venv/ha-test-environment.json \
+  --github-output .venv/ha-test-environment.outputs
+scripts/install_test_dependencies.sh \
+  --environment .venv/ha-test-environment.json .venv/bin/python
+mkdir -p test-results
+cp .venv/ha-test-environment.json test-results/environment.json
+.venv/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
 ```
 
-Use the corresponding version and harness from the table for any other matrix
-entry.
-The installer checks that Home Assistant reports the requested version before
-tests run. This public CI matrix samples four selected releases; it does not
-claim that the full suite has been tested across the entire runtime support
-floor of Home Assistant 2024.1+.
+Replace `2026.9.3` with `2026.8.3` or `latest` to reproduce another row. Keep
+the resolved environment file for the install and test commands; rerunning the
+resolver for `latest` later may select a newer Home Assistant release. For
+`latest`, use the Python minor recorded in the snapshot when creating the
+virtual environment; CI chooses that interpreter automatically. This
+matrix samples selected releases and does not claim full-suite coverage across
+the entire Home Assistant 2024.1+ runtime support floor. Existing compatibility
+shims and the declared runtime floor remain unchanged.
 
 Before creating a release tag, run the release-candidate gate:
 
