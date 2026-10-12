@@ -105,8 +105,7 @@ Assistant release. The CI matrix pairs:
 | Home Assistant | `pytest-homeassistant-custom-component` |
 | --- | --- |
 | `2026.10.0` | `0.13.371` |
-| `2026.9.3` | `0.13.366` |
-| `2026.8.3` | `0.13.357` |
+| `2026.10.1` | `0.13.372` |
 
 These exact PyPI harness releases embed the matching Home Assistant versions.
 The matrix does not install one harness and then override its Home Assistant
@@ -115,19 +114,20 @@ uploads a separate `pytest-results-ha-VERSION` artifact. The single version in
 `requirements_test.txt` remains the default current harness used by static
 validation and ordinary local verification.
 
-To reproduce an older matrix entry locally, use an isolated environment for
-that entry so package state cannot leak between Home Assistant versions:
+To reproduce a matrix entry locally, use an isolated environment for that
+entry so package state cannot leak between Home Assistant versions:
 
 ```bash
-python3.14 -m venv /private/tmp/mcp-assist-ha-2026.9.3
-/private/tmp/mcp-assist-ha-2026.9.3/bin/python -m pip install --upgrade pip wheel
-scripts/install_test_dependencies.sh 2026.9.3 0.13.366 /private/tmp/mcp-assist-ha-2026.9.3/bin/python
-/private/tmp/mcp-assist-ha-2026.9.3/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
+python3.14 -m venv /private/tmp/mcp-assist-ha-2026.10.1
+/private/tmp/mcp-assist-ha-2026.10.1/bin/python -m pip install --upgrade pip wheel
+scripts/install_test_dependencies.sh 2026.10.1 0.13.372 /private/tmp/mcp-assist-ha-2026.10.1/bin/python
+/private/tmp/mcp-assist-ha-2026.10.1/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
 ```
 
-Use the corresponding version and harness from the table for another entry.
+Use the corresponding version and harness from the table for the baseline
+entry.
 The installer checks that Home Assistant reports the requested version before
-tests run. These selected releases provide evidence for those three versions
+tests run. These selected releases provide evidence for those two versions
 only; they do not claim that the full suite has been tested across the entire
 runtime support floor of Home Assistant 2024.1+.
 

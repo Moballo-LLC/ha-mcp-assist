@@ -47,10 +47,8 @@ jobs:
         include:
           - homeassistant: "2026.10.0"
             harness-version: "0.13.371"
-          - homeassistant: "2026.9.3"
-            harness-version: "0.13.366"
-          - homeassistant: "2026.8.3"
-            harness-version: "0.13.357"
+          - homeassistant: "2026.10.1"
+            harness-version: "0.13.372"
 
     steps:
       - name: Checkout
