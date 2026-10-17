@@ -127,10 +127,12 @@ For the complete setup walkthrough, see
 See [Model Compatibility](docs/model-compatibility.md) before spending much time
 tuning a small local model.
 
-The public CI matrix runs the full integration test suite against the older
-monthly baselines Home Assistant 2026.8.3 and 2026.9.3, plus the latest stable
-release available when each job resolves its test environment. It pairs each
-Home Assistant version with a published compatible test harness and records
+The public CI workflow declares the exact Home Assistant rows for the full
+integration test suite. It currently covers the older monthly releases
+2026.8.3 and 2026.9.3, plus the latest stable release available when each job
+resolves its test environment. The resolver accepts stable exact releases from
+the workflow and pairs each with a published compatible test harness; it does
+not keep a separate target-to-harness version list. It records
 the resolved versions with the test results. These selected versions do not
 change the broader Home Assistant 2024.1+ runtime support floor or claim
 full-suite coverage across every supported runtime version. See

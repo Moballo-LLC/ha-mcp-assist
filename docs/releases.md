@@ -104,24 +104,28 @@ scripts/verify_local.sh --pytest
 
 ### Home Assistant Version Matrix
 
-The public CI matrix runs the full pytest suite against two older monthly
-baselines (`2026.8.3` and `2026.9.3`) and `latest`, which resolves to the latest
-stable Home Assistant release available when that row starts. It does not add
-duplicate patch rows from the current month. The resolver selects a published
-`pytest-homeassistant-custom-component` release that embeds the exact selected
-Home Assistant version and records Home Assistant, harness, and Python
-versions in each row's uploaded artifact. It excludes beta and yanked harness
-releases. If no compatible published harness exists, resolution fails the row;
-CI does not silently override Home Assistant or skip the test. The full `tests`
+The public CI workflow declares the exact stable Home Assistant rows for the
+full pytest suite. It currently includes two older monthly releases
+(`2026.8.3` and `2026.9.3`) and `latest`, which resolves to the latest stable
+Home Assistant release available when that row starts. It does not add
+duplicate patch rows from the current month. The resolver accepts stable exact
+targets from the workflow without a separate target-to-harness allowlist, then
+selects a published `pytest-homeassistant-custom-component` release that
+embeds the exact selected Home Assistant version. It records Home Assistant,
+harness, and Python versions in each row's uploaded artifact. It excludes beta
+and yanked harness releases. If no compatible published harness exists,
+resolution fails that row; CI does not silently override Home Assistant or skip
+the test. The full `tests`
 suite runs for each row, and the aggregate test check requires every row,
-including `latest`, to pass. Pinned baseline and default pairs are also checked
-for published, non-yanked distributions. The workflow runs daily so the moving latest row
-continues to provide current compatibility coverage.
+including `latest`, to pass. Exact target and default pairs are checked for
+published, non-yanked distributions. The workflow runs daily so the moving
+`latest` row continues to provide current compatibility coverage.
 
 `requirements_test.txt` retains one pinned current harness for the default
-local setup and lint job. The matrix installer uses the resolved environment
-snapshot so a moving `latest` selection cannot change between resolution and
-installation.
+local setup and lint job. For an exact target, `--expected-harness` checks that
+the requested harness is a published, non-yanked exact match. The matrix
+installer uses the resolved environment snapshot so a moving `latest`
+selection cannot change between resolution and installation.
 
 To reproduce a matrix entry locally, use a fresh virtual environment for each
 entry so package state cannot leak between Home Assistant versions:
