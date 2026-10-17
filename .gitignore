@@ -47,6 +47,7 @@ test-results/
 *.cover
 .hypothesis/
 .pytest_cache/
+/.local/validation/
 
 # Translations
 *.mo
