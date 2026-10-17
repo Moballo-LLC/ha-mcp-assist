@@ -127,6 +127,10 @@ the requested harness is a published, non-yanked exact match. The matrix
 installer uses the resolved environment snapshot so a moving `latest`
 selection cannot change between resolution and installation.
 
+Local validation may keep isolated environments, logs, and frozen result
+receipts under `.local/validation/`. That generated directory is ignored so
+writing validation evidence does not appear as a source change.
+
 To reproduce a matrix entry locally, use a fresh virtual environment for each
 entry so package state cannot leak between Home Assistant versions:
 
