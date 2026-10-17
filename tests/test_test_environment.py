@@ -107,14 +107,54 @@ def test_default_uses_pinned_harness_and_future_python_minimum(monkeypatch, tmp_
     assert setup.resolve_environment("default")["python"] == "3.15"
 
 
-def test_unknown_target_and_mismatched_baseline_fail_before_network(monkeypatch) -> None:
+@pytest.mark.parametrize("target", ["preview", "2026.13.1", "2027.2.1b0"])
+def test_unknown_target_and_malformed_expected_harness_fail_before_network(monkeypatch, target) -> None:
     fetch = Mock()
     monkeypatch.setattr(setup, "fetch_metadata", fetch)
     with pytest.raises(ValueError, match="Unknown test target"):
-        setup.resolve_environment("2026.7.0")
-    with pytest.raises(ValueError, match="does not match"):
-        setup.resolve_environment("2026.9.3", "0.13.372")
+        setup.resolve_environment(target)
+    with pytest.raises(ValueError, match="exact stable version"):
+        setup.resolve_environment("2027.2.1", "1.2b1")
     fetch.assert_not_called()
+
+
+@pytest.mark.parametrize("harness", ["1.2", "1.2.3.1"])
+@pytest.mark.parametrize("target", ["default", "latest", "2027.2.1"])
+def test_stable_harness_versions_keep_supported_release_shapes(monkeypatch, tmp_path, harness, target) -> None:
+    (tmp_path / "requirements_test.txt").write_text(f"{setup.HARNESS}=={harness}\n")
+    monkeypatch.setattr(setup, "ROOT", tmp_path)
+    responses = {
+        ("homeassistant", None): index("2027.2.1"),
+        ("homeassistant", "2027.2.1"): package_info("2027.2.1"),
+        (setup.HARNESS, None): index(harness),
+        (setup.HARNESS, harness): package_info("2027.2.1"),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    expected = {"homeassistant": "2027.2.1", "harness": harness, "python": "3.14"}
+    assert setup.resolve_environment(target) == expected
+    assert setup.resolve_environment(target, harness) == expected
+    assert setup.validate_environment(expected) == expected
+
+
+def test_expected_harness_must_match_the_exact_home_assistant_pair(monkeypatch) -> None:
+    responses = {
+        ("homeassistant", "2027.2.1"): package_info("2027.2.1"),
+        (setup.HARNESS, "1.2.3"): package_info("2027.1.0"),
+    }
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    with pytest.raises(ValueError, match="Requested harness does not match Home Assistant 2027.2.1"):
+        setup.resolve_environment("2027.2.1", "1.2.3")
+
+
+def test_expected_harness_rejects_yanked_distribution(monkeypatch) -> None:
+    responses = {
+        ("homeassistant", "2027.2.1"): package_info("2027.2.1"),
+        (setup.HARNESS, "1.2.3"): package_info("2027.2.1"),
+    }
+    responses[setup.HARNESS, "1.2.3"]["urls"] = [{"yanked": True}]
+    monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
+    with pytest.raises(ValueError, match=f"No published non-yanked distribution for {setup.HARNESS}"):
+        setup.resolve_environment("2027.2.1", "1.2.3")
 
 
 @pytest.mark.parametrize("value", [
@@ -162,7 +202,7 @@ def test_install_keeps_pair_in_one_resolution_and_reads_selected_core_dependenci
     assert calls[2][-1] == "check"
 
 
-@pytest.mark.parametrize("target", ["2026.8.3", "2026.9.3", "default"])
+@pytest.mark.parametrize("target", ["2026.8.3", "2026.9.3", "2027.2.1", "default"])
 @pytest.mark.parametrize("package", ["homeassistant", setup.HARNESS])
 @pytest.mark.parametrize("files", [[], [{"yanked": True}]])
 def test_pinned_environments_reject_missing_or_yanked_distributions(
@@ -173,26 +213,31 @@ def test_pinned_environments_reject_missing_or_yanked_distributions(
     )
     monkeypatch.setattr(setup, "ROOT", tmp_path)
     ha = "2026.10.1" if target == "default" else target
-    harness = "0.13.372" if target == "default" else setup.BASELINES[target]
+    harness = "0.13.372" if target == "default" else "1.2.3"
     responses = {
         ("homeassistant", ha): package_info(ha),
         (setup.HARNESS, harness): package_info(ha),
     }
+    if target != "default":
+        responses[(setup.HARNESS, None)] = index(harness)
     responses[package, ha if package == "homeassistant" else harness]["urls"] = files
     monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
     with pytest.raises(ValueError, match=f"No published non-yanked distribution for {package}"):
         setup.resolve_environment(target)
 
 
-def test_baseline_validates_actual_pair_and_python_metadata(monkeypatch) -> None:
+def test_exact_target_selects_compatible_harness_and_python_metadata(monkeypatch) -> None:
     responses = {
-        (setup.HARNESS, "0.13.357"): package_info("2026.8.3", ">=3.15"),
-        ("homeassistant", "2026.8.3"): package_info("2026.8.3", ">=3.14.2"),
+        ("homeassistant", "2027.2.1"): package_info("2027.2.1", ">=3.14.2"),
+        (setup.HARNESS, None): index("1.2.4", "1.2.3", "1.3.0b1"),
+        (setup.HARNESS, "1.2.4"): package_info("2027.1.0"),
+        (setup.HARNESS, "1.2.3"): package_info("2027.2.1", ">=3.15"),
     }
+    responses[(setup.HARNESS, None)]["releases"]["1.2.4"][0]["yanked"] = True
     monkeypatch.setattr(setup, "fetch_metadata", lambda p, v=None: responses[p, v])
-    assert setup.resolve_environment("2026.8.3") == {
-        "homeassistant": "2026.8.3", "harness": "0.13.357", "python": "3.15",
+    assert setup.resolve_environment("2027.2.1") == {
+        "homeassistant": "2027.2.1", "harness": "1.2.3", "python": "3.15",
     }
-    responses[setup.HARNESS, "0.13.357"] = package_info("2026.9.3")
-    with pytest.raises(ValueError, match="does not match Home Assistant"):
-        setup.resolve_environment("2026.8.3")
+    assert setup.resolve_environment("2027.2.1", "1.2.3")["harness"] == "1.2.3"
+    with pytest.raises(ValueError, match="Requested harness does not match Home Assistant"):
+        setup.resolve_environment("2027.2.1", "1.2.4")
