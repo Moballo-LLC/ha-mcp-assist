@@ -1,4 +1,4 @@
 # CI pins the current Home Assistant test harness; these are not runtime support bounds.
-pytest-homeassistant-custom-component==0.13.372
+pytest-homeassistant-custom-component==0.13.373
 ruff>=0.17.2,<1.0
 # Core conversation dependencies are installed from the selected Core manifest.
