@@ -362,9 +362,10 @@ use `search_music_assistant` and choose a result URI to clarify.
 Same-name radio entries from several providers resolve to one URI only when
 exactly one favorite or library copy identifies the user's preferred station;
 otherwise the duplicates remain ambiguous rather than relying on provider order.
-Explicit URIs, numeric IDs, and requests containing multiple media IDs retain
-direct playback. Name resolution searches at most 20 results with a 15-second
-timeout and uses the selected players' Music Assistant instance.
+Explicit URIs and numeric IDs retain direct playback. In a list, each
+human-readable name is searched while canonical URIs and numeric IDs remain
+direct. Name resolution searches at most 20 results with a 15-second timeout
+and uses the selected players' Music Assistant instance.
 
 For a contextual follow-up, copy both `media_content_id` and
 `media_content_type` from a native media search result and pass them as
