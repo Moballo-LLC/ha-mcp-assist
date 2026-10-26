@@ -353,6 +353,20 @@ Use player names, areas, floors, labels, or entity IDs to narrow ambiguous
 player requests. Search and library browsing support Music Assistant tracks,
 albums, artists, playlists, radio, audiobooks, and podcasts when those media
 types are available from the configured Music Assistant instance.
+For `play_music_assistant`, every human-readable name is searched before
+playback (up to five names per request, within one 30-second list budget).
+Matching tolerates minor spelling differences and omitted generic type words
+such as "radio" or "station", but requires one clear match with a canonical
+URI. Empty, ambiguous, incomplete, or low-confidence results stop playback;
+use `search_music_assistant` and choose a result URI to clarify.
+Same-name radio entries from several providers resolve to one URI only when
+exactly one favorite or library copy identifies the user's preferred station;
+otherwise the duplicates remain ambiguous rather than relying on provider order.
+Explicit URIs and numeric IDs retain direct playback. In a list, each
+human-readable name is searched while canonical URIs and numeric IDs remain
+direct. Name resolution searches at most 20 results with a 15-second timeout
+and uses the selected players' Music Assistant instance.
+
 For a contextual follow-up, copy both `media_content_id` and
 `media_content_type` from a native media search result and pass them as
 `within_media_content_id` and `within_media_content_type`; select a player when

@@ -24,6 +24,7 @@ from custom_components.mcp_assist.const import (
     CONF_ENABLE_ASSIST_BRIDGE,
     CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS,
     CONF_ENABLE_LLM_API_BRIDGE,
+    CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT,
     CONF_INCLUDE_CURRENT_USER,
     CONF_INCLUDE_HOME_LOCATION,
     CONF_INCLUDE_CURRENT_USER_IN_TOOL_CALLS,
@@ -1077,6 +1078,21 @@ def test_optional_technical_instructions_include_built_in_package_guidance(
 
     assert "Optional Built-In Tool Packages" in instructions
     assert "calculator tools" in instructions
+
+
+def test_optional_technical_instructions_require_music_search_before_playback(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """Named media should be searched verbatim before a canonical URI is played."""
+    system_entry_factory(data={CONF_ENABLE_MUSIC_ASSISTANT_SUPPORT: True})
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+
+    instructions = agent._build_optional_technical_instructions("Kitchen")
+
+    assert "search with the user's complete media wording" in instructions
+    assert "pass the selected canonical URI to playback" in instructions
+    assert "Preserve words in proper media and station names" in instructions
+    assert "ask the user to clarify instead of guessing" in instructions
 
 
 def test_profile_tool_filtering_hides_disabled_external_custom_tools(

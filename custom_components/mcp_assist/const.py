@@ -557,6 +557,8 @@ Unit conversion tools are enabled.
 MUSIC_ASSISTANT_TECHNICAL_INSTRUCTIONS = """
 Music Assistant support is enabled.
 - Prefer Music Assistant tools for playback, playback control, target discovery, search, library, and queue questions.
+- Before playing a named item, search with the user's complete media wording and pass the selected canonical URI to playback.
+- Preserve words in proper media and station names. If search is ambiguous, ask the user to clarify instead of guessing.
 - Only target Music Assistant players, not arbitrary media_player entities.
 - If no target is given and the current area is known, use area="{{ current_area }}".
 """

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 from datetime import date, datetime, time
+from difflib import SequenceMatcher
 import json
 import logging
+import re
 from typing import Any, Dict, List, Tuple
+import unicodedata
 
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.helpers import (
@@ -31,6 +35,12 @@ from ....discovery import EntityDiscovery
 _LOGGER = logging.getLogger(__name__)
 
 MUSIC_ASSISTANT_PLAYBACK_MEDIA_TYPES = ("track", "album", "artist", "playlist", "radio")
+PLAYBACK_SEARCH_LIMIT = 20
+PLAYBACK_SEARCH_TIMEOUT = 15
+PLAYBACK_NAME_LIST_LIMIT = 5
+PLAYBACK_NAME_LIST_TIMEOUT = 30
+PLAYBACK_MATCH_THRESHOLD = 0.90
+PLAYBACK_MATCH_MARGIN = 0.08
 MUSIC_ASSISTANT_LIBRARY_MEDIA_TYPES = (
     "track",
     "album",
@@ -112,7 +122,7 @@ MUSIC_ASSISTANT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         {"type": "string"},
                         {"type": "array", "items": {"type": "string"}},
                     ],
-                    "description": "The Music Assistant media identifier, URI, name, or list of items to play.",
+                    "description": "A canonical Music Assistant URI, name, or list of media identifiers. Human-readable names are searched first and play only when each result matches confidently; otherwise use search_music_assistant to choose a URI.",
                 },
                 "artist": {
                     "type": "string",
@@ -724,6 +734,7 @@ class MusicAssistantTool:
         normalized_media_id = self._normalize_music_assistant_media_id(args.get("media_id"))
         if normalized_media_id in (None, "", []):
             return self._text_result("❌ Error: media_id is required.")
+        requested_media_id = normalized_media_id
 
         try:
             resolved_player_ids, resolution_text = await self._resolve_music_assistant_player_targets(
@@ -734,6 +745,48 @@ class MusicAssistantTool:
             )
         except ValueError as err:
             return self._text_result(f"❌ Error: {err}")
+
+        try:
+            if isinstance(normalized_media_id, str) and not (
+                self._is_canonical_music_assistant_uri(normalized_media_id)
+                or normalized_media_id.isdecimal()
+            ):
+                normalized_media_id = await self._resolve_playback_media(
+                    normalized_media_id, media_type, resolved_player_ids, args
+                )
+            elif isinstance(normalized_media_id, list):
+                names_to_resolve = [
+                    item
+                    for item in normalized_media_id
+                    if not (
+                        self._is_canonical_music_assistant_uri(item)
+                        or item.isdecimal()
+                    )
+                ]
+                if len(names_to_resolve) > PLAYBACK_NAME_LIST_LIMIT:
+                    raise ValueError(
+                        "Too many human-readable media names to resolve safely. "
+                        "Use search_music_assistant to choose canonical URIs first."
+                    )
+                resolved_media_ids = []
+                try:
+                    async with asyncio.timeout(PLAYBACK_NAME_LIST_TIMEOUT):
+                        for item in normalized_media_id:
+                            resolved_media_ids.append(
+                                await self._resolve_playback_media(
+                                    item, media_type, resolved_player_ids, args
+                                )
+                                if item in names_to_resolve
+                                else item
+                            )
+                except TimeoutError as err:
+                    raise ValueError(
+                        "Music Assistant list search timed out. "
+                        "Use search_music_assistant to choose canonical URIs first."
+                    ) from err
+                normalized_media_id = resolved_media_ids
+        except ValueError as err:
+            return self._text_result(f"❌ Error: {err}", is_error=True)
 
         service_data: Dict[str, Any] = {
             "media_id": normalized_media_id,
@@ -798,9 +851,9 @@ class MusicAssistantTool:
         player_names = self._friendly_names_for_entities(resolved_player_ids)
         target_text = ", ".join(player_names)
         description_text = media_description or (
-            ", ".join(normalized_media_id)
-            if isinstance(normalized_media_id, list)
-            else str(normalized_media_id)
+            ", ".join(requested_media_id)
+            if isinstance(requested_media_id, list)
+            else str(requested_media_id)
         )
 
         text_parts = [
@@ -813,6 +866,183 @@ class MusicAssistantTool:
             text_parts.append(f"Shuffle set to {'on' if shuffle else 'off'}.")
 
         return self._text_result("\n".join(text_parts))
+
+    @staticmethod
+    def _is_canonical_music_assistant_uri(value: Any) -> bool:
+        """Recognize explicit provider URIs and stream URLs, without guessing IDs."""
+        return isinstance(value, str) and bool(
+            re.fullmatch(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+", value)
+        )
+
+    @staticmethod
+    def _playback_match_text(value: str, media_type: str = "") -> str:
+        """Normalize punctuation, accents, and generic words for the requested type."""
+        text = unicodedata.normalize("NFKD", value.casefold())
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        words = re.findall(r"[^\W_]+", text)
+        generic_words = {media_type, f"{media_type}s"} if media_type else set()
+        if media_type == "radio":
+            generic_words.update(("station", "stations"))
+        return " ".join(word for word in words if word not in generic_words)
+
+    @staticmethod
+    def _playback_match_score(query: str, candidate: str) -> float:
+        """Allow small spelling differences while rejecting short fuzzy guesses."""
+        if not query or not candidate:
+            return 0.0
+        if query == candidate:
+            return 1.0
+        if min(len(query), len(candidate)) < 6:
+            return 0.0
+        return SequenceMatcher(None, query, candidate, autojunk=False).ratio()
+
+    async def _resolve_playback_media(
+        self,
+        name: str,
+        media_type: str,
+        player_ids: list[str],
+        args: Dict[str, Any],
+    ) -> str:
+        """Search once and return only a clearly matching canonical media URI."""
+        guidance = "Use search_music_assistant to choose a canonical URI before playback."
+        query = self._playback_match_text(name, media_type)
+        if not query or len(name) > 256:
+            raise ValueError(f"The media name is empty or too long to resolve. {guidance}")
+        if not self.hass.services.has_service("music_assistant", "search"):
+            raise ValueError(f"Music Assistant search is unavailable. {guidance}")
+
+        registry = er.async_get(self.hass)
+        entry_ids = {
+            entry.config_entry_id
+            for entity_id in player_ids
+            if (entry := registry.async_get(entity_id)) is not None and entry.config_entry_id
+        }
+        if len(entry_ids) > 1:
+            raise ValueError(f"Playback targets span multiple Music Assistant instances. {guidance}")
+        config_entry = self._resolve_music_assistant_instance(
+            config_entry_id=next(iter(entry_ids), None)
+        )
+        service_data = {
+            "config_entry_id": config_entry.entry_id,
+            "name": name,
+            "media_type": media_type,
+            "limit": PLAYBACK_SEARCH_LIMIT,
+        }
+        for key in ("artist", "album"):
+            if isinstance(args.get(key), str) and args[key].strip():
+                service_data[key] = args[key].strip()
+        try:
+            async with asyncio.timeout(PLAYBACK_SEARCH_TIMEOUT):
+                response = await self.hass.services.async_call(
+                    domain="music_assistant",
+                    service="search",
+                    service_data=service_data,
+                    blocking=True,
+                    return_response=True,
+                )
+        except Exception as err:
+            raise ValueError(f"Music Assistant search failed. {guidance}") from err
+
+        if not isinstance(response, dict) or _media_search_response_has_error(response):
+            raise ValueError(f"Music Assistant returned an invalid search response. {guidance}")
+        collection = response.get(media_type, response.get(f"{media_type}s"))
+        if isinstance(collection, dict):
+            collection = collection.get("items")
+        if not isinstance(collection, list):
+            raise ValueError(f"Music Assistant search was malformed. {guidance}")
+
+        candidates: dict[str, dict[str, Any]] = {}
+        for item in collection:
+            if not isinstance(item, dict) or not (
+                isinstance(item.get("name"), str)
+                and item["name"].strip()
+                and len(item["name"]) <= 256
+                and self._is_canonical_music_assistant_uri(item.get("uri"))
+                and item.get("media_type", media_type) == media_type
+            ):
+                raise ValueError(f"Music Assistant returned a malformed media item. {guidance}")
+            normalized_name = self._playback_match_text(item["name"], media_type)
+            score = self._playback_match_score(query, normalized_name)
+            eligible = True
+            for key in ("artist", "album"):
+                if key not in service_data:
+                    continue
+                values = item.get("artists", item.get("artist")) if key == "artist" else item.get(key)
+                values = values if isinstance(values, list) else [values]
+                names = [value.get("name") if isinstance(value, dict) else value for value in values]
+                constraint = self._playback_match_text(service_data[key])
+                if not any(
+                    isinstance(value, str)
+                    and self._playback_match_score(
+                        constraint, self._playback_match_text(value)
+                    ) >= PLAYBACK_MATCH_THRESHOLD
+                    for value in names
+                ):
+                    eligible = False
+            candidate = {
+                "uri": item["uri"],
+                "name": normalized_name,
+                "score": score,
+                "eligible": eligible,
+                "favorite": item.get("favorite") is True,
+                "library": item["uri"].startswith("library://"),
+            }
+            existing = candidates.get(item["uri"])
+            if existing is None or (
+                candidate["eligible"], candidate["score"]
+            ) > (
+                existing["eligible"], existing["score"]
+            ):
+                candidates[item["uri"]] = candidate
+
+        ranked = sorted(
+            (
+                candidate
+                for candidate in candidates.values()
+                if candidate["eligible"]
+            ),
+            key=lambda item: (-item["score"], item["uri"]),
+        )
+        if not ranked or ranked[0]["score"] < PLAYBACK_MATCH_THRESHOLD:
+            raise ValueError(f"No high-confidence Music Assistant match was found. {guidance}")
+
+        # Radio catalogs commonly return the same station from several providers.
+        # Treat identical normalized station names as one semantic match, then prefer
+        # the user's favorite/library representation without relying on provider order.
+        if media_type == "radio":
+            station_groups: dict[str, list[dict[str, Any]]] = {}
+            for candidate in ranked:
+                station_groups.setdefault(candidate["name"], []).append(candidate)
+            semantic_matches = []
+            for group in station_groups.values():
+                if len(group) == 1:
+                    semantic_matches.extend(group)
+                    continue
+                favorites = [item for item in group if item["favorite"]]
+                libraries = [item for item in group if item["library"]]
+                if len(favorites) == 1:
+                    semantic_matches.append(favorites[0])
+                elif not favorites and len(libraries) == 1:
+                    semantic_matches.append(libraries[0])
+                else:
+                    # A shared display name is not identity evidence. Retain every
+                    # unresolved station so the confidence-margin check fails closed.
+                    semantic_matches.extend(group)
+            ranked = sorted(
+                semantic_matches,
+                key=lambda item: (
+                    -item["score"],
+                    -int(item["favorite"]),
+                    -int(item["library"]),
+                    item["uri"],
+                ),
+            )
+
+        if not ranked or ranked[0]["score"] < PLAYBACK_MATCH_THRESHOLD:
+            raise ValueError(f"No high-confidence Music Assistant match was found. {guidance}")
+        if len(ranked) > 1 and ranked[0]["score"] - ranked[1]["score"] < PLAYBACK_MATCH_MARGIN:
+            raise ValueError(f"Music Assistant found ambiguous media matches. {guidance}")
+        return ranked[0]["uri"]
 
     async def tool_list_music_assistant_instances(
         self,
