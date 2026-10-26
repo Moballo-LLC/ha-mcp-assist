@@ -277,6 +277,10 @@ Typical flow:
 2. `search_music_assistant` finds matching media.
 3. `play_music_assistant` starts playback.
 
+The wording above is illustrative. Equivalent requests follow the same generic
+media-search and independent target-resolution flow rather than matching a
+predefined phrase.
+
 Other examples:
 
 - "What is playing in the living room?"

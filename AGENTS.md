@@ -173,6 +173,19 @@ pytest -ra --junitxml=test-results/pytest.xml tests
 - Do not commit generated caches, `__pycache__`, `.pyc`, `.pyo`, local venvs, or
   `test-results/`.
 
+## Natural-Language Request Routing
+
+- Do not hardcode a complete user utterance or a media-plus-target phrase as a
+  special route, automation, prompt exception, or alias. Equivalent wording
+  must use the same generic tool path.
+- Resolve independent request dimensions independently. For media playback,
+  resolve a human-readable media name through search to a canonical identifier,
+  and resolve the requested player, area, floor, or label through discovery.
+- Narrow provider or catalog aliases may normalize stable media vocabulary to a
+  canonical name or identifier. Keep each alias independent of imperative
+  wording and playback targets, scope it to the provider and media type, and
+  fail closed when either the media or target remains ambiguous.
+
 ## Prompt Latency and Context Budget
 
 - Keep first-prompt latency low. Avoid adding startup work that performs broad

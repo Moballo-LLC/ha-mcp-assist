@@ -353,6 +353,13 @@ Use player names, areas, floors, labels, or entity IDs to narrow ambiguous
 player requests. Search and library browsing support Music Assistant tracks,
 albums, artists, playlists, radio, audiobooks, and podcasts when those media
 types are available from the configured Music Assistant instance.
+
+Media lookup and playback-target selection are separate generic steps. MCP
+Assist does not predefine full spoken phrases or media-plus-room shortcuts.
+Site-specific provider or channel aliases may normalize only the media name or
+canonical ID before the same search/play path; they must not choose or replace
+the independently requested player, area, floor, or label.
+
 For `play_music_assistant`, every human-readable name is searched before
 playback (up to five names per request, within one 30-second list budget).
 Matching tolerates minor spelling differences and omitted generic type words
