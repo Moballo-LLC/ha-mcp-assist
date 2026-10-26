@@ -46,6 +46,261 @@ def _stub_target_resolution(
     monkeypatch.setattr(tool, "_friendly_names_for_entities", lambda _ids: [name])
 
 
+def _stub_playback_services(hass, response):
+    """Record local search/play/shuffle calls without contacting a provider."""
+    calls = []
+
+    async def search_service(call):
+        calls.append(("search", dict(call.data)))
+        if isinstance(response, Exception):
+            raise response
+        if callable(response):
+            return response(call)
+        return response
+
+    async def play_service(call):
+        calls.append(("play", dict(call.data)))
+
+    async def shuffle_service(call):
+        calls.append(("shuffle", dict(call.data)))
+
+    hass.services.async_register(
+        "music_assistant", "search", search_service,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register("music_assistant", "play_media", play_service)
+    hass.services.async_register("media_player", "shuffle_set", shuffle_service)
+    return calls
+
+
+@pytest.mark.parametrize("name", ["Moonbeam FM", "Moonbeem FM", "Moonbeam FM Radio"])
+@pytest.mark.parametrize("nested", [False, True])
+async def test_play_music_assistant_resolves_name_before_playback(hass, monkeypatch, name, nested):
+    """A shortened or slightly misspelled fictional station resolves to its URI."""
+    entry = _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    items = [
+        {"name": "Other Sounds Radio", "uri": "library://radio/9", "media_type": "radio"},
+        {"name": "Moonbeam FM Radio", "uri": "radiobrowser://radio/22",
+         "media_type": "radio", "favorite": False},
+        {"name": "Moonbeam FM Radio", "uri": "library://radio/2", "media_type": "radio"},
+    ]
+    calls = _stub_playback_services(hass, {"radio": {"items": items} if nested else items})
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": name, "shuffle": True, "enqueue": "replace",
+    })
+
+    assert result["isError"] is False
+    assert calls == [
+        ("search", {"config_entry_id": entry.entry_id, "name": name,
+                    "media_type": "radio", "limit": 20}),
+        ("play", {"media_id": "library://radio/2", "media_type": "radio",
+                  "enqueue": "replace", "entity_id": ["media_player.kitchen"]}),
+        ("shuffle", {"shuffle": True, "entity_id": ["media_player.kitchen"]}),
+    ]
+
+
+@pytest.mark.parametrize("response", [
+    {"radio": []},
+    {"radio": [{"name": "Distant Echo Radio", "uri": "library://radio/9"}]},
+    {"radio": [{"name": "Moonbeam FMX", "uri": "library://radio/1"},
+               {"name": "Moonbeam FM", "uri": "library://radio/2"}]},
+    {"radio": [{"name": "Moonbeem FM", "uri": "library://radio/1"},
+               {"name": "Moonbeem FMS", "uri": "library://radio/2"}]},
+    {"radio": [{"name": "Moonbeam FM", "uri": "radiobrowser://radio/1"},
+               {"name": "Moonbeam FM", "uri": "radiobrowser://radio/2"}]},
+    {"radio": [{"name": "Moonbeam FM Radio"}]},
+    {"radio": [{"name": "Moonbeam FM Radio", "uri": "Moonbeam FM"}]},
+    {"radio": [{"name": "Moonbeam FM Radio", "uri": "library://radio/1",
+                "media_type": "playlist"}]},
+    {"radio": ["Moonbeam FM Radio"]},
+    {"radio": {"items": "invalid"}},
+    {"error": "search unavailable"},
+    {"radio": [] , "provider": {"error": "partial results"}},
+    [],
+    None,
+    RuntimeError("Search unavailable"),
+])
+async def test_play_music_assistant_fails_closed_on_uncertain_search(
+    hass, monkeypatch, response
+):
+    """Empty, weak, ambiguous, malformed, truncated, and failed searches never play."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    calls = _stub_playback_services(hass, response)
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": "Moonbeam FM", "shuffle": True,
+    })
+
+    assert result["isError"] is True
+    assert "canonical URI" in result["content"][0]["text"]
+    assert [service for service, _data in calls] == ["search"]
+
+
+@pytest.mark.parametrize("media_id, expected", [
+    ("library://radio/2", "library://radio/2"),
+    ("spotify://track/example", "spotify://track/example"),
+    ("https://example.invalid/stream", "https://example.invalid/stream"),
+    ("42", "42"),
+    (["library://radio/1", "library://radio/2"], ["library://radio/1", "library://radio/2"]),
+    ("library://radio/1;library://radio/2",
+     ["library://radio/1", "library://radio/2"]),
+])
+async def test_play_music_assistant_preserves_direct_identifiers(
+    hass, monkeypatch, media_id, expected
+):
+    """Explicit URIs, numeric IDs, and multi-item requests retain direct playback."""
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    calls = _stub_playback_services(hass, None)
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": media_id,
+    })
+
+    assert result["isError"] is False
+    assert calls == [("play", {"media_id": expected, "media_type": "radio",
+                                "entity_id": ["media_player.kitchen"]})]
+
+
+async def test_play_music_assistant_resolves_each_human_readable_list_item(
+    hass, monkeypatch
+):
+    """Every name in a multi-item request is searched before the list is played."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    responses = {
+        "Moonbeam FM": {"radio": [
+            {"name": "Moonbeam FM", "uri": "library://radio/2"},
+        ]},
+        "Sunrise FM": {"radio": [
+            {"name": "Sunrise FM", "uri": "library://radio/3"},
+        ]},
+    }
+    calls = _stub_playback_services(hass, lambda call: responses[call.data["name"]])
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": ["Moonbeam FM", "Sunrise FM"],
+    })
+
+    assert result["isError"] is False
+    assert [service for service, _data in calls] == ["search", "search", "play"]
+    assert calls[2][1]["media_id"] == ["library://radio/2", "library://radio/3"]
+
+
+async def test_play_music_assistant_prefers_favorite_duplicate_station(hass, monkeypatch):
+    """Equivalent provider copies collapse to one station and prefer the favorite URI."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    calls = _stub_playback_services(hass, {"radio": [
+        {"name": "Moonbeam FM Radio", "uri": "radiobrowser://radio/22",
+         "favorite": False},
+        {"name": "Moonbeam FM", "uri": "library://radio/2", "favorite": True},
+    ]})
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": "Moonbeam FM",
+    })
+
+    assert result["isError"] is False
+    assert [service for service, _data in calls] == ["search", "play"]
+    assert calls[1][1]["media_id"] == "library://radio/2"
+
+
+async def test_play_music_assistant_never_prefers_a_constraint_mismatch(
+    hass, monkeypatch
+):
+    """Favorite status cannot revive a same-name result rejected by constraints."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    calls = _stub_playback_services(hass, {"radio": [
+        {"name": "Moonbeam FM", "uri": "library://radio/2", "favorite": False,
+         "artists": [{"name": "Example Broadcaster"}]},
+        {"name": "Moonbeam FM", "uri": "radiobrowser://radio/22", "favorite": True,
+         "artists": [{"name": "Different Broadcaster"}]},
+    ]})
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": "Moonbeam FM",
+        "artist": "Example Broadcaster",
+    })
+
+    assert result["isError"] is False
+    assert [service for service, _data in calls] == ["search", "play"]
+    assert calls[1][1]["media_id"] == "library://radio/2"
+
+
+@pytest.mark.parametrize("missing_artist", [False, True])
+async def test_play_music_assistant_verifies_artist_and_album_constraints(
+    hass, monkeypatch, missing_artist
+):
+    """Search constraints must also be evidenced by the selected media item's metadata."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    item = {"name": "Paper Stars", "uri": "library://track/2", "media_type": "track",
+            "album": {"name": "Folded Sky"}}
+    if not missing_artist:
+        item["artists"] = [{"name": "The Example Band"}]
+    calls = _stub_playback_services(hass, {"tracks": [item]})
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "track", "media_id": "Paper Stars", "artist": "The Example Band",
+        "album": "Folded Sky",
+    })
+
+    assert result["isError"] is missing_artist
+    assert calls[0][1]["artist"] == "The Example Band"
+    assert calls[0][1]["album"] == "Folded Sky"
+    assert [service for service, _data in calls] == (
+        ["search"] if missing_artist else ["search", "play"]
+    )
+
+
+async def test_play_music_assistant_search_uses_target_instance(hass, monkeypatch):
+    """Multiple configured servers are disambiguated using the selected player's entry."""
+    entry = _add_music_assistant_entry(hass)
+    _add_music_assistant_entry(hass, entry_id="ma_other", title="Other")
+    registry = er.async_get(hass)
+    entity = registry.async_get_or_create(
+        "media_player", "music_assistant", "example", config_entry=entry,
+    )
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch, entity_id=entity.entity_id)
+    item = {"name": "Moonbeam FM", "uri": "library://radio/2"}
+    calls = _stub_playback_services(hass, {"radio": [item, item]})
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": "Moonbeam FM",
+    })
+
+    assert result["isError"] is False
+    assert calls[0][1]["config_entry_id"] == entry.entry_id
+
+
+async def test_play_music_assistant_without_search_does_not_fall_back(hass, monkeypatch):
+    """An unavailable search service cannot send a guessed name to playback."""
+    _add_music_assistant_entry(hass)
+    tool = MusicAssistantTool(hass)
+    _stub_target_resolution(tool, monkeypatch)
+    calls = _stub_playback_services(hass, None)
+    hass.services.async_remove("music_assistant", "search")
+
+    result = await tool.handle_call("play_music_assistant", {
+        "media_type": "radio", "media_id": "Moonbeam FM",
+    })
+
+    assert result["isError"] is True
+    assert calls == []
+
+
 @pytest.mark.asyncio
 async def test_control_music_assistant_player_routes_pause_to_media_player_service(
     hass,
