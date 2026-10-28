@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from types import SimpleNamespace
 
 import pytest
 
@@ -97,6 +98,15 @@ GPT6_MODEL_IDS = (
     "gpt-6-sol-2026-09-24",
     "gpt-6-luna",
     "gpt-6-luna-2026-09-24",
+)
+
+
+GENERIC_GPT6_MODEL_IDS = (
+    "gpt-6.0",
+    "gpt-6.2",
+    "gpt-6.10-mini",
+    "gpt-6.99-generic-2026-10-01",
+    "gpt-6.1.2",
 )
 
 
@@ -1152,7 +1162,10 @@ def test_gpt6_model_selection_respects_endpoint_tool_support(base_url: str, tran
         ) == ("model_requires_responses_api" if blocked else None)
 
 
-@pytest.mark.parametrize("model_name", ["gpt-6", *GPT6_MODEL_IDS])
+@pytest.mark.parametrize(
+    "model_name",
+    ["gpt-6", "gpt-6.1", "gpt-6.1-terra", *GENERIC_GPT6_MODEL_IDS, *GPT6_MODEL_IDS],
+)
 @pytest.mark.parametrize("prefix", ["", "openai/"])
 def test_gpt6_reasoning_classification_accepts_normalized_model_ids(
     model_name: str, prefix: str
@@ -2052,3 +2065,45 @@ def test_anthropic_provider_normalizes_http_message() -> None:
             }
         ],
     }
+
+
+@pytest.mark.parametrize("model_name", ["gpt-60", "gpt-60-sol", "gpt-6.1foo", "gpt-6.x-terra"])
+def test_reasoning_classification_rejects_numeric_family_near_misses(model_name):
+    assert not OpenAIProvider.is_reasoning_model(model_name)
+
+
+@pytest.mark.parametrize("transport", ["responses", "chat_completions"])
+@pytest.mark.parametrize(
+    "model_name", ["gpt-6.1-terra", "openai/gpt-6.1-terra", *GENERIC_GPT6_MODEL_IDS]
+)
+def test_versioned_reasoning_profile_omits_temperature_and_keeps_effort(transport, model_name):
+    provider = OpenAIProvider(_settings(
+        SERVER_TYPE_OPENAI, model_name=model_name, max_tokens=500, temperature=0.5,
+        provider_options={
+            CONF_OPENAI_API_TRANSPORT: transport,
+            "_resolved_model_profile": SimpleNamespace(model=model_name, effort="medium"),
+        },
+    ))
+    payload = provider.build_payload([{"role": "user", "content": "Hello"}])
+    assert "temperature" not in payload
+    if transport == "responses":
+        assert payload["include"] == ["reasoning.encrypted_content"]
+        assert payload["reasoning"] == {"effort": "medium"}
+        assert payload["max_output_tokens"] == 500
+    else:
+        assert payload["max_completion_tokens"] == 500
+        assert "max_tokens" not in payload
+        assert payload["reasoning_effort"] == "medium"
+
+
+@pytest.mark.parametrize("transport", ["responses", "chat_completions"])
+@pytest.mark.parametrize("base_url", [OPENAI_BASE_URL, "https://provider.example.invalid"])
+def test_generic_numeric_gpt6_models_remain_selectable(transport, base_url):
+    values = {CONF_OPENAI_API_TRANSPORT: transport}
+    assert OpenAIProvider.filter_model_ids(
+        list(GENERIC_GPT6_MODEL_IDS), base_url=base_url, values=values
+    ) == list(GENERIC_GPT6_MODEL_IDS)
+    for model_name in GENERIC_GPT6_MODEL_IDS:
+        assert OpenAIProvider.model_configuration_error(
+            model_name, base_url=base_url, values=values
+        ) is None

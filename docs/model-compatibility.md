@@ -58,11 +58,11 @@ and rejected if entered manually. Deep-research models are also filtered and
 rejected because they require OpenAI built-in data-source tools that MCP Assist
 does not currently send.
 
-GPT-6 Astra, Sol, and Luna, including dated snapshots, use reasoning-model
-request fields: MCP Assist omits `temperature`, uses `max_completion_tokens`
-for Chat Completions, and preserves encrypted reasoning continuation on
+GPT-6 models, including numeric versioned IDs such as `gpt-6.1-terra` and
+dated snapshots, use reasoning-model request fields: MCP Assist omits
+`temperature`, uses `max_completion_tokens` for Chat Completions, and preserves encrypted reasoning continuation on
 Responses. Choose **Automatic** or **Responses API** on the official OpenAI
-endpoint to use tools with reasoning for all three models.
+endpoint to use tools with reasoning for these models.
 
 For official OpenAI Chat Completions, Sol and Luna tool calls set
 `reasoning_effort` to `none`, including when a dated snapshot is selected.

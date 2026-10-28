@@ -100,7 +100,7 @@ class OpenAICompatibleProvider(LLMProvider):
         stripped before matching.
         """
         name = str(model_name or "").strip().lower().rsplit("/", 1)[-1]
-        if name.startswith("gpt-5") or OpenAICompatibleProvider._matches_model_family(name, "gpt-6"):
+        if name.startswith("gpt-5") or re.match(r"gpt-6(?:\.[0-9]+)*(?:$|-)", name):
             return True
         # o-series reasoning models are "o" followed by a digit: o1, o3, o4-mini…
         return len(name) >= 2 and name[0] == "o" and name[1].isdigit()
