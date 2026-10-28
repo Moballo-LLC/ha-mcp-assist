@@ -779,9 +779,10 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
     @classmethod
     def requires_responses_for_tools(cls, model_name: str) -> bool:
-        """Include Astra, whose Chat Completions support excludes tool calling."""
-        return cls.is_responses_only_model(model_name) or cls._matches_model_family(
-            model_name, "gpt-6-astra"
+        """Include families whose Chat Completions support excludes tool calling."""
+        return cls.is_responses_only_model(model_name) or any(
+            cls._matches_model_family(model_name, family)
+            for family in ("gpt-6-astra", "gpt-6.1-sol")
         )
 
     @staticmethod
