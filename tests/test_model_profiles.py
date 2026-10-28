@@ -29,10 +29,12 @@ from custom_components.mcp_assist.model_profiles import (
 from custom_components.mcp_assist.provider_runtime import resolve_provider_runtime_config
 
 
-def policy(model="example-model", effort="high", *, bindings=None):
+def policy(model="example-model", effort="high", *, bindings=None, providers=None):
     value = {"schemaVersion": 1, "models": {"primary": model}, "profiles": {
         "focused": {"label": "Focused", "modelAlias": "primary", "reasoningEffort": effort}
     }, "bindings": {"assistant": "focused"} if bindings is None else bindings}
+    if providers is not None:
+        value["modelProviders"] = providers
     value["revision"] = hashlib.sha256(json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()).hexdigest()
@@ -62,6 +64,36 @@ def test_binding_and_profile_resolution():
     assert validate_model_profile(value, "assistant") == validate_model_profile(value, "focused")
     value["nativeExport"] = {"ok": False, "error": "example"}
     assert validate_model_profile(value, "assistant").model == "example-model"
+
+
+def test_optional_model_providers_are_validated_and_covered_by_revision():
+    value = policy(providers={"primary": "vendor-a"})
+    assert validate_model_profile(value, "assistant").model == "example-model"
+    value["resolvedProfiles"]["focused"]["provider"] = "vendor-a"
+    assert validate_model_profile(value, "assistant").model == "example-model"
+    value["modelProviders"]["primary"] = "vendor-b"
+    value["resolvedProfiles"]["focused"]["provider"] = "vendor-b"
+    with pytest.raises(ModelProfileResolutionError):
+        validate_model_profile(value, "assistant")
+
+
+@pytest.mark.parametrize("providers", [
+    {}, [], {"other": "vendor-a"}, {"primary": "vendor-a", "extra": "vendor-b"},
+    {"primary": ""}, {"primary": "invalid provider"}, {"primary": None},
+])
+def test_malformed_provider_metadata_is_rejected(providers):
+    with pytest.raises(ModelProfileResolutionError):
+        validate_model_profile(policy(providers=providers), "assistant")
+
+
+@pytest.mark.parametrize("providers, resolved_provider", [
+    (None, "vendor-a"), ({"primary": "vendor-a"}, "vendor-b"),
+])
+def test_resolved_provider_requires_matching_hashed_alias_metadata(providers, resolved_provider):
+    value = policy(providers=providers)
+    value["resolvedProfiles"]["focused"]["provider"] = resolved_provider
+    with pytest.raises(ModelProfileResolutionError):
+        validate_model_profile(value, "assistant")
 
 
 def test_direct_profile_resolution_without_bindings():
