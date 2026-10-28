@@ -444,11 +444,31 @@ providers; configuring it there stops the request.
 Policies may add `imageModels` (alias to concrete model ID), `imageProfiles`
 (profile ID to `{label, modelAlias}`), and `imageBindings` (binding to profile ID).
 Include all three maps together, plus `resolvedImageProfiles` (profile ID to
-`{model}`). Image profiles have no reasoning effort. The canonical revision is
-SHA256 of the sorted compact UTF-8 JSON policy including `schemaVersion`, the
-three text policy maps, and all three image policy maps when present. Resolved
-maps and response metadata are excluded from that digest. Text-only policies
-remain valid for text requests.
+`{model}`). Image profiles have no reasoning effort.
+
+Policies may also include `modelProviders`, a map from every text model alias
+in `models` to its provider ID. When present, it must contain 1–64 entries and
+its keys must exactly match the keys of `models`. Each provider ID must match
+`[a-z][a-z0-9-]{0,47}` in full. The map is optional; policies without it remain
+valid. A text `resolvedProfiles` entry may additionally include `provider` only
+when `modelProviders` is present, and that value must equal the provider mapped
+to the profile's `modelAlias`. Otherwise the resolved entry remains
+`{model, effort}`. Image resolved entries remain `{model}`.
+
+The canonical revision is the lowercase hexadecimal SHA256 of a JSON object
+containing exactly:
+
+- `schemaVersion`, `models`, `profiles`, and `bindings`;
+- `imageModels`, `imageProfiles`, and `imageBindings` when those maps are present;
+- `modelProviders` when that map is present, even if resolved entries omit
+  `provider`.
+
+Serialize this object with recursively sorted keys, no whitespace separators,
+and unescaped Unicode, then encode it as UTF-8. In Python, use
+`json.dumps(policy_fields, sort_keys=True, ensure_ascii=False, separators=(",", ":"))`
+before hashing the encoded result. Exclude `revision`, both resolved maps
+(`resolvedProfiles` and `resolvedImageProfiles`), and other response metadata
+from the digest. Text-only policies remain valid for text requests.
 
 When both references are configured, one authenticated bounded lookup resolves
 both from the same snapshot. The image model is frozen through tool follow-ups
