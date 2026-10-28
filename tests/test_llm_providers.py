@@ -109,6 +109,11 @@ GENERIC_GPT6_MODEL_IDS = (
     "gpt-6.1.2",
 )
 
+NUMBERED_GPT_REASONING_MODEL_IDS = (
+    *GENERIC_GPT6_MODEL_IDS, "gpt-7-example", "gpt-10.2-example", "gpt-60-example"
+)
+
+
 
 def _settings(
     server_type: str = SERVER_TYPE_LMSTUDIO,
@@ -1077,7 +1082,10 @@ def test_gpt6_custom_chat_adapter_keeps_its_tool_reasoning_contract(
     assert "temperature" not in payload
 
 
-@pytest.mark.parametrize("model_name", ["gpt-6-astra", "gpt-6-astra-2026-09-24"])
+@pytest.mark.parametrize(
+    "model_name", ["gpt-6-astra", "gpt-6-astra-2026-09-24", "gpt-6.1-sol",
+                   "openai/gpt-6.1-sol", "gpt-6.1-sol-2026-10-01"]
+)
 @pytest.mark.parametrize("stream", [False, True])
 def test_gpt6_astra_rejects_official_chat_tool_requests(model_name: str, stream: bool) -> None:
     """Existing Chat profiles must fail with instructions before sending invalid tools."""
@@ -1164,7 +1172,7 @@ def test_gpt6_model_selection_respects_endpoint_tool_support(base_url: str, tran
 
 @pytest.mark.parametrize(
     "model_name",
-    ["gpt-6", "gpt-6.1", "gpt-6.1-terra", *GENERIC_GPT6_MODEL_IDS, *GPT6_MODEL_IDS],
+    ["gpt-6", "gpt-6.1", "gpt-6.1-terra", *NUMBERED_GPT_REASONING_MODEL_IDS, *GPT6_MODEL_IDS],
 )
 @pytest.mark.parametrize("prefix", ["", "openai/"])
 def test_gpt6_reasoning_classification_accepts_normalized_model_ids(
@@ -1218,7 +1226,7 @@ def test_is_reasoning_model_classification() -> None:
     assert is_reasoning("gpt-6-luna")
     assert is_reasoning("openai/gpt-6-astra")
     assert is_reasoning("openai/o3-mini")  # OpenRouter-style prefix
-    assert not is_reasoning("gpt-60-sol")
+    assert is_reasoning("gpt-60-sol")
     assert not is_reasoning("gpt-4o")
     assert not is_reasoning("gpt-4o-mini")
     assert not is_reasoning("omni-model")  # "o" not followed by a digit
@@ -2067,14 +2075,15 @@ def test_anthropic_provider_normalizes_http_message() -> None:
     }
 
 
-@pytest.mark.parametrize("model_name", ["gpt-60", "gpt-60-sol", "gpt-6.1foo", "gpt-6.x-terra"])
-def test_reasoning_classification_rejects_numeric_family_near_misses(model_name):
+@pytest.mark.parametrize("model_name", ["gpt-4.1", "gpt-3.5-turbo", "gpt-image-1", "gpt-custom", "gpt6.1",
+     "gpt-6.x-terra", "gpt-6.1foo"])
+def test_reasoning_classification_preserves_other_model_families(model_name):
     assert not OpenAIProvider.is_reasoning_model(model_name)
 
 
 @pytest.mark.parametrize("transport", ["responses", "chat_completions"])
 @pytest.mark.parametrize(
-    "model_name", ["gpt-6.1-terra", "openai/gpt-6.1-terra", *GENERIC_GPT6_MODEL_IDS]
+    "model_name", ["gpt-6.1-terra", "openai/gpt-6.1-terra", *NUMBERED_GPT_REASONING_MODEL_IDS]
 )
 def test_versioned_reasoning_profile_omits_temperature_and_keeps_effort(transport, model_name):
     provider = OpenAIProvider(_settings(
@@ -2100,10 +2109,32 @@ def test_versioned_reasoning_profile_omits_temperature_and_keeps_effort(transpor
 @pytest.mark.parametrize("base_url", [OPENAI_BASE_URL, "https://provider.example.invalid"])
 def test_generic_numeric_gpt6_models_remain_selectable(transport, base_url):
     values = {CONF_OPENAI_API_TRANSPORT: transport}
-    assert OpenAIProvider.filter_model_ids(
+    assert set(OpenAIProvider.filter_model_ids(
         list(GENERIC_GPT6_MODEL_IDS), base_url=base_url, values=values
-    ) == list(GENERIC_GPT6_MODEL_IDS)
+    )) == set(GENERIC_GPT6_MODEL_IDS)
     for model_name in GENERIC_GPT6_MODEL_IDS:
         assert OpenAIProvider.model_configuration_error(
             model_name, base_url=base_url, values=values
         ) is None
+
+
+@pytest.mark.parametrize("base_url", [OPENAI_BASE_URL, "https://provider.example.invalid"])
+def test_gpt61_sol_tool_transport_rules_follow_endpoint_contract(base_url):
+    model = "gpt-6.1-sol"
+    values = {CONF_OPENAI_API_TRANSPORT: "chat_completions"}
+    official = base_url == OPENAI_BASE_URL
+    error = OpenAIProvider.model_configuration_error(model, base_url=base_url, values=values)
+    assert error == ("model_requires_responses_api" if official else None)
+    assert (model in OpenAIProvider.filter_model_ids(
+        [model], base_url=base_url, values=values
+    )) is not official
+    if not official:
+        provider = OpenAIProvider(_settings(
+            SERVER_TYPE_OPENAI, model_name=model, base_url=base_url,
+            provider_options={**values, "_resolved_model_profile": SimpleNamespace(effort="medium")},
+        ))
+        payload = provider.build_payload([], [{"type": "function", "function": {
+            "name": "example", "parameters": {"type": "object", "properties": {}}
+        }}])
+        assert payload["reasoning_effort"] == "medium"
+        assert "temperature" not in payload

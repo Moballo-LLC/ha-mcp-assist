@@ -58,20 +58,23 @@ and rejected if entered manually. Deep-research models are also filtered and
 rejected because they require OpenAI built-in data-source tools that MCP Assist
 does not currently send.
 
-GPT-6 models, including numeric versioned IDs such as `gpt-6.1-terra` and
-dated snapshots, use reasoning-model request fields: MCP Assist omits
-`temperature`, uses `max_completion_tokens` for Chat Completions, and preserves encrypted reasoning continuation on
-Responses. Choose **Automatic** or **Responses API** on the official OpenAI
-endpoint to use tools with reasoning for these models.
+MCP Assist treats numbered GPT generations 5 and later, including versioned
+IDs such as `gpt-6.1-terra` and dated snapshots, as reasoning models. It omits
+`temperature`, uses `max_completion_tokens` for Chat Completions, and preserves
+encrypted reasoning continuation on Responses. Choose **Automatic** or
+**Responses API** on the official OpenAI endpoint to use tools with reasoning
+for these models.
 
-For official OpenAI Chat Completions, Sol and Luna tool calls set
+For official OpenAI Chat Completions, GPT-6 Sol and GPT-6 Luna tool calls set
 `reasoning_effort` to `none`, including when a dated snapshot is selected.
-Astra requires Responses for tool calling and does not support `none` reasoning.
-MCP Assist therefore excludes Astra from the official Chat Completions model
-list and rejects that pairing when entered manually. Existing Astra profiles
-using Chat Completions must switch **Generation API** to **Automatic** or
-**Responses API**; tool requests report an error until the setting is updated.
-See [OpenAI's GPT-6 migration guidance](https://developers.openai.com/api/docs/guides/latest-model#migration-quickstart).
+Astra and GPT-6.1 Sol require Responses for tool calling. Astra does not support
+`none` reasoning; GPT-6.1 Sol does not support `none` or `minimal`.
+MCP Assist therefore excludes both from the official Chat Completions model
+list and rejects those pairings when entered manually. Existing profiles for
+these models using Chat Completions must switch **Generation API** to
+**Automatic** or **Responses API**; tool requests report an error until the
+setting is updated. See [OpenAI's reasoning-model guidance](https://developers.openai.com/api/docs/guides/reasoning)
+for model-specific effort and transport requirements.
 
 Custom OpenAI-compatible endpoints keep their own Chat Completions tool
 contract, since some translate that route to Responses. Provider-prefixed IDs
