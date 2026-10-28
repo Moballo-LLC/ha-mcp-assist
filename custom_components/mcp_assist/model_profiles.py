@@ -70,6 +70,16 @@ def _validate_policy(payload: Any) -> None:
     revision = payload["revision"]
     if not isinstance(revision, str) or not _REVISION.fullmatch(revision):
         raise ValueError
+    providers = payload.get("modelProviders")
+    if "modelProviders" in payload:
+        models = payload.get("models")
+        if (
+            not isinstance(providers, dict) or not 1 <= len(providers) <= 64
+            or not isinstance(models, dict) or set(providers) != set(models)
+            or any(not isinstance(provider, str) or not _ID.fullmatch(provider)
+                   for provider in providers.values())
+        ):
+            raise ValueError
     image_names = ("imageModels", "imageProfiles", "imageBindings")
     image_present = [name in payload for name in image_names]
     if any(image_present) and not all(image_present):
@@ -108,7 +118,12 @@ def _validate_policy(payload: Any) -> None:
                 if profile["reasoningEffort"] not in _EFFORTS:
                     raise ValueError
                 resolved["effort"] = profile["reasoningEffort"]
-            if payload[resolved_name].get(profile_id) != resolved:
+            actual = payload[resolved_name].get(profile_id)
+            if text and isinstance(actual, dict) and "provider" in actual:
+                if providers is None:
+                    raise ValueError
+                resolved["provider"] = providers[profile["modelAlias"]]
+            if actual != resolved:
                 raise ValueError
         if set(payload[resolved_name]) != set(profiles):
             raise ValueError
@@ -117,6 +132,8 @@ def _validate_policy(payload: Any) -> None:
     names = ("schemaVersion", "models", "profiles", "bindings")
     if all(image_present):
         names += image_names
+    if "modelProviders" in payload:
+        names += ("modelProviders",)
     canonical = json.dumps({name: payload[name] for name in names}, sort_keys=True,
                            ensure_ascii=False, separators=(",", ":"))
     if hashlib.sha256(canonical.encode("utf-8")).hexdigest() != revision:
