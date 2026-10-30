@@ -54,3 +54,17 @@ def test_translation_files_match_source_strings() -> None:
                 failures.append(f"{path.name} guard token leaked at {key}")
 
     assert not failures
+
+
+def test_model_retrieval_descriptions_have_no_interpolation_parameters() -> None:
+    """Options flows supply no placeholder values for these static descriptions."""
+    for path in [STRINGS, *sorted(TRANSLATIONS.glob("*.json"))]:
+        strings = _flatten_strings(json.loads(path.read_text(encoding="utf-8")))
+        descriptions = {
+            key: value for key, value in strings.items()
+            if key.endswith((".data_description.openai_resolve_model",
+                             ".data_description.openai_resolve_image_model"))
+        }
+        assert len(descriptions) == 4, path.name
+        for key, value in descriptions.items():
+            assert "{" not in value and "}" not in value, f"{path.name}: {key}"
