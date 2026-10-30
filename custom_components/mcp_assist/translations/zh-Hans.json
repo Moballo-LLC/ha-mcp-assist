@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "负责回应此配置文件请求的 OpenClaw 代理。必须与 OpenClaw 中已配置的代理一致。默认值为 'main'。",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。",
               "system_prompt": "随每个请求作为额外的系统提示词发送给 OpenClaw，例如用于设定人设。留空则使用代理自己的提示词。语音卫星所在的房间会自动添加。"
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "负责回应此配置文件请求的 OpenClaw 代理。必须与 OpenClaw 中已配置的代理一致。默认值为 'main'。",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。"
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。",
           "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "负责回应此配置文件请求的 OpenClaw 代理。必须与 OpenClaw 中已配置的代理一致。默认值为 'main'。",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。"
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "负责回应此配置文件请求的 OpenClaw 代理。必须与 OpenClaw 中已配置的代理一致。默认值为 'main'。",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。",
               "system_prompt": "随每个请求作为额外的系统提示词发送给 OpenClaw，例如用于设定人设。留空则使用代理自己的提示词。语音卫星所在的房间会自动添加。"
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Chinese Simplified-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in 简体中文.",
+    "follow_up_phrases": "还有什么, 还有其他, 你会, 我应该, 我可以, 哪个, 怎么能, 那个怎么样, 有没有",
+    "end_words": "停止, 停, 取消, 不, 谢谢, 再见, 拜拜, 完成, 没关系, 算了, 忘了吧, 就这样, 好了",
+    "spoken_celsius": "{value}摄氏度",
+    "spoken_fahrenheit": "{value}华氏度",
+    "spoken_degrees": "{value}度",
+    "spoken_percent": "{value}%",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

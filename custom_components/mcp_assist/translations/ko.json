@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다.",
               "system_prompt": "모든 요청에 추가 시스템 프롬프트로 OpenClaw에 전송되며, 예를 들어 페르소나를 정할 때 쓸 수 있습니다. 에이전트 자체 프롬프트를 사용하려면 비워 두세요. 음성 새틀라이트의 방은 자동으로 추가됩니다."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "Standard는 전체 프로필 도구 컨텍스트를 보냅니다. Light는 더 작은 기록 창을 유지하고 소규모 로컬 모델을 위한 핵심 Home Assistant 도구를 광고합니다.",
           "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다.",
               "system_prompt": "모든 요청에 추가 시스템 프롬프트로 OpenClaw에 전송되며, 예를 들어 페르소나를 정할 때 쓸 수 있습니다. 에이전트 자체 프롬프트를 사용하려면 비워 두세요. 음성 새틀라이트의 방은 자동으로 추가됩니다."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Korean-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in 한국어.",
+    "follow_up_phrases": "다른 것, 또 뭐, 할래, 해야 할까, 할 수 있어, 어떤, 어떻게, 어때, 있어",
+    "end_words": "중지, 멈춰, 취소, 아니, 고마워, 감사, 안녕, 잘가, 완료, 괜찮아, 됐어, 잊어, 그게 다야, 끝",
+    "spoken_celsius": "{value}도",
+    "spoken_fahrenheit": "{value}화씨 도",
+    "spoken_degrees": "{value}도",
+    "spoken_percent": "{value}퍼센트",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "وكيل OpenClaw الذي يردّ على طلبات هذا الملف الشخصي. يجب أن يطابق وكيلاً مضبوطاً في OpenClaw. الافتراضي هو 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' يمنح كل محادثة في Home Assistant جلسة OpenClaw خاصة بها، فتبقى الأسئلة التالية ضمنها. 'Fixed' يرسل كل الطلبات إلى الجلسة الواحدة المحددة في مفتاح الجلسة.",
               "system_prompt": "يُرسل إلى OpenClaw مع كل طلب كتعليمات نظام إضافية، مثلاً لتحديد شخصية. اتركه فارغاً لاستخدام تعليمات الوكيل الخاصة. تُضاف غرفة الجهاز الصوتي تلقائياً."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "وكيل OpenClaw الذي يردّ على طلبات هذا الملف الشخصي. يجب أن يطابق وكيلاً مضبوطاً في OpenClaw. الافتراضي هو 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' يمنح كل محادثة في Home Assistant جلسة OpenClaw خاصة بها، فتبقى الأسئلة التالية ضمنها. 'Fixed' يرسل كل الطلبات إلى الجلسة الواحدة المحددة في مفتاح الجلسة."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "يرسل المعيار سياق أداة الملف الشخصي الكامل. يحتفظ Light بنافذة سجل أصغر ويعلن عن أدوات Home Assistant الأساسية للنماذج المحلية الصغيرة.",
           "hermes_session_key": "مفتاح ثابت يحدد نطاق ذاكرة Hermes طويلة المدى لهذا الملف الشخصي.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "وكيل OpenClaw الذي يردّ على طلبات هذا الملف الشخصي. يجب أن يطابق وكيلاً مضبوطاً في OpenClaw. الافتراضي هو 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' يمنح كل محادثة في Home Assistant جلسة OpenClaw خاصة بها، فتبقى الأسئلة التالية ضمنها. 'Fixed' يرسل كل الطلبات إلى الجلسة الواحدة المحددة في مفتاح الجلسة."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "وكيل OpenClaw الذي يردّ على طلبات هذا الملف الشخصي. يجب أن يطابق وكيلاً مضبوطاً في OpenClaw. الافتراضي هو 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' يمنح كل محادثة في Home Assistant جلسة OpenClaw خاصة بها، فتبقى الأسئلة التالية ضمنها. 'Fixed' يرسل كل الطلبات إلى الجلسة الواحدة المحددة في مفتاح الجلسة.",
               "system_prompt": "يُرسل إلى OpenClaw مع كل طلب كتعليمات نظام إضافية، مثلاً لتحديد شخصية. اتركه فارغاً لاستخدام تعليمات الوكيل الخاصة. تُضاف غرفة الجهاز الصوتي تلقائياً."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Arabic-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in العربية.",
+    "follow_up_phrases": "شيء آخر, ماذا أيضا, هل ستفعل, هل يجب أن, هل يمكنني, أي, كيف يمكنني, ماذا عن, هل يوجد",
+    "end_words": "توقف, قف, إلغاء, لا, شكرا, مع السلامة, وداعا, انتهيت, لا بأس, انسى, هذا كل شيء, انتهى",
+    "spoken_celsius": "{value} درجة مئوية",
+    "spoken_fahrenheit": "{value} درجة فهرنهايت",
+    "spoken_degrees": "{value} درجة",
+    "spoken_percent": "{value} بالمئة",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

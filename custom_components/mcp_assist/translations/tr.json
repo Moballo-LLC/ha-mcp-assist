@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir.",
               "system_prompt": "Her istekle birlikte OpenClaw'a ek sistem istemi olarak gönderilir, örneğin bir kişilik belirlemek için. Ajanın kendi istemlerini kullanmak için boş bırakın. Sesli uydunun odası otomatik olarak eklenir."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "Standard, tam profil aracı içeriğini gönderir. Light, daha küçük bir geçmiş penceresi tutar ve küçük yerel modeller için temel Home Assistant araçlarının tanıtımını yapar.",
           "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir.",
               "system_prompt": "Her istekle birlikte OpenClaw'a ek sistem istemi olarak gönderilir, örneğin bir kişilik belirlemek için. Ajanın kendi istemlerini kullanmak için boş bırakın. Sesli uydunun odası otomatik olarak eklenir."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Turkish-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Türkçe.",
+    "follow_up_phrases": "başka bir şey, başka ne, yapar mısın, yapmalı mıyım, yapabilir miyim, hangi, nasıl yapabilirim, peki ya, var mı",
+    "end_words": "dur, durdur, iptal, hayır, teşekkürler, güle güle, hoşça kal, tamam, bitti, önemli değil, boşver, unut, hepsi bu",
+    "spoken_celsius": "{value} santigrat derece",
+    "spoken_fahrenheit": "{value} fahrenhayt derece",
+    "spoken_degrees": "{value} derece",
+    "spoken_percent": "{value}%",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

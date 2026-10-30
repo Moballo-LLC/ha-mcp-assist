@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "Ang OpenClaw agent na sumasagot sa mga kahilingan ng profile na ito. Dapat itong tumugma sa agent na naka-configure sa OpenClaw. Ang default ay 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "Binibigyan ng 'Per conversation' ang bawat Home Assistant conversation ng sarili nitong OpenClaw session, at nananatili roon ang mga follow-up na tanong. Ipinapadala ng 'Fixed' ang lahat ng kahilingan sa iisang session na itinakda sa Session Key.",
               "system_prompt": "Ipinapadala sa OpenClaw kasama ng bawat kahilingan bilang karagdagang system prompt, halimbawa para magtakda ng persona. Iwanang blangko para gamitin ang sariling mga prompt ng agent. Awtomatikong idinaragdag ang kuwarto ng voice satellite."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "Ang OpenClaw agent na sumasagot sa mga kahilingan ng profile na ito. Dapat itong tumugma sa agent na naka-configure sa OpenClaw. Ang default ay 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "Binibigyan ng 'Per conversation' ang bawat Home Assistant conversation ng sarili nitong OpenClaw session, at nananatili roon ang mga follow-up na tanong. Ipinapadala ng 'Fixed' ang lahat ng kahilingan sa iisang session na itinakda sa Session Key."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "Ipinapadala ng Standard ang buong konteksto ng tool sa profile. Ang Light ay nagpapanatili ng isang mas maliit na window ng kasaysayan at nag-a-advertise ng mga pangunahing tool na Home Assistant para sa maliliit na lokal na modelo.",
           "hermes_session_key": "Stable na key na tumutukoy sa pangmatagalang memorya ng Hermes para sa profile na ito.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "Ang OpenClaw agent na sumasagot sa mga kahilingan ng profile na ito. Dapat itong tumugma sa agent na naka-configure sa OpenClaw. Ang default ay 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "Binibigyan ng 'Per conversation' ang bawat Home Assistant conversation ng sarili nitong OpenClaw session, at nananatili roon ang mga follow-up na tanong. Ipinapadala ng 'Fixed' ang lahat ng kahilingan sa iisang session na itinakda sa Session Key."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "Ang OpenClaw agent na sumasagot sa mga kahilingan ng profile na ito. Dapat itong tumugma sa agent na naka-configure sa OpenClaw. Ang default ay 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "Binibigyan ng 'Per conversation' ang bawat Home Assistant conversation ng sarili nitong OpenClaw session, at nananatili roon ang mga follow-up na tanong. Ipinapadala ng 'Fixed' ang lahat ng kahilingan sa iisang session na itinakda sa Session Key.",
               "system_prompt": "Ipinapadala sa OpenClaw kasama ng bawat kahilingan bilang karagdagang system prompt, halimbawa para magtakda ng persona. Iwanang blangko para gamitin ang sariling mga prompt ng agent. Awtomatikong idinaragdag ang kuwarto ng voice satellite."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Filipino-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Filipino.",
+    "follow_up_phrases": "iba pa, ano pa, gagawin mo ba, dapat ba ako, maaari ba ako, alin, paano ako, paano naman, mayroon ba",
+    "end_words": "tigil, hinto, kanselahin, hindi, salamat, paalam, bye, tapos na, okay lang, kalimutan mo, yun lang, ayos na",
+    "spoken_celsius": "{value} digri Celsius",
+    "spoken_fahrenheit": "{value} digri Fahrenheit",
+    "spoken_degrees": "{value} digri",
+    "spoken_percent": "{value} porsiyento",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

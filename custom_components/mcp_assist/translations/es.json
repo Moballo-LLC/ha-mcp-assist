@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "El agente de OpenClaw que responde a las solicitudes de este perfil. Debe coincidir con un agente configurado en OpenClaw. El valor predeterminado es 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' da a cada conversación de Home Assistant su propia sesión de OpenClaw, y las preguntas de seguimiento se quedan en ella. 'Fixed' envía todas las solicitudes a la única sesión indicada en Clave de sesión.",
               "system_prompt": "Se envía a OpenClaw con cada solicitud como una instrucción de sistema adicional, por ejemplo para definir una personalidad. Déjalo vacío para usar las instrucciones propias del agente. La habitación del satélite de voz se añade automáticamente."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "El agente de OpenClaw que responde a las solicitudes de este perfil. Debe coincidir con un agente configurado en OpenClaw. El valor predeterminado es 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' da a cada conversación de Home Assistant su propia sesión de OpenClaw, y las preguntas de seguimiento se quedan en ella. 'Fixed' envía todas las solicitudes a la única sesión indicada en Clave de sesión."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "Estándar envía el contexto completo de la herramienta de perfil. Light mantiene una ventana de historial más pequeña y anuncia herramientas principales Home Assistant para modelos locales pequeños.",
           "hermes_session_key": "Clave estable que delimita la memoria a largo plazo de Hermes para este perfil.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "El agente de OpenClaw que responde a las solicitudes de este perfil. Debe coincidir con un agente configurado en OpenClaw. El valor predeterminado es 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' da a cada conversación de Home Assistant su propia sesión de OpenClaw, y las preguntas de seguimiento se quedan en ella. 'Fixed' envía todas las solicitudes a la única sesión indicada en Clave de sesión."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "El agente de OpenClaw que responde a las solicitudes de este perfil. Debe coincidir con un agente configurado en OpenClaw. El valor predeterminado es 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' da a cada conversación de Home Assistant su propia sesión de OpenClaw, y las preguntas de seguimiento se quedan en ella. 'Fixed' envía todas las solicitudes a la única sesión indicada en Clave de sesión.",
               "system_prompt": "Se envía a OpenClaw con cada solicitud como una instrucción de sistema adicional, por ejemplo para definir una personalidad. Déjalo vacío para usar las instrucciones propias del agente. La habitación del satélite de voz se añade automáticamente."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Spanish-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Español.",
+    "follow_up_phrases": "algo más, qué más, harías, debería, puedo, cuál, cómo puedo, qué tal, hay",
+    "end_words": "para, detener, cancelar, no, gracias, adiós, chao, hecho, no importa, olvídalo, es todo, eso es todo",
+    "spoken_celsius": "{value} grados Celsius",
+    "spoken_fahrenheit": "{value} grados Fahrenheit",
+    "spoken_degrees": "{value} grados",
+    "spoken_percent": "{value} por ciento",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

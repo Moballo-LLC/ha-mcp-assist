@@ -33,7 +33,9 @@ from .tools.builtin_catalog import (
     get_builtin_shared_setting_value,
     load_builtin_tool_toggle_specs,
 )
-from .localization import get_language_instruction, get_follow_up_phrases, get_end_words
+from .localization import (
+    async_load_localizations, get_language_instruction, get_follow_up_phrases, get_end_words,
+)
 from .llm_providers import (
     OpenAIProvider,
     ProviderConfigField,
@@ -1246,6 +1248,7 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle step 1 - profile name and server type."""
+        await async_load_localizations(self.hass)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -2177,6 +2180,7 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
+        await async_load_localizations(self.hass)
         # Check if this is the system entry - skip directly to MCP server settings
         if self.config_entry.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
             return await self.async_step_mcp_server()

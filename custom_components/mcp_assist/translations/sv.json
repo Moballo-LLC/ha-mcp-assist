@@ -186,7 +186,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "OpenClaw-agenten som svarar på den här profilens förfrågningar. Den måste motsvara en agent som är konfigurerad i OpenClaw. Standard är 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' ger varje samtal i Home Assistant en egen OpenClaw-session, och uppföljningsfrågor stannar i den. 'Fixed' skickar alla förfrågningar till den enda session som anges i Sessionsnyckel.",
               "system_prompt": "Skickas till OpenClaw med varje förfrågan som en extra systeminstruktion, till exempel för att ange en persona. Lämna tomt för att använda agentens egna instruktioner. Röstsatellitens rum läggs till automatiskt."
             }
@@ -236,7 +236,7 @@
         },
         "data_description": {
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "OpenClaw-agenten som svarar på den här profilens förfrågningar. Den måste motsvara en agent som är konfigurerad i OpenClaw. Standard är 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' ger varje samtal i Home Assistant en egen OpenClaw-session, och uppföljningsfrågor stannar i den. 'Fixed' skickar alla förfrågningar till den enda session som anges i Sessionsnyckel."
         }
       },
@@ -451,7 +451,7 @@
           "context_mode": "Standard skickar hela profilverktygskontexten. Light håller ett mindre historikfönster och annonserar Home Assistant kärnverktyg för små lokala modeller.",
           "hermes_session_key": "Stabil nyckel som avgränsar Hermes långtidsminne för denna profil.",
           "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-          "openclaw_agent_id": "OpenClaw-agenten som svarar på den här profilens förfrågningar. Den måste motsvara en agent som är konfigurerad i OpenClaw. Standard är 'main'.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
           "openclaw_session_mode": "'Per conversation' ger varje samtal i Home Assistant en egen OpenClaw-session, och uppföljningsfrågor stannar i den. 'Fixed' skickar alla förfrågningar till den enda session som anges i Sessionsnyckel."
         },
         "sections": {
@@ -557,7 +557,7 @@
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
               "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
               "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
-              "openclaw_agent_id": "OpenClaw-agenten som svarar på den här profilens förfrågningar. Den måste motsvara en agent som är konfigurerad i OpenClaw. Standard är 'main'.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
               "openclaw_session_mode": "'Per conversation' ger varje samtal i Home Assistant en egen OpenClaw-session, och uppföljningsfrågor stannar i den. 'Fixed' skickar alla förfrågningar till den enda session som anges i Sessionsnyckel.",
               "system_prompt": "Skickas till OpenClaw med varje förfrågan som en extra systeminstruktion, till exempel för att ange en persona. Lämna tomt för att använda agentens egna instruktioner. Röstsatellitens rum läggs till automatiskt."
             }
@@ -813,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Swedish-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Svenska.",
+    "follow_up_phrases": "något annat, vad mer, skulle du, borde jag, kan jag, vilken, hur kan, vad sägs om, finns det",
+    "end_words": "stopp, stoppa, avbryt, nej, tack, hej då, adjö, klar, inget problem, glöm det, strunt samma, det var allt",
+    "spoken_celsius": "{value} grader Celsius",
+    "spoken_fahrenheit": "{value} grader Fahrenheit",
+    "spoken_degrees": "{value} grader",
+    "spoken_percent": "{value} procent",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }
