@@ -54,6 +54,7 @@ def runtime(profile_entry_factory):
     return resolve_provider_runtime_config(profile_entry_factory(data={
         CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_MODEL_NAME: 'selection',
         CONF_API_KEY: 'example-key', CONF_LMSTUDIO_URL: 'https://example.invalid/v1',
+        'openai_resolve_model': True,
     }))
 
 
@@ -68,9 +69,10 @@ async def test_retrieves_opaque_id_and_authenticates(runtime, monkeypatch):
 
 
 @pytest.mark.parametrize('status', [404, 405])
-async def test_unsupported_retrieve_keeps_selection(runtime, monkeypatch, status):
+async def test_opted_in_retrieval_requires_a_model(runtime, monkeypatch, status):
     session(monkeypatch, Response(status=status))
-    assert await model_selection.async_resolve_model(runtime, 'vendor/model') == 'vendor/model'
+    with pytest.raises(model_selection.ModelResolutionError):
+        await model_selection.async_resolve_model(runtime, 'vendor/model')
 
 
 @pytest.mark.parametrize('response', [
@@ -245,3 +247,26 @@ async def test_analyze_image_forwards_frozen_text_without_image_lookup(
     assert server.register_model_request.call_args.args[2] == 'analyze_image'
     assert captured['headers'][agent_module.MCP_MODEL_REQUEST_HEADER] == 'token'
     lookup.assert_not_awaited()
+
+
+@pytest.mark.parametrize('selection', ['vendor/model', 'profile/custom', 'opaque:@value'])
+async def test_standard_backend_does_not_require_model_retrieval(
+    profile_entry_factory, monkeypatch, selection,
+):
+    runtime = resolve_provider_runtime_config(profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_MODEL_NAME: selection,
+        CONF_LMSTUDIO_URL: 'https://example.invalid/v1',
+    }))
+    calls = session(monkeypatch, Response(status=500))
+    assert await model_selection.async_resolve_model(runtime, selection) == selection
+    assert calls == []
+
+
+async def test_options_can_disable_model_retrieval(profile_entry_factory, monkeypatch):
+    runtime = resolve_provider_runtime_config(profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+        CONF_LMSTUDIO_URL: 'https://example.invalid/v1', 'openai_resolve_model': True,
+    }, options={'openai_resolve_model': False}))
+    calls = session(monkeypatch, Response(status=401))
+    assert await model_selection.async_resolve_model(runtime, 'opaque') == 'opaque'
+    assert calls == []

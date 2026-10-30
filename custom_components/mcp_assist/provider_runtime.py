@@ -11,6 +11,7 @@ from .const import (
     CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
+    CONF_OPENAI_RESOLVE_MODEL,
     CONF_SERVER_TYPE,
     CONF_TIMEOUT,
     DEFAULT_API_KEY,
@@ -50,6 +51,7 @@ class ProviderRuntimeConfig:
     base_url: str
     display_name: str
     is_remote_service: bool
+    resolve_model_before_request: bool = False
 
 
 PROVIDER_DISPLAY_NAMES = {
@@ -143,6 +145,9 @@ def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
         base_url=base_url.rstrip("/"),
         display_name=PROVIDER_DISPLAY_NAMES.get(server_type, server_type),
         is_remote_service=server_type in REMOTE_PROVIDER_TYPES,
+        resolve_model_before_request=_get_entry_value(
+            entry, CONF_OPENAI_RESOLVE_MODEL, False
+        ) is True,
     )
 
 

@@ -239,6 +239,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 (CONF_API_KEY, None, "password", True),
             ),
             (
+                ("openai_resolve_model", False, "boolean", True),
                 (
                     CONF_OPENAI_API_TRANSPORT,
                     DEFAULT_OPENAI_API_TRANSPORT,

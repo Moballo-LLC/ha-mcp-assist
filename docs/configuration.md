@@ -474,11 +474,17 @@ integration itself. See [External Custom Tools](custom-tools.md).
 
 For a custom OpenAI-compatible endpoint, select the text and image model IDs
 reported by the endpoint. Custom IDs are treated as opaque values. MCP Assist
-retrieves the selected text model through the standard model API once per
-conversation request and reuses the returned ID for its tool follow-ups. Image
-model retrieval occurs on first image generation and is shared by subsequent
-image calls in that request.
+sends the selected IDs directly by default; a working generation endpoint does
+not need to implement model retrieval.
 
-If the endpoint returns 404 or 405 for model retrieval, MCP Assist uses the
-selected ID. Other errors stop the request. API transport settings remain
-independent of the model selection.
+For endpoints that resolve aliases through `GET /models/{model}`, enable
+**Retrieve Model Before Each Request**. MCP Assist retrieves the selected text
+model once per conversation request and reuses the returned ID for its tool
+follow-ups. Image model retrieval occurs on first image generation and is shared
+by subsequent image calls in that request. Any retrieval error, including 404 or
+405, stops the request rather than silently changing its model binding.
+
+Legacy active custom-endpoint profile selections migrate once to model IDs and
+enable retrieval to preserve their request bindings. Stale legacy fields on
+other providers or official OpenAI endpoints do not replace current model
+selections. API transport settings remain independent of model selection.

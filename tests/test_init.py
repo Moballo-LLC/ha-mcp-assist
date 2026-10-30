@@ -82,11 +82,13 @@ def _mock_system_entry_init(hass, data: dict) -> MockConfigEntry:
 
 def test_migrate_legacy_model_selections(hass, profile_entry_factory):
     entry = profile_entry_factory(data={
+        "server_type": "openai", "lmstudio_url": "https://example.invalid/v1",
         "model_profile": "old", "model_name": "dormant", "api_key": "example-key",
         "openai_image_model_profile": "visual", "openai_image_model": "old-image",
     }, options={"model_profile": " selected ", "unrelated": True})
     _migrate_legacy_model_selections(hass, entry)
     assert entry.options["model_name"] == "profile/selected"
+    assert entry.options["openai_resolve_model"] is True
     assert entry.options["openai_image_model"] == "image-profile/visual"
     assert entry.options["unrelated"] is True
     assert entry.data["api_key"] == "example-key"
@@ -94,6 +96,7 @@ def test_migrate_legacy_model_selections(hass, profile_entry_factory):
     assert "openai_image_model_profile" not in entry.data
     _migrate_legacy_model_selections(hass, entry)
     assert entry.options["model_name"] == "profile/selected"
+    assert entry.options["openai_resolve_model"] is True
 
 
 def test_migrate_cleared_legacy_selection_preserves_concrete_option(hass, profile_entry_factory):
@@ -748,3 +751,39 @@ async def test_openclaw_setup_and_diagnostics_use_effective_connection_options(
     diagnostics = build_assist_diagnostics(hass, entry)
     assert diagnostics["credential_configured"] is bool(factory.call_args.kwargs["token"])
     assert "synthetic-" not in str(diagnostics)
+
+
+@pytest.mark.parametrize(('data_provider', 'options_provider', 'data_url', 'options_url'), [
+    ('ollama', None, 'https://example.invalid/v1', None),
+    ('openai', 'anthropic', 'https://example.invalid/v1', None),
+    ('openai', None, 'https://api.openai.com/v1', None),
+    ('openai', None, 'https://example.invalid/v1', 'https://api.openai.com/v1'),
+])
+def test_migrate_inactive_legacy_selection_preserves_models(
+    hass, profile_entry_factory, data_provider, options_provider, data_url, options_url,
+):
+    options = {'model_name': 'current-text', 'openai_image_model': 'current-image'}
+    if options_provider is not None:
+        options['server_type'] = options_provider
+    if options_url is not None:
+        options['lmstudio_url'] = options_url
+    entry = profile_entry_factory(data={
+        'server_type': data_provider, 'lmstudio_url': data_url,
+        'model_profile': 'inactive-text', 'openai_image_model_profile': 'inactive-image',
+    }, options=options)
+    _migrate_legacy_model_selections(hass, entry)
+    assert entry.options['model_name'] == 'current-text'
+    assert entry.options['openai_image_model'] == 'current-image'
+    assert not entry.options.get('openai_resolve_model', False)
+    assert 'model_profile' not in entry.data
+    assert 'openai_image_model_profile' not in entry.data
+
+
+def test_migrate_effective_custom_provider_enables_retrieval(hass, profile_entry_factory):
+    entry = profile_entry_factory(data={
+        'server_type': 'ollama', 'lmstudio_url': 'https://api.openai.com/v1',
+        'model_profile': 'text',
+    }, options={'server_type': 'openai', 'lmstudio_url': 'https://example.invalid/v1'})
+    _migrate_legacy_model_selections(hass, entry)
+    assert entry.options['model_name'] == 'profile/text'
+    assert entry.options['openai_resolve_model'] is True

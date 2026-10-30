@@ -31,10 +31,11 @@ class ModelResolutionError(ValueError):
 async def async_resolve_model(runtime: ProviderRuntimeConfig, model: str) -> str:
     """Freeze a model ID once for a logical request to a custom endpoint.
 
-    A server which does not implement model retrieval may return 404 or 405;
-    in that case the originally selected ID remains the request model.
+    Retrieval is opt-in for endpoints that resolve aliases. Ordinary compatible
+    endpoints receive the selected ID directly without a metadata request.
     """
-    if runtime.server_type != SERVER_TYPE_OPENAI or not model:
+    if (not runtime.resolve_model_before_request
+            or runtime.server_type != SERVER_TYPE_OPENAI or not model):
         return model
     if OpenAIProvider._is_official_openai_base_url(runtime.base_url):
         return model
@@ -52,8 +53,6 @@ async def async_resolve_model(runtime: ProviderRuntimeConfig, model: str) -> str
         timeout = aiohttp.ClientTimeout(total=min(max(runtime.timeout, 1), 15))
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, headers=headers, allow_redirects=False) as response:
-                if response.status in (404, 405):
-                    return model
                 if response.status != 200:
                     raise ModelResolutionError()
                 if response.content_length is not None and response.content_length > _MAX_BYTES:
