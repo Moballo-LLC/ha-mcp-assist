@@ -822,7 +822,7 @@ class MCPAssistConversationEntity(ConversationEntity):
             if scoped.resolved_image is None:
                 try:
                     scoped.resolved_image = await async_resolve_model(
-                        resolve_provider_runtime_config(self.entry), scoped.image
+                        resolve_provider_runtime_config(self.entry), scoped.image, image=True
                     )
                 except BaseException:
                     scoped.failed = True

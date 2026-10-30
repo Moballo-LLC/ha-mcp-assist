@@ -12,6 +12,7 @@ from .const import (
     CONF_LMSTUDIO_URL,
     CONF_MODEL_NAME,
     CONF_OPENAI_RESOLVE_MODEL,
+    CONF_OPENAI_RESOLVE_IMAGE_MODEL,
     CONF_SERVER_TYPE,
     CONF_TIMEOUT,
     DEFAULT_API_KEY,
@@ -52,6 +53,7 @@ class ProviderRuntimeConfig:
     display_name: str
     is_remote_service: bool
     resolve_model_before_request: bool = False
+    resolve_image_model_before_request: bool = False
 
 
 PROVIDER_DISPLAY_NAMES = {
@@ -147,6 +149,9 @@ def resolve_provider_runtime_config(entry: Any) -> ProviderRuntimeConfig:
         is_remote_service=server_type in REMOTE_PROVIDER_TYPES,
         resolve_model_before_request=_get_entry_value(
             entry, CONF_OPENAI_RESOLVE_MODEL, False
+        ) is True,
+        resolve_image_model_before_request=_get_entry_value(
+            entry, CONF_OPENAI_RESOLVE_IMAGE_MODEL, False
         ) is True,
     )
 

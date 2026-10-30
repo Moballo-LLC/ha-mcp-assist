@@ -11,6 +11,7 @@ from ..const import (
     CONF_LMSTUDIO_URL,
     CONF_OPENAI_API_TRANSPORT,
     CONF_OPENAI_RESOLVE_MODEL,
+    CONF_OPENAI_RESOLVE_IMAGE_MODEL,
     CONF_OPENAI_IMAGE_MODEL,
     CONF_OPENAI_IMAGE_API,
     DEFAULT_OPENAI_API_TRANSPORT,
@@ -65,6 +66,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
     )
     provider_options_fields = (
         ProviderConfigField(CONF_OPENAI_RESOLVE_MODEL, default=False, kind="boolean"),
+        ProviderConfigField(CONF_OPENAI_RESOLVE_IMAGE_MODEL, default=False, kind="boolean"),
         ProviderConfigField(
             CONF_OPENAI_API_TRANSPORT,
             default=DEFAULT_OPENAI_API_TRANSPORT,

@@ -2857,7 +2857,7 @@ class MCPServer(
         if scoped is not None and scoped[0] is entry and scoped[2] is not None:
             return provider
         image = await async_resolve_model(
-            resolve_provider_runtime_config(entry), provider.image_model
+            resolve_provider_runtime_config(entry), provider.image_model, image=True
         )
         return create_llm_provider(replace(
             provider.settings, provider_options={

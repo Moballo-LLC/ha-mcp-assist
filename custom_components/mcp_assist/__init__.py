@@ -94,6 +94,7 @@ from .const import (
     CONF_OPENCLAW_TOKEN,
     CONF_OPENCLAW_USE_SSL,
     CONF_OPENAI_RESOLVE_MODEL,
+    CONF_OPENAI_RESOLVE_IMAGE_MODEL,
     SERVER_TYPE_OPENAI,
 )
 from .mcp_server import MCPServer
@@ -116,14 +117,15 @@ def _migrate_legacy_model_selections(hass: HomeAssistant, entry: ConfigEntry) ->
     runtime = resolve_provider_runtime_config(entry)
     active = (runtime.server_type == SERVER_TYPE_OPENAI
               and not OpenAIProvider._is_official_openai_base_url(runtime.base_url))
-    for legacy_key, model_key, prefix in (
-        ("model_profile", "model_name", "profile/"),
-        ("openai_image_model_profile", "openai_image_model", "image-profile/"),
+    for legacy_key, model_key, prefix, retrieve_key in (
+        ("model_profile", "model_name", "profile/", CONF_OPENAI_RESOLVE_MODEL),
+        ("openai_image_model_profile", "openai_image_model", "image-profile/",
+         CONF_OPENAI_RESOLVE_IMAGE_MODEL),
     ):
         reference = options.get(legacy_key, data.get(legacy_key, ""))
         if active and isinstance(reference, str) and reference.strip():
             options[model_key] = prefix + reference.strip()
-            options[CONF_OPENAI_RESOLVE_MODEL] = True
+            options[retrieve_key] = True
         for source in (data, options):
             if legacy_key in source:
                 del source[legacy_key]

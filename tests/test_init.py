@@ -90,6 +90,7 @@ def test_migrate_legacy_model_selections(hass, profile_entry_factory):
     assert entry.options["model_name"] == "profile/selected"
     assert entry.options["openai_resolve_model"] is True
     assert entry.options["openai_image_model"] == "image-profile/visual"
+    assert entry.options["openai_resolve_image_model"] is True
     assert entry.options["unrelated"] is True
     assert entry.data["api_key"] == "example-key"
     assert "model_profile" not in entry.data and "model_profile" not in entry.options

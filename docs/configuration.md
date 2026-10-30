@@ -478,13 +478,15 @@ sends the selected IDs directly by default; a working generation endpoint does
 not need to implement model retrieval.
 
 For endpoints that resolve aliases through `GET /models/{model}`, enable
-**Retrieve Model Before Each Request**. MCP Assist retrieves the selected text
-model once per conversation request and reuses the returned ID for its tool
-follow-ups. Image model retrieval occurs on first image generation and is shared
-by subsequent image calls in that request. Any retrieval error, including 404 or
-405, stops the request rather than silently changing its model binding.
+**Retrieve Text Model Before Each Request** or **Retrieve Image Model Before Each
+Request**, independently. MCP Assist retrieves the selected text model once per
+conversation request and reuses the returned ID for its tool follow-ups. Image
+model retrieval occurs on first image generation and is shared by subsequent
+image calls in that request. Any retrieval error, including 404 or 405, stops the
+request rather than silently changing its model binding.
 
 Legacy active custom-endpoint profile selections migrate once to model IDs and
-enable retrieval to preserve their request bindings. Stale legacy fields on
+enable retrieval only for the migrated text or image selection, preserving its
+request binding. Stale legacy fields on
 other providers or official OpenAI endpoints do not replace current model
 selections. API transport settings remain independent of model selection.

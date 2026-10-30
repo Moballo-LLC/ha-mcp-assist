@@ -240,6 +240,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             ),
             (
                 ("openai_resolve_model", False, "boolean", True),
+                ("openai_resolve_image_model", False, "boolean", True),
                 (
                     CONF_OPENAI_API_TRANSPORT,
                     DEFAULT_OPENAI_API_TRANSPORT,

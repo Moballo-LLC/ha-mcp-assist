@@ -118,6 +118,7 @@ async def test_image_resolution_is_lazy_and_shared(hass, profile_entry_factory, 
         )
         assert scoped.resolved_image == 'opaque-frozen-image'
         assert resolve.await_count == 1
+        assert resolve.call_args.kwargs == {'image': True}
         await agent._resolve_request_image_model()
         assert resolve.await_count == 1
     finally:
@@ -309,3 +310,63 @@ async def test_no_tools_inference_requires_owned_resolved_snapshot(
         assert model == 'resolved-current'
         lookup.assert_awaited_once()
         assert lookup.call_args.args[1] == 'alias'
+
+
+async def test_image_only_migration_does_not_retrieve_concrete_text(
+    hass, profile_entry_factory, monkeypatch,
+):
+    from custom_components.mcp_assist import _migrate_legacy_model_selections
+
+    entry = profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_MODEL_NAME: 'ordinary-text',
+        CONF_LMSTUDIO_URL: 'https://example.invalid/v1',
+        'openai_image_model_profile': 'legacy-image',
+    })
+    _migrate_legacy_model_selections(hass, entry)
+    runtime = resolve_provider_runtime_config(entry)
+    calls = session(monkeypatch, Response(status=404))
+    assert await model_selection.async_resolve_model(runtime, runtime.model_name) == 'ordinary-text'
+    assert calls == []
+    assert entry.options['openai_resolve_image_model'] is True
+    assert not entry.options.get('openai_resolve_model', False)
+
+
+async def test_retrieval_can_be_enabled_for_images_independently(
+    profile_entry_factory, monkeypatch,
+):
+    runtime = resolve_provider_runtime_config(profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_LMSTUDIO_URL: 'https://example.invalid/v1',
+        'openai_resolve_image_model': True,
+    }))
+    calls = session(monkeypatch, Response(b'{"id":"frozen-image"}'))
+    assert await model_selection.async_resolve_model(runtime, 'ordinary-text') == 'ordinary-text'
+    assert calls == []
+    assert await model_selection.async_resolve_model(runtime, 'image-alias', image=True) == 'frozen-image'
+    assert len(calls) == 1
+
+
+async def test_text_retrieval_does_not_enable_image_retrieval(runtime, monkeypatch):
+    calls = session(monkeypatch, Response(status=404))
+    assert await model_selection.async_resolve_model(runtime, 'ordinary-image', image=True) == 'ordinary-image'
+    assert calls == []
+
+
+async def test_standalone_image_lookup_uses_image_setting(hass, profile_entry_factory, monkeypatch):
+    from unittest.mock import AsyncMock
+    from custom_components.mcp_assist import mcp_server as server_module
+
+    entry = profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_LMSTUDIO_URL: 'https://example.invalid/v1',
+        'openai_resolve_image_model': True, 'openai_image_model': 'image-alias',
+    })
+    server = server_module.MCPServer(hass, 8099, entry)
+    lookup = AsyncMock(return_value='frozen-image')
+    monkeypatch.setattr(server_module, 'async_resolve_model', lookup)
+    provider = await server._get_image_model_provider({'profile_entry_id': entry.entry_id})
+    assert provider.image_model == 'frozen-image'
+    lookup.assert_awaited_once()
+    assert lookup.call_args.kwargs == {'image': True}
+    runtime, selected = lookup.call_args.args
+    assert selected == 'image-alias'
+    assert runtime.resolve_image_model_before_request is True
+    assert runtime.resolve_model_before_request is False

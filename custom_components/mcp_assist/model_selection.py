@@ -28,14 +28,17 @@ class ModelResolutionError(ValueError):
         super().__init__("The selected model could not be retrieved from the endpoint.")
 
 
-async def async_resolve_model(runtime: ProviderRuntimeConfig, model: str) -> str:
+async def async_resolve_model(
+    runtime: ProviderRuntimeConfig, model: str, *, image: bool = False,
+) -> str:
     """Freeze a model ID once for a logical request to a custom endpoint.
 
     Retrieval is opt-in for endpoints that resolve aliases. Ordinary compatible
     endpoints receive the selected ID directly without a metadata request.
     """
-    if (not runtime.resolve_model_before_request
-            or runtime.server_type != SERVER_TYPE_OPENAI or not model):
+    enabled = (runtime.resolve_image_model_before_request if image
+               else runtime.resolve_model_before_request)
+    if not enabled or runtime.server_type != SERVER_TYPE_OPENAI or not model:
         return model
     if OpenAIProvider._is_official_openai_base_url(runtime.base_url):
         return model
