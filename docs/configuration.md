@@ -190,8 +190,8 @@ Lower effort can reduce voice latency, but quality and support vary by model.
   maps to Low for GPT-OSS.
 - llama.cpp and vLLM pass `enable_thinking` and `reasoning_effort` to the chat
   template. The loaded template must support these controls.
-- OpenAI maps the setting to the selected generation API. Named model-profile
-  policies retain priority. GPT-6 Astra and GPT-6.1 Sol use Low for Off; GPT-6
+- OpenAI maps the setting to the selected generation API. GPT-6 Astra and
+  GPT-6.1 Sol use Low for Off; GPT-6
   Sol/Luna Chat Completions tool requests keep their required `none` effort.
 - Gemini uses Minimal for Off on Flash families that support it, otherwise Low
   when reasoning cannot be disabled. It uses High for Medium on the original
@@ -470,111 +470,23 @@ integration itself. See [External Custom Tools](custom-tools.md).
 - Consider a higher timeout.
 - Keep action controls enabled only if this profile should also control devices.
 
-### Compatible endpoint model profiles
+### Compatible endpoint model selection
 
-For the **OpenAI** provider with a custom compatible endpoint, **Model profile
-(optional)** accepts a binding name or profile ID from that endpoint's policy.
-Leave it blank to keep using your saved model without any profile lookup. Other
-providers do not support this option. Official
-OpenAI endpoints do not support this opt-in contract.
+For a custom OpenAI-compatible endpoint, select the text and image model IDs
+reported by the endpoint. Custom IDs are treated as opaque values. MCP Assist
+sends the selected IDs directly by default; a working generation endpoint does
+not need to implement model retrieval.
 
-When configured, MCP Assist makes an authenticated GET to the same base's
-`/v1/model-profiles` endpoint (preserving an existing `/v1` prefix). The endpoint
-must return schema version 1 with a canonical SHA256 `revision`, `models`,
-`profiles`, `bindings`, and `resolvedProfiles`. The `bindings` object may be empty
-when selecting a profile ID directly. Each profile specifies a label,
-model alias, and reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`, or
-`ultra`); its resolved pair must match those settings. Redirects are rejected;
-lookup is limited to 15 seconds and 1 MiB.
+For endpoints that resolve aliases through `GET /models/{model}`, enable
+**Retrieve Text Model Before Each Request** or **Retrieve Image Model Before Each
+Request**, independently. MCP Assist retrieves the selected text model once per
+conversation request and reuses the returned ID for its tool follow-ups. Image
+model retrieval occurs on first image generation and is shared by subsequent
+image calls in that request. Any retrieval error, including 404 or 405, stops the
+request rather than silently changing its model binding.
 
-The concrete model, effort, and revision are frozen for the entire conversation
-request, including tool follow-ups. The next request resolves the current policy
-again. Smart Entity Index gap filling also resolves the named text profile for
-standalone calls and reuses the frozen selection when called within a conversation.
-Missing profiles, authentication failures, and invalid policy responses
-stop the request before model generation; MCP Assist does not fall back to the
-saved model. The agent's read-only `resolved_model_profile` metadata reports the
-last resolved pair and revision, not proof that a model request succeeded.
-
-
-**Image model profile (optional)** accepts an image binding or profile ID from the
-same compatible endpoint. It overrides the concrete **Image Model** selection
-when nonempty. Leave it blank to preserve the saved concrete selection or auto
-behavior. This option is unavailable on official OpenAI endpoints and other
-providers; configuring it there stops the request.
-
-Policies may add `imageModels` (alias to concrete model ID), `imageProfiles`
-(profile ID to `{label, modelAlias}`), and `imageBindings` (binding to profile ID).
-Include all three maps together, plus `resolvedImageProfiles` (profile ID to
-`{model}`). Image profiles have no reasoning effort.
-
-Policies may also include `modelProviders`, a map from every text model alias
-in `models` to its provider ID. When present, it must contain 1–64 entries and
-its keys must exactly match the keys of `models`. Each provider ID must match
-`[a-z][a-z0-9-]{0,47}` in full. The map is optional; policies without it remain
-valid. A text `resolvedProfiles` entry may additionally include `provider` only
-when `modelProviders` is present, and that value must equal the provider mapped
-to the profile's `modelAlias`. Otherwise the resolved entry remains
-`{model, effort}`. Image resolved entries remain `{model}`.
-
-The canonical revision is the lowercase hexadecimal SHA256 of a JSON object
-containing exactly:
-
-- `schemaVersion`, `models`, `profiles`, and `bindings`;
-- `imageModels`, `imageProfiles`, and `imageBindings` when those maps are present;
-- `modelProviders` when that map is present, even if resolved entries omit
-  `provider`.
-
-Serialize this object with recursively sorted keys, no whitespace separators,
-and unescaped Unicode, then encode it as UTF-8. In Python, use
-`json.dumps(policy_fields, sort_keys=True, ensure_ascii=False, separators=(",", ":"))`
-before hashing the encoded result. Exclude `revision`, both resolved maps
-(`resolvedProfiles` and `resolvedImageProfiles`), and other response metadata
-from the digest. Text-only policies remain valid for text requests.
-
-When both references are configured, one authenticated bounded lookup resolves
-both from the same snapshot. The image model is frozen through tool follow-ups
-and transport fallback, including Responses image tools and Images API requests.
-The next logical request resolves again. Missing or invalid image policy stops
-generation without falling back to the saved concrete model.
-
-With only an image reference configured, policy resolution waits until the first
-`generate_image` call. Ordinary text conversations do not depend on image policy
-availability. Concurrent image tools and subsequent calls in the same logical
-request share that resolution; a failed lookup is retained for that request
-without another policy read.
-
-Conversation tool calls retain the frozen selection across the local MCP HTTP
-boundary using a one-use opaque identifier. The server keeps the selection only
-in memory and binds it to the profile entry, tool, and JSON-RPC request. Invalid
-or replayed identifiers fail before dispatch; standalone calls resolve their own
-policy. Identifiers are released on completion, failure, cancellation, or server
-shutdown.
-
-The agent's `image_model_profile` property exposes the current reference.
-`resolved_image_model_profile` exposes `reference`, `model`, `profile_id`, and
-`revision` for the current reference after resolution, or `None` before resolution
-and after a failed request. Changing the reference invalidates old metadata.
-`image_model` reports the effective concrete image model, or `None` until the
-configured reference resolves. This metadata does not prove image generation
-succeeded.
-
-Resolution and cleanup publish these scalar attributes to Home Assistant's
-state machine immediately, so templates and automations see the current
-metadata. A failed or cancelled request removes its resolved metadata.
-
-The conversation entity also publishes scalar state attributes for consumers:
-`image_model_profile` is the configured reference; `resolved_image_model_profile`
-is the resolved profile ID; `image_model_policy_revision` is the policy revision.
-Resolved attributes are omitted until resolution succeeds and whenever the
-reference changes or a request fails.
-
-Policy lookups with an image reference send `include_images=true` to request
-the complete text and image
-policy. Compatible endpoints can keep their default response limited to the text
-policy for older clients, with a revision computed from only its four policy
-fields. The expanded response includes the image policy fields in its revision.
-Endpoints that ignore the query remain compatible: MCP Assist accepts a valid
-text-only policy for text requests, and requires the image maps for image profile
-requests. The query requests policy capability; it does not change authentication
-or provider routing.
+Legacy active custom-endpoint profile selections migrate once to model IDs and
+enable retrieval only for the migrated text or image selection, preserving its
+request binding. Stale legacy fields on
+other providers or official OpenAI endpoints do not replace current model
+selections. API transport settings remain independent of model selection.

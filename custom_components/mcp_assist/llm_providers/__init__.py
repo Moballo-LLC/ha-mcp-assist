@@ -111,18 +111,16 @@ def build_provider_settings(
         ),
     )
 
-    # Import after provider modules initialize to avoid a policy/transport import cycle.
-    from ..model_profiles import REQUEST_RESOLVED_PROFILES
+    from ..model_selection import REQUEST_MODEL_SELECTION
+    from ..const import CONF_OPENAI_IMAGE_MODEL
 
-    scoped = REQUEST_RESOLVED_PROFILES.get()
+    scoped = REQUEST_MODEL_SELECTION.get()
     if scoped is not None and scoped[0] is entry:
         text, image = scoped[1:]
         provider_options = dict(settings.provider_options)
-        if text is not None:
-            provider_options["_resolved_model_profile"] = text
         if image is not None:
-            provider_options["_resolved_image_model_profile"] = image
-        settings = replace(settings, model_name=text.model if text else settings.model_name,
+            provider_options[CONF_OPENAI_IMAGE_MODEL] = image
+        settings = replace(settings, model_name=text or settings.model_name,
                            provider_options=provider_options)
     return settings
 

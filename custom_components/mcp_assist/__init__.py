@@ -93,15 +93,45 @@ from .const import (
     CONF_OPENCLAW_PORT,
     CONF_OPENCLAW_TOKEN,
     CONF_OPENCLAW_USE_SSL,
+    CONF_OPENAI_RESOLVE_MODEL,
+    CONF_OPENAI_RESOLVE_IMAGE_MODEL,
+    SERVER_TYPE_OPENAI,
 )
 from .mcp_server import MCPServer
 from .index_manager import IndexManager
 from .localization import async_load_localizations
+from .provider_runtime import resolve_provider_runtime_config
+from .llm_providers.openai import OpenAIProvider
 
 _LOGGER = logging.getLogger(__name__)
 _LEGACY_QUERY_TOKEN_AUTH_DEFAULT = True
 
 PLATFORMS = [Platform.CONVERSATION]
+
+
+def _migrate_legacy_model_selections(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Convert old endpoint selections once, retaining all unrelated settings."""
+    data = dict(entry.data)
+    options = dict(entry.options)
+    changed = False
+    runtime = resolve_provider_runtime_config(entry)
+    active = (runtime.server_type == SERVER_TYPE_OPENAI
+              and not OpenAIProvider._is_official_openai_base_url(runtime.base_url))
+    for legacy_key, model_key, prefix, retrieve_key in (
+        ("model_profile", "model_name", "profile/", CONF_OPENAI_RESOLVE_MODEL),
+        ("openai_image_model_profile", "openai_image_model", "image-profile/",
+         CONF_OPENAI_RESOLVE_IMAGE_MODEL),
+    ):
+        reference = options.get(legacy_key, data.get(legacy_key, ""))
+        if active and isinstance(reference, str) and reference.strip():
+            options[model_key] = prefix + reference.strip()
+            options[retrieve_key] = True
+        for source in (data, options):
+            if legacy_key in source:
+                del source[legacy_key]
+                changed = True
+    if changed:
+        hass.config_entries.async_update_entry(entry, data=data, options=options)
 
 
 async def _migrate_brave_search_tool_name(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -644,6 +674,7 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MCP Assist from a config entry."""
     await async_load_localizations(hass)
+    _migrate_legacy_model_selections(hass, entry)
     # Skip setup for system entry (it only stores config, doesn't create entities)
     if entry.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
         _LOGGER.debug("Skipping setup for system entry (config only)")
