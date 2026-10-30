@@ -136,6 +136,14 @@ def auto_enable_custom_integrations(enable_custom_integrations) -> None:
     return None
 
 
+@pytest.fixture(autouse=True)
+async def load_runtime_localizations(hass) -> None:
+    """Unit-created profiles use the same locale cache as integration setup."""
+    from custom_components.mcp_assist.localization import async_load_localizations
+
+    await async_load_localizations(hass)
+
+
 @pytest.fixture
 def profile_entry_factory(hass) -> Callable[..., MockConfigEntry]:
     """Create and add a profile entry."""

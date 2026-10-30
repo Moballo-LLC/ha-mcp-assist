@@ -4907,3 +4907,78 @@ async def test_run_automation_blocked_when_not_exposed(
 
     assert "not exposed" in result["content"][0]["text"]
     async_call_mock.assert_not_awaited()
+
+
+@pytest.mark.parametrize("exposed", [True, False])
+async def test_flat_action_target_keeps_exposure_checks(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, exposed
+):
+    """The shorthand must use the same target resolution as nested entity IDs."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("light.example_lamp", "on")
+    monkeypatch.setattr(mcp_server_module, "async_should_expose", lambda *args: exposed)
+    calls = []
+
+    async def turn_on(call):
+        calls.append(call.data)
+
+    hass.services.async_register("light", "turn_on", turn_on)
+    result = await server.tool_perform_action({
+        "domain": "light", "action": "turn_on", "entity_id": "light.example_lamp",
+    })
+    if exposed:
+        assert calls == [{"entity_id": ["light.example_lamp"]}]
+    else:
+        assert calls == []
+        assert "expos" in str(result).lower()
+
+
+async def test_conflicting_flat_and_nested_targets_are_rejected(
+    hass, profile_entry_factory, system_entry_factory
+):
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    result = await server.tool_perform_action({
+        "domain": "light", "action": "turn_on", "entity_id": "light.example_lamp",
+        "target": {"entity_id": "light.other_lamp"},
+    })
+    assert result["isError"] is True
+    assert "not both" in result["content"][0]["text"]
+
+
+@pytest.mark.parametrize("target_args", [
+    {"entity_id": None, "target": {"entity_id": "light.example_lamp"}},
+    {"entity_id": "", "target": {"entity_id": "light.example_lamp"}},
+    {"entity_id": [], "target": {"entity_id": "light.example_lamp"}},
+    {"entity_id": "light.example_lamp", "target": {}},
+    {"entity_id": "light.example_lamp", "target": None},
+])
+async def test_empty_target_placeholder_does_not_conflict(
+    hass, profile_entry_factory, monkeypatch, target_args
+):
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("light.example_lamp", "on")
+    monkeypatch.setattr(mcp_server_module, "async_should_expose", lambda *args: True)
+    calls = []
+
+    async def turn_on(call):
+        calls.append(call.data)
+
+    hass.services.async_register("light", "turn_on", turn_on)
+    await server.tool_perform_action({"domain": "light", "action": "turn_on", **target_args})
+    assert calls == [{"entity_id": ["light.example_lamp"]}]
+
+
+async def test_actual_tool_schemas_are_compatible_with_anthropic(hass, profile_entry_factory):
+    from custom_components.mcp_assist.llm_providers import build_provider_settings, create_llm_provider
+    from custom_components.mcp_assist.tool_schema import convert_mcp_tools_to_llm_tools
+
+    entry = profile_entry_factory(data={"server_type": "anthropic"})
+    server = MCPServer(hass, 8099, entry)
+    tools = convert_mcp_tools_to_llm_tools(await server._get_tools_list())
+    provider = create_llm_provider(build_provider_settings(entry, max_tokens=500, temperature=0.5))
+    payload = provider.build_payload([{"role": "user", "content": "Hello"}], tools)
+    assert any(tool["name"] == "perform_action" for tool in payload["tools"])
+    for tool in payload["tools"]:
+        assert not {"anyOf", "allOf", "oneOf"} & tool["input_schema"].keys(), tool["name"]

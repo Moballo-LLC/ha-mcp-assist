@@ -96,6 +96,7 @@ from .const import (
 )
 from .mcp_server import MCPServer
 from .index_manager import IndexManager
+from .localization import async_load_localizations
 
 _LOGGER = logging.getLogger(__name__)
 _LEGACY_QUERY_TOKEN_AUTH_DEFAULT = True
@@ -642,6 +643,7 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MCP Assist from a config entry."""
+    await async_load_localizations(hass)
     # Skip setup for system entry (it only stores config, doesn't create entities)
     if entry.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
         _LOGGER.debug("Skipping setup for system entry (config only)")

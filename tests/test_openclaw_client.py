@@ -60,6 +60,52 @@ def _make_client() -> OpenClawClient:
     )
 
 
+class _ReplyFramesWs:
+    """Deliver a protocol-4 run before send() resumes."""
+
+    def __init__(self, client, *, final=True):
+        self.client = client
+        self.final = final
+
+    async def send(self, raw):
+        request = json.loads(raw)
+        await self.client._handle_message({
+            "type": "res", "id": request["id"], "ok": True,
+            "payload": {"runId": "run-1", "status": "accepted"},
+        })
+        for data in ({"delta": "First "}, {"delta": "sentence."}):
+            self.client._handle_agent_event({
+                "runId": "run-1", "stream": "assistant", "data": data,
+            })
+        self.client._handle_agent_event({
+            "runId": "run-1", "stream": "lifecycle", "data": {"phase": "end"},
+            "summary": "Operational summary, not the reply",
+        })
+        if self.final:
+            await self.client._handle_message({
+                "type": "res", "id": request["id"], "ok": True,
+                "payload": {"runId": "run-1", "status": "ok", "result": {
+                    "payloads": [{"text": "First sentence. Second sentence."}],
+                }},
+            })
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final", [True, False])
+async def test_complete_protocol_four_reply(final, monkeypatch):
+    """Final RPC output wins; delta-only streams remain a usable fallback."""
+    from custom_components.mcp_assist import openclaw_client as module
+
+    monkeypatch.setattr(module, "FINAL_RESPONSE_GRACE", 0.01, raising=False)
+    client = _make_client()
+    client._connected = True
+    client._ws = _ReplyFramesWs(client, final=final)
+    result = await client.send_message("Hello", "main")
+    assert result == ("First sentence. Second sentence." if final else "First sentence.")
+    assert client._pending_requests == {}
+    assert client._agent_runs == {}
+
+
 class _ImmediateAckWs:
     """Fake websocket that delivers the ack and completion during send()."""
 
@@ -501,4 +547,82 @@ async def test_send_message_fails_fast_when_socket_dropped_after_ack() -> None:
     with pytest.raises(OpenClawConnectionError):
         await asyncio.wait_for(client.send_message("hi", "main"), timeout=5)
 
+    assert client._agent_runs == {}
+
+
+@pytest.mark.parametrize(("events", "expected"), [
+    ([{"itemId": "a", "delta": "First"}, {"itemId": "b", "delta": "Second"}], "First\n\nSecond"),
+    ([{"delta": "First"}, {"text": "First reply", "delta": " reply"}], "First reply"),
+    ([{"itemId": "a", "text": "Old"}, {"itemId": "a", "text": "Corrected"}], "Corrected"),
+    ([{"text": "Old"}, {"text": "", "replace": True}], ""),
+])
+def test_assistant_items_merge_without_losing_or_duplicating_text(events, expected):
+    run = _AgentRun("run-1")
+    for data in events:
+        run.apply_assistant_text(data)
+    assert run.text == expected
+
+
+@pytest.mark.parametrize("phase", ["end", "complete", "error"])
+def test_non_lifecycle_phases_do_not_finish_agent_run(phase):
+    client = _make_client()
+    run = _AgentRun("run-1")
+    client._apply_agent_event(run, {"stream": "compaction", "data": {"phase": phase}})
+    assert not run.complete_event.is_set()
+    client._apply_agent_event(run, {"stream": "lifecycle", "data": {"phase": phase}})
+    assert run.complete_event.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["send", "ack", "run"])
+async def test_cancelled_openclaw_run_releases_all_waiters(stage):
+    client = _make_client()
+    client._connected = True
+    reached_stage = asyncio.Event()
+
+    class WaitingWs:
+        async def send(self, raw):
+            request = json.loads(raw)
+            if stage == "run":
+                await client._handle_message({
+                    "type": "res", "id": request["id"], "ok": True,
+                    "payload": {"runId": "run-1", "status": "accepted"},
+                })
+            reached_stage.set()
+            if stage == "send":
+                await asyncio.Event().wait()
+
+    client._ws = WaitingWs()
+    task = asyncio.create_task(client.send_message("Hello", "main"))
+    await reached_stage.wait()
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert client._pending_requests == {}
+    assert client._final_responses == {}
+    assert client._agent_runs == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final_status", ["error", "timeout"])
+async def test_final_rpc_failure_does_not_return_successful_stream(final_status):
+    from custom_components.mcp_assist.openclaw_client import OpenClawError
+
+    client = _make_client()
+    client._connected = True
+
+    class FailedFinalWs(_ReplyFramesWs):
+        async def send(self, raw):
+            await super().send(raw)
+            request = json.loads(raw)
+            await client._handle_message({
+                "type": "res", "id": request["id"], "ok": True,
+                "payload": {"runId": "run-1", "status": final_status},
+            })
+
+    client._ws = FailedFinalWs(client, final=False)
+    with pytest.raises(OpenClawError):
+        await client.send_message("Hello", "main")
+    assert client._final_responses == {}
     assert client._agent_runs == {}

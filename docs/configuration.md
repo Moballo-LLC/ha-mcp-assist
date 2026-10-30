@@ -35,7 +35,9 @@ Profile settings are independent per conversation agent.
 
 ### Local and Self-Hosted Providers
 
-For LM Studio, llama.cpp, Ollama, and vLLM, configure the server URL.
+For LM Studio, llama.cpp, Ollama, and vLLM, configure the server URL. An optional
+API key authenticates both model listing and generation using a bearer header.
+Leave it blank for servers without authentication.
 
 | Provider | Common default URL |
 | --- | --- |
@@ -62,6 +64,25 @@ version. Changes to gateway host, port, bearer credential, and SSL in a profile'
 options take precedence over the original saved values when the profile reloads.
 The gateway challenge must be received and signed before a new device can appear
 for pairing approval.
+
+OpenClaw's **Provider** section also offers:
+
+- **Agent ID** optionally selects the gateway agent. Leave it blank to preserve
+  the gateway's existing fixed-session routing. Per-conversation sessions use
+  `main` when no agent is specified.
+- **Session Mode** defaults to **Fixed**, preserving existing profiles. Choose
+  **Per conversation** for `agent:<id>:ha-<conversation_id>` sessions so separate
+  conversations do not share history. Follow-ups keep the same session.
+- **Session Key** controls fixed sessions. A full `agent:<id>:...` key selects its
+  own agent and takes precedence over Agent ID. With an explicit Agent ID, a
+  short fixed key is qualified as `agent:<id>:<key>` for older gateways too.
+- **System Prompt** adds an optional persona to each gateway request. Blank uses
+  the agent's own prompts. The satellite's area, when known, is sent as
+  `[Room: <area>]` in the message and `Speaking from: <area>` in the extra prompt.
+
+OpenClaw replies use the gateway's final result when available, with assembled
+assistant text as a fallback. A completed stream can wait up to two seconds for
+that final result. A gateway run failure is reported as an error.
 
 Hermes Agent support is experimental. Configure its API-server URL, normally
 `http://localhost:8642`, an optional API key, and a stable **Memory Session
@@ -147,6 +168,47 @@ the default prompt without locking your profile to an older copy.
 
 Customize prompts when you need a stable site-specific behavior. Keep technical
 instructions concise and avoid hardcoding entity IDs unless that is intentional.
+
+With built-in technical instructions, time, date, area, and enabled user/location
+context accompany the current user message in a labelled Home Assistant context
+block, followed by the user request. The system prompt remains stable
+between turns so compatible servers can reuse cached prompt tokens. Custom
+technical templates keep their existing context placeholders. When Music
+Assistant is enabled, custom templates also receive the current area beside the
+user request so implicit room targeting still works. This does not fetch the
+entity index or add network calls.
+
+### Thinking
+
+The **Provider** section offers **Server default**, **Off**, **Low**, **Medium**,
+and **High** for Ollama, llama.cpp, vLLM, OpenAI, Gemini, OpenRouter, and OpenClaw.
+Server default preserves the existing request. Off requests disabled reasoning
+where supported, or a lower supported effort for models that always reason.
+Lower effort can reduce voice latency, but quality and support vary by model.
+
+- Ollama uses a boolean for most thinking models and levels for GPT-OSS; Off
+  maps to Low for GPT-OSS.
+- llama.cpp and vLLM pass `enable_thinking` and `reasoning_effort` to the chat
+  template. The loaded template must support these controls.
+- OpenAI maps the setting to the selected generation API. Named model-profile
+  policies retain priority. GPT-6 Astra and GPT-6.1 Sol use Low for Off; GPT-6
+  Sol/Luna Chat Completions tool requests keep their required `none` effort.
+- Gemini uses Minimal for Off on Flash families that support it, otherwise Low
+  when reasoning cannot be disabled. It uses High for Medium on the original
+  Gemini 3 Pro, which supports only Low and High.
+  OpenRouter uses its compatible reasoning controls; supported levels depend
+  on the selected model.
+- OpenClaw forwards the level to the gateway's agent request.
+
+LM Studio, Anthropic, and Hermes retain server-managed thinking settings. LM
+Studio's documented Chat Completions parameters do not establish support for
+upstream's template override, so this fork does not advertise that control.
+
+**Clean Responses** converts temperature and percentage symbols using Home
+Assistant's voice pipeline language, falling back to the configured language.
+Unsupported languages leave symbols for the TTS
+engine. Incomplete thinking blocks are removed before speech even when cleaning
+is disabled.
 
 ## Conversation Settings
 

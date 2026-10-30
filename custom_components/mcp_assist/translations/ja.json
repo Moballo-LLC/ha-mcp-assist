@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "思考",
+          "openclaw_agent_id": "エージェントID",
+          "openclaw_session_mode": "セッションモード"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "思考",
+              "openclaw_agent_id": "エージェントID",
+              "openclaw_session_mode": "セッションモード",
+              "system_prompt": "システムプロンプト"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' は、Home Assistantの会話ごとに専用のOpenClawセッションを割り当て、フォローアップの質問はその中で続きます。'Fixed' は、すべてのリクエストをセッションキーで指定した1つのセッションに送ります。",
+              "system_prompt": "追加のシステムプロンプトとして、リクエストごとにOpenClawへ送信されます。たとえばペルソナの設定に使えます。エージェント自身のプロンプトを使う場合は空欄にしてください。音声サテライトの部屋は自動的に追加されます。"
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "共有 MCP サーバーで有効になっている場合でも、このプロファイルが Web 検索および URL 読み取りツールを使用できないようにします。"
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' は、Home Assistantの会話ごとに専用のOpenClawセッションを割り当て、フォローアップの質問はその中で続きます。'Fixed' は、すべてのリクエストをセッションキーで指定した1つのセッションに送ります。"
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "思考",
+          "openclaw_agent_id": "エージェントID",
+          "openclaw_session_mode": "セッションモード"
         },
         "data_description": {
           "model_name": "このプロファイルが使用する LLM モデル。",
           "system_prompt": "現在有効なシステム プロンプトが事前に入力されています。これを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
           "technical_prompt": "現在有効な技術指示が事前に入力されています。それらを編集してこのプロファイルをカスタマイズします。変更しないままにすると、統合はコードからの組み込みプロンプトを使用し続けます。",
           "context_mode": "標準は、完全なプロファイル ツール コンテキストを送信します。 Light は小さい履歴ウィンドウを保持し、小規模なローカル モデル用のコア Home Assistant ツールをアドバタイズします。",
-          "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。"
+          "hermes_session_key": "このプロファイルのHermes長期メモリを区分する固定キー。",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' は、Home Assistantの会話ごとに専用のOpenClawセッションを割り当て、フォローアップの質問はその中で続きます。'Fixed' は、すべてのリクエストをセッションキーで指定した1つのセッションに送ります。"
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "思考",
+              "openclaw_agent_id": "エージェントID",
+              "openclaw_session_mode": "セッションモード",
+              "system_prompt": "システムプロンプト"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama が選択したモデルをメモリにロードしておく期間。",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "自動では、OpenAI の公式エンドポイントに Responses を、カスタムエンドポイントに Chat Completions を使用します。エンドポイントが対応している場合にのみ API を明示的に選択してください。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' は、Home Assistantの会話ごとに専用のOpenClawセッションを割り当て、フォローアップの質問はその中で続きます。'Fixed' は、すべてのリクエストをセッションキーで指定した1つのセッションに送ります。",
+              "system_prompt": "追加のシステムプロンプトとして、リクエストごとにOpenClawへ送信されます。たとえばペルソナの設定に使えます。エージェント自身のプロンプトを使う場合は空欄にしてください。音声サテライトの部屋は自動的に追加されます。"
             }
           },
           "advanced_settings": {
@@ -760,6 +790,21 @@
         "images": "Images API",
         "responses": "Responses API"
       }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "サーバー既定",
+        "off": "オフ",
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
+      }
     }
   },
   "entity": {
@@ -768,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Japanese-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in 日本語.",
+    "follow_up_phrases": "他に何か, 他には, してくれる, すべき, できる, どれ, どうやって, どうですか, ありますか",
+    "end_words": "ストップ, 止めて, キャンセル, いいえ, ありがとう, さようなら, バイバイ, 完了, 大丈夫, いいです, 忘れて, 以上, それだけ",
+    "spoken_celsius": "{value}度",
+    "spoken_fahrenheit": "{value}華氏度",
+    "spoken_degrees": "{value}度",
+    "spoken_percent": "{value}パーセント",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

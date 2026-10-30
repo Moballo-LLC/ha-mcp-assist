@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API δημιουργίας",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Σκέψη",
+          "openclaw_agent_id": "Αναγνωριστικό πράκτορα",
+          "openclaw_session_mode": "Λειτουργία συνεδρίας"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API δημιουργίας",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Σκέψη",
+              "openclaw_agent_id": "Αναγνωριστικό πράκτορα",
+              "openclaw_session_mode": "Λειτουργία συνεδρίας",
+              "system_prompt": "Οδηγιες συστηματος"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "Το 'Per conversation' δίνει σε κάθε συνομιλία του Home Assistant τη δική της συνεδρία OpenClaw, όπου παραμένουν οι επόμενες ερωτήσεις. Το 'Fixed' στέλνει όλα τα αιτήματα στη μία συνεδρία του πεδίου Κλειδί συνεδρίας.",
+              "system_prompt": "Αποστέλλεται στο OpenClaw με κάθε αίτημα ως πρόσθετη οδηγία συστήματος, π.χ. για ορισμό περσόνας. Αφήστε το κενό για να χρησιμοποιηθούν οι ίδιες οι οδηγίες του πράκτορα. Το δωμάτιο του φωνητικού δορυφόρου προστίθεται αυτόματα."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Αποτρέπει αυτό το προφίλ από τη χρήση εργαλείων αναζήτησης ιστού και URL-ανάγνωσης, ακόμα κι αν είναι ενεργοποιημένα στον κοινόχρηστο διακομιστή MCP."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "Το 'Per conversation' δίνει σε κάθε συνομιλία του Home Assistant τη δική της συνεδρία OpenClaw, όπου παραμένουν οι επόμενες ερωτήσεις. Το 'Fixed' στέλνει όλα τα αιτήματα στη μία συνεδρία του πεδίου Κλειδί συνεδρίας."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API δημιουργίας",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Σκέψη",
+          "openclaw_agent_id": "Αναγνωριστικό πράκτορα",
+          "openclaw_session_mode": "Λειτουργία συνεδρίας"
         },
         "data_description": {
           "model_name": "Το μοντέλο LLM θα πρέπει να χρησιμοποιεί αυτό το προφίλ.",
           "system_prompt": "Προγεμισμένο με την τρέχουσα προτροπή αποτελεσματικού συστήματος. Επεξεργαστείτε το για να προσαρμόσετε αυτό το προφίλ. Εάν παραμείνει αμετάβλητη, η ενοποίηση συνεχίζει να χρησιμοποιεί την ενσωματωμένη προτροπή από τον κώδικα.",
           "technical_prompt": "Προγεμισμένο με τις τρέχουσες αποτελεσματικές τεχνικές οδηγίες. Επεξεργαστείτε τα για να προσαρμόσετε αυτό το προφίλ. Εάν παραμείνει αμετάβλητη, η ενοποίηση συνεχίζει να χρησιμοποιεί την ενσωματωμένη προτροπή από τον κώδικα.",
           "context_mode": "Το Standard στέλνει το πλαίσιο του εργαλείου πλήρους προφίλ. Το Light διατηρεί ένα μικρότερο παράθυρο ιστορικού και διαφημίζει βασικά εργαλεία Home Assistant για μικρά τοπικά μοντέλα.",
-          "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ."
+          "hermes_session_key": "Σταθερό κλειδί που οριοθετεί τη μακροπρόθεσμη μνήμη Hermes για αυτό το προφίλ.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "Το 'Per conversation' δίνει σε κάθε συνομιλία του Home Assistant τη δική της συνεδρία OpenClaw, όπου παραμένουν οι επόμενες ερωτήσεις. Το 'Fixed' στέλνει όλα τα αιτήματα στη μία συνεδρία του πεδίου Κλειδί συνεδρίας."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API δημιουργίας",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Σκέψη",
+              "openclaw_agent_id": "Αναγνωριστικό πράκτορα",
+              "openclaw_session_mode": "Λειτουργία συνεδρίας",
+              "system_prompt": "Οδηγιες συστηματος"
             },
             "data_description": {
               "ollama_keep_alive": "Για πόσο καιρό το Ollama θα πρέπει να διατηρεί φορτωμένο στη μνήμη το επιλεγμένο μοντέλο.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Η Αυτόματη επιλογή χρησιμοποιεί το Responses για το επίσημο τελικό σημείο OpenAI και το Chat Completions για προσαρμοσμένα τελικά σημεία. Επιλέξτε ρητά ένα API μόνο όταν το τελικό σημείο το υποστηρίζει.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "Το 'Per conversation' δίνει σε κάθε συνομιλία του Home Assistant τη δική της συνεδρία OpenClaw, όπου παραμένουν οι επόμενες ερωτήσεις. Το 'Fixed' στέλνει όλα τα αιτήματα στη μία συνεδρία του πεδίου Κλειδί συνεδρίας.",
+              "system_prompt": "Αποστέλλεται στο OpenClaw με κάθε αίτημα ως πρόσθετη οδηγία συστήματος, π.χ. για ορισμό περσόνας. Αφήστε το κενό για να χρησιμοποιηθούν οι ίδιες οι οδηγίες του πράκτορα. Το δωμάτιο του φωνητικού δορυφόρου προστίθεται αυτόματα."
             }
           },
           "advanced_settings": {
@@ -760,6 +790,21 @@
         "images": "Images API",
         "responses": "Responses API"
       }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Προεπιλογή διακομιστή",
+        "off": "Ανενεργό",
+        "low": "Χαμηλή",
+        "medium": "Μέτρια",
+        "high": "Υψηλή"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
+      }
     }
   },
   "entity": {
@@ -768,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Greek-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Ελληνικά.",
+    "follow_up_phrases": "κάτι άλλο, τι άλλο, θα ήθελες, πρέπει να, μπορώ να, ποιο, πώς μπορώ, τι λες για, υπάρχει",
+    "end_words": "σταμάτα, στοπ, ακύρωση, όχι, ευχαριστώ, αντίο, γεια, τέλος, δεν πειράζει, άστο, ξέχνα το, αυτό είναι όλο",
+    "spoken_celsius": "{value} βαθμούς Κελσίου",
+    "spoken_fahrenheit": "{value} βαθμούς Φαρενάιτ",
+    "spoken_degrees": "{value} βαθμούς",
+    "spoken_percent": "{value} τοις εκατό",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

@@ -192,6 +192,8 @@ class SmartDiscovery:
         inferred_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Discover entities with paging metadata."""
+        if isinstance(domain, str) and domain.strip().casefold() in {"all", "*"}:
+            domain = None
         # Detect query type and intent
         query_type = self._detect_query_type(
             entity_type, area or floor, domain, state, name_contains
@@ -262,7 +264,7 @@ class SmartDiscovery:
             return await self._discover_aggregate_entities_page(
                 domain, state, limit, offset
             )
-        elif area and not floor and not label and not device_class and not name_pattern and not inferred_type:
+        elif area and not name_contains and not floor and not label and not device_class and not name_pattern and not inferred_type:
             return await self._discover_area_entities_page(
                 area, entity_type, domain, state, limit, offset
             )
@@ -304,7 +306,7 @@ class SmartDiscovery:
                 return QueryType.PERSON
 
             # Check for aggregate queries
-            if any(word in name_lower for word in ["who", "anyone", "everyone", "all"]):
+            if re.search(r"\b(who|anyone|everyone|all)\b", name_lower):
                 return QueryType.AGGREGATE
 
         # Area-based query

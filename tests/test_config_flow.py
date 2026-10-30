@@ -329,7 +329,10 @@ def test_normalize_prompt_inputs_for_server_managed_agents_drops_prompts(
 
     assert normalized[CONF_SYSTEM_PROMPT_MODE] == PROMPT_MODE_DEFAULT
     assert normalized[CONF_TECHNICAL_PROMPT_MODE] == PROMPT_MODE_DEFAULT
-    assert CONF_SYSTEM_PROMPT not in normalized
+    if server_type == SERVER_TYPE_OPENCLAW:
+        assert normalized[CONF_SYSTEM_PROMPT] == "custom"
+    else:
+        assert CONF_SYSTEM_PROMPT not in normalized
     assert CONF_TECHNICAL_PROMPT not in normalized
 
 
@@ -446,7 +449,7 @@ async def test_server_step_uses_provider_specific_connection_fields(hass) -> Non
     ollama_result = await ollama_flow.async_step_server()
     ollama_markers = _schema_marker_by_field(ollama_result["data_schema"])
 
-    assert set(ollama_markers) == {CONF_LMSTUDIO_URL}
+    assert set(ollama_markers) == {CONF_LMSTUDIO_URL, CONF_API_KEY}
     assert ollama_markers[CONF_LMSTUDIO_URL].default() == DEFAULT_OLLAMA_URL
 
     openai_flow = MCPAssistConfigFlow()
@@ -1453,6 +1456,7 @@ async def test_options_step_for_ollama_keeps_provider_fields_in_provider_section
         CONF_OLLAMA_NUM_CTX,
         CONF_OLLAMA_KEEP_ALIVE,
         CONF_STATEFUL_SESSION_ID,
+        "thinking_mode",
     }
     assert CONF_OLLAMA_NUM_CTX not in _section_field_names(advanced_section)
     assert CONF_OLLAMA_KEEP_ALIVE not in _section_field_names(advanced_section)
@@ -1778,7 +1782,10 @@ async def test_options_step_for_openclaw_hides_model_prompts_and_uses_provider_s
     assert PROMPTS_SECTION_KEY not in top_level_keys
     assert PROVIDER_SECTION_KEY in top_level_keys
     assert isinstance(provider_section, section)
-    assert _section_field_names(provider_section) == {CONF_OPENCLAW_SESSION_KEY}
+    assert _section_field_names(provider_section) == {
+        CONF_OPENCLAW_SESSION_KEY, "openclaw_agent_id", "openclaw_session_mode",
+        "thinking_mode", CONF_SYSTEM_PROMPT,
+    }
     assert CONF_OPENCLAW_SESSION_KEY not in _section_field_names(advanced_section)
 
 
@@ -1901,3 +1908,22 @@ async def test_options_image_default_tracks_endpoint_and_model_changes(
     updated = SimpleNamespace(data=entry.data, options=result["data"])
     provider = create_llm_provider(build_provider_settings(updated, max_tokens=0, temperature=None))
     assert provider.image_model == (image_selection or automatic_model)
+
+
+async def test_openclaw_options_preserve_persona_and_session_controls(
+    hass, profile_entry_factory, system_entry_factory
+):
+    """The server-managed flow must retain the optional OpenClaw prompt."""
+    system_entry_factory()
+    entry = profile_entry_factory(data={CONF_SERVER_TYPE: SERVER_TYPE_OPENCLAW})
+    flow = MCPAssistOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    await flow.async_step_init({PROVIDER_SECTION_KEY: {
+        CONF_SYSTEM_PROMPT: "Answer briefly", "openclaw_agent_id": "voice",
+        "openclaw_session_mode": "per_conversation", "thinking_mode": "low",
+    }})
+    assert flow.profile_options[CONF_SYSTEM_PROMPT] == "Answer briefly"
+    assert flow.profile_options["openclaw_session_mode"] == "per_conversation"
+    assert flow.profile_options["openclaw_agent_id"] == "voice"
+    assert flow.profile_options["thinking_mode"] == "low"

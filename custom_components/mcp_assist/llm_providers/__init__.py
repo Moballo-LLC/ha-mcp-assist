@@ -29,6 +29,8 @@ from .vllm import VLLMProvider
 from ..provider_runtime import resolve_provider_runtime_config
 from ..const import (
     CONF_STATEFUL_SESSION_ID,
+    CONF_THINKING_MODE,
+    DEFAULT_THINKING_MODE,
     DEFAULT_STATEFUL_SESSION_ID,
     SERVER_TYPE_ANTHROPIC,
     SERVER_TYPE_GEMINI,
@@ -92,7 +94,12 @@ def build_provider_settings(
         timeout=runtime_config.timeout,
         max_tokens=max_tokens,
         temperature=temperature,
-        provider_options=provider_class.options_from_entry(entry),
+        provider_options={
+            **provider_class.options_from_entry(entry),
+            **({CONF_THINKING_MODE: options.get(
+                CONF_THINKING_MODE, data.get(CONF_THINKING_MODE, DEFAULT_THINKING_MODE)
+            )} if provider_class.supports_thinking_mode else {}),
+        },
         display_name=runtime_config.display_name,
         is_remote_service=runtime_config.is_remote_service,
         prompt_cache_key=prompt_cache_key,

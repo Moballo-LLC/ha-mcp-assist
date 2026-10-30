@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API for generering",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Tenking",
+          "openclaw_agent_id": "Agent-ID",
+          "openclaw_session_mode": "Øktmodus"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API for generering",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Tenking",
+              "openclaw_agent_id": "Agent-ID",
+              "openclaw_session_mode": "Øktmodus",
+              "system_prompt": "Systeminstruksjoner"
             },
             "data_description": {
               "ollama_keep_alive": "Hvor lenge Ollama skal beholde den valgte modellen lastet i minnet.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatisk bruker Responses for det offisielle OpenAI-endepunktet og Chat Completions for egendefinerte endepunkter. Velg en API uttrykkelig bare når endepunktet støtter den.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' gir hver samtale i Home Assistant sin egen OpenClaw-økt, og oppfølgingsspørsmål blir i den. 'Fixed' sender alle forespørsler til den ene økten som er angitt i Øktnøkkel.",
+              "system_prompt": "Sendes til OpenClaw sammen med hver forespørsel som en ekstra systeminstruksjon, for eksempel for å angi en persona. La feltet stå tomt for å bruke agentens egne instruksjoner. Rommet til stemmesatellitten legges til automatisk."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Hindrer denne profilen fra å bruke nettsøk og URL-leseverktøy, selv om de er aktivert på den delte MCP-serveren."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' gir hver samtale i Home Assistant sin egen OpenClaw-økt, og oppfølgingsspørsmål blir i den. 'Fixed' sender alle forespørsler til den ene økten som er angitt i Øktnøkkel."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API for generering",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Tenking",
+          "openclaw_agent_id": "Agent-ID",
+          "openclaw_session_mode": "Øktmodus"
         },
         "data_description": {
           "model_name": "LLM-modellen denne profilen skal bruke.",
           "system_prompt": "Forhåndsutfylt med gjeldende effektive systemmelding. Rediger den for å tilpasse denne profilen. Hvis den forblir uendret, fortsetter integrasjonen å bruke den innebygde ledeteksten fra koden.",
           "technical_prompt": "Forhåndsutfylt med gjeldende effektive tekniske instruksjoner. Rediger dem for å tilpasse denne profilen. Hvis den forblir uendret, fortsetter integrasjonen å bruke den innebygde ledeteksten fra koden.",
           "context_mode": "Standard sender hele profilverktøykonteksten. Light holder et mindre historievindu og annonserer kjerneverktøy for Home Assistant for små lokale modeller.",
-          "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen."
+          "hermes_session_key": "Stabil nøkkel som avgrenser Hermes' langtidsminne for denne profilen.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' gir hver samtale i Home Assistant sin egen OpenClaw-økt, og oppfølgingsspørsmål blir i den. 'Fixed' sender alle forespørsler til den ene økten som er angitt i Øktnøkkel."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API for generering",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Tenking",
+              "openclaw_agent_id": "Agent-ID",
+              "openclaw_session_mode": "Øktmodus",
+              "system_prompt": "Systeminstruksjoner"
             },
             "data_description": {
               "ollama_keep_alive": "Hvor lenge Ollama skal beholde den valgte modellen lastet i minnet.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatisk bruker Responses for det offisielle OpenAI-endepunktet og Chat Completions for egendefinerte endepunkter. Velg en API uttrykkelig bare når endepunktet støtter den.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' gir hver samtale i Home Assistant sin egen OpenClaw-økt, og oppfølgingsspørsmål blir i den. 'Fixed' sender alle forespørsler til den ene økten som er angitt i Øktnøkkel.",
+              "system_prompt": "Sendes til OpenClaw sammen med hver forespørsel som en ekstra systeminstruksjon, for eksempel for å angi en persona. La feltet stå tomt for å bruke agentens egne instruksjoner. Rommet til stemmesatellitten legges til automatisk."
             }
           },
           "advanced_settings": {
@@ -760,6 +790,21 @@
         "images": "Images API",
         "responses": "Responses API"
       }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Serverstandard",
+        "off": "Av",
+        "low": "Lav",
+        "medium": "Middels",
+        "high": "Høy"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
+      }
     }
   },
   "entity": {
@@ -768,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Norwegian-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in Norsk Bokmål.",
+    "follow_up_phrases": "noe annet, hva mer, ville du, burde jeg, kan jeg, hvilken, hvordan kan, hva med, finnes det",
+    "end_words": "stopp, avbryt, nei, takk, ha det, adjø, ferdig, glem det, ikke noe, det var alt",
+    "spoken_celsius": "{value} grader celsius",
+    "spoken_fahrenheit": "{value} grader fahrenheit",
+    "spoken_degrees": "{value} grader",
+    "spoken_percent": "{value} prosent",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

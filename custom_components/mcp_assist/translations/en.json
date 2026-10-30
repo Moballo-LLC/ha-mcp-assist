@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Generation API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Thinking",
+          "openclaw_agent_id": "Agent ID",
+          "openclaw_session_mode": "Session Mode"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Generation API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Thinking",
+              "openclaw_agent_id": "Agent ID",
+              "openclaw_session_mode": "Session Mode",
+              "system_prompt": "System Prompt"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' gives each Home Assistant conversation its own OpenClaw session, so follow-up questions stay in it. 'Fixed' sends every request to the single session set in Session Key.",
+              "system_prompt": "Sent to OpenClaw with every request as an extra system prompt, for example to set a persona. Leave blank to use the agent's own prompts. The satellite's room is added automatically."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Prevents this profile from using web search and URL-reading tools, even if they are enabled on the shared MCP server."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' gives each Home Assistant conversation its own OpenClaw session, so follow-up questions stay in it. 'Fixed' sends every request to the single session set in Session Key."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Generation API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Thinking",
+          "openclaw_agent_id": "Agent ID",
+          "openclaw_session_mode": "Session Mode"
         },
         "data_description": {
           "model_name": "The LLM model this profile should use.",
           "system_prompt": "Prefilled with the current effective system prompt. Edit it to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
           "technical_prompt": "Prefilled with the current effective technical instructions. Edit them to customize this profile. If left unchanged, the integration keeps using the built-in prompt from code.",
           "context_mode": "Adaptive keeps core tools ready and loads optional/custom tool schemas on demand. Standard sends the full profile tool context. Light uses the smallest context for small local models.",
-          "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile."
+          "hermes_session_key": "Stable key scoping Hermes long-term memory for this profile.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' gives each Home Assistant conversation its own OpenClaw session, so follow-up questions stay in it. 'Fixed' sends every request to the single session set in Session Key."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Generation API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Thinking",
+              "openclaw_agent_id": "Agent ID",
+              "openclaw_session_mode": "Session Mode",
+              "system_prompt": "System Prompt"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatic uses Responses for the official OpenAI endpoint and Chat Completions for custom endpoints. Choose an API explicitly only when the endpoint supports it.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' gives each Home Assistant conversation its own OpenClaw session, so follow-up questions stay in it. 'Fixed' sends every request to the single session set in Session Key.",
+              "system_prompt": "Sent to OpenClaw with every request as an extra system prompt, for example to set a persona. Leave blank to use the agent's own prompts. The satellite's room is added automatically."
             }
           },
           "advanced_settings": {
@@ -760,6 +790,21 @@
         "images": "Images API",
         "responses": "Responses API"
       }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Server default",
+        "off": "Off",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
+      }
     }
   },
   "entity": {
@@ -768,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "",
+    "follow_up_phrases": "anything else, what else, would you, do you, should i, can i, which, how can, what about, is there",
+    "end_words": "stop, cancel, no, nope, thanks, thank you, bye, goodbye, done, never mind, nevermind, forget it, that's all, that's it",
+    "spoken_celsius": "{value} degrees celsius",
+    "spoken_fahrenheit": "{value} degrees fahrenheit",
+    "spoken_degrees": "{value} degrees",
+    "spoken_percent": "{value} percent",
+    "spoken_euros": "{value} euros",
+    "spoken_pounds": "{value} pounds",
+    "spoken_dollars": "{value} dollars",
+    "spoken_and": "{value} and",
+    "spoken_plus": "{value} plus",
+    "spoken_equals": "{value} equals",
+    "spoken_less_than": "{value} less than",
+    "spoken_greater_than": "{value} greater than",
+    "spoken_at": "{value} at",
+    "spoken_number": "{value} number",
+    "spoken_times": "{value} times",
+    "spoken_divided_by": "{value} divided by"
   }
 }

@@ -16,6 +16,9 @@ from ..const import (
     CONF_LMSTUDIO_URL,
     CONF_STATEFUL_SESSION_ID,
     DEFAULT_STATEFUL_SESSION_ID,
+    CONF_THINKING_MODE,
+    DEFAULT_THINKING_MODE,
+    THINKING_MODES,
 )
 from ..provider_runtime import (
     build_provider_auth_headers,
@@ -175,6 +178,7 @@ class LLMProvider:
 
     transport_name = "openai_chat"
     supports_streaming = True
+    supports_thinking_mode = False
     supports_stateful_session_id_option = True
     provider_type = ""
     provider_display_name = ""
@@ -204,8 +208,14 @@ class LLMProvider:
     @classmethod
     def config_provider_options_fields(cls) -> tuple[ProviderConfigField, ...]:
         """Return provider fields plus the optional stateful endpoint contract."""
+        fields = cls.provider_options_fields
+        if cls.supports_thinking_mode:
+            fields = (*fields, ProviderConfigField(
+                CONF_THINKING_MODE, default=DEFAULT_THINKING_MODE, required=False,
+                kind="select", options=THINKING_MODES, translation_key=CONF_THINKING_MODE,
+            ))
         if not cls.supports_stateful_session_id_option:
-            return cls.provider_options_fields
+            return fields
         return (
             ProviderConfigField(
                 CONF_STATEFUL_SESSION_ID,
@@ -213,8 +223,14 @@ class LLMProvider:
                 required=False,
                 kind="boolean",
             ),
-            *cls.provider_options_fields,
+            *fields,
         )
+
+    @property
+    def thinking_mode(self) -> str:
+        """Return an explicit override, leaving unknown or absent settings alone."""
+        mode = self.settings.provider_options.get(CONF_THINKING_MODE)
+        return mode if mode in THINKING_MODES else DEFAULT_THINKING_MODE
 
     @classmethod
     def options_from_entry(cls, entry: Any) -> dict[str, Any]:

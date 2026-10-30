@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "思考",
+          "openclaw_agent_id": "代理 ID",
+          "openclaw_session_mode": "会话模式"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "思考",
+              "openclaw_agent_id": "代理 ID",
+              "openclaw_session_mode": "会话模式",
+              "system_prompt": "系统提示词"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。",
+              "system_prompt": "随每个请求作为额外的系统提示词发送给 OpenClaw，例如用于设定人设。留空则使用代理自己的提示词。语音卫星所在的房间会自动添加。"
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "阻止此配置文件使用 Web 搜索和 URL 读取工具，即使它们在共享 MCP 服务器上启用也是如此。"
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。"
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "生成 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "思考",
+          "openclaw_agent_id": "代理 ID",
+          "openclaw_session_mode": "会话模式"
         },
         "data_description": {
           "model_name": "此配置文件应使用的 LLM 型号。",
           "system_prompt": "预填当前有效的系统提示符。编辑它以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
           "technical_prompt": "预填有当前有效的技术说明。编辑它们以自定义此配置文件。如果保持不变，集成将继续使用代码中的内置提示。",
           "context_mode": "标准发送完整的配置文件工具上下文。 Light 保留较小的历史窗口，并为小型本地模型宣传核心 Home Assistant 工具。",
-          "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。"
+          "hermes_session_key": "用于限定此配置文件的Hermes长期记忆的固定密钥。",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+          "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。"
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "生成 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "思考",
+              "openclaw_agent_id": "代理 ID",
+              "openclaw_session_mode": "会话模式",
+              "system_prompt": "系统提示词"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama 应将所选模型加载到内存中保留多长时间。",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "自动模式对 OpenAI 官方端点使用 Responses，对自定义端点使用 Chat Completions。仅当端点支持某个 API 时才明确选择它。",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Optional agent ID. Leave blank to keep the gateway default for fixed sessions; per-conversation sessions use main when blank.",
+              "openclaw_session_mode": "'Per conversation' 为每个 Home Assistant 对话分配独立的 OpenClaw 会话，后续提问保留在该会话中。'Fixed' 将所有请求发送到会话密钥中指定的同一个会话。",
+              "system_prompt": "随每个请求作为额外的系统提示词发送给 OpenClaw，例如用于设定人设。留空则使用代理自己的提示词。语音卫星所在的房间会自动添加。"
             }
           },
           "advanced_settings": {
@@ -760,6 +790,21 @@
         "images": "Images API",
         "responses": "Responses API"
       }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "服务器默认",
+        "off": "关闭",
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
+      }
     }
   },
   "entity": {
@@ -768,5 +813,26 @@
         "name": "{profile_name}"
       }
     }
+  },
+  "common": {
+    "language_instruction": "You are a helpful Chinese Simplified-speaking Home Assistant voice assistant. Respond naturally and conversationally to user requests in 简体中文.",
+    "follow_up_phrases": "还有什么, 还有其他, 你会, 我应该, 我可以, 哪个, 怎么能, 那个怎么样, 有没有",
+    "end_words": "停止, 停, 取消, 不, 谢谢, 再见, 拜拜, 完成, 没关系, 算了, 忘了吧, 就这样, 好了",
+    "spoken_celsius": "{value}摄氏度",
+    "spoken_fahrenheit": "{value}华氏度",
+    "spoken_degrees": "{value}度",
+    "spoken_percent": "{value}%",
+    "spoken_euros": "{value}€",
+    "spoken_pounds": "{value}£",
+    "spoken_dollars": "{value}$",
+    "spoken_and": "{value}&",
+    "spoken_plus": "{value}+",
+    "spoken_equals": "{value}=",
+    "spoken_less_than": "{value}<",
+    "spoken_greater_than": "{value}>",
+    "spoken_at": "{value}@",
+    "spoken_number": "{value}#",
+    "spoken_times": "{value}×",
+    "spoken_divided_by": "{value}÷"
   }
 }

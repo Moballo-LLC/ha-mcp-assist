@@ -56,6 +56,7 @@ _CHAT_COMPLETIONS_ONLY_MODEL_PREFIXES = (
 class OpenAIProvider(OpenAICompatibleProvider):
     """OpenAI Responses and chat-completions transport."""
 
+    supports_thinking_mode = True
     provider_type = SERVER_TYPE_OPENAI
     provider_display_name = "OpenAI"
     default_base_url = OPENAI_BASE_URL
@@ -288,6 +289,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
                     "Choose Responses API or Automatic in the profile's Generation API setting."
                 )
             payload = super().build_payload(messages, tools, stream=stream)
+            effort = self._thinking_effort()
+            if effort is not None:
+                payload["reasoning_effort"] = effort
             if (
                 tools
                 and self.uses_official_openai_api
@@ -322,10 +326,42 @@ class OpenAIProvider(OpenAICompatibleProvider):
             payload["tools"] = response_tools
             payload["tool_choice"] = "auto"
 
+        effort = self._thinking_effort()
+        if effort is not None:
+            payload["reasoning"] = {"effort": effort}
         resolved = self.settings.provider_options.get("_resolved_model_profile")
         if resolved:
             payload["reasoning"] = {"effort": resolved.effort}
         return payload
+
+    def _thinking_effort(self) -> str | None:
+        """Map the upstream thinking selector to this endpoint's reasoning API."""
+        mode = self.thinking_mode
+        if mode == "default":
+            return None
+        if not self.uses_official_openai_api:
+            return "none" if mode == "off" else mode
+        if not self.is_reasoning_model(self.model_name):
+            return None
+        name = self.model_name.strip().lower().rsplit("/", 1)[-1]
+        if name.startswith(("o1-mini", "o1-preview")):
+            return None
+        if self._matches_model_family(name, "gpt-5-pro"):
+            return "high"
+        if any(self._matches_model_family(name, family) for family in (
+            "gpt-5.2-pro", "gpt-5.4-pro",
+        )):
+            return "medium" if mode in {"off", "low"} else mode
+        if mode != "off":
+            return mode
+        if name.startswith("o") or any(
+            self._matches_model_family(name, family)
+            for family in ("gpt-6-astra", "gpt-6.1-sol")
+        ):
+            return "low"
+        if name == "gpt-5" or name.startswith("gpt-5-"):
+            return "minimal"
+        return "none"
 
     @classmethod
     def _build_responses_tools(

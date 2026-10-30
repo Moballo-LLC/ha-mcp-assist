@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 class GeminiProvider(OpenAICompatibleProvider):
     """Gemini's OpenAI-compatible chat transport and metadata handling."""
 
+    supports_thinking_mode = True
     provider_type = SERVER_TYPE_GEMINI
     provider_display_name = "Gemini"
     connection_fields = (ProviderConfigField(CONF_API_KEY, kind="password"),)
@@ -105,3 +106,27 @@ class GeminiProvider(OpenAICompatibleProvider):
             "⚠️ No thought_signature captured for Gemini 3 "
             "(this will cause 400 error on next turn)"
         )
+
+    def build_payload(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
+        *, stream: bool = True,
+    ) -> dict[str, Any]:
+        """Use Gemini's OpenAI-compatible thinking control when requested."""
+        payload = super().build_payload(messages, tools, stream=stream)
+        mode = self.thinking_mode
+        if mode != "default":
+            model = self.model_name.lower().removeprefix("models/")
+            if mode == "off":
+                if model.startswith("gemini-2.5-flash"):
+                    mode = "none"
+                elif model.startswith((
+                    "gemini-3-flash", "gemini-3.1-flash-lite",
+                    "gemini-3.5-flash-lite", "gemini-3.6-flash",
+                )):
+                    mode = "minimal"
+                else:
+                    mode = "low"
+            if mode == "medium" and model.startswith("gemini-3-pro"):
+                mode = "high"
+            payload["reasoning_effort"] = mode
+        return payload

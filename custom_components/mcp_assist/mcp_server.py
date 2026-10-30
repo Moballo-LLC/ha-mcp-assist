@@ -2561,6 +2561,13 @@ class MCPServer(
                             "type": "string",
                             "description": "The service action (e.g., 'turn_on', 'turn_off', 'toggle', 'set_temperature', 'create_event', 'add_item')",
                         },
+                        "entity_id": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "array", "items": {"type": "string"}},
+                            ],
+                            "description": "Entity IDs as an alternative to target. Use only one target form.",
+                        },
                         "target": {
                             "type": "object",
                             "description": "Target entities or selector IDs such as areas, floors, labels, or devices",
@@ -2610,7 +2617,7 @@ class MCPServer(
                             "additionalProperties": True,
                         },
                     },
-                    "required": ["domain", "action", "target"],
+                    "required": ["domain", "action"],
                     "additionalProperties": False,
                 },
             },
@@ -3965,9 +3972,15 @@ class MCPServer(
                 "content": [
                     {
                         "type": "text",
-                        "text": "No entities found matching the search criteria.",
+                        "text": (
+                            "No entities found matching the search criteria. "
+                            "Try fewer filters or a shorter name. Only entities exposed "
+                            "to Assist are available."
+                        ),
                     }
-                ]
+                ],
+                "entities": [],
+                "pagination": pagination,
             }
 
         # Check if this is a smart discovery result (has summary metadata)
@@ -4545,8 +4558,18 @@ class MCPServer(
         """Perform an action on Home Assistant entities with progress notifications."""
         domain = args.get("domain")
         action = args.get("action")
-        target = args.get("target", {})
+        target = args.get("target")
+        if target is None:
+            target = {}
         data = args.get("data", {})
+
+        entity_id = args.get("entity_id")
+        if entity_id not in (None, "", []):
+            if target != {}:
+                return self._build_text_tool_result(
+                    "Use either entity_id or target, not both.", is_error=True
+                )
+            target = {"entity_id": entity_id}
 
         # Validate required parameters
         if not domain:

@@ -1594,7 +1594,7 @@ async def test_default_prompt_does_not_fetch_index_unless_requested(
 
     prompt = await agent._build_system_prompt_with_context(SimpleNamespace(device_id=None))
 
-    assert "Current area:" in prompt
+    assert "Current area:" not in prompt
     assert "get_index()" in prompt
     assert "## Index" not in prompt
 
@@ -1621,7 +1621,7 @@ async def test_default_prompt_includes_current_user_and_home_location_context(
     entry = profile_entry_factory()
     agent = MCPAssistConversationEntity(hass, entry)
 
-    prompt = await agent._build_system_prompt_with_context(
+    prompt = await agent._build_turn_context(
         SimpleNamespace(device_id=None, context=SimpleNamespace(user_id="user-123"))
     )
 
@@ -1648,7 +1648,7 @@ async def test_default_prompt_omits_optional_identity_context_when_disabled(
     entry = profile_entry_factory()
     agent = MCPAssistConversationEntity(hass, entry)
 
-    prompt = await agent._build_system_prompt_with_context(
+    prompt = await agent._build_turn_context(
         SimpleNamespace(device_id=None, context=SimpleNamespace(user_id="user-123"))
     )
 

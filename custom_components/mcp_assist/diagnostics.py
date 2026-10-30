@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from . import const
-from .localization import get_language_instruction
+from .localization import async_load_localizations, get_language_instruction
 from .runtime_observation import project_request_outcomes
 
 _PROVIDERS = frozenset(
@@ -226,4 +226,5 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return support metadata using Home Assistant's diagnostics download."""
+    await async_load_localizations(hass)
     return build_assist_diagnostics(hass, entry)
