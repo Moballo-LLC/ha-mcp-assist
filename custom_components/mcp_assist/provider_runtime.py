@@ -171,7 +171,10 @@ def build_provider_auth_headers(server_type: str, api_key: str) -> dict[str, str
             "X-Title": "MCP Assist for Home Assistant",
         }
 
-    if server_type == SERVER_TYPE_HERMES:
+    if server_type in {
+        SERVER_TYPE_HERMES, SERVER_TYPE_LMSTUDIO, SERVER_TYPE_LLAMACPP,
+        SERVER_TYPE_OLLAMA, SERVER_TYPE_VLLM,
+    }:
         return (
             {"Authorization": f"Bearer {normalized_key}"}
             if normalized_key

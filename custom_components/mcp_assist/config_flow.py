@@ -441,7 +441,10 @@ def _normalize_prompt_inputs(
     if not provider_class.uses_config_prompt_fields:
         normalized[CONF_SYSTEM_PROMPT_MODE] = PROMPT_MODE_DEFAULT
         normalized[CONF_TECHNICAL_PROMPT_MODE] = PROMPT_MODE_DEFAULT
-        normalized.pop(CONF_SYSTEM_PROMPT, None)
+        if any(field.key == CONF_SYSTEM_PROMPT for field in provider_class.provider_options_fields):
+            normalized[CONF_SYSTEM_PROMPT] = str(normalized.get(CONF_SYSTEM_PROMPT) or "")
+        else:
+            normalized.pop(CONF_SYSTEM_PROMPT, None)
         normalized.pop(CONF_TECHNICAL_PROMPT, None)
         return normalized
 
@@ -2237,7 +2240,11 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                         user_input[CONF_MODEL_NAME] = (
                             provider_class.default_config_model_name
                         )
-                    user_input[CONF_SYSTEM_PROMPT] = ""
+                    if not any(
+                        field.key == CONF_SYSTEM_PROMPT
+                        for field in provider_class.provider_options_fields
+                    ):
+                        user_input[CONF_SYSTEM_PROMPT] = ""
                     user_input[CONF_TECHNICAL_PROMPT] = ""
                     user_input[CONF_SYSTEM_PROMPT_MODE] = PROMPT_MODE_DEFAULT
                     user_input[CONF_TECHNICAL_PROMPT_MODE] = PROMPT_MODE_DEFAULT

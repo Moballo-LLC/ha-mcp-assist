@@ -201,7 +201,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             SERVER_TYPE_LMSTUDIO,
             LMStudioProvider,
             "LM Studio",
-            ((CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL, "text", True),),
+            ((CONF_API_KEY, "", "password", False), (CONF_LMSTUDIO_URL, DEFAULT_LMSTUDIO_URL, "text", True)),
             (),
             DEFAULT_LMSTUDIO_URL,
             "cannot_connect",
@@ -212,7 +212,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             SERVER_TYPE_LLAMACPP,
             LlamaCppProvider,
             "llama.cpp",
-            ((CONF_LMSTUDIO_URL, DEFAULT_LLAMACPP_URL, "text", True),),
+            ((CONF_API_KEY, "", "password", False), (CONF_LMSTUDIO_URL, DEFAULT_LLAMACPP_URL, "text", True)),
             (),
             DEFAULT_LLAMACPP_URL,
             "cannot_connect",
@@ -223,7 +223,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             SERVER_TYPE_OLLAMA,
             OllamaProvider,
             "Ollama",
-            ((CONF_LMSTUDIO_URL, DEFAULT_OLLAMA_URL, "text", True),),
+            ((CONF_LMSTUDIO_URL, DEFAULT_OLLAMA_URL, "text", True), (CONF_API_KEY, "", "password", False)),
             (
                 (CONF_OLLAMA_NUM_CTX, DEFAULT_OLLAMA_NUM_CTX, "integer", False),
                 (CONF_OLLAMA_KEEP_ALIVE, DEFAULT_OLLAMA_KEEP_ALIVE, "text", False),
@@ -307,7 +307,10 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 (CONF_OPENCLAW_USE_SSL, DEFAULT_OPENCLAW_USE_SSL, "boolean", True),
             ),
             (
+                ("openclaw_agent_id", "main", "text", False),
+                ("openclaw_session_mode", "fixed", "select", False),
                 (CONF_OPENCLAW_SESSION_KEY, DEFAULT_OPENCLAW_SESSION_KEY, "text", False),
+                ("system_prompt", "", "text", False),
             ),
             None,
             None,
@@ -339,7 +342,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
             SERVER_TYPE_VLLM,
             VLLMProvider,
             "vLLM",
-            ((CONF_LMSTUDIO_URL, DEFAULT_VLLM_URL, "text", True),),
+            ((CONF_API_KEY, "", "password", False), (CONF_LMSTUDIO_URL, DEFAULT_VLLM_URL, "text", True)),
             (),
             DEFAULT_VLLM_URL,
             "cannot_connect",
@@ -675,7 +678,8 @@ async def test_ollama_provider_fetches_models_from_native_tags_endpoint(
         async def __aexit__(self, *args: object) -> None:
             return None
 
-        def get(self, url: str) -> TagsResponse:
+        def get(self, url: str, *, headers=None) -> TagsResponse:
+            assert headers == {"Authorization": "Bearer test-local-key"}
             calls.append(url)
             return TagsResponse()
 
@@ -684,7 +688,7 @@ async def test_ollama_provider_fetches_models_from_native_tags_endpoint(
 
     models = await OllamaProvider.fetch_models(
         None,
-        {CONF_LMSTUDIO_URL: "http://ollama.example.invalid"},
+        {CONF_LMSTUDIO_URL: "http://ollama.example.invalid", CONF_API_KEY: "test-local-key"},
     )
 
     assert calls == ["http://ollama.example.invalid/api/tags"]

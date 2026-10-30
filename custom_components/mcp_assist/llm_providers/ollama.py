@@ -10,6 +10,7 @@ from typing import Any
 import aiohttp
 
 from ..const import (
+    CONF_API_KEY,
     CONF_LMSTUDIO_URL,
     CONF_OLLAMA_KEEP_ALIVE,
     CONF_OLLAMA_NUM_CTX,
@@ -33,11 +34,13 @@ class OllamaProvider(LLMProvider):
     """Ollama native chat transport."""
 
     transport_name = "ollama_chat"
+    supports_thinking_mode = True
     provider_type = SERVER_TYPE_OLLAMA
     provider_display_name = "Ollama"
     default_base_url = DEFAULT_OLLAMA_URL
     connection_fields = (
         ProviderConfigField(CONF_LMSTUDIO_URL, default=DEFAULT_OLLAMA_URL),
+        ProviderConfigField(CONF_API_KEY, default="", required=False, kind="password"),
     )
     provider_options_fields = (
         ProviderConfigField(
@@ -82,7 +85,7 @@ class OllamaProvider(LLMProvider):
 
             timeout = aiohttp.ClientTimeout(total=cls.model_fetch_timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(models_url) as resp:
+                async with session.get(models_url, headers=cls.model_request_headers(values)) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         _LOGGER.warning(
@@ -163,6 +166,11 @@ class OllamaProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
 
+        if self.thinking_mode != "default":
+            if "gpt-oss" in self.model_name.lower():
+                payload["think"] = "low" if self.thinking_mode == "off" else self.thinking_mode
+            else:
+                payload["think"] = self.thinking_mode != "off"
         return payload
 
     def parse_http_message(self, data: dict[str, Any]) -> dict[str, Any]:

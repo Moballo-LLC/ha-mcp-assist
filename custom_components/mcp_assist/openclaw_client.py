@@ -34,6 +34,7 @@ DEVICE_SCOPES = ["operator.read", "operator.write"]
 CHALLENGE_TIMEOUT = 15.0
 HANDSHAKE_TIMEOUT = 10.0
 KEEPALIVE_INTERVAL = 30
+FINAL_RESPONSE_GRACE = 2.0
 RECONNECT_DELAY = 5
 
 # Storage
@@ -194,6 +195,7 @@ class OpenClawClient:
         self._keepalive_task: Optional[asyncio.Task] = None
         self._receive_task: Optional[asyncio.Task] = None
         self._pending_requests: Dict[str, asyncio.Future] = {}
+        self._final_responses: Dict[str, asyncio.Future] = {}
         self._agent_runs: Dict[str, "_AgentRun"] = {}
         # Agent events that arrived before send_message registered the run.
         self._early_agent_events: Dict[str, list] = {}
@@ -448,10 +450,11 @@ class OpenClawClient:
         that already completed are left untouched so an ok result is not
         overwritten with an error.
         """
-        for future in self._pending_requests.values():
-            if not future.done():
-                future.set_exception(OpenClawConnectionError(reason))
-        self._pending_requests.clear()
+        for futures in (self._pending_requests, self._final_responses):
+            for future in futures.values():
+                if not future.done():
+                    future.set_exception(OpenClawConnectionError(reason))
+            futures.clear()
 
         for run in self._agent_runs.values():
             if not run.complete_event.is_set():
@@ -470,22 +473,12 @@ class OpenClawClient:
                 pass
             self._ws = None
 
-    async def send_message(self, text: str, session_key: str) -> str:
-        """Send a message to the OpenClaw agent and return the response.
-
-        Args:
-            text: User message text
-            session_key: OpenClaw session key (e.g., "main")
-
-        Returns:
-            The agent's response text
-
-        Raises:
-            OpenClawConnectionError: Not connected
-            OpenClawTimeoutError: Response timed out
-        """
+    async def send_message(
+        self, text: str, session_key: str, *, agent_id: str | None = None,
+        extra_system_prompt: str | None = None, thinking: str | None = None,
+    ) -> str:
+        """Send a run, using its final RPC reply or completed streamed output."""
         if not self.is_connected:
-            _LOGGER.info("OpenClaw not connected, attempting reconnect...")
             try:
                 await self.connect()
             except Exception as err:
@@ -494,77 +487,84 @@ class OpenClawClient:
                 ) from err
 
         request_id = str(uuid.uuid4())
-        idempotency_key = str(uuid.uuid4())
+        params = {
+            "message": text, "sessionKey": session_key,
+            "idempotencyKey": str(uuid.uuid4()),
+        }
+        if agent_id:
+            params["agentId"] = agent_id
+        if extra_system_prompt:
+            params["extraSystemPrompt"] = extra_system_prompt
+        if thinking:
+            params["thinking"] = thinking
 
-        # Register the response future before sending so a fast acknowledgment
-        # processed during the send await cannot be dropped.
-        future = asyncio.get_running_loop().create_future()
-        self._pending_requests[request_id] = future
-
+        loop = asyncio.get_running_loop()
+        ack = loop.create_future()
+        final = loop.create_future()
+        self._pending_requests[request_id] = ack
+        self._final_responses[request_id] = final
+        run_id = None
+        complete_task = None
         try:
-            await self._ws.send(json.dumps({
-                "type": "req",
-                "id": request_id,
-                "method": "agent",
-                "params": {
-                    "message": text,
-                    "sessionKey": session_key,
-                    "idempotencyKey": idempotency_key,
-                },
-            }))
-        except Exception as err:
-            self._pending_requests.pop(request_id, None)
-            raise OpenClawConnectionError(f"Failed to send agent request: {err}") from err
+            try:
+                await self._ws.send(json.dumps({
+                    "type": "req", "id": request_id, "method": "agent", "params": params,
+                }))
+            except Exception as err:
+                raise OpenClawConnectionError(f"Failed to send agent request: {err}") from err
+            try:
+                response = await asyncio.wait_for(ack, timeout=10.0)
+            except asyncio.TimeoutError as err:
+                raise OpenClawTimeoutError("Timeout waiting for agent run acknowledgment") from err
+            if not response.get("ok", True):
+                self._read_final_response(response)
+            payload = response.get("payload") or {}
+            run_id = payload.get("runId")
+            if not run_id:
+                raise OpenClawError("No runId in agent response")
+            run = _AgentRun(run_id)
+            self._agent_runs[run_id] = run
+            for event in self._early_agent_events.pop(run_id, []):
+                self._apply_agent_event(run, event)
 
-        _LOGGER.debug("Sent agent request: %s", request_id[:8])
-
-        # Wait for the initial response (contains runId)
-        try:
-            resp = await asyncio.wait_for(future, timeout=10.0)
-        except asyncio.TimeoutError:
-            self._pending_requests.pop(request_id, None)
-            raise OpenClawTimeoutError("Timeout waiting for agent run acknowledgment")
-
-        if not resp.get("ok", True):
-            error = resp.get("error", {})
-            raise OpenClawError(f"Agent request failed: {error.get('message', error)}")
-
-        run_id = resp.get("payload", {}).get("runId")
-        if not run_id:
-            raise OpenClawError("No runId in agent response")
-
-        # Track this run, replaying any events that beat the registration.
-        run = _AgentRun(run_id)
-        self._agent_runs[run_id] = run
-        for payload in self._early_agent_events.pop(run_id, []):
-            self._apply_agent_event(run, payload)
-
-        # If the socket dropped between the ack resolving and now, no receive
-        # loop is left to complete this run — fail fast instead of waiting the
-        # full timeout. A completion that already arrived was replayed above,
-        # so only bail when the run is still pending.
-        if not run.complete_event.is_set() and not self.is_connected:
-            self._agent_runs.pop(run_id, None)
-            raise OpenClawConnectionError("Connection to OpenClaw Gateway lost")
-
-        try:
-            await asyncio.wait_for(run.complete_event.wait(), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            raise OpenClawTimeoutError(
-                f"OpenClaw agent timed out after {self._timeout}s"
+            if not run.complete_event.is_set() and not final.done() and not self.is_connected:
+                raise OpenClawConnectionError("Connection to OpenClaw Gateway lost")
+            complete_task = asyncio.create_task(run.complete_event.wait())
+            done, _ = await asyncio.wait(
+                {final, complete_task}, timeout=self._timeout,
+                return_when=asyncio.FIRST_COMPLETED,
             )
+            if not done:
+                raise OpenClawTimeoutError(f"OpenClaw agent timed out after {self._timeout}s")
+            if not final.done() and run.status != "error" and payload.get("status") == "accepted":
+                await asyncio.wait({final}, timeout=FINAL_RESPONSE_GRACE)
+            if final.done():
+                try:
+                    final_response = final.result()
+                except OpenClawConnectionError:
+                    if run.status != "ok":
+                        raise
+                else:
+                    final_text = self._read_final_response(final_response)
+                    if final_text is not None:
+                        return final_text
+            if run.status == "error":
+                raise OpenClawError(f"Agent error: {run.error or 'unknown error'}")
+            return run.text or run.legacy_output or run.summary or ""
         finally:
-            self._agent_runs.pop(run_id, None)
-
-        _LOGGER.debug(
-            "Run complete: status=%s summary_len=%s full_text_len=%s",
-            run.status, len(run.summary or ""), len(run.full_text),
-        )
-
-        if run.status == "error":
-            raise OpenClawError(f"Agent error: {run.summary or 'unknown error'}")
-
-        return run.summary or run.full_text
+            if complete_task is not None:
+                complete_task.cancel()
+                await asyncio.gather(complete_task, return_exceptions=True)
+            if run_id:
+                self._agent_runs.pop(run_id, None)
+                self._early_agent_events.pop(run_id, None)
+            self._pending_requests.pop(request_id, None)
+            self._final_responses.pop(request_id, None)
+            for future in (ack, final):
+                if not future.done():
+                    future.cancel()
+                elif not future.cancelled():
+                    future.exception()
 
     async def _receive_loop(self, ws) -> None:
         """Background task to receive and dispatch WebSocket messages."""
@@ -600,11 +600,21 @@ class OpenClawClient:
         msg_type = msg.get("type")
 
         if msg_type == "res":
-            # Response to a pending request
             req_id = msg.get("id")
+            payload = msg.get("payload")
+            payload = payload if isinstance(payload, dict) else {}
             future = self._pending_requests.pop(req_id, None)
-            if future and not future.done():
+            if future is not None and not future.done():
                 future.set_result(msg)
+                # Older gateways omit the accepted status in their acknowledgment.
+                if msg.get("ok", True) and (
+                    payload.get("status") == "accepted"
+                    or (payload.get("runId") and not payload.get("status") and "result" not in payload)
+                ):
+                    return
+            final = self._final_responses.pop(req_id, None)
+            if final is not None and not final.done():
+                final.set_result(msg)
 
         elif msg_type == "event":
             event_name = msg.get("event")
@@ -620,7 +630,7 @@ class OpenClawClient:
 
     # Bounds for events buffered before their run is registered.
     _MAX_EARLY_EVENT_RUNS = 8
-    _MAX_EARLY_EVENTS_PER_RUN = 32
+    _MAX_EARLY_EVENTS_PER_RUN = 512
 
     def _handle_agent_event(self, payload: Dict[str, Any]) -> None:
         """Handle an agent event (streaming output or completion)."""
@@ -648,29 +658,77 @@ class OpenClawClient:
 
     def _apply_agent_event(self, run: "_AgentRun", payload: Dict[str, Any]) -> None:
         """Apply a single agent event to its run."""
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        stream = payload.get("stream")
         _LOGGER.debug(
-            "Agent event: run=%s keys=%s output_len=%s status=%s phase=%s",
+            "Agent event: run=%s stream=%s keys=%s data_keys=%s status=%s phase=%s",
             run.run_id[:8],
+            stream,
             list(payload.keys()),
-            len(payload.get("output", "")) if payload.get("output") else 0,
+            list(data.keys()),
             payload.get("status"),
-            payload.get("data", {}).get("phase"),
+            data.get("phase"),
         )
 
-        # Accumulate output (gateway sends cumulative text)
+        # Older gateways sent the cumulative reply as a top-level "output"
         output = payload.get("output")
-        if output:
-            run.update_text(output)
-        elif "data" in payload and "text" in payload.get("data", {}):
-            run.update_text(payload["data"]["text"])
+        if isinstance(output, str) and output:
+            run.legacy_output = output
+
+        # Assistant text: "delta" appends, "text" is a snapshot of the item
+        if stream == "assistant" or (stream is None and "text" in data):
+            run.apply_assistant_text(data)
 
         # Check for completion
         status = payload.get("status")
-        phase = payload.get("data", {}).get("phase", "")
+        phase = data.get("phase", "")
 
-        if status in ("ok", "error") or phase in ("end", "complete"):
-            summary = payload.get("summary")
-            run.set_complete(status or "ok", summary)
+        if status == "error" or phase == "error":
+            run.set_complete(
+                "error",
+                data.get("errorMessage")
+                or data.get("error")
+                or payload.get("summary"),
+            )
+        elif status == "ok" or phase in ("end", "complete"):
+            run.set_complete("ok", payload.get("summary") if stream is None else None)
+
+    @staticmethod
+    def _read_final_response(msg: Dict[str, Any]) -> Optional[str]:
+        """Return the reply text from the agent RPC's final response.
+
+        Raises for failed runs. Returns None when the response carries no
+        reply text, so the streamed text is used instead.
+        """
+        if not msg.get("ok", True):
+            error = msg.get("error", {})
+            message = error.get("message", error) if isinstance(error, dict) else error
+            raise OpenClawError(f"Agent request failed: {message}")
+
+        payload = msg.get("payload") if isinstance(msg.get("payload"), dict) else {}
+        status = payload.get("status")
+        if status == "timeout":
+            raise OpenClawTimeoutError("OpenClaw agent run timed out")
+        if status == "error":
+            reason = payload.get("stopReason") or payload.get("summary") or "unknown error"
+            raise OpenClawError(f"Agent error: {reason}")
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        payloads = result.get("payloads")
+        if isinstance(payloads, list):
+            texts = [
+                item["text"]
+                for item in payloads
+                if isinstance(item, dict) and isinstance(item.get("text"), str)
+            ]
+            if texts:
+                return "\n\n".join(text for text in texts if text)
+
+        meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
+        visible = meta.get("finalAssistantVisibleText")
+        if isinstance(visible, str):
+            return visible
+        return None
 
     async def _keepalive_loop(self) -> None:
         """Background task to send keepalive pings."""
@@ -693,18 +751,56 @@ class _AgentRun:
 
     def __init__(self, run_id: str) -> None:
         self.run_id = run_id
-        self.full_text = ""
+        # Assistant text per item, in order. Events without an itemId apply
+        # to the most recent item.
+        self.items: Dict[str, str] = {}
+        self._last_item: Optional[str] = None
+        self.legacy_output = ""
+        self.error: Optional[str] = None
         self.summary: Optional[str] = None
         self.status: Optional[str] = None
         self.complete_event = asyncio.Event()
 
-    def update_text(self, cumulative_text: str) -> None:
-        """Update with cumulative text from the gateway."""
-        self.full_text = cumulative_text
+    @property
+    def text(self) -> str:
+        """The reply so far: every assistant item, separated by a blank line."""
+        return "\n\n".join(
+            item.strip() for item in self.items.values() if item.strip()
+        )
 
-    def set_complete(self, status: str, summary: Optional[str] = None) -> None:
+    def apply_assistant_text(self, data: Dict[str, Any]) -> None:
+        """Merge one assistant text event (OpenClaw protocol 4).
+
+        "delta" holds newly appended text. "text", when present, is an
+        authoritative snapshot of the item that already includes the delta.
+        "replace" swaps the item's text, even for an empty snapshot.
+        """
+        snapshot = data.get("text") if isinstance(data.get("text"), str) else None
+        delta = data.get("delta") if isinstance(data.get("delta"), str) else None
+        if snapshot is None and delta is None:
+            return
+
+        item_id = data.get("itemId") if isinstance(data.get("itemId"), str) else ""
+        key = item_id or (self._last_item if self._last_item is not None else "")
+        current = self.items.get(key, "")
+
+        if snapshot is not None:
+            if item_id or data.get("replace") is True or snapshot.startswith(current):
+                updated = snapshot
+            else:
+                # Unkeyed, non-prefix snapshot: treat as new text, not a rewrite
+                updated = current + (delta if delta is not None else snapshot)
+        else:
+            updated = current + delta
+
+        self.items[key] = updated
+        self._last_item = key
+
+    def set_complete(self, status: str, error: Optional[str] = None) -> None:
         """Mark the run as complete."""
         self.status = status
-        if summary:
-            self.summary = summary
+        if error:
+            self.summary = str(error)
+            if status == "error":
+                self.error = str(error)
         self.complete_event.set()

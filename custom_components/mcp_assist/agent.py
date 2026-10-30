@@ -82,8 +82,15 @@ from .hermes_client import (
     HermesConnectionError,
     HermesSessionError,
 )
-from .localization import get_language_instruction
+from .localization import get_language_instruction, get_spoken_symbols
 from .const import (
+    CONF_OPENCLAW_AGENT_ID,
+    CONF_OPENCLAW_SESSION_MODE,
+    DEFAULT_OPENCLAW_AGENT_ID,
+    OPENCLAW_SESSION_MODE_FIXED,
+    OPENCLAW_SESSION_MODE_PER_CONVERSATION,
+    CONF_THINKING_MODE,
+    DEFAULT_THINKING_MODE,
     DOMAIN,
     CONF_PROFILE_NAME,
     CONF_MODEL_NAME,
@@ -1619,6 +1626,17 @@ class MCPAssistConversationEntity(ConversationEntity):
             self.entry.data.get(CONF_OPENCLAW_SESSION_KEY, DEFAULT_OPENCLAW_SESSION_KEY),
         )
 
+    def _openclaw_session_target(self, conversation_id: str) -> tuple[str, str | None]:
+        """Resolve upstream OpenClaw agent routing without changing legacy sessions."""
+        agent_id = str(self._get_profile_setting(
+            CONF_OPENCLAW_AGENT_ID, DEFAULT_OPENCLAW_AGENT_ID
+        ) or "").strip() or DEFAULT_OPENCLAW_AGENT_ID
+        mode = self._get_profile_setting(CONF_OPENCLAW_SESSION_MODE, OPENCLAW_SESSION_MODE_FIXED)
+        if mode == OPENCLAW_SESSION_MODE_PER_CONVERSATION:
+            return f"agent:{agent_id}:ha-{conversation_id.lower()}", agent_id
+        session_key = str(self.session_key or "").strip() or DEFAULT_OPENCLAW_SESSION_KEY
+        return session_key, None if session_key.lower().startswith("agent:") else agent_id
+
     async def async_added_to_hass(self) -> None:
         """When entity is added to Home Assistant."""
         await super().async_added_to_hass()
@@ -2399,7 +2417,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             )
 
             # Build conversation messages
-            messages = self._build_messages(system_prompt, user_input.text, history)
+            turn_context = await self._build_turn_context(user_input)
+            user_text = f"{turn_context}\n\n{user_input.text}" if turn_context else user_input.text
+            messages = self._build_messages(system_prompt, user_text, history)
             if metrics_enabled:
                 _LOGGER.debug(
                     (
@@ -2500,9 +2520,23 @@ class MCPAssistConversationEntity(ConversationEntity):
         if not client:
             raise RuntimeError("OpenClaw client not available — check integration setup")
 
+        session_key, agent_id = self._openclaw_session_target(conversation_id)
+        prompt = str(self._get_profile_setting(CONF_SYSTEM_PROMPT, "") or "").strip()
+        prompt_parts = [prompt] if prompt else []
+        current_area = await self._get_current_area(user_input)
+        message = user_input.text
+        if current_area and current_area != "Unknown":
+            prompt_parts.append(f"Speaking from: {current_area}")
+            message = f"[Room: {current_area}] {message}"
+
         _LOGGER.info("📡 Sending to OpenClaw gateway")
         with observe_request(self, "provider") as outcome:
-            response_text = await client.send_message(user_input.text, self.session_key)
+            thinking = self._get_profile_setting(CONF_THINKING_MODE, DEFAULT_THINKING_MODE)
+            response_text = await client.send_message(
+                message, session_key, agent_id=agent_id,
+                extra_system_prompt="\n\n".join(prompt_parts),
+                thinking=thinking if thinking in ("off", "low", "medium", "high") else None,
+            )
             outcome.complete(response_text)
         _LOGGER.info(
             "✅ OpenClaw response received, length: %d", len(response_text)
@@ -3003,7 +3037,6 @@ class MCPAssistConversationEntity(ConversationEntity):
         current_area = "Unknown"
         if (
             self._prompt_references_variable(combined_template, "current_area")
-            or self.music_assistant_support_enabled
         ) and user_input is not None:
             current_area = await self._get_current_area(user_input)
         variables["current_area"] = current_area
@@ -3058,6 +3091,27 @@ class MCPAssistConversationEntity(ConversationEntity):
             variables["index"] = "{}"
 
         return variables, current_area
+
+    async def _build_turn_context(self, user_input: ConversationInput) -> str:
+        """Keep volatile default context beside the current message for prompt caching."""
+        technical_prompt = self._resolve_prompt_setting(
+            prompt_key=CONF_TECHNICAL_PROMPT,
+            mode_key=CONF_TECHNICAL_PROMPT_MODE,
+            default_prompt=DEFAULT_TECHNICAL_PROMPT,
+        )
+        if technical_prompt != DEFAULT_TECHNICAL_PROMPT:
+            return ""
+        variables, _ = await self._build_prompt_template_variables(
+            user_input,
+            "{{ current_user_context }} {{ home_location_context }} {{ current_area }}",
+        )
+        return "\n".join(part for part in (
+            variables["current_user_context"],
+            f"Current area: {variables['current_area']}",
+            variables["home_location_context"],
+            f"Current time: {variables['time']}",
+            f"Current date: {variables['date']}",
+        ) if part)
 
     async def _build_system_prompt_with_context(
         self, user_input: ConversationInput
@@ -3966,6 +4020,22 @@ class MCPAssistConversationEntity(ConversationEntity):
             all_matches.extend(matches)
             cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.DOTALL | re.IGNORECASE)
 
+        # Unpaired tags left after removing complete blocks:
+        # - a closing tag with no opening one (chat templates that open the
+        #   block in the prompt): everything before it is reasoning
+        # - an opening tag that is never closed (output cut off or the model
+        #   ran on): everything after it is reasoning
+        for close_tag in (r"</think>", r"<\|/thought\|>"):
+            match = re.search(rf"^(.*){close_tag}", cleaned_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                all_matches.append(match.group(1))
+                cleaned_text = cleaned_text[match.end():]
+        for open_tag in (r"<think>", r"<\|thought\|>"):
+            match = re.search(rf"{open_tag}(.*)$", cleaned_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                all_matches.append(match.group(1))
+                cleaned_text = cleaned_text[:match.start()]
+
         if not all_matches:
             return text, ""
 
@@ -4042,25 +4112,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)  # # Header → Header
 
         # 3. Convert symbols to words
-        SYMBOL_MAP = {
-            "°C": " degrees celsius",
-            "°F": " degrees fahrenheit",
-            "°": " degrees",
-            "%": " percent",
-            "€": " euros",
-            "£": " pounds",
-            "$": " dollars",
-            "&": " and",
-            "+": " plus",
-            "=": " equals",
-            "<": " less than",
-            ">": " greater than",
-            "@": " at",
-            "#": " number",
-            "×": " times",
-            "÷": " divided by",
-        }
-        for symbol, word in SYMBOL_MAP.items():
+        for symbol, word in get_spoken_symbols(self.hass.config.language):
             text = text.replace(symbol, word)
 
         # 4. Remove URLs

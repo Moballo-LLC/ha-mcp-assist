@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Luontirajapinta",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Ajattelu",
+          "openclaw_agent_id": "Agentin ID",
+          "openclaw_session_mode": "Istuntotila"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Luontirajapinta",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Ajattelu",
+              "openclaw_agent_id": "Agentin ID",
+              "openclaw_session_mode": "Istuntotila",
+              "system_prompt": "Jarjestelmaohjeet"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "OpenClaw-agentti, joka vastaa tämän profiilin pyyntöihin. Sen on vastattava OpenClawissa määritettyä agenttia. Oletus on 'main'.",
+              "openclaw_session_mode": "'Per conversation' antaa jokaiselle Home Assistant -keskustelulle oman OpenClaw-istunnon, ja jatkokysymykset pysyvät siinä. 'Fixed' lähettää kaikki pyynnöt yhteen Istuntoavain-kentässä määritettyyn istuntoon.",
+              "system_prompt": "Lähetetään OpenClawille jokaisen pyynnön mukana lisäjärjestelmäkehotteena, esimerkiksi persoonan määrittämiseksi. Jätä tyhjäksi, jos haluat käyttää agentin omia kehotteita. Puhesatelliitin huone lisätään automaattisesti."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Estää tätä profiilia käyttämästä verkkohakua ja URL-lukutyökaluja, vaikka ne olisivat käytössä jaetussa MCP-palvelimessa."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "OpenClaw-agentti, joka vastaa tämän profiilin pyyntöihin. Sen on vastattava OpenClawissa määritettyä agenttia. Oletus on 'main'.",
+          "openclaw_session_mode": "'Per conversation' antaa jokaiselle Home Assistant -keskustelulle oman OpenClaw-istunnon, ja jatkokysymykset pysyvät siinä. 'Fixed' lähettää kaikki pyynnöt yhteen Istuntoavain-kentässä määritettyyn istuntoon."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Luontirajapinta",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Ajattelu",
+          "openclaw_agent_id": "Agentin ID",
+          "openclaw_session_mode": "Istuntotila"
         },
         "data_description": {
           "model_name": "Malli LLM, jota tämän profiilin tulisi käyttää.",
           "system_prompt": "Esitäytetty voimassa olevalla järjestelmäkehotteella. Muokkaa tätä profiilia muokkaamalla sitä. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
           "technical_prompt": "Esitäytetty voimassa olevilla teknisillä ohjeilla. Muokkaa niitä muokataksesi tätä profiilia. Jos se jätetään ennalleen, integrointi jatkaa sisäänrakennetun koodin kehotteen käyttöä.",
           "context_mode": "Standard lähettää koko profiilityökalukontekstin. Light pitää pienemmän historiaikkunan ja mainostaa Home Assistant-ydintyökaluja pienille paikallisille malleille.",
-          "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille."
+          "hermes_session_key": "Pysyvä avain, joka rajaa Hermesin pitkäaikaismuistin tälle profiilille.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "OpenClaw-agentti, joka vastaa tämän profiilin pyyntöihin. Sen on vastattava OpenClawissa määritettyä agenttia. Oletus on 'main'.",
+          "openclaw_session_mode": "'Per conversation' antaa jokaiselle Home Assistant -keskustelulle oman OpenClaw-istunnon, ja jatkokysymykset pysyvät siinä. 'Fixed' lähettää kaikki pyynnöt yhteen Istuntoavain-kentässä määritettyyn istuntoon."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Luontirajapinta",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Ajattelu",
+              "openclaw_agent_id": "Agentin ID",
+              "openclaw_session_mode": "Istuntotila",
+              "system_prompt": "Jarjestelmaohjeet"
             },
             "data_description": {
               "ollama_keep_alive": "How long Ollama should keep the selected model loaded in memory.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automaattinen käyttää Responses-rajapintaa OpenAI:n virallisessa päätepisteessä ja Chat Completions -rajapintaa mukautetuissa päätepisteissä. Valitse rajapinta erikseen vain, kun päätepiste tukee sitä.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "OpenClaw-agentti, joka vastaa tämän profiilin pyyntöihin. Sen on vastattava OpenClawissa määritettyä agenttia. Oletus on 'main'.",
+              "openclaw_session_mode": "'Per conversation' antaa jokaiselle Home Assistant -keskustelulle oman OpenClaw-istunnon, ja jatkokysymykset pysyvät siinä. 'Fixed' lähettää kaikki pyynnöt yhteen Istuntoavain-kentässä määritettyyn istuntoon.",
+              "system_prompt": "Lähetetään OpenClawille jokaisen pyynnön mukana lisäjärjestelmäkehotteena, esimerkiksi persoonan määrittämiseksi. Jätä tyhjäksi, jos haluat käyttää agentin omia kehotteita. Puhesatelliitin huone lisätään automaattisesti."
             }
           },
           "advanced_settings": {
@@ -759,6 +789,21 @@
         "auto": "Automatic",
         "images": "Images API",
         "responses": "Responses API"
+      }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Palvelimen oletus",
+        "off": "Pois",
+        "low": "Matala",
+        "medium": "Keskitaso",
+        "high": "Korkea"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
       }
     }
   },

@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Oluşturma API'si",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Düşünme",
+          "openclaw_agent_id": "Ajan ID'si",
+          "openclaw_session_mode": "Oturum Modu"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Oluşturma API'si",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Düşünme",
+              "openclaw_agent_id": "Ajan ID'si",
+              "openclaw_session_mode": "Oturum Modu",
+              "system_prompt": "Sistem Yonergeleri"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+              "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir.",
+              "system_prompt": "Her istekle birlikte OpenClaw'a ek sistem istemi olarak gönderilir, örneğin bir kişilik belirlemek için. Ajanın kendi istemlerini kullanmak için boş bırakın. Sesli uydunun odası otomatik olarak eklenir."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Bu profilin, paylaşılan MCP sunucusunda etkinleştirilmiş olsalar bile web aramasını ve URL okuma araçlarını kullanmasını engeller."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+          "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "Oluşturma API'si",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Düşünme",
+          "openclaw_agent_id": "Ajan ID'si",
+          "openclaw_session_mode": "Oturum Modu"
         },
         "data_description": {
           "model_name": "Bu profilin kullanması gereken LLM modeli.",
           "system_prompt": "Geçerli etkin sistem istemiyle önceden doldurulmuştur. Bu profili özelleştirmek için düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
           "technical_prompt": "Geçerli geçerli teknik talimatlarla önceden doldurulmuştur. Bu profili özelleştirmek için bunları düzenleyin. Değişmeden bırakılırsa entegrasyon, koddaki yerleşik istemi kullanmaya devam eder.",
           "context_mode": "Standard, tam profil aracı içeriğini gönderir. Light, daha küçük bir geçmiş penceresi tutar ve küçük yerel modeller için temel Home Assistant araçlarının tanıtımını yapar.",
-          "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar."
+          "hermes_session_key": "Bu profil için Hermes uzun süreli belleğini sınırlayan sabit anahtar.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+          "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "Oluşturma API'si",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Düşünme",
+              "openclaw_agent_id": "Ajan ID'si",
+              "openclaw_session_mode": "Oturum Modu",
+              "system_prompt": "Sistem Yonergeleri"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama'in seçilen modeli bellekte ne kadar süreyle yüklü tutması gerektiği.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Otomatik, resmi OpenAI uç noktası için Responses'ı ve özel uç noktalar için Chat Completions'ı kullanır. Bir API'yi yalnızca uç nokta destekliyorsa açıkça seçin.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "Bu profilin isteklerini yanıtlayan OpenClaw ajanı. OpenClaw'da yapılandırılmış bir ajanla eşleşmelidir. Varsayılan 'main' değeridir.",
+              "openclaw_session_mode": "'Per conversation', Home Assistant'taki her konuşmaya kendi OpenClaw oturumunu verir ve takip soruları o oturumda kalır. 'Fixed', tüm istekleri Oturum Anahtarı'nda belirlenen tek oturuma gönderir.",
+              "system_prompt": "Her istekle birlikte OpenClaw'a ek sistem istemi olarak gönderilir, örneğin bir kişilik belirlemek için. Ajanın kendi istemlerini kullanmak için boş bırakın. Sesli uydunun odası otomatik olarak eklenir."
             }
           },
           "advanced_settings": {
@@ -759,6 +789,21 @@
         "auto": "Automatic",
         "images": "Images API",
         "responses": "Responses API"
+      }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Sunucu varsayılanı",
+        "off": "Kapalı",
+        "low": "Düşük",
+        "medium": "Orta",
+        "high": "Yüksek"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
       }
     }
   },

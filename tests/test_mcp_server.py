@@ -4907,3 +4907,41 @@ async def test_run_automation_blocked_when_not_exposed(
 
     assert "not exposed" in result["content"][0]["text"]
     async_call_mock.assert_not_awaited()
+
+
+@pytest.mark.parametrize("exposed", [True, False])
+async def test_flat_action_target_keeps_exposure_checks(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, exposed
+):
+    """The shorthand must use the same target resolution as nested entity IDs."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("light.example_lamp", "on")
+    monkeypatch.setattr(mcp_server_module, "async_should_expose", lambda *args: exposed)
+    calls = []
+
+    async def turn_on(call):
+        calls.append(call.data)
+
+    hass.services.async_register("light", "turn_on", turn_on)
+    result = await server.tool_perform_action({
+        "domain": "light", "action": "turn_on", "entity_id": "light.example_lamp",
+    })
+    if exposed:
+        assert calls == [{"entity_id": ["light.example_lamp"]}]
+    else:
+        assert calls == []
+        assert "expos" in str(result).lower()
+
+
+async def test_conflicting_flat_and_nested_targets_are_rejected(
+    hass, profile_entry_factory, system_entry_factory
+):
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    result = await server.tool_perform_action({
+        "domain": "light", "action": "turn_on", "entity_id": "light.example_lamp",
+        "target": {"entity_id": "light.other_lamp"},
+    })
+    assert result["isError"] is True
+    assert "not both" in result["content"][0]["text"]

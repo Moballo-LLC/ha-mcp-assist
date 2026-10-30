@@ -31,6 +31,16 @@ tool result. For lights, legacy `color_temp` values are migrated to
 `color_temp_kelvin`: values from 100 through 1000 are treated as mireds, while
 larger values are treated as Kelvin supplied under the old key.
 
+For a direct entity target, `perform_action` also accepts a top-level `entity_id`
+(a string or list), for example `{"domain":"light","action":"turn_on",
+"entity_id":"light.example_lamp"}`. Use either this shorthand or `target` in
+one call. Both use the same domain and Assist exposure checks.
+
+`discover_entities` combines area and name filters, treats `domain: "all"` or
+`domain: "*"` as no domain filter, and matches aggregate words such as "all"
+only as whole words. Empty results include guidance to simplify filters or
+check Assist exposure; they never reveal hidden entities.
+
 ## Device Tools
 
 Device tools help when the user refers to a physical device instead of a single

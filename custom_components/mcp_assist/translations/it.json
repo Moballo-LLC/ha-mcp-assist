@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API di generazione",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Ragionamento",
+          "openclaw_agent_id": "ID agente",
+          "openclaw_session_mode": "Modalità sessione"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API di generazione",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Ragionamento",
+              "openclaw_agent_id": "ID agente",
+              "openclaw_session_mode": "Modalità sessione",
+              "system_prompt": "Istruzioni di sistema"
             },
             "data_description": {
               "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatico usa Responses per l'endpoint OpenAI ufficiale e Chat Completions per gli endpoint personalizzati. Scegli esplicitamente un'API solo quando l'endpoint la supporta.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "L'agente OpenClaw che risponde alle richieste di questo profilo. Deve corrispondere a un agente configurato in OpenClaw. Il valore predefinito è 'main'.",
+              "openclaw_session_mode": "'Per conversation' assegna a ogni conversazione di Home Assistant una propria sessione OpenClaw, in cui restano le domande successive. 'Fixed' invia tutte le richieste all'unica sessione indicata in Chiave di sessione.",
+              "system_prompt": "Inviato a OpenClaw con ogni richiesta come istruzione di sistema aggiuntiva, ad esempio per definire un personaggio. Lascia vuoto per usare le istruzioni proprie dell'agente. La stanza del satellite vocale viene aggiunta automaticamente."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "Impedisce a questo profilo di utilizzare la ricerca Web e gli strumenti di lettura URL, anche se sono abilitati sul server MCP condiviso."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "L'agente OpenClaw che risponde alle richieste di questo profilo. Deve corrispondere a un agente configurato in OpenClaw. Il valore predefinito è 'main'.",
+          "openclaw_session_mode": "'Per conversation' assegna a ogni conversazione di Home Assistant una propria sessione OpenClaw, in cui restano le domande successive. 'Fixed' invia tutte le richieste all'unica sessione indicata in Chiave di sessione."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "API di generazione",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "Ragionamento",
+          "openclaw_agent_id": "ID agente",
+          "openclaw_session_mode": "Modalità sessione"
         },
         "data_description": {
           "model_name": "Il modello LLM che questo profilo dovrebbe utilizzare.",
           "system_prompt": "Precompilato con il prompt di sistema attualmente effettivo. Modificalo per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
           "technical_prompt": "Precompilato con le istruzioni tecniche vigenti in vigore. Modificali per personalizzare questo profilo. Se lasciata invariata, l'integrazione continua a utilizzare il prompt incorporato dal codice.",
           "context_mode": "Standard invia il contesto completo dello strumento profilo. Light mantiene una finestra della cronologia più piccola e pubblicizza gli strumenti Home Assistant principali per piccoli modelli locali.",
-          "hermes_session_key": "Chiave stabile che delimita la memoria a lungo termine di Hermes per questo profilo."
+          "hermes_session_key": "Chiave stabile che delimita la memoria a lungo termine di Hermes per questo profilo.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "L'agente OpenClaw che risponde alle richieste di questo profilo. Deve corrispondere a un agente configurato in OpenClaw. Il valore predefinito è 'main'.",
+          "openclaw_session_mode": "'Per conversation' assegna a ogni conversazione di Home Assistant una propria sessione OpenClaw, in cui restano le domande successive. 'Fixed' invia tutte le richieste all'unica sessione indicata in Chiave di sessione."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "API di generazione",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "Ragionamento",
+              "openclaw_agent_id": "ID agente",
+              "openclaw_session_mode": "Modalità sessione",
+              "system_prompt": "Istruzioni di sistema"
             },
             "data_description": {
               "ollama_keep_alive": "Per quanto tempo Ollama deve mantenere caricato in memoria il modello selezionato.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "Automatico usa Responses per l'endpoint OpenAI ufficiale e Chat Completions per gli endpoint personalizzati. Scegli esplicitamente un'API solo quando l'endpoint la supporta.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "L'agente OpenClaw che risponde alle richieste di questo profilo. Deve corrispondere a un agente configurato in OpenClaw. Il valore predefinito è 'main'.",
+              "openclaw_session_mode": "'Per conversation' assegna a ogni conversazione di Home Assistant una propria sessione OpenClaw, in cui restano le domande successive. 'Fixed' invia tutte le richieste all'unica sessione indicata in Chiave di sessione.",
+              "system_prompt": "Inviato a OpenClaw con ogni richiesta come istruzione di sistema aggiuntiva, ad esempio per definire un personaggio. Lascia vuoto per usare le istruzioni proprie dell'agente. La stanza del satellite vocale viene aggiunta automaticamente."
             }
           },
           "advanced_settings": {
@@ -759,6 +789,21 @@
         "auto": "Automatic",
         "images": "Images API",
         "responses": "Responses API"
+      }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "Predefinito del server",
+        "off": "Disattivato",
+        "low": "Basso",
+        "medium": "Medio",
+        "high": "Alto"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
       }
     }
   },

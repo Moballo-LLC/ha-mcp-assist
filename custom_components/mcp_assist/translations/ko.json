@@ -107,7 +107,10 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "생성 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "사고",
+          "openclaw_agent_id": "에이전트 ID",
+          "openclaw_session_mode": "세션 모드"
         },
         "sections": {
           "conversation": {
@@ -165,7 +168,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "생성 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "사고",
+              "openclaw_agent_id": "에이전트 ID",
+              "openclaw_session_mode": "세션 모드",
+              "system_prompt": "시스템 프롬프트"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
@@ -177,7 +184,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+              "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다.",
+              "system_prompt": "모든 요청에 추가 시스템 프롬프트로 OpenClaw에 전송되며, 예를 들어 페르소나를 정할 때 쓸 수 있습니다. 에이전트 자체 프롬프트를 사용하려면 비워 두세요. 음성 새틀라이트의 방은 자동으로 추가됩니다."
             }
           },
           "tools": {
@@ -222,6 +233,11 @@
               "disable_web_search": "공유 MCP 서버에서 활성화된 경우에도 이 프로필이 웹 검색 및 URL 읽기 도구를 사용하지 못하도록 합니다."
             }
           }
+        },
+        "data_description": {
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+          "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다."
         }
       },
       "mcp_server": {
@@ -423,14 +439,20 @@
           "openai_image_model_profile": "Image model profile (optional)",
           "openai_api_transport": "생성 API",
           "openai_image_model": "Image Model",
-          "openai_image_api": "Image Generation API"
+          "openai_image_api": "Image Generation API",
+          "thinking_mode": "사고",
+          "openclaw_agent_id": "에이전트 ID",
+          "openclaw_session_mode": "세션 모드"
         },
         "data_description": {
           "model_name": "이 프로필이 사용해야 하는 LLM 모델입니다.",
           "system_prompt": "현재 유효한 시스템 프롬프트가 미리 채워져 있습니다. 이 프로필을 사용자 정의하려면 편집하세요. 변경하지 않고 그대로 두면 통합은 코드의 내장 프롬프트를 계속 사용합니다.",
           "technical_prompt": "현재 유효한 기술 지침이 미리 입력되어 있습니다. 이 프로필을 사용자 정의하려면 편집하세요. 변경하지 않고 그대로 두면 통합은 코드의 내장 프롬프트를 계속 사용합니다.",
           "context_mode": "Standard는 전체 프로필 도구 컨텍스트를 보냅니다. Light는 더 작은 기록 창을 유지하고 소규모 로컬 모델을 위한 핵심 Home Assistant 도구를 광고합니다.",
-          "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키."
+          "hermes_session_key": "이 프로필의 Hermes 장기 메모리 범위를 지정하는 고정 키.",
+          "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+          "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+          "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다."
         },
         "sections": {
           "profile": {
@@ -517,7 +539,11 @@
               "openai_image_model_profile": "Image model profile (optional)",
               "openai_api_transport": "생성 API",
               "openai_image_model": "Image Model",
-              "openai_image_api": "Image Generation API"
+              "openai_image_api": "Image Generation API",
+              "thinking_mode": "사고",
+              "openclaw_agent_id": "에이전트 ID",
+              "openclaw_session_mode": "세션 모드",
+              "system_prompt": "시스템 프롬프트"
             },
             "data_description": {
               "ollama_keep_alive": "Ollama가 선택한 모델을 메모리에 로드된 상태로 유지해야 하는 기간입니다.",
@@ -529,7 +555,11 @@
               "openai_image_model_profile": "Optional image binding or profile ID from a compatible endpoint. Overrides the image model setting. Resolution failure stops the request.",
               "openai_api_transport": "자동은 공식 OpenAI 엔드포인트에 Responses를 사용하고 사용자 지정 엔드포인트에 Chat Completions를 사용합니다. 엔드포인트가 지원하는 경우에만 API를 명시적으로 선택하세요.",
               "openai_image_model": "Choose auto to use Flare on official OpenAI endpoints and the profile model on custom endpoints; existing image-only models are preserved. Choose a model ID to keep that image model fixed when the endpoint or conversation model changes. Check that the endpoint supports your choice.",
-              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool."
+              "openai_image_api": "Automatic uses the selected generation API on official OpenAI endpoints and the Images API on custom endpoints. Select Responses only if the endpoint supports its image-generation tool.",
+              "thinking_mode": "Server default preserves existing behavior. Off requests no reasoning or the lowest supported effort. Support depends on the provider and model; a selected model profile takes precedence.",
+              "openclaw_agent_id": "이 프로필의 요청에 응답하는 OpenClaw 에이전트입니다. OpenClaw에 설정된 에이전트와 일치해야 합니다. 기본값은 'main'입니다.",
+              "openclaw_session_mode": "'Per conversation'은 Home Assistant 대화마다 별도의 OpenClaw 세션을 주며, 후속 질문은 그 세션에 남습니다. 'Fixed'는 모든 요청을 세션 키에 지정한 하나의 세션으로 보냅니다.",
+              "system_prompt": "모든 요청에 추가 시스템 프롬프트로 OpenClaw에 전송되며, 예를 들어 페르소나를 정할 때 쓸 수 있습니다. 에이전트 자체 프롬프트를 사용하려면 비워 두세요. 음성 새틀라이트의 방은 자동으로 추가됩니다."
             }
           },
           "advanced_settings": {
@@ -759,6 +789,21 @@
         "auto": "Automatic",
         "images": "Images API",
         "responses": "Responses API"
+      }
+    },
+    "thinking_mode": {
+      "options": {
+        "default": "서버 기본값",
+        "off": "끄기",
+        "low": "낮음",
+        "medium": "중간",
+        "high": "높음"
+      }
+    },
+    "openclaw_session_mode": {
+      "options": {
+        "fixed": "Fixed",
+        "per_conversation": "Per conversation"
       }
     }
   },

@@ -85,17 +85,17 @@ async def _dispatch_image(server: MCPServer, **arguments):
         (
             SERVER_TYPE_LMSTUDIO,
             "https://provider.example.invalid/v1/images/generations",
-            {},
+            {"Authorization": "Bearer test-provider-key"},
         ),
         (
             SERVER_TYPE_LLAMACPP,
             "https://provider.example.invalid/v1/images/generations",
-            {},
+            {"Authorization": "Bearer test-provider-key"},
         ),
         (
             SERVER_TYPE_VLLM,
             "https://provider.example.invalid/v1/images/generations",
-            {},
+            {"Authorization": "Bearer test-provider-key"},
         ),
         (
             SERVER_TYPE_GEMINI,

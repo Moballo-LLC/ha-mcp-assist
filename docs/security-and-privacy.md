@@ -189,6 +189,16 @@ separate trust boundary:
 - Review server-side transcript, tool, and memory retention separately from MCP
   Assist's Chat Log Mode and memory tools.
 
+OpenClaw receives the satellite's area name when Home Assistant knows it, plus
+the optional profile system prompt. Per-conversation session mode separates
+conversation histories; Fixed mode deliberately shares the configured session.
+Neither mode changes the gateway's own permissions or retention policy.
+
+For built-in technical instructions, enabled user/location context is sent with
+the current user message instead of the system prompt. The same shared privacy
+settings still govern it. Optional local-server API keys are sent as bearer
+headers to the configured endpoint for model listing and generation.
+
 Hermes requests can cause tools to run on the Hermes host before a response is
 returned. When an API key is configured, MCP Assist also sends the stable memory
 session key and the current transcript session ID. It replays bounded local
