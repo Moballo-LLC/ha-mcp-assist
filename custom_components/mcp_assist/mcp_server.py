@@ -2618,7 +2618,6 @@ class MCPServer(
                         },
                     },
                     "required": ["domain", "action"],
-                    "anyOf": [{"required": ["target"]}, {"required": ["entity_id"]}],
                     "additionalProperties": False,
                 },
             },
@@ -4559,15 +4558,18 @@ class MCPServer(
         """Perform an action on Home Assistant entities with progress notifications."""
         domain = args.get("domain")
         action = args.get("action")
-        target = args.get("target", {})
+        target = args.get("target")
+        if target is None:
+            target = {}
         data = args.get("data", {})
 
-        if "entity_id" in args:
-            if "target" in args:
+        entity_id = args.get("entity_id")
+        if entity_id not in (None, "", []):
+            if target != {}:
                 return self._build_text_tool_result(
                     "Use either entity_id or target, not both.", is_error=True
                 )
-            target = {"entity_id": args["entity_id"]}
+            target = {"entity_id": entity_id}
 
         # Validate required parameters
         if not domain:

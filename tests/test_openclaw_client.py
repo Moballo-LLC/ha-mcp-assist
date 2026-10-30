@@ -563,6 +563,16 @@ def test_assistant_items_merge_without_losing_or_duplicating_text(events, expect
     assert run.text == expected
 
 
+@pytest.mark.parametrize("phase", ["end", "complete", "error"])
+def test_non_lifecycle_phases_do_not_finish_agent_run(phase):
+    client = _make_client()
+    run = _AgentRun("run-1")
+    client._apply_agent_event(run, {"stream": "compaction", "data": {"phase": phase}})
+    assert not run.complete_event.is_set()
+    client._apply_agent_event(run, {"stream": "lifecycle", "data": {"phase": phase}})
+    assert run.complete_event.is_set()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["send", "ack", "run"])
 async def test_cancelled_openclaw_run_releases_all_waiters(stage):

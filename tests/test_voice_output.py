@@ -1,6 +1,8 @@
 """Speech regressions adapted from upstream v0.19."""
 
 import pytest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
 
@@ -30,3 +32,24 @@ def test_voice_symbols_follow_language(hass, profile_entry_factory, language, ex
         hass, profile_entry_factory(options={"clean_responses": True})
     )
     assert agent._clean_text_for_tts("21°C, 40%") == expected
+
+
+def test_voice_symbols_use_pipeline_language(hass, profile_entry_factory):
+    hass.config.language = "de"
+    agent = MCPAssistConversationEntity(
+        hass, profile_entry_factory(options={"clean_responses": True})
+    )
+    assert agent._clean_text_for_tts("21°C", language="en") == "21 degrees celsius"
+    assert agent._clean_text_for_tts("21°C", language="xx") == "21°C"
+
+
+async def test_response_uses_voice_pipeline_language(hass, profile_entry_factory, monkeypatch):
+    hass.config.language = "de"
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(options={
+        "clean_responses": True, "follow_up_mode": "none",
+    }))
+    monkeypatch.setattr(agent, "_execute_actions", AsyncMock(return_value=[]))
+    result = await agent._build_response_result(
+        "21°C", SimpleNamespace(text="Temperature?", language="en"), "chat-1"
+    )
+    assert result.response.speech["plain"]["speech"] == "21 degrees celsius"

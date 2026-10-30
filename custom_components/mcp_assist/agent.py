@@ -1630,12 +1630,15 @@ class MCPAssistConversationEntity(ConversationEntity):
         """Resolve upstream OpenClaw agent routing without changing legacy sessions."""
         agent_id = str(self._get_profile_setting(
             CONF_OPENCLAW_AGENT_ID, DEFAULT_OPENCLAW_AGENT_ID
-        ) or "").strip() or DEFAULT_OPENCLAW_AGENT_ID
+        ) or "").strip().lower()
         mode = self._get_profile_setting(CONF_OPENCLAW_SESSION_MODE, OPENCLAW_SESSION_MODE_FIXED)
         if mode == OPENCLAW_SESSION_MODE_PER_CONVERSATION:
+            agent_id = agent_id or "main"
             return f"agent:{agent_id}:ha-{conversation_id.lower()}", agent_id
         session_key = str(self.session_key or "").strip() or DEFAULT_OPENCLAW_SESSION_KEY
-        return session_key, None if session_key.lower().startswith("agent:") else agent_id
+        if session_key.lower().startswith("agent:") or not agent_id:
+            return session_key, None
+        return f"agent:{agent_id}:{session_key}", agent_id
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to Home Assistant."""
@@ -2418,7 +2421,10 @@ class MCPAssistConversationEntity(ConversationEntity):
 
             # Build conversation messages
             turn_context = await self._build_turn_context(user_input)
-            user_text = f"{turn_context}\n\n{user_input.text}" if turn_context else user_input.text
+            user_text = (
+                f"[Home Assistant context]\n{turn_context}\n\n[User request]\n{user_input.text}"
+                if turn_context else user_input.text
+            )
             messages = self._build_messages(system_prompt, user_text, history)
             if metrics_enabled:
                 _LOGGER.debug(
@@ -2639,7 +2645,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         # Create intent response
         intent_response = intent.IntentResponse(language=user_input.language)
-        cleaned_text = self._clean_text_for_tts(response_text)
+        cleaned_text = self._clean_text_for_tts(response_text, language=user_input.language)
         intent_response.async_set_speech(cleaned_text)
 
         # Check if user wants to end (stopwords+1 algorithm)
@@ -3100,6 +3106,9 @@ class MCPAssistConversationEntity(ConversationEntity):
             default_prompt=DEFAULT_TECHNICAL_PROMPT,
         )
         if technical_prompt != DEFAULT_TECHNICAL_PROMPT:
+            if self.music_assistant_support_enabled:
+                current_area = await self._get_current_area(user_input)
+                return f"Current area: {current_area}"
             return ""
         variables, _ = await self._build_prompt_template_variables(
             user_input,
@@ -4047,7 +4056,7 @@ class MCPAssistConversationEntity(ConversationEntity):
 
         return cleaned_text, thinking_content
 
-    def _clean_text_for_tts(self, text: str) -> str:
+    def _clean_text_for_tts(self, text: str, *, language: str | None = None) -> str:
         """Clean text for TTS to handle special characters properly."""
         # ALWAYS run character normalization (existing fixes)
         # Replace ALL apostrophe variants with standard apostrophe
@@ -4112,7 +4121,7 @@ class MCPAssistConversationEntity(ConversationEntity):
         text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)  # # Header → Header
 
         # 3. Convert symbols to words
-        for symbol, word in get_spoken_symbols(self.hass.config.language):
+        for symbol, word in get_spoken_symbols(language or self.hass.config.language):
             text = text.replace(symbol, word)
 
         # 4. Remove URLs

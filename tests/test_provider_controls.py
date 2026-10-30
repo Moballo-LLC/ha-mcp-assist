@@ -24,7 +24,10 @@ from custom_components.mcp_assist.provider_runtime import build_provider_auth_he
     }}),
     ("openrouter", "example/model", "off", {"reasoning": {"effort": "none"}}),
     ("gemini", "gemini-2.5-flash", "off", {"reasoning_effort": "none"}),
-    ("gemini", "gemini-3-pro", "off", {"reasoning_effort": "minimal"}),
+    ("gemini", "gemini-3-pro-preview", "off", {"reasoning_effort": "low"}),
+    ("gemini", "gemini-3-pro-preview", "medium", {"reasoning_effort": "high"}),
+    ("gemini", "gemini-3.1-pro-preview", "off", {"reasoning_effort": "low"}),
+    ("gemini", "gemini-3.1-pro-preview", "medium", {"reasoning_effort": "medium"}),
     ("openai", "gpt-5", "off", {"reasoning": {"effort": "minimal"}}),
     ("openai", "gpt-6.1-sol", "off", {"reasoning": {"effort": "low"}}),
     ("openai", "gpt-6-astra", "off", {"reasoning": {"effort": "low"}}),
@@ -67,11 +70,14 @@ def test_local_auth_is_opt_in_and_consistent(profile_entry_factory, provider):
 
 
 @pytest.mark.parametrize(("options", "expected"), [
-    ({}, ("main", "main")),
-    ({"openclaw_agent_id": "voice"}, ("main", "voice")),
+    ({}, ("main", None)),
+    ({"openclaw_agent_id": "voice"}, ("agent:voice:main", "voice")),
+    ({"openclaw_agent_id": "VOICE", "openclaw_session_key": "satellite"},
+     ("agent:voice:satellite", "voice")),
     ({"openclaw_session_key": "agent:other:fixed"}, ("agent:other:fixed", None)),
     ({"openclaw_session_mode": "per_conversation", "openclaw_agent_id": "voice"},
      ("agent:voice:ha-chat-123", "voice")),
+    ({"openclaw_session_mode": "per_conversation"}, ("agent:main:ha-chat-123", "main")),
 ])
 def test_openclaw_session_routing(hass, profile_entry_factory, options, expected):
     agent = MCPAssistConversationEntity(hass, profile_entry_factory(options=options))
@@ -92,7 +98,7 @@ async def test_openclaw_sends_room_and_persona_without_local_discovery(
     monkeypatch.setattr(agent, "_build_response_result", AsyncMock(return_value="done"))
     await agent._handle_openclaw_message(SimpleNamespace(text="Hello"), "chat-123")
     client.send_message.assert_awaited_once_with(
-        "[Room: Kitchen] Hello" if area == "Kitchen" else "Hello", "main", agent_id="main",
+        "[Room: Kitchen] Hello" if area == "Kitchen" else "Hello", "main", agent_id=None,
         extra_system_prompt="Answer briefly\n\nSpeaking from: Kitchen" if area == "Kitchen" else "Answer briefly",
         thinking="low",
     )
@@ -138,3 +144,26 @@ async def test_default_prompt_is_stable_and_custom_context_still_renders(
     })
     assert await agent._build_turn_context(user) == ""
     assert "Time: " in await agent._build_system_prompt_with_context(user)
+
+
+@pytest.mark.parametrize("music_enabled", [True, False])
+async def test_custom_prompt_keeps_optional_music_room_context(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, music_enabled
+):
+    system_entry_factory(data={"enable_music_assistant_support": music_enabled})
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory(options={
+        "context_mode": "standard", "technical_prompt_mode": "custom",
+        "technical_prompt": "Use the available tools.",
+    }))
+    area = AsyncMock(return_value="Kitchen")
+    monkeypatch.setattr(agent, "_get_current_area", area)
+    user = SimpleNamespace(device_id="satellite")
+    prompt = await agent._build_system_prompt_with_context(user)
+    context = await agent._build_turn_context(user)
+    if music_enabled:
+        assert context == "Current area: Kitchen"
+        area.assert_awaited_once()
+    else:
+        assert context == ""
+        area.assert_not_awaited()
+    assert "Current time:" not in prompt + context

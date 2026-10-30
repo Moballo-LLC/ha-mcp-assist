@@ -307,7 +307,7 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 (CONF_OPENCLAW_USE_SSL, DEFAULT_OPENCLAW_USE_SSL, "boolean", True),
             ),
             (
-                ("openclaw_agent_id", "main", "text", False),
+                ("openclaw_agent_id", "", "text", False),
                 ("openclaw_session_mode", "fixed", "select", False),
                 (CONF_OPENCLAW_SESSION_KEY, DEFAULT_OPENCLAW_SESSION_KEY, "text", False),
                 ("system_prompt", "", "text", False),

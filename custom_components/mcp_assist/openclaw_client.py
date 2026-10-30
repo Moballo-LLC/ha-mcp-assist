@@ -679,6 +679,9 @@ class OpenClawClient:
         if stream == "assistant" or (stream is None and "text" in data):
             run.apply_assistant_text(data)
 
+        if stream not in (None, "lifecycle"):
+            return
+
         # Check for completion
         status = payload.get("status")
         phase = data.get("phase", "")

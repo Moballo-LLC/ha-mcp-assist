@@ -115,7 +115,10 @@ class GeminiProvider(OpenAICompatibleProvider):
         payload = super().build_payload(messages, tools, stream=stream)
         mode = self.thinking_mode
         if mode != "default":
+            model = self.model_name.lower()
             if mode == "off":
-                mode = "none" if "2.5-flash" in self.model_name.lower() else "minimal"
+                mode = "none" if "2.5-flash" in model else "low"
+            if mode == "medium" and model.startswith("gemini-3-pro"):
+                mode = "high"
             payload["reasoning_effort"] = mode
         return payload
