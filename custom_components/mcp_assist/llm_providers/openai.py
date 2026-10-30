@@ -8,8 +8,6 @@ from urllib.parse import urlsplit
 
 from ..const import (
     CONF_API_KEY,
-    CONF_MODEL_PROFILE,
-    CONF_OPENAI_IMAGE_MODEL_PROFILE,
     CONF_LMSTUDIO_URL,
     CONF_OPENAI_API_TRANSPORT,
     CONF_OPENAI_IMAGE_MODEL,
@@ -65,8 +63,6 @@ class OpenAIProvider(OpenAICompatibleProvider):
         ProviderConfigField(CONF_API_KEY, kind="password"),
     )
     provider_options_fields = (
-        ProviderConfigField(CONF_MODEL_PROFILE, default="", required=False),
-        ProviderConfigField(CONF_OPENAI_IMAGE_MODEL_PROFILE, default="", required=False),
         ProviderConfigField(
             CONF_OPENAI_API_TRANSPORT,
             default=DEFAULT_OPENAI_API_TRANSPORT,
@@ -132,15 +128,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
             OPENAI_API_TRANSPORT_AUTO, OPENAI_IMAGE_API_IMAGES, OPENAI_API_TRANSPORT_RESPONSES
         ):
             image_api = OPENAI_API_TRANSPORT_AUTO
-        model_profile = str(options.get(
-            CONF_MODEL_PROFILE, data.get(CONF_MODEL_PROFILE, "")
-        ) or "").strip()
-        image_profile = str(options.get(
-            CONF_OPENAI_IMAGE_MODEL_PROFILE, data.get(CONF_OPENAI_IMAGE_MODEL_PROFILE, "")
-        ) or "").strip()
         return {
-            **({CONF_OPENAI_IMAGE_MODEL_PROFILE: image_profile} if image_profile else {}),
-            **({CONF_MODEL_PROFILE: model_profile} if model_profile else {}),
             CONF_OPENAI_API_TRANSPORT: transport,
             CONF_OPENAI_IMAGE_MODEL: image_model,
             CONF_OPENAI_IMAGE_API: image_api,
@@ -161,11 +149,6 @@ class OpenAIProvider(OpenAICompatibleProvider):
     @property
     def image_model(self) -> str:
         """Return this provider instance's selected image model."""
-        resolved = self.settings.provider_options.get("_resolved_image_model_profile")
-        if resolved is not None:
-            return resolved.model
-        if self.settings.provider_options.get(CONF_OPENAI_IMAGE_MODEL_PROFILE):
-            raise ValueError("The configured image model profile has not been resolved.")
         configured = str(self.settings.provider_options.get(CONF_OPENAI_IMAGE_MODEL) or "").strip()
         if configured and configured != OPENAI_IMAGE_MODEL_AUTO:
             return configured
@@ -301,9 +284,6 @@ class OpenAIProvider(OpenAICompatibleProvider):
                 )
             ):
                 payload["reasoning_effort"] = "none"
-            resolved = self.settings.provider_options.get("_resolved_model_profile")
-            if resolved:
-                payload["reasoning_effort"] = resolved.effort
             return payload
 
         payload: dict[str, Any] = {
@@ -329,9 +309,6 @@ class OpenAIProvider(OpenAICompatibleProvider):
         effort = self._thinking_effort()
         if effort is not None:
             payload["reasoning"] = {"effort": effort}
-        resolved = self.settings.provider_options.get("_resolved_model_profile")
-        if resolved:
-            payload["reasoning"] = {"effort": resolved.effort}
         return payload
 
     def _thinking_effort(self) -> str | None:

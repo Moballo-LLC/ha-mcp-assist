@@ -89,12 +89,6 @@ def _choice(value: Any, choices: frozenset[str]) -> str:
     return value if isinstance(value, str) and value in choices else "unknown"
 
 
-def _selection(entry: ConfigEntry, profile_key: str, model_key: str) -> str:
-    if str(_configured(entry, profile_key) or "").strip():
-        return "profile"
-    return "explicit" if _configured(entry, model_key) else "unset"
-
-
 def _prompt_mode(entry: ConfigEntry, mode_key: str, prompt_key: str, default_prompt: str) -> str:
     """Infer legacy prompt modes using the same rules as the conversation agent."""
     explicit_mode = _configured(entry, mode_key)
@@ -123,19 +117,9 @@ def _cached_tools(agent: Any) -> dict[str, Any]:
     return {"status": "cached", "count": len(tools), "schema_bytes": size}
 
 
-def _resolution(agent: Any, selection: str, attribute: str) -> str:
-    if selection != "profile":
-        return "not_applicable"
-    if agent is None:
-        return "runtime_unavailable"
-    return "resolved" if isinstance(getattr(agent, attribute, None), Mapping) else "unresolved"
-
-
 def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Project metadata without discovery, model calls, or configuration contents.
 
-    External diagnostic tools can reuse this helper. An unresolved profile can be
-    normal before its first request; resolution is not proof of provider success.
     """
     domain_data = hass.data.get(const.DOMAIN, {})
     if not isinstance(domain_data, Mapping):
@@ -167,11 +151,7 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
     provider = _choice(
         _configured(entry, const.CONF_SERVER_TYPE, const.DEFAULT_SERVER_TYPE), _PROVIDERS
     )
-    model_selection = (
-        _selection(entry, const.CONF_MODEL_PROFILE, const.CONF_MODEL_NAME)
-        if provider == const.SERVER_TYPE_OPENAI
-        else ("explicit" if _configured(entry, const.CONF_MODEL_NAME) else "unset")
-    )
+    model_selection = "explicit" if _configured(entry, const.CONF_MODEL_NAME) else "unset"
     result.update(
         provider=provider,
         agent_runtime_present=agent is not None,
@@ -180,7 +160,6 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
             _configured(entry, const.CONF_CONTEXT_MODE, const.DEFAULT_CONTEXT_MODE), _CONTEXT_MODES
         ),
         model_selection=model_selection,
-        model_profile_resolution=_resolution(agent, model_selection, "resolved_model_profile"),
         credential_configured=bool(_configured(
             entry,
             const.CONF_OPENCLAW_TOKEN
@@ -190,12 +169,8 @@ def build_assist_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[st
         cached_tools=_cached_tools(agent),
     )
     if provider == const.SERVER_TYPE_OPENAI:
-        image_selection = _selection(
-            entry, const.CONF_OPENAI_IMAGE_MODEL_PROFILE, const.CONF_OPENAI_IMAGE_MODEL
-        )
-        result["image_model_selection"] = image_selection
-        result["image_profile_resolution"] = _resolution(
-            agent, image_selection, "resolved_image_model_profile"
+        result["image_model_selection"] = (
+            "explicit" if _configured(entry, const.CONF_OPENAI_IMAGE_MODEL) else "unset"
         )
     result["prompts"] = {
         label: {

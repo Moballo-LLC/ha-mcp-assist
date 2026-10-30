@@ -111,25 +111,6 @@ async def test_openclaw_sends_room_and_persona_without_local_discovery(
     )
 
 
-@pytest.mark.parametrize("transport", ["responses", "chat_completions"])
-async def test_openai_policy_effort_precedes_profile_thinking(profile_entry_factory, transport):
-    from dataclasses import replace
-
-    entry = profile_entry_factory(data={
-        "server_type": "openai", "model_name": "gpt-5.4",
-        "lmstudio_url": "https://api.openai.com",
-    }, options={"thinking_mode": "off", "openai_api_transport": transport})
-    settings = build_provider_settings(entry, max_tokens=500, temperature=0.5)
-    settings = replace(settings, provider_options={
-        **settings.provider_options, "_resolved_model_profile": SimpleNamespace(effort="high"),
-    })
-    payload = create_llm_provider(settings).build_payload([{"role": "user", "content": "Hello"}])
-    if transport == "responses":
-        assert payload["reasoning"] == {"effort": "high"}
-    else:
-        assert payload["reasoning_effort"] == "high"
-
-
 async def test_default_prompt_is_stable_and_custom_context_still_renders(
     hass, profile_entry_factory, monkeypatch
 ):

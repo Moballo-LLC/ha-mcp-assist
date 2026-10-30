@@ -56,11 +56,9 @@ from .tools.builtin_catalog import (
 )
 from .openapi import to_openapi
 from .llm_tool_result import normalize_llm_tool_result
-from .model_profiles import (
-    MCP_PROFILE_REQUEST_HEADER,
-    ModelProfileResolutionError,
-    REQUEST_RESOLVED_PROFILES,
-    ResolvedProfilesSnapshot,
+from .model_selection import (
+    MCP_MODEL_REQUEST_HEADER, ModelResolutionError, REQUEST_MODEL_SELECTION,
+    ModelSelectionSnapshot, async_resolve_model,
 )
 from .const import (
     DOMAIN,
@@ -332,7 +330,7 @@ class MCPServer(
         self._sse_client_ips: dict[web.StreamResponse, str | None] = {}
         self._progress_queue_ips: dict[asyncio.Queue[Any], str | None] = {}
         self._websocket_clients: dict[WebSocketResponse, str | None] = {}
-        self._profile_requests: dict[str, tuple[str, str, ResolvedProfilesSnapshot]] = {}
+        self._model_requests: dict[str, tuple[str, str, ModelSelectionSnapshot]] = {}
         self._cached_tools_list: dict[str, Any] | None = None
         self._cached_tools_signature: tuple[Any, ...] | None = None
         self.allowed_ips: list[str] = []
@@ -836,7 +834,7 @@ class MCPServer(
     async def stop(self) -> None:
         """Stop the MCP server."""
         _LOGGER.info("Stopping MCP server")
-        self._profile_requests.clear()
+        self._model_requests.clear()
 
         if self.site:
             await self.site.stop()
@@ -1955,27 +1953,27 @@ class MCPServer(
 
         return ws
 
-    def register_profile_request(
-        self, snapshot: ResolvedProfilesSnapshot, request_id: str, tool_name: str
+    def register_model_request(
+        self, snapshot: ModelSelectionSnapshot, request_id: str, tool_name: str
     ) -> str:
         """Retain a trusted selection for one local HTTP tool dispatch."""
-        if len(self._profile_requests) >= 128:
-            raise ModelProfileResolutionError()
+        if len(self._model_requests) >= 128:
+            raise ModelResolutionError()
         token = secrets.token_urlsafe(32)
-        self._profile_requests[token] = (request_id, tool_name, snapshot)
+        self._model_requests[token] = (request_id, tool_name, snapshot)
         return token
 
-    def discard_profile_request(self, token: str) -> None:
+    def discard_model_request(self, token: str) -> None:
         """Release a dispatch that failed or was cancelled before consumption."""
-        self._profile_requests.pop(token, None)
+        self._model_requests.pop(token, None)
 
-    def _take_profile_request(
+    def _take_model_request(
         self, request: web.Request, data: dict[str, Any]
-    ) -> ResolvedProfilesSnapshot | None:
-        token = (getattr(request, "headers", {}) or {}).get(MCP_PROFILE_REQUEST_HEADER)
+    ) -> ModelSelectionSnapshot | None:
+        token = (getattr(request, "headers", {}) or {}).get(MCP_MODEL_REQUEST_HEADER)
         if token is None:
             return None
-        retained = self._profile_requests.pop(token, None)
+        retained = self._model_requests.pop(token, None)
         params = data.get("params")
         context = params.get("context") if isinstance(params, dict) else None
         try:
@@ -1987,7 +1985,7 @@ class MCPServer(
                 or params.get("name") != retained[1] or not isinstance(context, dict)
                 or context.get("profile_entry_id") != retained[2][0].entry_id
                 or self._resolve_profile_entry(context) is not retained[2][0]):
-            raise ModelProfileResolutionError()
+            raise ModelResolutionError()
         return retained[2]
 
     async def handle_mcp_request(self, request: web.Request) -> web.Response:
@@ -2006,7 +2004,7 @@ class MCPServer(
             return security_response
 
         request_id = None
-        profiles_token = REQUEST_RESOLVED_PROFILES.set(None)
+        profiles_token = REQUEST_MODEL_SELECTION.set(None)
         try:
             data = await request.json()
 
@@ -2056,11 +2054,11 @@ class MCPServer(
                 )
 
             try:
-                REQUEST_RESOLVED_PROFILES.set(self._take_profile_request(request, data))
-            except ModelProfileResolutionError:
+                REQUEST_MODEL_SELECTION.set(self._take_model_request(request, data))
+            except ModelResolutionError:
                 return web.json_response(
                     {"jsonrpc": "2.0", "error": {"code": -32600,
-                     "message": "Invalid profile request snapshot"}, "id": request_id},
+                     "message": "Invalid model request snapshot"}, "id": request_id},
                     status=400,
                 )
 
@@ -2108,7 +2106,7 @@ class MCPServer(
             error_response["id"] = request_id
             return web.json_response(error_response, status=500)
         finally:
-            REQUEST_RESOLVED_PROFILES.reset(profiles_token)
+            REQUEST_MODEL_SELECTION.reset(profiles_token)
 
     async def process_mcp_notification(self, data: Dict[str, Any]) -> None:
         """Process MCP notification (no response expected)."""
@@ -2850,34 +2848,21 @@ class MCPServer(
 
     async def _get_image_model_provider(self, context: dict[str, Any] | None) -> LLMProvider:
         """Reuse the conversation snapshot or resolve a standalone media request."""
-        from .const import CONF_MODEL_PROFILE, CONF_OPENAI_IMAGE_MODEL_PROFILE
-        from .model_profiles import REQUEST_RESOLVED_PROFILES, async_resolve_model_profiles
+        from .const import CONF_OPENAI_IMAGE_MODEL
         from .provider_runtime import resolve_provider_runtime_config
 
         entry = self._resolve_profile_entry(context)
         provider = self._get_model_provider(context)
-        scoped = REQUEST_RESOLVED_PROFILES.get()
-        if scoped is not None and scoped[0] is entry:
+        scoped = REQUEST_MODEL_SELECTION.get()
+        if scoped is not None and scoped[0] is entry and scoped[2] is not None:
             return provider
-        options, data = entry.options, entry.data
-        image_reference = str(options.get(
-            CONF_OPENAI_IMAGE_MODEL_PROFILE, data.get(CONF_OPENAI_IMAGE_MODEL_PROFILE, "")
-        ) or "").strip()
-        if not image_reference:
-            return provider
-        text_reference = str(options.get(
-            CONF_MODEL_PROFILE, data.get(CONF_MODEL_PROFILE, "")
-        ) or "").strip()
-        text, image = await async_resolve_model_profiles(
-            resolve_provider_runtime_config(entry), text_reference, image_reference
+        image = await async_resolve_model(
+            resolve_provider_runtime_config(entry), provider.image_model
         )
-        provider_options = {**provider.settings.provider_options,
-                            "_resolved_image_model_profile": image}
-        if text is not None:
-            provider_options["_resolved_model_profile"] = text
         return create_llm_provider(replace(
-            provider.settings, model_name=text.model if text else provider.model_name,
-            provider_options=provider_options,
+            provider.settings, provider_options={
+                **provider.settings.provider_options, CONF_OPENAI_IMAGE_MODEL: image,
+            },
         ))
 
     async def tool_get_image(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -3626,9 +3611,6 @@ class MCPServer(
                 "tool_choice": {"type": "image_generation"},
                 "store": False,
             }
-            resolved_text = provider.settings.provider_options.get("_resolved_model_profile")
-            if resolved_text is not None:
-                payload["reasoning"] = {"effort": resolved_text.effort}
             image_options = image_tool
         else:
             payload = {

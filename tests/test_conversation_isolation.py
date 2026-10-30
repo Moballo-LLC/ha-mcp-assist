@@ -7,7 +7,13 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from custom_components.mcp_assist.agent import MCPAssistConversationEntity
-from tests.test_model_profiles import user_input
+from homeassistant.components.conversation import ConversationInput
+from homeassistant.core import Context
+
+
+def user_input(text="Test"):
+    return ConversationInput(text=text, context=Context(), conversation_id="test",
+                             device_id=None, satellite_id=None, language="en", agent_id="test")
 
 
 @pytest.mark.parametrize("second_outcome", ["success", "error", "cancel"])

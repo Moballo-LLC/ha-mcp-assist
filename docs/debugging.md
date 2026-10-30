@@ -11,14 +11,13 @@ Chat Log Mode is off by default. Enable it per profile from the profile's advanc
 
 Open **Settings → Devices & services → HA MCP Assist**, open the entry menu,
 and select **Download diagnostics**. Each profile reports provider type, context
-mode, whether its agent is loaded, model-selection/resolution status, configured
+mode, whether its agent is loaded, model-selection status, configured
 prompt lengths, limits, and the size of its cached tool schemas. Shared settings
 report server presence and whether external tools and bearer authentication are
 configured. Prompt modes follow the conversation agent's backward-compatible
 inference when older entries do not store an explicit mode, including localized
-system defaults and per-profile option overrides. Model-profile references use
-the same whitespace normalization as the agent; blank references select the
-explicit model instead. Shared diagnostics preserve the running server's legacy
+system defaults and per-profile option overrides. Shared diagnostics preserve
+the running server's legacy
 fallback to its owning profile when a system setting is absent or null; explicit
 system overrides still take precedence. Whitespace-only bearer values do not
 enable MCP bearer authentication.
@@ -29,9 +28,8 @@ configuration and caches on demand without discovery, network requests, or paid
 model calls. A tool cache that has not been built has no size yet. Oversized or
 complex caches report `too_large` without serialization: measurement is limited
 to 1,000 tools, 8,192 nodes, 32 nesting levels, and a conservative 256 KiB encoded
-size budget. Smaller caches report their actual UTF-8 JSON size. An unresolved
-model profile can be normal before its first request; this report does not prove
-provider connectivity or successful device control.
+size budget. Smaller caches report their actual UTF-8 JSON size. This report does
+not prove provider connectivity or successful device control.
 
 ## Ordinary request outcomes
 

@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mcp_assist import (
     _async_handle_validate_external_custom_tools,
     _migrate_brave_search_tool_name,
+    _migrate_legacy_model_selections,
     _async_apply_shared_mcp_settings,
     _async_release_mcp_server,
     async_setup_entry,
@@ -77,6 +78,30 @@ def _mock_system_entry_init(hass, data: dict) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
+
+
+def test_migrate_legacy_model_selections(hass, profile_entry_factory):
+    entry = profile_entry_factory(data={
+        "model_profile": "old", "model_name": "dormant", "api_key": "example-key",
+        "openai_image_model_profile": "visual", "openai_image_model": "old-image",
+    }, options={"model_profile": " selected ", "unrelated": True})
+    _migrate_legacy_model_selections(hass, entry)
+    assert entry.options["model_name"] == "profile/selected"
+    assert entry.options["openai_image_model"] == "image-profile/visual"
+    assert entry.options["unrelated"] is True
+    assert entry.data["api_key"] == "example-key"
+    assert "model_profile" not in entry.data and "model_profile" not in entry.options
+    assert "openai_image_model_profile" not in entry.data
+    _migrate_legacy_model_selections(hass, entry)
+    assert entry.options["model_name"] == "profile/selected"
+
+
+def test_migrate_cleared_legacy_selection_preserves_concrete_option(hass, profile_entry_factory):
+    entry = profile_entry_factory(data={"model_profile": "old", "model_name": "old-model"},
+                                  options={"model_profile": "", "model_name": "pinned"})
+    _migrate_legacy_model_selections(hass, entry)
+    assert entry.options["model_name"] == "pinned"
+    assert "model_profile" not in entry.data and "model_profile" not in entry.options
 
 
 @pytest.mark.asyncio

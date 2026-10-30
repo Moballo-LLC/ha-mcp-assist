@@ -35,8 +35,9 @@ async def test_diagnostics_allowlist_omits_private_configuration(hass, profile_e
     result = await async_get_config_entry_diagnostics(hass, entry)
     assert secret not in json.dumps(result)
     assert entry.entry_id not in json.dumps(result)
-    assert result["model_profile_resolution"] == "resolved"
-    assert result["image_profile_resolution"] == "unresolved"
+    assert result["model_selection"] == "explicit"
+    assert "model_profile_resolution" not in result
+    assert "image_profile_resolution" not in result
     assert result["prompts"]["system"] == {
         "mode": "custom", "configured_characters": len(secret),
     }
@@ -48,7 +49,6 @@ def test_unloaded_and_wrong_agent_identity_have_no_live_evidence(hass, profile_e
     entry = profile_entry_factory(data={"server_type": "openai", "model_profile": "example-profile"})
     result = build_assist_diagnostics(hass, entry)
     assert result["agent_runtime_present"] is False
-    assert result["model_profile_resolution"] == "runtime_unavailable"
     assert result["cached_tools"] == {"status": "not_built"}
     hass.data["mcp_assist"] = {entry.entry_id: {"agent": SimpleNamespace(
         entry=object(), resolved_model_profile={"model": "example"},
@@ -104,7 +104,6 @@ def test_non_openai_provider_ignores_inactive_profile_reference(hass, profile_en
     })
     result = build_assist_diagnostics(hass, entry)
     assert result["model_selection"] == "explicit"
-    assert result["model_profile_resolution"] == "not_applicable"
 
 
 def test_openclaw_credential_is_reported_as_boolean_without_exposing_token(
@@ -231,26 +230,6 @@ def test_prompt_mode_options_override_data_and_infer_localized_default(
     result = build_assist_diagnostics(hass, entry)
     assert result["prompts"]["system"]["mode"] == "default"
     assert localized not in json.dumps(result)
-
-
-@pytest.mark.parametrize("reference,expected", [(" \t\n", "explicit"), ("  example-profile  ", "profile")])
-@pytest.mark.parametrize("image", [False, True])
-@pytest.mark.parametrize("storage", ["data", "options"])
-def test_profile_reference_selection_matches_runtime_normalization(
-    hass, profile_entry_factory, reference, expected, image, storage,
-):
-    profile_key = "openai_image_model_profile" if image else "model_profile"
-    model_key = "openai_image_model" if image else "model_name"
-    entry = profile_entry_factory(
-        data={"server_type": "openai", **({profile_key: reference, model_key: "example-model"}
-                                        if storage == "data" else {})},
-        options={profile_key: reference, model_key: "example-model"} if storage == "options" else {},
-    )
-    result = build_assist_diagnostics(hass, entry)
-    assert result["image_model_selection" if image else "model_selection"] == expected
-    resolution = result["image_profile_resolution" if image else "model_profile_resolution"]
-    assert resolution == ("runtime_unavailable" if expected == "profile" else "not_applicable")
-    assert "example-profile" not in json.dumps(result)
 
 
 @pytest.mark.parametrize("system_values", [

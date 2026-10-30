@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
-from types import SimpleNamespace
 
 import pytest
 
 from custom_components.mcp_assist.const import (
     CONF_API_KEY,
-    CONF_MODEL_PROFILE,
-    CONF_OPENAI_IMAGE_MODEL_PROFILE,
     CONF_HERMES_SESSION_KEY,
     CONF_HERMES_URL,
     CONF_LMSTUDIO_URL,
@@ -242,8 +239,6 @@ def test_ollama_detects_llama_server_invalid_tool_argument_errors() -> None:
                 (CONF_API_KEY, None, "password", True),
             ),
             (
-                (CONF_MODEL_PROFILE, "", "text", False),
-                (CONF_OPENAI_IMAGE_MODEL_PROFILE, "", "text", False),
                 (
                     CONF_OPENAI_API_TRANSPORT,
                     DEFAULT_OPENAI_API_TRANSPORT,
@@ -2094,7 +2089,7 @@ def test_versioned_reasoning_profile_omits_temperature_and_keeps_effort(transpor
         SERVER_TYPE_OPENAI, model_name=model_name, max_tokens=500, temperature=0.5,
         provider_options={
             CONF_OPENAI_API_TRANSPORT: transport,
-            "_resolved_model_profile": SimpleNamespace(model=model_name, effort="medium"),
+            "thinking_mode": "medium",
         },
     ))
     payload = provider.build_payload([{"role": "user", "content": "Hello"}])
@@ -2135,7 +2130,7 @@ def test_gpt61_sol_tool_transport_rules_follow_endpoint_contract(base_url):
     if not official:
         provider = OpenAIProvider(_settings(
             SERVER_TYPE_OPENAI, model_name=model, base_url=base_url,
-            provider_options={**values, "_resolved_model_profile": SimpleNamespace(effort="medium")},
+            provider_options={**values, "thinking_mode": "medium"},
         ))
         payload = provider.build_payload([], [{"type": "function", "function": {
             "name": "example", "parameters": {"type": "object", "properties": {}}

@@ -104,6 +104,26 @@ _LEGACY_QUERY_TOKEN_AUTH_DEFAULT = True
 PLATFORMS = [Platform.CONVERSATION]
 
 
+def _migrate_legacy_model_selections(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Convert old endpoint selections once, retaining all unrelated settings."""
+    data = dict(entry.data)
+    options = dict(entry.options)
+    changed = False
+    for legacy_key, model_key, prefix in (
+        ("model_profile", "model_name", "profile/"),
+        ("openai_image_model_profile", "openai_image_model", "image-profile/"),
+    ):
+        reference = options.get(legacy_key, data.get(legacy_key, ""))
+        if isinstance(reference, str) and reference.strip():
+            options[model_key] = prefix + reference.strip()
+        for source in (data, options):
+            if legacy_key in source:
+                del source[legacy_key]
+                changed = True
+    if changed:
+        hass.config_entries.async_update_entry(entry, data=data, options=options)
+
+
 async def _migrate_brave_search_tool_name(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """One-time migration: Replace 'brave_search' with 'search' in Technical Instructions."""
     options = entry.options
@@ -644,6 +664,7 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MCP Assist from a config entry."""
     await async_load_localizations(hass)
+    _migrate_legacy_model_selections(hass, entry)
     # Skip setup for system entry (it only stores config, doesn't create entities)
     if entry.unique_id == SYSTEM_ENTRY_UNIQUE_ID:
         _LOGGER.debug("Skipping setup for system entry (config only)")

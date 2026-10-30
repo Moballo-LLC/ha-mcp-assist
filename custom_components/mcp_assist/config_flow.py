@@ -1395,12 +1395,18 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 current_values,
             )
             models = await provider_class.fetch_models(self.hass, provider_values)
+            official_openai = (
+                server_type == SERVER_TYPE_OPENAI
+                and OpenAIProvider._is_official_openai_base_url(
+                    provider_class.model_base_url(provider_values)
+                )
+            )
             self._fetched_image_models = tuple(
                 model for model in models
-                if server_type == SERVER_TYPE_OPENAI
-                and isinstance(model, str) and OpenAIProvider.is_image_model_id(model)
+                if server_type == SERVER_TYPE_OPENAI and isinstance(model, str)
+                and (not official_openai or OpenAIProvider.is_image_model_id(model))
             )
-            if server_type == SERVER_TYPE_OPENAI:
+            if official_openai:
                 models = [
                     model for model in models
                     if model not in self._fetched_image_models
@@ -2276,15 +2282,21 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
             options.get(CONF_MODEL_NAME, data.get(CONF_MODEL_NAME, DEFAULT_MODEL_NAME)),
         )
 
+        provider_values = _merge_provider_values(data, options, current_values)
         if provider_class.uses_config_model_step:
-            provider_values = _merge_provider_values(data, options, current_values)
             models = await provider_class.fetch_models(self.hass, provider_values)
+        official_openai = (
+            server_type == SERVER_TYPE_OPENAI
+            and OpenAIProvider._is_official_openai_base_url(
+                provider_class.model_base_url(provider_values)
+            )
+        )
         image_models = tuple(
             model for model in models
-            if server_type == SERVER_TYPE_OPENAI
-            and isinstance(model, str) and OpenAIProvider.is_image_model_id(model)
+            if server_type == SERVER_TYPE_OPENAI and isinstance(model, str)
+            and (not official_openai or OpenAIProvider.is_image_model_id(model))
         )
-        if server_type == SERVER_TYPE_OPENAI:
+        if official_openai:
             models = [model for model in models if model not in image_models]
 
         # Build model selector based on whether models were fetched
