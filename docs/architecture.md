@@ -22,8 +22,9 @@ MCP Assist keeps the prompt smaller by exposing Home Assistant through MCP tools
 Each `translations/<language>.json` file owns its runtime language text in the
 Home Assistant-supported `common` section: prompt instructions, follow-up and
 ending phrases, and spoken symbols. `strings.json` supplies the English source.
-Spoken-symbol templates use `{value}` to preserve language-specific spacing;
-leave the symbol unchanged when the TTS engine should handle it.
+Spoken-symbol templates start with `{value}` and supply the suffix and its
+language-specific spacing. They do not reorder numbers; leave the symbol
+unchanged when it needs a prefix or the TTS engine should handle it.
 
 `localization.py` contains only lookup, locale normalization, fallback, and symbol
 ordering logic. Setup and config flows load the bundled files once through the

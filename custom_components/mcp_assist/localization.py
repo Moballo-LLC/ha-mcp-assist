@@ -56,7 +56,7 @@ def _phrases(language_code: str, key: str) -> str:
     data = _language_data(language_code)
     if key not in data:
         _LOGGER.warning("Language '%s' has no %s; using English defaults", language_code, key)
-    return data.get(key, _COMMON["en"][key])
+    return data.get(key, _COMMON.get("en", {}).get(key, ""))
 
 
 def get_follow_up_phrases(language_code: str) -> str:

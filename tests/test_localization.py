@@ -59,5 +59,21 @@ def test_runtime_strings_are_complete_and_hassfest_compatible():
             assert value == value.strip(), (path, key)
             assert cv.string_with_no_html(value) == value
             if key.startswith("spoken_"):
+                assert value.startswith("{value}"), (path, key)
                 assert value.count("{value}") == 1, (path, key)
                 assert value.format(value="") == value.replace("{value}", "")
+
+
+async def test_diagnostics_load_localizations_with_cold_cache(hass, profile_entry_factory, monkeypatch):
+    from custom_components.mcp_assist.diagnostics import async_get_config_entry_diagnostics
+
+    monkeypatch.setattr(localization, "_COMMON", {})
+    hass.config.language = "de"
+    await async_get_config_entry_diagnostics(hass, profile_entry_factory())
+    assert "Deutsch" in localization.get_language_instruction("de")
+
+
+def test_phrase_lookup_before_initialization_does_not_crash(monkeypatch):
+    monkeypatch.setattr(localization, "_COMMON", {})
+    assert localization.get_follow_up_phrases("de") == ""
+    assert localization.get_end_words("en") == ""

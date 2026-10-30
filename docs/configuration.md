@@ -193,8 +193,9 @@ Lower effort can reduce voice latency, but quality and support vary by model.
 - OpenAI maps the setting to the selected generation API. Named model-profile
   policies retain priority. GPT-6 Astra and GPT-6.1 Sol use Low for Off; GPT-6
   Sol/Luna Chat Completions tool requests keep their required `none` effort.
-- Gemini uses Low for Off on models that cannot disable reasoning, and High for
-  Medium on the original Gemini 3 Pro, which supports only Low and High.
+- Gemini uses Minimal for Off on Flash families that support it, otherwise Low
+  when reasoning cannot be disabled. It uses High for Medium on the original
+  Gemini 3 Pro, which supports only Low and High.
   OpenRouter uses its compatible reasoning controls; supported levels depend
   on the selected model.
 - OpenClaw forwards the level to the gateway's agent request.
