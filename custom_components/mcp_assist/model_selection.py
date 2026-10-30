@@ -44,6 +44,8 @@ async def async_resolve_model(
         return model
     if not isinstance(model, str) or len(model) > 512:
         raise ModelResolutionError()
+    if any(part in {".", ".."} for part in model.split("/")):
+        raise ModelResolutionError()
     try:
         parts = urlsplit(runtime.base_url)
         if (parts.scheme not in {"http", "https"} or not parts.hostname

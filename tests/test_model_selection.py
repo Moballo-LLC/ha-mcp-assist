@@ -370,3 +370,11 @@ async def test_standalone_image_lookup_uses_image_setting(hass, profile_entry_fa
     assert selected == 'image-alias'
     assert runtime.resolve_image_model_before_request is True
     assert runtime.resolve_model_before_request is False
+
+
+@pytest.mark.parametrize('selection', ['.', '..', '../admin', 'vendor/../admin', 'vendor/./model'])
+async def test_model_retrieval_cannot_escape_its_path(runtime, monkeypatch, selection):
+    calls = session(monkeypatch, Response(b'{"id":"unexpected"}'))
+    with pytest.raises(model_selection.ModelResolutionError):
+        await model_selection.async_resolve_model(runtime, selection)
+    assert calls == []
