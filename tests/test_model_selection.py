@@ -270,3 +270,42 @@ async def test_options_can_disable_model_retrieval(profile_entry_factory, monkey
     calls = session(monkeypatch, Response(status=401))
     assert await model_selection.async_resolve_model(runtime, 'opaque') == 'opaque'
     assert calls == []
+
+
+@pytest.mark.parametrize('scope_kind', ['none', 'foreign', 'empty', 'blank', 'owned'])
+async def test_no_tools_inference_requires_owned_resolved_snapshot(
+    hass, profile_entry_factory, monkeypatch, scope_kind,
+):
+    from unittest.mock import AsyncMock
+    from custom_components.mcp_assist import agent as agent_module
+
+    entry = profile_entry_factory(data={
+        CONF_SERVER_TYPE: SERVER_TYPE_OPENAI, CONF_MODEL_NAME: 'alias',
+        CONF_LMSTUDIO_URL: 'https://example.invalid/v1', 'openai_resolve_model': True,
+    })
+    agent = agent_module.MCPAssistConversationEntity(hass, entry)
+    lookup = AsyncMock(return_value='resolved-current')
+    monkeypatch.setattr(agent_module, 'async_resolve_model', lookup)
+
+    async def capture_model(messages, provider, **kwargs):
+        return provider.model_name
+
+    monkeypatch.setattr(agent, '_call_llm_without_tools', capture_model)
+    snapshots = {
+        'none': None, 'foreign': (object(), 'resolved-foreign', None),
+        'empty': (entry, None, None), 'blank': (entry, '', None), 'owned': (entry, 'resolved-owned', None),
+    }
+    snapshot = snapshots[scope_kind]
+    token = agent_module.REQUEST_MODEL_SELECTION.set(snapshot)
+    try:
+        model = await agent.async_call_llm_without_tools([{'role': 'user', 'content': 'test'}])
+        assert agent_module.REQUEST_MODEL_SELECTION.get() is snapshot
+    finally:
+        agent_module.REQUEST_MODEL_SELECTION.reset(token)
+    if scope_kind == 'owned':
+        assert model == 'resolved-owned'
+        lookup.assert_not_awaited()
+    else:
+        assert model == 'resolved-current'
+        lookup.assert_awaited_once()
+        assert lookup.call_args.args[1] == 'alias'

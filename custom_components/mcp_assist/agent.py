@@ -4308,7 +4308,8 @@ class MCPAssistConversationEntity(ConversationEntity):
     ) -> str:
         """Call the active provider directly with tools disabled."""
         settings = self._build_provider_settings()
-        if REQUEST_MODEL_SELECTION.get() is None:
+        snapshot = REQUEST_MODEL_SELECTION.get()
+        if snapshot is None or snapshot[0] is not self.entry or not snapshot[1]:
             model = await async_resolve_model(
                 resolve_provider_runtime_config(self.entry), settings.model_name
             )
