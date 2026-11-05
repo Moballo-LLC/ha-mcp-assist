@@ -53,32 +53,52 @@ class AnthropicProvider(LLMProvider):
         del stream
         system_parts: list[str] = []
         anthropic_messages: list[dict[str, Any]] = []
+        anthropic_tools = self.convert_tools(tools)
+        # Anthropic rejects tool_use/tool_result blocks when a request defines no
+        # tools, so tool-free finalization requests carry that history as text.
+        native_tool_blocks = bool(anthropic_tools)
 
         for message in messages:
             role = message.get("role")
             if role == "system":
                 content = str(message.get("content") or "").strip()
-                if content:
+                if not content:
+                    continue
+                if anthropic_messages:
+                    # Hoisting a mid-conversation instruction would leave the
+                    # request ending on an assistant turn (an assistant prefill).
+                    self.append_message(
+                        anthropic_messages,
+                        "user",
+                        [{"type": "text", "text": content}],
+                    )
+                else:
                     system_parts.append(content)
                 continue
 
             if role == "tool":
-                self.append_message(
-                    anthropic_messages,
-                    "user",
-                    [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": message.get("tool_call_id", ""),
-                            "content": str(message.get("content") or ""),
-                        }
-                    ],
-                )
+                result_text = str(message.get("content") or "")
+                if native_tool_blocks:
+                    result_block: dict[str, Any] = {
+                        "type": "tool_result",
+                        "tool_use_id": message.get("tool_call_id", ""),
+                        "content": result_text,
+                    }
+                else:
+                    result_block = {
+                        "type": "text",
+                        "text": f"Tool result: {result_text or '(empty)'}",
+                    }
+                self.append_message(anthropic_messages, "user", [result_block])
                 continue
 
             if role == "assistant" and message.get("tool_calls"):
                 content_blocks = self.text_content_blocks(message.get("content"))
-                content_blocks.extend(self.tool_use_blocks(message.get("tool_calls", [])))
+                tool_calls = message.get("tool_calls", [])
+                if native_tool_blocks:
+                    content_blocks.extend(self.tool_use_blocks(tool_calls))
+                else:
+                    content_blocks.extend(self.tool_call_text_blocks(tool_calls))
                 self.append_message(anthropic_messages, "assistant", content_blocks)
                 continue
 
@@ -100,7 +120,6 @@ class AnthropicProvider(LLMProvider):
         if self.temperature is not None:
             payload["temperature"] = self.temperature
 
-        anthropic_tools = self.convert_tools(tools)
         if anthropic_tools:
             payload["tools"] = anthropic_tools
 
@@ -219,6 +238,22 @@ class AnthropicProvider(LLMProvider):
 
         text = str(content or "").strip()
         return [{"type": "text", "text": text}] if text else []
+
+    def tool_call_text_blocks(
+        self, tool_calls: list[dict[str, Any]]
+    ) -> list[dict[str, str]]:
+        """Describe earlier tool calls as text for requests without tool definitions."""
+        blocks: list[dict[str, str]] = []
+        for tool_call in tool_calls:
+            function = tool_call.get("function", {})
+            name = function.get("name")
+            if not name:
+                continue
+            arguments = stringify_tool_arguments(
+                parse_tool_arguments(function.get("arguments"))
+            )
+            blocks.append({"type": "text", "text": f"Called tool {name} with {arguments}"})
+        return blocks
 
     def tool_use_blocks(
         self, tool_calls: list[dict[str, Any]]
