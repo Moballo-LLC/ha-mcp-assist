@@ -608,3 +608,27 @@ def test_redaction_handles_objects_with_broken_string_conversion() -> None:
         "value": "[BrokenStringError omitted]"
     }
     assert redact_exception(error) == "BrokenStringError"
+
+
+def test_redact_secrets_leaves_large_base64_blobs_intact() -> None:
+    """Inline image data is passed through instead of scanned and possibly corrupted."""
+    # "/AKIA...": a token-shaped run that the AWS key pattern would otherwise rewrite.
+    blob = "iVBORw0KGgo" + "A" * 2000 + "/AKIAABCDEFGHIJKLMNOP/" + "B" * 2000 + "=="
+    payload = {
+        "content": [
+            {"type": "image", "data": blob, "mimeType": "image/png"},
+            {"type": "text", "text": f"data:image/png;base64,{blob}"},
+        ]
+    }
+
+    assert redact_secrets(payload) == payload
+
+
+def test_redact_secrets_still_scans_long_non_base64_text() -> None:
+    """The base64 fast path must not skip ordinary long text containing a credential."""
+    text = "log line " * 200 + "Authorization: Bearer sk-abcdefghijklmnop12345"
+
+    redacted = redact_secrets({"text": text})["text"]
+
+    assert "sk-abcdefghijklmnop12345" not in redacted
+    assert len(text) > 1024

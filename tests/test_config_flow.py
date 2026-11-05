@@ -62,6 +62,7 @@ from custom_components.mcp_assist.tools.builtin_catalog import (
 )
 from custom_components.mcp_assist.llm_providers.ollama import OllamaProvider
 from custom_components.mcp_assist.const import (
+    DOMAIN,
     CONF_API_KEY,
     CONF_ALLOWED_IPS,
     CONF_ALLOW_QUERY_TOKEN_AUTH,
@@ -1927,3 +1928,54 @@ async def test_openclaw_options_preserve_persona_and_session_controls(
     assert flow.profile_options["openclaw_session_mode"] == "per_conversation"
     assert flow.profile_options["openclaw_agent_id"] == "voice"
     assert flow.profile_options["thinking_mode"] == "low"
+
+
+async def test_user_step_aborts_duplicate_profile_before_later_steps(
+    hass, profile_entry_factory
+) -> None:
+    """A duplicate profile should be rejected at step 1, not after five steps."""
+    from homeassistant.data_entry_flow import AbortFlow
+
+    profile_entry_factory()
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.handler = DOMAIN
+    flow.context = {"source": "user"}
+
+    with pytest.raises(AbortFlow, match="already_configured"):
+        await flow.async_step_user(
+            {CONF_PROFILE_NAME: "Test Profile", CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA}
+        )
+
+
+async def test_shared_mcp_step_duplicate_does_not_change_shared_settings(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """An aborted duplicate profile must not write its shared settings."""
+    from homeassistant.data_entry_flow import AbortFlow
+
+    system_entry = system_entry_factory()
+    original_shared = dict(system_entry.data)
+    flow = MCPAssistConfigFlow()
+    flow.hass = hass
+    flow.handler = DOMAIN
+    flow.context = {"source": "user"}
+    flow.step1_data = {
+        CONF_PROFILE_NAME: "Test Profile",
+        CONF_SERVER_TYPE: SERVER_TYPE_OLLAMA,
+    }
+    flow.step2_data = {}
+    flow.step3_data = {}
+    flow.step4_data = {}
+    # The duplicate appears after step 1 passed, e.g. from another browser tab.
+    profile_entry_factory()
+
+    with pytest.raises(AbortFlow, match="already_configured"):
+        await flow.async_step_mcp_server(
+            {
+                CONF_MCP_PORT: 9876,
+                CONF_MCP_BEARER_TOKEN: "x" * 40,
+            }
+        )
+
+    assert dict(system_entry.data) == original_shared
