@@ -4731,14 +4731,17 @@ class MCPAssistConversationEntity(ConversationEntity):
                                         )
 
                                         if "id" in tc:
-                                            tool_ids[idx] = tc["id"]
-                                            current_tool_calls[idx]["id"] = tc["id"]
+                                            # Continuation deltas may repeat id as
+                                            # null/""; keep the id from the first one.
+                                            if tc["id"]:
+                                                tool_ids[idx] = tc["id"]
+                                                current_tool_calls[idx]["id"] = tc["id"]
                                             # Add the required type field
                                             current_tool_calls[idx]["type"] = "function"
 
                                         if "function" in tc:
                                             func = tc["function"]
-                                            if "name" in func:
+                                            if func.get("name"):
                                                 tool_names[idx] = func["name"]
                                                 if (
                                                     "function"
@@ -4892,6 +4895,14 @@ class MCPAssistConversationEntity(ConversationEntity):
             if sentence_buffer.strip():
                 await self._trigger_tts(sentence_buffer.strip())
                 sentence_buffer = ""
+
+            # Arguments are attached only once the buffer parses, so a stream cut
+            # off mid-arguments would otherwise run the tool with no arguments.
+            # Attach the raw buffer so the invalid-JSON guard rejects it instead.
+            for idx, buffered_arguments in tool_arg_buffers.items():
+                if buffered_arguments and idx < len(current_tool_calls):
+                    function = current_tool_calls[idx].setdefault("function", {})
+                    function.setdefault("arguments", buffered_arguments)
 
             current_tool_calls = self._compact_streamed_tool_calls(current_tool_calls)
 

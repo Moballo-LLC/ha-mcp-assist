@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
+from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.core import SupportsResponse
 from homeassistant.helpers import service as service_helper
 from homeassistant.util import dt as dt_util
@@ -17,6 +18,7 @@ from ..music_assistant.music_assistant import (
 )
 from ....domain_registry import get_domain_info
 from ....secret_redaction import redact_exception
+from ....targeting import split_data_target_selectors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,6 +155,10 @@ class ResponseServicesMixin:
                     }
                 ]
             }
+
+        target, data, selector_error = split_data_target_selectors(target, data)
+        if selector_error:
+            return {"content": [{"type": "text", "text": f"❌ Error: {selector_error}"}]}
 
         _LOGGER.info(
             "📖 Calling response service: %s.%s with target keys %s and data keys %s",
@@ -304,6 +310,23 @@ class ResponseServicesMixin:
 
         return prepared
 
+    def _response_service_exposure_error(self, domain: str, service: str) -> str | None:
+        """Block script services whose script entity is not exposed to Assist.
+
+        Each script registers a ``script.<object_id>`` service with optional
+        response data, so this path must honor the same exposure rule as
+        run_script.
+        """
+        if domain != "script":
+            return None
+        entity_id = f"script.{service}"
+        if async_should_expose(self.hass, "conversation", entity_id):
+            return None
+        return (
+            f"{entity_id} is not exposed to the assistant. Expose it in Home "
+            "Assistant's Assist settings to call it."
+        )
+
     async def _get_response_service_catalog(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
         """Build a catalog of HA services that support response data."""
         descriptions = await service_helper.async_get_all_descriptions(self.hass)
@@ -314,6 +337,8 @@ class ResponseServicesMixin:
                 continue
 
             for service_name in services:
+                if self._response_service_exposure_error(domain, service_name):
+                    continue
                 supports_response = self.hass.services.supports_response(
                     domain, service_name
                 )
@@ -334,7 +359,9 @@ class ResponseServicesMixin:
         self, domain: str, service: str
     ) -> tuple[Dict[str, Any], str | None]:
         """Get dynamic metadata for a response-capable HA service."""
-        capability_error = self._get_domain_capability_error(domain)
+        capability_error = self._get_domain_capability_error(
+            domain
+        ) or self._response_service_exposure_error(domain, service)
         if capability_error:
             return {}, capability_error
 

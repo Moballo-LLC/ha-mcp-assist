@@ -585,6 +585,13 @@ _register_unit_aliases("MiBps", ["mebibyte per second", "mebibytes per second"])
 _register_unit_aliases("GiBps", ["gibibyte per second", "gibibytes per second"])
 _register_unit_aliases("TiBps", ["tebibyte per second", "tebibytes per second"])
 
+# Exact-case SI symbols whose case-folded form collides with a different unit
+# (for example mW folds to "mw", which is registered as megawatt). These units
+# are not supported, so reject them instead of converting by the wrong factor.
+CASE_SENSITIVE_UNSUPPORTED_UNITS = frozenset(
+    {"mW", "mJ", "Ms", "MA", "MV", "mHz", "Kb", "Mb", "Gb", "Tb"}
+)
+
 _register_case_sensitive_unit_aliases("bps", ["b/s"])
 _register_case_sensitive_unit_aliases("kbps", ["kb/s", "Kb/s"])
 _register_case_sensitive_unit_aliases("mbps", ["mb/s", "Mb/s"])
@@ -827,6 +834,8 @@ class CalculatorTool:
     def _normalize_unit(self, value: Any) -> str | None:
         """Normalize a unit name into a canonical internal unit id."""
         case_sensitive_normalized = _normalize_case_sensitive_unit_alias(value)
+        if case_sensitive_normalized in CASE_SENSITIVE_UNSUPPORTED_UNITS:
+            return None
         if case_sensitive_normalized:
             case_sensitive_match = CASE_SENSITIVE_UNIT_ALIASES.get(case_sensitive_normalized)
             if case_sensitive_match:

@@ -1232,3 +1232,18 @@ async def test_read_url_rejects_oversized_chunked_body_after_multiple_reads(
     result = await tool.handle_call("read_url", {"url": "https://example.com/chunked"})
 
     assert result["content"][0]["text"] == "❌ URL response is too large to read safely"
+
+
+@pytest.mark.asyncio
+async def test_read_url_stray_end_tags_do_not_rescan_open_tags(hass) -> None:
+    """Unclosed tags plus stray closers used to take tens of seconds to parse."""
+    import time
+
+    tool = read_url_module.ReadUrlTool(hass)
+    html = "<i>" * 20000 + "</z>" * 20000 + "<p>Visible text</p>"
+
+    started = time.monotonic()
+    text = await tool._extract_text(html, "text/html")
+
+    assert text == "Visible text"
+    assert time.monotonic() - started < 10

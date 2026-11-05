@@ -4487,14 +4487,22 @@ async def test_tool_budget_skips_extra_calls_and_finishes_without_tools(
     ]
     assert "tools" in posts[0]["json"]
     assert "tools" not in posts[1]["json"]
-    assert "tool-call budget has been reached" in posts[1]["json"]["system"]
-
-    final_tool_result_blocks = posts[1]["json"]["messages"][-1]["content"]
-    assert [block["tool_use_id"] for block in final_tool_result_blocks] == [
-        "toolu_1",
-        "toolu_2",
+    # Anthropic rejects tool_use/tool_result blocks when no tools are defined,
+    # so the tool-free finalization request carries the tool history as text.
+    final_messages = posts[1]["json"]["messages"]
+    assert {
+        block["type"] for message in final_messages for block in message["content"]
+    } == {"text"}
+    final_blocks = final_messages[-1]["content"]
+    assert final_messages[-1]["role"] == "user"
+    assert "tool-call budget has been reached" in final_blocks[-1]["text"]
+    tool_result_texts = [
+        block["text"].removeprefix("Tool result: ")
+        for block in final_blocks
+        if block["text"].startswith("Tool result: ")
     ]
-    skipped_content = json.loads(final_tool_result_blocks[1]["content"])
+    assert len(tool_result_texts) == 2
+    skipped_content = json.loads(tool_result_texts[1])
     assert skipped_content["budget_exhausted"] is True
     assert "configured tool-call budget" in skipped_content["error"]
 
@@ -6531,3 +6539,96 @@ async def test_streaming_starts_with_user_request_and_ignores_old_probe_result(
     assert posts[1]["json"]["messages"] == second
     assert posts[1]["json"]["model"] == "second-example-model"
     assert posts[1]["json"]["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_truncated_tool_arguments_are_not_executed(
+    hass, profile_entry_factory, monkeypatch
+) -> None:
+    """A stream cut off mid-arguments must trigger the invalid-JSON retry, not run {}."""
+    entry = profile_entry_factory(
+        data={
+            CONF_SERVER_TYPE: SERVER_TYPE_OPENAI,
+            CONF_LMSTUDIO_URL: OPENAI_BASE_URL,
+            CONF_API_KEY: "sk-test",
+            CONF_MODEL_NAME: "gpt-4o-mini",
+        },
+        options={
+            CONF_OPENAI_API_TRANSPORT: "chat_completions",
+            CONF_MAX_ITERATIONS: 3,
+            CONF_MAX_TOKENS: 100,
+        },
+    )
+    agent = MCPAssistConversationEntity(hass, entry)
+    agent._streaming_available = True
+    monkeypatch.setattr(
+        agent,
+        "_get_mcp_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "perform_action",
+                        "description": "Control entities.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
+        ),
+    )
+    execute_mock = AsyncMock(return_value=[])
+    monkeypatch.setattr(agent, "_execute_tool_calls", execute_mock)
+    monkeypatch.setattr(agent, "_log_initial_llm_payload_metrics", lambda **kwargs: None)
+
+    truncated_call = {
+        "choices": [
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "perform_action",
+                                "arguments": '{"domain": "lock", "entity_id": "lock.fr',
+                            },
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    responses = [
+        _FakeStreamingResponse(
+            [
+                "data: " + json.dumps(truncated_call),
+                'data: {"choices":[{"delta":{},"finish_reason":"length"}]}',
+                "data: [DONE]",
+            ]
+        ),
+        _FakeStreamingResponse(
+            [
+                'data: {"choices":[{"delta":{"content":"Please try again."}}]}',
+                'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+                "data: [DONE]",
+            ]
+        ),
+    ]
+    posts: list[dict] = []
+
+    def _client_session(**kwargs):
+        del kwargs
+        return _FakeAnthropicSession(responses, posts)
+
+    monkeypatch.setattr(agent_module.aiohttp, "ClientSession", _client_session)
+
+    result = await agent._call_llm_streaming(
+        [{"role": "user", "content": "Unlock the front door."}]
+    )
+
+    execute_mock.assert_not_awaited()
+    assert result == "Please try again."
+    assert len(posts) == 2
+    assert "invalid JSON arguments" in posts[1]["json"]["messages"][-1]["content"]

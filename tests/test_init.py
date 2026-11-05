@@ -6,6 +6,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
+from homeassistant.exceptions import ConfigEntryNotReady
 import pytest
 from tests.ha_test_compat import MockConfigEntry
 
@@ -788,3 +789,29 @@ def test_migrate_effective_custom_provider_enables_retrieval(hass, profile_entry
     _migrate_legacy_model_selections(hass, entry)
     assert entry.options['model_name'] == 'profile/text'
     assert entry.options['openai_resolve_model'] is True
+
+
+@pytest.mark.asyncio
+async def test_failed_server_start_stops_new_index_manager(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A port-in-use retry must not leak the index manager's registry listeners."""
+    system_entry_factory()
+    entry = profile_entry_factory()
+    index_manager = SimpleNamespace(start=AsyncMock(), async_stop=AsyncMock())
+    mcp_server = SimpleNamespace(
+        start=AsyncMock(side_effect=OSError("Address already in use")),
+        stop=AsyncMock(),
+    )
+
+    with (
+        patch("custom_components.mcp_assist.IndexManager", return_value=index_manager),
+        patch("custom_components.mcp_assist.MCPServer", return_value=mcp_server),
+    ):
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+
+    index_manager.async_stop.assert_awaited_once()
+    mcp_server.stop.assert_awaited_once()
+    assert "index_manager" not in hass.data[DOMAIN]
+    assert "shared_mcp_server" not in hass.data[DOMAIN]

@@ -2139,3 +2139,66 @@ def test_gpt61_sol_tool_transport_rules_follow_endpoint_contract(base_url):
         }}])
         assert payload["reasoning_effort"] == "medium"
         assert "temperature" not in payload
+
+
+def test_anthropic_payload_keeps_mid_conversation_system_messages_in_order() -> None:
+    """A retry instruction after an assistant turn must not become an assistant prefill."""
+    provider = AnthropicProvider(_settings(SERVER_TYPE_ANTHROPIC))
+
+    payload = provider.build_payload(
+        [
+            {"role": "system", "content": "Be brief."},
+            {"role": "user", "content": "Is the door locked?"},
+            {"role": "assistant", "content": "Let me check."},
+            {"role": "system", "content": "Call the needed tool now."},
+        ],
+        [],
+    )
+
+    assert payload["system"] == "Be brief."
+    assert payload["messages"][-1] == {
+        "role": "user",
+        "content": [{"type": "text", "text": "Call the needed tool now."}],
+    }
+
+
+def test_anthropic_payload_flattens_tool_history_when_no_tools_are_sent() -> None:
+    """Anthropic rejects tool_use/tool_result blocks in requests that define no tools."""
+    provider = AnthropicProvider(_settings(SERVER_TYPE_ANTHROPIC))
+    history = [
+        {"role": "user", "content": "Is the door locked?"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "toolu_1",
+                    "type": "function",
+                    "function": {
+                        "name": "get_entity_details",
+                        "arguments": '{"entity_id": "lock.front"}',
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "toolu_1", "content": "locked"},
+    ]
+    tool = {
+        "type": "function",
+        "function": {"name": "get_entity_details", "parameters": {"type": "object"}},
+    }
+
+    with_tools = provider.build_payload(history, [tool])
+    without_tools = provider.build_payload(history, [])
+
+    assert with_tools["messages"][1]["content"][0]["type"] == "tool_use"
+    assert with_tools["messages"][2]["content"][0]["type"] == "tool_result"
+    assert "tools" not in without_tools
+    block_types = {
+        block["type"]
+        for message in without_tools["messages"]
+        for block in message["content"]
+    }
+    assert block_types == {"text"}
+    assert without_tools["messages"][2]["content"] == [
+        {"type": "text", "text": "Tool result: locked"}
+    ]
