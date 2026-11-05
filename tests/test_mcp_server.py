@@ -5176,3 +5176,23 @@ async def test_image_tools_reject_unexposed_entities(
         await server._capture_camera_image("camera.bedroom")
     with pytest.raises(ValueError, match="not exposed"):
         await server._resolve_entity_image("person.guest")
+
+
+@pytest.mark.asyncio
+async def test_tool_get_image_does_not_echo_data_url_payload(
+    hass, profile_entry_factory, system_entry_factory
+) -> None:
+    """A data: URL source is summarized, not copied back into the tool result."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    payload = b"\x89PNG\r\n\x1a\n" + b"x" * 4096
+    data_url = "data:image/png;base64," + base64.b64encode(payload).decode()
+
+    result = await server.tool_get_image({"image_url": data_url})
+
+    assert result["isError"] is False
+    source = result["structuredContent"]["source"]
+    assert source["value"] == f"data URL (image/png, {len(payload)} bytes)"
+    text_blocks = [block["text"] for block in result["content"] if block["type"] == "text"]
+    assert all("base64," not in text for text in text_blocks)
+    assert "base64," not in json.dumps(result["structuredContent"])

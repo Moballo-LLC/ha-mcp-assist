@@ -107,7 +107,7 @@ Current schema:
   "version": "1.0.0",
   "entrypoint": "tool:MyTool",
   "capabilities": [
-    "Optional short capability summary shown to the model"
+    "Optional short capability summary for diagnostics"
   ],
   "prompt_append_file": "prompt.md"
 }
@@ -137,6 +137,9 @@ Current schema:
 - `capabilities`
   - Optional
   - List of short strings describing what the package can do
+  - Reported in validation and diagnostics output. They are not added to the
+    model prompt; use `prompt_append_file` or `get_prompt_instructions()` for
+    model guidance
 - `prompt_append_file`
   - Optional
   - Relative file path inside the package
@@ -182,6 +185,9 @@ MCP Assist loads these helpers from:
 - `<home-assistant-config>/mcp-assist-tools/__shared__/`
 
 This avoids ad-hoc `sys.path` shims and keeps package imports collision-safe.
+Each package is imported under its own module namespace, so relative imports and
+imports of sibling packages are not supported. Put shared code in `__shared__/`
+and load it with `load_external_shared_module`.
 
 ### Package settings
 
@@ -205,6 +211,12 @@ When present, MCP Assist will load and validate settings from:
 
 - Shared: `<home-assistant-config>/mcp-assist-tool-settings/<tool_id>.json`
 - Per-profile override: `<home-assistant-config>/mcp-assist-tool-settings/profiles/<profile_entry_id>/<tool_id>.json`
+
+Shared settings files are read when packages load, so run
+`mcp_assist.reload_external_custom_tools` after editing one. Per-profile files
+are read on each call. A call context's `profile_entry_id` selects a per-profile
+file only when it matches an existing MCP Assist profile. Other values are
+ignored.
 
 During a tool call, packages can read:
 
@@ -235,11 +247,16 @@ The module also exports standalone helpers for shared modules:
 ```python
 from custom_components.mcp_assist.custom_tool_api import (
     async_recorder_query,
+    async_run_recorder_job,
     entity_snapshot,
+    exposed_entity_ids,
     format_entity_state,
     format_datetime,
     format_relative_time,
+    format_state,
+    is_entity_exposed,
     mcp_error_result,
+    mcp_image_result,
     mcp_json_result,
     mcp_text_result,
 )
@@ -247,10 +264,16 @@ from custom_components.mcp_assist.custom_tool_api import (
 
 Useful helpers include:
 
-- `mcp_text_result(...)`, `mcp_error_result(...)`, and `mcp_json_result(...)`
+- `mcp_text_result(...)`, `mcp_error_result(...)`, `mcp_json_result(...)`, and
+  `mcp_image_result(image_bytes, mime_type)`
 - `self.ok(...)` and `self.error(...)`
-- `entity_snapshot(hass, entity_id)`
-- `format_entity_state(hass, entity_id)`
+- `entity_snapshot(hass, entity_id, exposed_only=False)`
+- `format_entity_state(hass, entity_id, exposed_only=False)` and `format_state(state)`
+- `is_entity_exposed(hass, entity_id)`: Home Assistant's own Assist exposure
+  check, including domain and device-class defaults
+- `exposed_entity_ids(hass, domain=None)`: exposed entity IDs, optionally for
+  one domain or a list of domains. Filtering by domain uses Home Assistant's
+  state index instead of copying every state.
 - `format_datetime(...)` and `format_relative_time(...)`
 - `async_recorder_query(hass, sql, parameters, limit=...)`
 - `self.async_recorder_query(sql, parameters, limit=...)`
@@ -313,6 +336,20 @@ This keeps package prompts smaller, preserves active-profile model selection,
 and lets external suites compose generic MCP Assist capabilities such as image
 analysis without duplicating provider logic.
 
+### Exposure and trust
+
+Package code runs inside Home Assistant with full access, the same as any custom
+integration. MCP Assist does not sandbox it. Where a check applies:
+
+- Built-in tools reached through `call_mcp_tool` (`get_image`, `analyze_image`,
+  `perform_action`, `call_service_with_response`, and others) apply the same
+  Assist exposure checks as when the model calls them. For example,
+  `get_image` refuses a camera or image entity that is not exposed.
+- Direct `hass.states` reads and `hass.services` calls are not exposure
+  checked. When a tool acts on entity IDs that come from the model, check them
+  with `is_entity_exposed` or use `exposed_only=True`. Fixed entities that the
+  package author chose deliberately can be read directly.
+
 ## Tool Definition Rules
 
 Each tool definition must:
@@ -320,8 +357,12 @@ Each tool definition must:
 - be an MCP tool definition object
 - include `name`
 - include `description`
-- include `inputSchema`
+- include `inputSchema` (if omitted, it defaults to an object with no properties)
 - declare `annotations.readOnlyHint` when it is safe for read-only profiles
+
+An optional `llmDescription` (or `llm_description`) replaces `description` in the
+model-facing tool list. Keep it short; `description` stays available for
+diagnostics.
 
 Tool names must:
 
@@ -468,7 +509,12 @@ You no longer need a full restart just to iterate on package code:
 
 The validation service loads and validates external packages, returns
 diagnostics, and then shuts them down without exposing them in the live MCP tool
-registry. Use it before enabling custom tools or after editing package code.
+registry. Use it before enabling custom tools or after editing package code. It
+reports `load_errors` and `loaded_tools`.
+
+The reload service reloads built-in and external packages and returns combined
+package diagnostics. External results appear under `external_load_errors` and
+`external_packages`, and built-in results under the `built_in_*` keys.
 
 The diagnostics endpoint reports:
 

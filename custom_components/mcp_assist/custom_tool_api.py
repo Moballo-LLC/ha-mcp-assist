@@ -24,6 +24,7 @@ import re
 import sys
 from typing import Any, Callable, Mapping, TypeVar
 
+from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
@@ -469,8 +470,45 @@ def mcp_image_result(
     )
 
 
-def entity_snapshot(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
-    """Return a compact, JSON-friendly snapshot for a Home Assistant entity."""
+def is_entity_exposed(hass: HomeAssistant, entity_id: str) -> bool:
+    """Return whether an entity is exposed to the conversation assistant.
+
+    Uses Home Assistant's own exposure rules, including domain and device-class
+    defaults, so tools agree with MCP Assist's built-in tools.
+    """
+    return bool(async_should_expose(hass, "conversation", entity_id))
+
+
+def exposed_entity_ids(
+    hass: HomeAssistant,
+    domain: str | list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
+    """Return current entity IDs exposed to the assistant, optionally by domain.
+
+    Passing a domain lets Home Assistant filter its state index instead of
+    copying every state, which matters on homes with thousands of entities.
+    """
+    domain_filter = list(domain) if isinstance(domain, (list, tuple)) else domain
+    return [
+        entity_id
+        for entity_id in hass.states.async_entity_ids(domain_filter)
+        if is_entity_exposed(hass, entity_id)
+    ]
+
+
+def entity_snapshot(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    exposed_only: bool = False,
+) -> dict[str, Any] | None:
+    """Return a compact, JSON-friendly snapshot for a Home Assistant entity.
+
+    With ``exposed_only=True``, entities not exposed to the assistant are
+    treated as missing.
+    """
+    if exposed_only and not is_entity_exposed(hass, entity_id):
+        return None
     state = hass.states.get(entity_id)
     if state is None:
         return None
@@ -492,9 +530,18 @@ def format_entity_state(
     *,
     include_last_changed: bool = False,
     missing_text: str | None = None,
+    exposed_only: bool = False,
 ) -> str:
-    """Format a Home Assistant entity's current state for tool output."""
-    state = hass.states.get(entity_id)
+    """Format a Home Assistant entity's current state for tool output.
+
+    With ``exposed_only=True``, entities not exposed to the assistant are
+    reported like missing entities.
+    """
+    state = (
+        None
+        if exposed_only and not is_entity_exposed(hass, entity_id)
+        else hass.states.get(entity_id)
+    )
     if state is None:
         return missing_text if missing_text is not None else f"{entity_id}: unavailable"
     return format_state(state, include_last_changed=include_last_changed)

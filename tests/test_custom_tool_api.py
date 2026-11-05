@@ -14,9 +14,11 @@ from custom_components.mcp_assist.custom_tool_api import (
     analyze_image,
     async_recorder_query,
     entity_snapshot,
+    exposed_entity_ids,
     format_datetime,
     format_entity_state,
     format_relative_time,
+    is_entity_exposed,
     mcp_error_result,
     mcp_image_result,
     mcp_json_result,
@@ -267,3 +269,34 @@ def test_read_only_sql_validator_allows_select_ctes_and_ignores_literals() -> No
     assert custom_tool_api_module._is_read_only_sql(
         "SELECT /*!50000 'DELETE FROM states' AS example_text, */ state FROM states"
     )
+
+
+def test_exposure_helpers_follow_assist_exposure(hass, monkeypatch) -> None:
+    """Exposure-aware helpers hide entities that are not exposed to Assist."""
+    hass.states.async_set("light.kitchen", "on", {"friendly_name": "Kitchen"})
+    hass.states.async_set("light.closet", "off", {"friendly_name": "Closet"})
+    hass.states.async_set("sensor.power", "5", {"friendly_name": "Power"})
+    exposed = {"light.kitchen", "sensor.power"}
+    monkeypatch.setattr(
+        custom_tool_api_module,
+        "async_should_expose",
+        lambda hass_obj, assistant, entity_id: (
+            assistant == "conversation" and entity_id in exposed
+        ),
+    )
+
+    assert is_entity_exposed(hass, "light.kitchen") is True
+    assert is_entity_exposed(hass, "light.closet") is False
+    assert exposed_entity_ids(hass, "light") == ["light.kitchen"]
+    assert sorted(exposed_entity_ids(hass, ["light", "sensor"])) == [
+        "light.kitchen",
+        "sensor.power",
+    ]
+    assert entity_snapshot(hass, "light.closet", exposed_only=True) is None
+    assert entity_snapshot(hass, "light.closet")["state"] == "off"
+    assert entity_snapshot(hass, "light.kitchen", exposed_only=True)["state"] == "on"
+    assert (
+        format_entity_state(hass, "light.closet", exposed_only=True, missing_text="n/a")
+        == "n/a"
+    )
+    assert format_entity_state(hass, "light.kitchen", exposed_only=True) == "Kitchen: on"
