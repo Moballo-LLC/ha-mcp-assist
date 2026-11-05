@@ -664,3 +664,16 @@ def test_redact_secrets_passes_identified_binary_payloads_in_order() -> None:
     assert redacted == payload
     assert list(redacted["content"][0]) == ["type", "data", "mimeType"]
     assert list(redacted["content"][1]) == ["type", "mimeType", "data"]
+
+
+def test_redact_secrets_handles_non_string_block_types() -> None:
+    """Arbitrary JSON with list/object `type` values must not crash redaction."""
+    for value in (
+        {"type": ["string", "null"], "data": "example"},
+        {"type": {"kind": "image"}, "data": "example"},
+        {"type": None, "data": "example"},
+    ):
+        assert redact_secrets(value) == value
+    assert "AIza" not in json.dumps(
+        redact_secrets({"type": ["image"], "data": "AIza" + "B" * 35})
+    )
