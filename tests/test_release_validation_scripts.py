@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import product
 import os
 from pathlib import Path
 import subprocess
@@ -68,11 +69,16 @@ def test_release_workflow_installs_resolved_core_conversation_dependencies() -> 
     assert validate["run"] == 'PYTHON="$(command -v python)" scripts/verify_release_candidate.sh'
 
 
-def test_test_workflow_runs_full_suite_with_independent_latest_resolution() -> None:
+def test_test_workflow_runs_full_suite_on_dynamically_discovered_releases() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/tests.yml").read_text())
     job = workflow["jobs"]["test"]
     assert job["strategy"]["fail-fast"] is False
-    assert job["strategy"]["matrix"]["homeassistant"] == ["2026.8.3", "2026.9.3", "latest"]
+    assert job["needs"] == "environments"
+    assert job["strategy"]["matrix"] == "${{ fromJSON(needs.environments.outputs.matrix) }}"
+    discovery = workflow["jobs"]["environments"]
+    assert discovery["outputs"]["matrix"] == "${{ steps.releases.outputs.matrix }}"
+    assert any("test_environment.py matrix --github-output" in step.get("run", "")
+               for step in discovery["steps"])
     assert not job.get("continue-on-error", False)
     steps = job["steps"]
     resolve = next(step for step in steps if step.get("id") == "environment")
@@ -94,25 +100,21 @@ def test_test_workflow_preserves_required_fail_closed_aggregate_status() -> None
 
     assert aggregate["name"] == "Test"
     assert aggregate["if"] == "always()"
-    assert aggregate["needs"] == ["test"]
+    assert aggregate["needs"] == ["environments", "test"]
     assert aggregate["timeout-minutes"] > 0
     assert len(steps) == 1
     assert steps[0]["env"]["MATRIX_RESULT"] == "${{ needs.test.result }}"
     assert '"$MATRIX_RESULT" != "success"' in steps[0]["run"]
     assert "exit 1" in steps[0]["run"]
 
-    for result, expected_returncode in (
-        ("success", 0),
-        ("failure", 1),
-        ("cancelled", 1),
-        ("skipped", 1),
-    ):
+    for discovery_result, result in product(("success", "failure", "cancelled", "skipped"), repeat=2):
+        expected_returncode = 0 if discovery_result == result == "success" else 1
         completed = subprocess.run(
             ["bash", "-c", steps[0]["run"]],
             check=False,
             capture_output=True,
             text=True,
-            env=os.environ | {"MATRIX_RESULT": result},
+            env=os.environ | {"MATRIX_RESULT": result, "DISCOVERY_RESULT": discovery_result},
         )
         assert completed.returncode == expected_returncode
 

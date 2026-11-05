@@ -1622,7 +1622,7 @@ async def test_llm_api_bridge_lists_allowlisted_registered_apis(
         assert payload["allowed_api_ids"] == ["llm_intents", "missing_api"]
         assert payload["missing_allowed_api_ids"] == ["missing_api"]
         assert payload["apis"] == [
-            {"id": "llm_intents", "name": "LLM Intents", "allowed": True}
+            {"id": "llm_intents", "name": "LLM Intents", "allowed": True, "requires_admin": False}
         ]
     finally:
         unregister()

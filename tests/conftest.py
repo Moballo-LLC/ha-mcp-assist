@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from tests.ha_test_compat import MockConfigEntry
 
 from custom_components.mcp_assist.const import (
     CONF_ALLOWED_IPS,

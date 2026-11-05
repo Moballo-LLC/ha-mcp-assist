@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from tests.ha_test_compat import MockConfigEntry
 
 from custom_components.mcp_assist import (
     _async_handle_validate_external_custom_tools,

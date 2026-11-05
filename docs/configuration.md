@@ -7,6 +7,25 @@ MCP Assist configuration has two layers:
 
 This guide explains the main settings and when to change them.
 
+## Conditional Setup Forms
+
+On Home Assistant releases with conditional form support, setup and options
+show dependent fields only when they apply:
+
+- Web search reveals its provider selector when enabled, the Brave API key for
+  Brave, and the SearXNG URL for SearXNG.
+- Google Maps reveals its API key when enabled.
+- LLM API Bridge reveals its allowlist when enabled.
+- Index auto-refresh reveals its delay when enabled.
+- Response mode **None** hides follow-up phrases and end words.
+- OpenClaw’s fixed session key appears only in **Fixed** session mode.
+
+Turning a feature off keeps its previously saved credentials, provider choice,
+allowlist, and custom phrases for later reuse. Hidden form input is omitted by
+Home Assistant’s validation. On older releases, the same fields remain visible
+and use their existing defaults and validation. The configuration keys and
+runtime support floor are unchanged.
+
 ## Profile Settings
 
 Profile settings are independent per conversation agent.
@@ -381,6 +400,13 @@ Shared setting shown with the LLM API Bridge tool:
 The shared settings form shows currently registered third-party LLM APIs beside
 the allowlist field. Copy the API ID from that list when enabling an installed
 integration.
+
+For Home Assistant 2026.11 troubleshooting, add `homeassistant` to the allowlist
+only if it appears among the registered APIs. An authenticated administrator
+must start the Assist conversation. The API can read sensitive system logs and
+perform actions or reload integrations; review its discovered tool schemas
+before enabling it for a profile. External MCP bearer access does not grant
+administrator identity. The bridge remains optional and disabled by default.
 
 The built-in Home Assistant `assist` API remains on the separate Assist Bridge.
 Do not add third-party API IDs unless you trust the integration that registered

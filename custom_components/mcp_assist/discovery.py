@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - older Home Assistant versions
     WeatherEntityFeature = None
 
 from .const import MAX_ENTITIES_PER_DISCOVERY
-from .registry_compat import iter_registry_items
+from .registry_compat import device_effective_area_id, entity_display_name, iter_registry_items
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ class SmartDiscovery:
                 continue
 
             state_obj = self.hass.states.get(entity_id)
-            if state_obj and name in state_obj.name.casefold():
+            if state_obj and name in entity_display_name(self.hass, state_obj).casefold():
                 return True
 
             entity_entry = entity_registry.async_get(entity_id)
@@ -522,8 +522,8 @@ class SmartDiscovery:
         area_id = None
         if entity_entry and entity_entry.area_id:
             area_id = entity_entry.area_id
-        elif device_entry and device_entry.area_id:
-            area_id = device_entry.area_id
+        elif device_entry:
+            area_id = device_effective_area_id(self.hass, device_entry)
 
         area_entry = area_registry.async_get_area(area_id) if area_id else None
 
@@ -675,7 +675,7 @@ class SmartDiscovery:
 
         consider(
             "entity name",
-            state_obj.name,
+            entity_display_name(self.hass, state_obj),
             exact_score=120,
             substring_score=90,
             token_score=75,
@@ -763,7 +763,7 @@ class SmartDiscovery:
         include_label_sources: bool = False,
     ) -> Dict[str, Any]:
         """Resolve area, floor, and label context for a device."""
-        area_id = device_entry.area_id if device_entry else None
+        area_id = device_effective_area_id(self.hass, device_entry) if device_entry else None
         area_entry = area_registry.async_get_area(area_id) if area_id else None
 
         floor_id = getattr(area_entry, "floor_id", None) if area_entry else None
@@ -832,7 +832,7 @@ class SmartDiscovery:
 
             entity_summary = {
                 "entity_id": state_obj.entity_id,
-                "name": state_obj.name,
+                "name": entity_display_name(self.hass, state_obj),
                 "domain": state_obj.domain,
                 "state": state_obj.state,
             }
@@ -1066,7 +1066,7 @@ class SmartDiscovery:
             # Also check friendly name and aliases
             if not matched:
                 # Check friendly name
-                if name_lower in state_obj.name.lower():
+                if name_lower in entity_display_name(self.hass, state_obj).lower():
                     entity_info = self._create_entity_info(state_obj)
                     results["related_entities"]["other"].append(entity_info)
                 else:
@@ -1134,7 +1134,7 @@ class SmartDiscovery:
             # Also check friendly name and aliases
             if not matched:
                 # Check friendly name
-                if name_lower in state_obj.name.lower():
+                if name_lower in entity_display_name(self.hass, state_obj).lower():
                     entity_info = self._create_entity_info(state_obj)
                     results["related_entities"]["other"].append(entity_info)
                 else:
@@ -1292,8 +1292,8 @@ class SmartDiscovery:
                     entity_area_id = entity_entry.area_id
                 elif entity_entry.device_id:
                     device_entry = device_registry.async_get(entity_entry.device_id)
-                    if device_entry and device_entry.area_id:
-                        entity_area_id = device_entry.area_id
+                    if device_entry:
+                        entity_area_id = device_effective_area_id(self.hass, device_entry)
 
             # Check if entity is in the target area
             if entity_area_id != area_id:
@@ -1617,7 +1617,7 @@ class SmartDiscovery:
         """Create entity information dictionary."""
         entity_info = {
             "entity_id": state_obj.entity_id,
-            "name": state_obj.name,
+            "name": entity_display_name(self.hass, state_obj),
             "domain": state_obj.domain,
             "state": state_obj.state,
         }
@@ -1812,7 +1812,7 @@ class SmartDiscovery:
 
             entity_details = {
                 "entity_id": entity_id,
-                "name": state_obj.name,
+                "name": entity_display_name(self.hass, state_obj),
                 "domain": state_obj.domain,
                 "state": state_obj.state,
                 "attributes": self._serialize_attributes(dict(state_obj.attributes)),
@@ -2229,15 +2229,15 @@ class SmartDiscovery:
                     entity_area_id = entity_entry.area_id
                 elif entity_entry.device_id:
                     device_entry = device_registry.async_get(entity_entry.device_id)
-                    if device_entry and device_entry.area_id:
-                        entity_area_id = device_entry.area_id
+                    if device_entry:
+                        entity_area_id = device_effective_area_id(self.hass, device_entry)
 
             if entity_area_id == area_id:
                 # Only include entities that should be exposed
                 if async_should_expose(self.hass, "conversation", state.entity_id):
                     entities.append({
                         "entity_id": state.entity_id,
-                        "name": state.attributes.get("friendly_name", state.entity_id),
+                        "name": entity_display_name(self.hass, state),
                         "state": state.state,
                         "domain": state.entity_id.split(".")[0]
                     })

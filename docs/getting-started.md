@@ -16,7 +16,15 @@ profile, and testing that the model can use MCP tools.
 
 For model selection notes, see [Model Compatibility](model-compatibility.md).
 
-## Install with HACS
+## Install with Marketplace on Home Assistant 2026.11+
+
+Open **Settings** -> **Marketplace**, select **Add from link**, and enter
+`https://github.com/Moballo-LLC/ha-mcp-assist`. Custom repositories require the
+Marketplace’s GitHub connection. Install **HA MCP Assist** and follow its setup
+flow. Updates can require a Home Assistant restart; follow the repair notice.
+Existing HACS installations migrate with Home Assistant’s Marketplace.
+
+## Install with HACS on older Home Assistant releases
 
 [![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Moballo-LLC&repository=ha-mcp-assist&category=integration)
 
@@ -137,6 +145,11 @@ server.
   and external custom tools.
 
 See [Configuration](configuration.md) for the full settings reference.
+
+Newer Home Assistant setup forms reveal dependent fields as you change a
+choice—for example, selecting Brave shows its API key field. Older releases
+show the complete form. See [Conditional Setup Forms](configuration.md#conditional-setup-forms)
+for the fields that adapt and how saved settings are retained.
 
 ## Set as a Voice Assistant
 

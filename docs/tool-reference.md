@@ -36,6 +36,19 @@ For a direct entity target, `perform_action` also accepts a top-level `entity_id
 "entity_id":"light.example_lamp"}`. Use either this shorthand or `target` in
 one call. Both use the same domain and Assist exposure checks.
 
+On Home Assistant releases with native target exclusions, `target.exclude`
+accepts entity, device, area, floor, and label IDs. For example, turn off a floor
+except the kitchen with `{"domain":"light","action":"turn_off","target":
+{"floor_id":"ground_floor","exclude":{"area_id":"kitchen"}}}`. Exclusions
+are resolved for each call, use Core’s group handling, and preserve conversation
+exposure checks. An empty remaining target is an error; put selector IDs in
+`target`, since `data` cannot override exclusions. Older releases do not
+advertise this option and reject it if supplied.
+
+Discovery uses Core’s computed registry names when available, including device
+context, and retains state-name fallbacks on older releases. Child devices use
+the area inherited from their parent when Core provides that information.
+
 `discover_entities` combines area and name filters, treats `domain: "all"` or
 `domain: "*"` as no domain filter, and matches aggregate words such as "all"
 only as whole words. Empty results include guidance to simplify filters or
@@ -90,6 +103,16 @@ third-party API's schema. The built-in Home Assistant `assist` API stays on the
 Assist Bridge tools. Native tool results retain their structured data and error
 status in MCP Assist, including Home Assistant's `ToolResult` API and older
 JSON-object return values.
+
+Home Assistant 2026.11 can register the `homeassistant` API for troubleshooting:
+system information, logs, action discovery/calls, and integration listing/reload.
+Enable the LLM API Bridge and explicitly allowlist `homeassistant` to use it.
+Authenticated Assist conversations call this bridge in process with their real
+Home Assistant user context. Core still enforces administrator access. External
+MCP clients do not gain a Home Assistant user identity from their bearer token
+or request JSON, so they cannot use administrator-only APIs. `list_llm_apis`
+reports `requires_admin` alongside allowlist status. API calls remain subject
+to the profile’s tool-family and Control Home Assistant settings.
 
 ## Response-Service Read Tools
 

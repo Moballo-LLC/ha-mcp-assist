@@ -27,7 +27,7 @@ import voluptuous as vol
 import yarl
 
 from homeassistant.components import conversation
-from homeassistant.core import Context, HomeAssistant, SupportsResponse
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     area_registry as ar,
@@ -55,6 +55,9 @@ from .tools.builtin_catalog import (
     is_builtin_package_enabled_for_shared_settings,
 )
 from .openapi import to_openapi
+from .request_context import current_ha_context
+from .targeting import apply_target_exclusions, target_schema
+from .registry_compat import device_effective_area_id, entity_display_name
 from .llm_tool_result import normalize_llm_tool_result
 from .model_selection import (
     MCP_MODEL_REQUEST_HEADER, ModelResolutionError, REQUEST_MODEL_SELECTION,
@@ -2566,49 +2569,7 @@ class MCPServer(
                             ],
                             "description": "Entity IDs as an alternative to target. Use only one target form.",
                         },
-                        "target": {
-                            "type": "object",
-                            "description": "Target entities or selector IDs such as areas, floors, labels, or devices",
-                            "properties": {
-                                "entity_id": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "array", "items": {"type": "string"}},
-                                    ],
-                                    "description": "Single entity ID or list of entity IDs. Preferred for most direct control and for entities that do not belong to a device.",
-                                },
-                                "area_id": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "array", "items": {"type": "string"}},
-                                    ],
-                                    "description": "Single area ID or list of area IDs. Resolved to exposed entity IDs before the service call.",
-                                },
-                                "floor_id": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "array", "items": {"type": "string"}},
-                                    ],
-                                    "description": "Single floor ID or list of floor IDs. Resolved to exposed entity IDs before the service call.",
-                                },
-                                "label_id": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "array", "items": {"type": "string"}},
-                                    ],
-                                    "description": "Single label ID or list of label IDs. Resolved to exposed entity IDs before the service call.",
-                                },
-                                "device_id": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "array", "items": {"type": "string"}},
-                                    ],
-                                    "description": "Single device ID or list of device IDs. Resolved to exposed attached entity IDs before the service call.",
-                                },
-                            },
-                            "minProperties": 1,
-                            "additionalProperties": False,
-                        },
+                        "target": target_schema(),
                         "data": {
                             "type": "object",
                             "description": "Additional parameters for the service (e.g., brightness: 50, temperature: 22)",
@@ -4594,6 +4555,14 @@ class MCPServer(
                 ]
             }
 
+        if "exclude" in target and set(data).intersection(
+            {"entity_id", "device_id", "area_id", "floor_id", "label_id", "exclude"}
+        ):
+            return self._build_text_tool_result(
+                "Put all target selectors in target; data cannot override target exclusions.",
+                is_error=True,
+            )
+
         _LOGGER.info(
             "🎯 Performing action: %s.%s (target_count=%d, data_count=%d, target_bytes=%d, data_bytes=%d)",
             _sanitize_log_value(domain),
@@ -5143,7 +5112,7 @@ class MCPServer(
         """Create an LLM context for the native Home Assistant Assist API."""
         kwargs: dict[str, Any] = {
             "platform": DOMAIN,
-            "context": Context(),
+            "context": current_ha_context(),
             "language": "*",
             "assistant": conversation.DOMAIN,
             "device_id": None,
@@ -5292,7 +5261,7 @@ class MCPServer(
         for entity_id in entity_ids:
             state = self.hass.states.get(entity_id)
             if state and state.name:
-                names.append(state.name)
+                names.append(entity_display_name(self.hass, state))
             else:
                 names.append(entity_id)
         return names
@@ -5377,6 +5346,7 @@ class MCPServer(
 
             resolved_entities.update(combined_matches)
 
+        resolved_entities = apply_target_exclusions(self.hass, resolved_entities, target)
         if not resolved_entities:
             raise ValueError(
                 "Target did not resolve to any exposed entities. Use discover_entities first."
@@ -5452,8 +5422,8 @@ class MCPServer(
             area_id = None
             if entity_entry and entity_entry.area_id:
                 area_id = entity_entry.area_id
-            elif device_entry and device_entry.area_id:
-                area_id = device_entry.area_id
+            elif device_entry:
+                area_id = device_effective_area_id(self.hass, device_entry)
 
             floor_id = area_floor_ids.get(area_id)
 

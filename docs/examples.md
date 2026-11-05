@@ -331,3 +331,29 @@ What is the status of the custom pool controller?
 The exact tool depends on the package you install under
 `<home-assistant-config>/mcp-assist-tools`. See
 [External Custom Tools](custom-tools.md).
+
+
+## Leave a Room Out of an Action
+
+On Home Assistant versions that support native exclusions:
+
+```text
+Turn off the downstairs lights except the kitchen.
+```
+
+Discover the floor and area IDs, then use `perform_action` with a floor target
+and `target.exclude.area_id` for the kitchen. The exclusion is resolved again
+on later calls, so newly added kitchen lights remain excluded.
+
+## Troubleshoot with Home Assistant’s Native API
+
+On Home Assistant 2026.11+, enable the LLM API Bridge, allowlist the registered
+`homeassistant` API, and use an authenticated administrator’s Assist session:
+
+```text
+Check the system log and help explain why this integration is failing.
+```
+
+Use `list_llm_api_tools` to discover the current tools, then call the relevant
+read tool. Review proposed actions separately: this API can also call services
+and reload integrations. Logs may be sent to your configured model provider.

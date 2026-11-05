@@ -15,6 +15,14 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.helpers import llm
+
+try:
+    from homeassistant.data_entry_flow import (
+        Optional as ConditionalOptional,
+        Required as ConditionalRequired,
+    )
+except ImportError:  # Older supported Core releases keep all fields visible.
+    ConditionalOptional = ConditionalRequired = None
 from homeassistant.helpers.selector import (
     BooleanSelector,
     SelectSelector,
@@ -261,6 +269,39 @@ def _provider_field_default(
     return _get_form_value(current_values, field.key, default)
 
 
+def _visible_marker(marker: Any, condition: Any) -> Any:
+    """Attach Core-native visibility without changing legacy form markers."""
+    if condition is None or ConditionalOptional is None:
+        return marker
+    marker_type = ConditionalRequired if isinstance(marker, vol.Required) else ConditionalOptional
+    return marker_type(marker.schema, default=marker.default,
+                       description=marker.description, visible=condition)
+
+
+def _visible_schema(items: dict[Any, Any], conditions: dict[str, Any]) -> vol.Schema:
+    """Keep field defaults and validation while allowing Core to omit hidden input."""
+    return vol.Schema({_visible_marker(key, conditions.get(key.schema)): value
+                       for key, value in items.items()})
+
+
+def _preserve_inactive_profile_values(
+    values: dict[str, Any], previous: dict[str, Any], fields: tuple[ProviderConfigField, ...],
+) -> dict[str, Any]:
+    """Disabling a feature should not erase its stored customization."""
+    values = dict(values)
+    inactive = set()
+    if values.get(CONF_RESPONSE_MODE, previous.get(CONF_RESPONSE_MODE)) == "none":
+        inactive.update((CONF_FOLLOW_UP_PHRASES, CONF_END_WORDS))
+    merged = {**previous, **values}
+    for field in fields:
+        if field.visible_when and not all(merged.get(key) == value for key, value in field.visible_when):
+            inactive.add(field.key)
+    for key in inactive:
+        if key not in values and key in previous:
+            values[key] = previous[key]
+    return values
+
+
 def _provider_field_marker(
     field: ProviderConfigField,
     current_values: dict[str, Any] | None = None,
@@ -270,9 +311,9 @@ def _provider_field_marker(
     """Build a voluptuous marker for a provider-owned field."""
     default = _provider_field_default(field, current_values, options, data)
     marker = vol.Required if field.required else vol.Optional
-    if default is None:
-        return marker(field.key)
-    return marker(field.key, default=default)
+    result = marker(field.key) if default is None else marker(field.key, default=default)
+    condition = [{"field": key, "value": value} for key, value in field.visible_when]
+    return _visible_marker(result, condition or None)
 
 
 def _provider_field_validator(field: ProviderConfigField) -> Any:
@@ -748,6 +789,7 @@ def _validate_shared_google_maps_settings(
 def _normalize_shared_tool_inputs(
     user_input: dict[str, Any],
     built_in_specs: tuple[BuiltInToolToggleSpec, ...] = (),
+    *, previous_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Normalize shared tool-family settings before storing."""
     normalized = dict(user_input)
@@ -761,6 +803,27 @@ def _normalize_shared_tool_inputs(
         legacy_label_key = spec.shared_label
         if legacy_label_key in normalized:
             normalized[spec.shared_setting_key] = bool(normalized.pop(legacy_label_key))
+
+    previous_values = previous_values or {}
+    search_enabled = any(
+        normalized.get(spec.shared_setting_key, spec.shared_default)
+        for spec in built_in_specs if spec.requires_search_provider
+    ) or normalized.get(CONF_ENABLE_WEB_SEARCH, DEFAULT_ENABLE_WEB_SEARCH)
+    provider = normalized.get(CONF_SEARCH_PROVIDER, previous_values.get(CONF_SEARCH_PROVIDER))
+    inactive = set()
+    if not search_enabled:
+        inactive.add(CONF_SEARCH_PROVIDER)
+    if not search_enabled or provider != "brave":
+        inactive.add(CONF_BRAVE_API_KEY)
+    if not search_enabled or provider != "searxng":
+        inactive.add(CONF_SEARXNG_URL)
+    if not normalized.get(CONF_ENABLE_LLM_API_BRIDGE, DEFAULT_ENABLE_LLM_API_BRIDGE):
+        inactive.add(CONF_LLM_API_ALLOWLIST)
+    if not _shared_google_maps_enabled(normalized, built_in_specs):
+        inactive.add(CONF_GOOGLE_MAPS_API_KEY)
+    for key in inactive:
+        if key not in normalized and key in previous_values:
+            normalized[key] = previous_values[key]
 
     search_provider = _normalize_search_provider(
         normalized.get(CONF_SEARCH_PROVIDER, DEFAULT_SEARCH_PROVIDER)
@@ -922,6 +985,7 @@ def _build_shared_tools_section(
         )
 
     shared_tool_fields: dict[Any, Any] = {}
+    visibility: dict[str, Any] = {}
     for _label, setting_key, marker, value_type, spec in sorted(
         shared_tool_entries,
         key=lambda item: item[0],
@@ -929,6 +993,7 @@ def _build_shared_tools_section(
         shared_tool_fields[marker] = value_type
 
         if spec and spec.package_id == "google_maps":
+            visibility[CONF_GOOGLE_MAPS_API_KEY] = {"field": spec.shared_setting_key, "value": True}
             shared_tool_fields[
                 vol.Optional(
                     CONF_GOOGLE_MAPS_API_KEY,
@@ -941,6 +1006,7 @@ def _build_shared_tools_section(
             ] = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
         if setting_key == CONF_ENABLE_LLM_API_BRIDGE:
+            visibility[CONF_LLM_API_ALLOWLIST] = {"field": setting_key, "value": True}
             shared_tool_fields[
                 vol.Optional(
                     CONF_LLM_API_ALLOWLIST,
@@ -953,6 +1019,10 @@ def _build_shared_tools_section(
             ] = TextSelector(TextSelectorConfig(multiline=True))
 
         if spec and spec.requires_search_provider:
+            enabled = {"field": spec.shared_setting_key, "value": True}
+            visibility[CONF_SEARCH_PROVIDER] = enabled
+            visibility[CONF_BRAVE_API_KEY] = [enabled, {"field": CONF_SEARCH_PROVIDER, "value": "brave"}]
+            visibility[CONF_SEARXNG_URL] = [enabled, {"field": CONF_SEARCH_PROVIDER, "value": "searxng"}]
             shared_tool_fields[
                 vol.Required(
                     CONF_SEARCH_PROVIDER,
@@ -994,7 +1064,7 @@ def _build_shared_tools_section(
             ] = TextSelector(TextSelectorConfig(type=TextSelectorType.URL))
 
     return section(
-        vol.Schema(shared_tool_fields),
+        _visible_schema(shared_tool_fields, visibility),
         {"collapsed": False},
     )
 
@@ -1029,7 +1099,7 @@ def _build_shared_server_section(defaults: dict[str, Any]) -> section:
 def _build_shared_discovery_section(defaults: dict[str, Any]) -> section:
     """Build the shared MCP server discovery settings section."""
     return section(
-        vol.Schema(
+        _visible_schema(
             {
                 vol.Optional(
                     CONF_ENABLE_GAP_FILLING,
@@ -1053,7 +1123,8 @@ def _build_shared_discovery_section(defaults: dict[str, Any]) -> section:
                     CONF_MAX_ENTITIES_PER_DISCOVERY,
                     default=defaults[CONF_MAX_ENTITIES_PER_DISCOVERY],
                 ): vol.All(vol.Coerce(int), vol.Range(min=20, max=500)),
-            }
+            },
+            {CONF_INDEX_REFRESH_DELAY_SECONDS: {"field": CONF_ENABLE_INDEX_AUTO_REFRESH, "value": True}},
         ),
         {"collapsed": False},
     )
@@ -1160,7 +1231,10 @@ def _build_prompt_section(
 
 def _build_conversation_section(schema_items: dict[Any, Any]) -> section:
     """Wrap conversation-behavior fields in a section."""
-    return section(vol.Schema(schema_items), {"collapsed": False})
+    return section(_visible_schema(schema_items, {
+        CONF_FOLLOW_UP_PHRASES: {"field": CONF_RESPONSE_MODE, "operator": "not_eq", "value": "none"},
+        CONF_END_WORDS: {"field": CONF_RESPONSE_MODE, "operator": "not_eq", "value": "none"},
+    }), {"collapsed": False})
 
 
 def _build_performance_section(schema_items: dict[Any, Any]) -> section:
@@ -1503,6 +1577,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 TOOLS_SECTION_KEY,
             )
             user_input = _apply_profile_tool_disables(user_input, built_in_specs)
+            user_input = _preserve_inactive_profile_values(
+                user_input, getattr(self, "step4_data", {}), provider_class.config_provider_options_fields(),
+            )
             self.step4_data = user_input
 
             # Server-managed agents hide client-side generation/tool-loop settings.
@@ -1866,7 +1943,14 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 MEMORY_SECTION_KEY,
                 TOOLS_SECTION_KEY,
             )
-            user_input = _normalize_shared_tool_inputs(user_input, built_in_specs)
+            from . import get_system_entry
+            previous_entry = get_system_entry(self.hass)
+            previous_values = (
+                {**previous_entry.data, **previous_entry.options} if previous_entry else {}
+            )
+            user_input = _normalize_shared_tool_inputs(
+                user_input, built_in_specs, previous_values=previous_values,
+            )
             current_values = user_input
 
             # Validate MCP port
@@ -2210,6 +2294,10 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 TOOLS_SECTION_KEY,
             )
             user_input = _apply_profile_tool_disables(user_input, built_in_specs)
+            user_input = _preserve_inactive_profile_values(
+                user_input, {**self.config_entry.data, **self.config_entry.options},
+                provider_class.config_provider_options_fields(),
+            )
             user_input = _normalize_prompt_inputs(
                 user_input, server_type, default_system_prompt
             )
@@ -2708,7 +2796,14 @@ class MCPAssistOptionsFlow(config_entries.OptionsFlow):
                 MEMORY_SECTION_KEY,
                 TOOLS_SECTION_KEY,
             )
-            user_input = _normalize_shared_tool_inputs(user_input, built_in_specs)
+            from . import get_system_entry
+            previous_entry = get_system_entry(self.hass)
+            previous_values = (
+                {**previous_entry.data, **previous_entry.options} if previous_entry else {}
+            )
+            user_input = _normalize_shared_tool_inputs(
+                user_input, built_in_specs, previous_values=previous_values,
+            )
             current_values = user_input
 
             # Validate MCP port
