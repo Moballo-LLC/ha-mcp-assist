@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 import logging
 import sys
 import types
@@ -1572,3 +1573,55 @@ class BridgeTool(MCPAssistExternalTool):
     assert captured["arguments"] == {"value": "ok"}
     assert captured["context"]["profile_entry_id"] == profile_entry.entry_id
     assert captured["context"]["profile_name"] == "Test"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile_entry_id", ["../outside", "not-an-entry", "..%2F..", "a/b"])
+async def test_external_custom_tool_ignores_untrusted_profile_entry_ids(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path,
+    profile_entry_id,
+) -> None:
+    """Client-supplied profile IDs must not select settings files outside profiles/."""
+    _write_external_tool_package(tmp_path)
+    monkeypatch.setattr(
+        hass.config,
+        "path",
+        lambda *parts: str(tmp_path.joinpath(*parts)),
+    )
+    profile_entry = profile_entry_factory()
+    system_entry_factory(
+        data={
+            CONF_ENABLE_EXTERNAL_CUSTOM_TOOLS: True,
+            CONF_ENABLE_CALCULATOR_TOOLS: False,
+            CONF_ENABLE_WEB_SEARCH: False,
+        }
+    )
+    settings_root = tmp_path / CUSTOM_TOOL_SETTINGS_DIRECTORY
+    settings_root.mkdir(parents=True, exist_ok=True)
+    # A settings file a traversal would reach: <settings>/profiles/../outside/.
+    planted = settings_root / "outside"
+    planted.mkdir()
+    (planted / "sample_tool.json").write_text(
+        json.dumps({"status_text": "planted"}), encoding="utf-8"
+    )
+
+    loader = CustomToolsLoader(hass, profile_entry)
+    await loader.initialize()
+    result = await loader.handle_tool_call(
+        "sample_tool_status", {}, context={"profile_entry_id": profile_entry_id}
+    )
+
+    assert result["isError"] is False
+    assert result["content"][0]["text"] == "sample ok"
+
+
+@pytest.mark.asyncio
+async def test_external_loader_rejects_path_like_profile_entry_ids(hass, tmp_path) -> None:
+    """The loader itself refuses IDs that are not config-entry-shaped."""
+    loader = ExternalCustomToolLoader(hass)
+    loaded_tool = SimpleNamespace(
+        shared_settings={}, manifest=SimpleNamespace(tool_id="sample_tool")
+    )
+
+    with pytest.raises(ValueError, match="Invalid profile entry ID"):
+        await loader.load_profile_settings(loaded_tool, "../../etc")

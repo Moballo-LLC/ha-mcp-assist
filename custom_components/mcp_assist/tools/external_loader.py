@@ -27,6 +27,8 @@ _LOGGER = logging.getLogger(__name__)
 
 _TOOL_ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
 _TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+# Config entry IDs are ULIDs; anything else must never reach a filesystem path.
+_PROFILE_ENTRY_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _MAX_PROMPT_CHARS_PER_TOOL = 220
 _MAX_PROMPT_CHARS_TOTAL = 2200
 
@@ -586,6 +588,8 @@ class ExternalCustomToolLoader:
         """Load an optional per-profile settings overlay for a tool."""
         if not profile_entry_id:
             return loaded_tool.shared_settings, {}, None
+        if not _PROFILE_ENTRY_ID_PATTERN.fullmatch(profile_entry_id):
+            raise ValueError("Invalid profile entry ID for tool settings.")
 
         profile_path = (
             self.get_settings_root()

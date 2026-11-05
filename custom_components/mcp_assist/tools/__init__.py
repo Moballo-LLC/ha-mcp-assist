@@ -17,6 +17,7 @@ from ..const import (
     CONF_SEARCH_PROVIDER,
     DEFAULT_BRAVE_API_KEY,
     DEFAULT_ENABLE_EXTERNAL_CUSTOM_TOOLS,
+    DOMAIN,
 )
 from .builtin_catalog import (
     BuiltInToolToggleSpec,
@@ -661,6 +662,13 @@ class CustomToolsLoader:
 
         call_context = dict(context or {})
         profile_entry_id = str(call_context.get("profile_entry_id") or "").strip()
+        if profile_entry_id:
+            # The MCP client supplies this context, so only a real MCP Assist
+            # profile may select a per-profile settings overlay.
+            profile_entry = self.hass.config_entries.async_get_entry(profile_entry_id)
+            if profile_entry is None or profile_entry.domain != DOMAIN:
+                profile_entry_id = ""
+                call_context.pop("profile_entry_id", None)
         try:
             (
                 effective_settings,

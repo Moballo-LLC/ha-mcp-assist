@@ -2972,13 +2972,18 @@ class MCPServer(
             )
         if field_name == "image_url":
             image_bytes, mime_type = await self._fetch_image_reference(field_value)
+            display_value = field_value
+            if field_value.startswith("data:"):
+                # Echoing an inline image back would put megabytes of base64
+                # into the tool result the model reads.
+                display_value = f"data URL ({mime_type}, {len(image_bytes)} bytes)"
             return (
                 image_bytes,
                 mime_type,
                 {
                     "type": "image_url",
-                    "value": field_value,
-                    "description": f"URL {field_value}",
+                    "value": display_value,
+                    "description": f"URL {display_value}",
                 },
             )
 
