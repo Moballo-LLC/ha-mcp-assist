@@ -242,14 +242,43 @@ _KNOWN_TOKEN_RE = re.compile(
     r")\b"
 )
 _OPAQUE_HEX_RE = re.compile(r"(?i)^[0-9a-f]{32,}$")
-# Encoded binary such as inline image data, optionally as a base64 data URL.
-# The credential patterns below cannot match inside it except by chance (where
-# they would corrupt the payload), and scanning megabytes of it with every
-# pattern blocks the event loop for seconds.
-_BASE64_BLOB_MIN_CHARS = 1024
-_BASE64_BLOB_RE = re.compile(
-    r"(?:data:[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+;base64,)?[A-Za-z0-9+/\r\n]+={0,2}"
-)
+# Only explicitly identified binary payloads skip redaction: base64 data URLs,
+# and the ``data`` field of image/audio content blocks (MCP) or base64 image
+# sources (Anthropic). Scanning megabytes of them with every credential pattern
+# blocks the event loop for seconds, and a token-shaped run inside the data could
+# be rewritten and corrupt it. Ordinary text is always scanned.
+# One character class with one quantifier: linear time, no backtracking.
+_BASE64_PAYLOAD_RE = re.compile(r"[A-Za-z0-9+/=\r\n]+")
+_BINARY_BLOCK_TYPES = frozenset({"image", "audio", "base64"})
+_DATA_URL_BASE64_MARKER = ";base64,"
+_DATA_URL_HEADER_MAX_CHARS = 128
+
+
+def _is_base64_payload(text: str) -> bool:
+    """Return whether text is non-empty and uses only the base64 alphabet."""
+    return _BASE64_PAYLOAD_RE.fullmatch(text) is not None
+
+
+def _is_base64_data_url(text: str) -> bool:
+    """Return whether text is a ``data:<mime>;base64,<payload>`` URL."""
+    if not text.startswith("data:"):
+        return False
+    marker = text.find(_DATA_URL_BASE64_MARKER, 5, _DATA_URL_HEADER_MAX_CHARS)
+    if marker < 0 or any(char.isspace() for char in text[5:marker]):
+        return False
+    return _is_base64_payload(text[marker + len(_DATA_URL_BASE64_MARKER):])
+
+
+def _is_binary_block_payload(mapping: Mapping, key: Any, item: Any) -> bool:
+    """Return whether item is the base64 payload of an image/audio block."""
+    return (
+        key == "data"
+        and isinstance(item, str)
+        and mapping.get("type") in _BINARY_BLOCK_TYPES
+        and _is_base64_payload(item)
+    )
+
+
 _PRIVATE_KEY_PEM_RE = re.compile(
     r"-----BEGIN (?P<label>(?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?)-----"
     r".*?"
@@ -527,7 +556,7 @@ def redact_secret_text(
         text = str(value)
     except Exception:
         return f"[{type(value).__name__} omitted]"
-    if len(text) >= _BASE64_BLOB_MIN_CHARS and _BASE64_BLOB_RE.fullmatch(text):
+    if _is_base64_data_url(text):
         return text
     text = _PRIVATE_KEY_PEM_RE.sub(REDACTION_MARKER, text)
     text = _URL_USERINFO_RE.sub(
@@ -631,6 +660,9 @@ def redact_secrets(
                     key,
                     _include_ambiguous_labels=_include_ambiguous_labels,
                 )
+                if _is_binary_block_payload(current, key, item):
+                    redacted[safe_key] = item
+                    continue
                 has_value = _has_potential_secret_value(item)
                 should_redact = (
                     _is_sensitive_key(key)
@@ -643,6 +675,8 @@ def redact_secrets(
                     and _is_ambiguous_mapping_key(key)
                     and _looks_like_ambiguous_mapping_credential(item)
                 )
+                # Reserve the key now so pass-through payloads keep their order.
+                redacted[safe_key] = None
                 child_tasks.append(
                     (redacted, safe_key, item, child_ancestors, should_redact)
                 )
