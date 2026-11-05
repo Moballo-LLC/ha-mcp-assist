@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from homeassistant.core import SupportsResponse
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from tests.ha_test_compat import MockConfigEntry
 
 from custom_components.mcp_assist.tools.packages.music_assistant.music_assistant import MusicAssistantTool
 

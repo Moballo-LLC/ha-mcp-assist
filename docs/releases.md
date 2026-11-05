@@ -81,7 +81,8 @@ scripts/install_test_dependencies.sh
 PYTHON=.venv/bin/python scripts/verify_local.sh
 ```
 
-The installer uses the pinned default harness from `requirements_test.txt`.
+The installer resolves the latest stable Home Assistant release and a matching
+published test harness from PyPI metadata.
 The release workflow resolves that same default environment, selects its
 Python version, and installs the selected Core conversation dependencies from
 its manifest before running release-candidate validation. Resolution and
@@ -104,56 +105,57 @@ scripts/verify_local.sh --pytest
 
 ### Home Assistant Version Matrix
 
-The public CI workflow declares the exact stable Home Assistant rows for the
-full pytest suite. It currently includes two older monthly releases
-(`2026.8.3` and `2026.9.3`) and `latest`, which resolves to the latest stable
-Home Assistant release available when that row starts. It does not add
-duplicate patch rows from the current month. The resolver accepts stable exact
-targets from the workflow without a separate target-to-harness allowlist, then
-selects a published `pytest-homeassistant-custom-component` release that
-embeds the exact selected Home Assistant version. It records Home Assistant,
-harness, and Python versions in each row's uploaded artifact. It excludes beta
-and yanked harness releases. If no compatible published harness exists,
-resolution fails that row; CI does not silently override Home Assistant or skip
-the test. The full `tests`
-suite runs for each row, and the aggregate test check requires every row,
-including `latest`, to pass. Exact target and default pairs are checked for
-published, non-yanked distributions. The workflow runs daily so the moving
-`latest` row continues to provide current compatibility coverage.
+CI discovers the latest non-yanked stable patch from each of the three most
+recent Home Assistant release months. It runs the full `tests` suite on every
+selected release. There is no maintained HA version list or harness version
+pin. Beta releases and yanked distributions are excluded. Discovery failures
+and failures in any matrix row fail the aggregate `Test` check. The workflow
+runs daily so new stable releases enter coverage automatically.
 
-`requirements_test.txt` retains one pinned current harness for the default
-local setup and lint job. For an exact target, `--expected-harness` checks that
-the requested harness is a published, non-yanked exact match. The matrix
-installer uses the resolved environment snapshot so a moving `latest`
-selection cannot change between resolution and installation.
+For each selected Core release, the resolver checks published package metadata
+for a matching `pytest-homeassistant` release. When available, it uses that
+official Core test package. Older releases use a published
+`pytest-homeassistant-custom-component` harness whose metadata pins that exact
+Core release. Missing compatible packages fail the row; CI never downgrades
+Core or skips tests to produce a passing check. The two plugins supply
+overlapping fixtures, so the installer removes the other plugin when switching
+environments. Tests import shared helpers through a small compatibility module.
+Pytest disables the standalone respx plugin so Core can install its HTTP alias
+before respx loads, as the official harness requires.
 
-Local validation may keep isolated environments, logs, and frozen result
-receipts under `.local/validation/`. That generated directory is ignored so
-writing validation evidence does not appear as a source change.
+`default` and `latest` both resolve the newest stable Core release and matching
+harness dynamically. An exact Core target remains available for reproduction;
+`--expected-harness` additionally checks a specific harness version. The
+installer resolves dependencies together, reads conversation dependencies from
+the selected Core manifest, runs `pip check`, and verifies installed Core and
+harness metadata against the snapshot.
 
-To reproduce a matrix entry locally, use a fresh virtual environment for each
-entry so package state cannot leak between Home Assistant versions:
+Each row saves an environment artifact before installation containing the exact
+Core version, harness package/version, and Python minor. Installation uses that
+snapshot, so newly published releases cannot change the selected pair halfway
+through a job. CI selects Python from the packages’ declared requirements.
+Local validation may retain ignored environments and receipts under
+`.local/validation/`; use separate environments for different Core releases.
+
+To inspect the current matrix or resolve a local environment:
 
 ```bash
-python3.14 -m venv .venv
-.venv/bin/python scripts/test_environment.py resolve 2026.9.3 \
-  --output .venv/ha-test-environment.json \
-  --github-output .venv/ha-test-environment.outputs
-scripts/install_test_dependencies.sh \
-  --environment .venv/ha-test-environment.json .venv/bin/python
-mkdir -p test-results
-cp .venv/ha-test-environment.json test-results/environment.json
+python scripts/test_environment.py matrix
+python scripts/test_environment.py resolve latest --output ha-test-environment.json
+```
+
+Create a fresh virtual environment with the Python minor recorded in the
+snapshot, then install and test that exact pair:
+
+```bash
+scripts/install_test_dependencies.sh --environment ha-test-environment.json .venv/bin/python
 .venv/bin/python -m pytest -ra --junitxml=test-results/pytest.xml tests
 ```
 
-Replace `2026.9.3` with `2026.8.3` or `latest` to reproduce another row. Keep
-the resolved environment file for the install and test commands; rerunning the
-resolver for `latest` later may select a newer Home Assistant release. For
-`latest`, use the Python minor recorded in the snapshot when creating the
-virtual environment; CI chooses that interpreter automatically. This
-matrix samples selected releases and does not claim full-suite coverage across
-the entire Home Assistant 2024.1+ runtime support floor. Existing compatibility
-shims and the declared runtime floor remain unchanged.
+Keep the snapshot for reproduction; resolving `latest` again later may select a
+newer release. These three sampled months do not claim full-suite coverage
+across the entire Home Assistant 2024.1+ runtime support floor. Existing
+runtime compatibility shims and the declared support floor remain unchanged.
 
 Before creating a release tag, run the release-candidate gate:
 

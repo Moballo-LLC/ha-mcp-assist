@@ -15,6 +15,23 @@ permissions:
   contents: read
 
 jobs:
+  environments:
+    name: Discover Home Assistant releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.releases.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Bootstrap Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Discover the latest three stable release months
+        id: releases
+        run: python scripts/test_environment.py matrix --github-output "$GITHUB_OUTPUT"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -27,7 +44,7 @@ jobs:
       - name: Bootstrap Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.x"
 
       - name: Resolve default test environment
         id: environment
@@ -48,29 +65,30 @@ jobs:
 
   test:
     name: Test HA ${{ matrix.homeassistant }}
+    needs: environments
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        homeassistant: ["2026.8.3", "2026.9.3", latest]
+      matrix: ${{ fromJSON(needs.environments.outputs.matrix) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Bootstrap Python 3.14
+      - name: Bootstrap Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.x"
 
       - name: Resolve test environment
         id: environment
-        run: >-
-          python scripts/test_environment.py resolve
-          "${{ matrix.homeassistant }}"
-          --output "$RUNNER_TEMP/ha-test-environment.json"
-          --github-output "$GITHUB_OUTPUT"
+        env:
+          HA_TARGET: ${{ matrix.homeassistant }}
+        run: |
+          mkdir -p test-results
+          python scripts/test_environment.py resolve "$HA_TARGET" \
+            --output test-results/environment.json --github-output "$GITHUB_OUTPUT"
 
       - name: Set up target Python
         uses: actions/setup-python@v7
@@ -80,16 +98,15 @@ jobs:
           cache-dependency-path: requirements_test.txt
 
       - name: Install test dependencies
-        run: scripts/install_test_dependencies.sh --environment "$RUNNER_TEMP/ha-test-environment.json"
+        run: scripts/install_test_dependencies.sh --environment test-results/environment.json
 
       - name: Run full pytest suite
         run: |
           mkdir -p test-results
-          cp "$RUNNER_TEMP/ha-test-environment.json" test-results/environment.json
           PYTHON="$(command -v python)" scripts/verify_local.sh --pytest
 
       - name: Upload pytest results
-        if: always()
+        if: always() && steps.environment.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: pytest-results-ha-${{ matrix.homeassistant }}
@@ -102,6 +119,7 @@ jobs:
     name: Test
     if: always()
     needs:
+      - environments
       - test
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -109,9 +127,10 @@ jobs:
     steps:
       - name: Require every Home Assistant matrix run to pass
         env:
+          DISCOVERY_RESULT: ${{ needs.environments.result }}
           MATRIX_RESULT: ${{ needs.test.result }}
         run: |
-          if [[ "$MATRIX_RESULT" != "success" ]]; then
+          if [[ "$DISCOVERY_RESULT" != "success" || "$MATRIX_RESULT" != "success" ]]; then
             echo "Home Assistant test matrix result was: $MATRIX_RESULT" >&2
             exit 1
           fi

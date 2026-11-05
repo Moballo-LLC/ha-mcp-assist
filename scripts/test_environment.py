@@ -17,6 +17,27 @@ ROOT = Path(__file__).resolve().parents[1]
 STABLE = re.compile(r"\d+(?:\.\d+)+\Z")
 HA_VERSION = re.compile(r"\d{4}\.(?:[1-9]|1[0-2])\.\d+\Z")
 HARNESS = "pytest-homeassistant-custom-component"
+OFFICIAL_HARNESS = "pytest-homeassistant"
+
+
+def harness_package(ha: str) -> str:
+    """Prefer Core's matching published harness, retaining older release coverage."""
+    published = stable_releases(fetch_metadata(OFFICIAL_HARNESS))
+    return OFFICIAL_HARNESS if ha in published else HARNESS
+
+
+def release_matrix() -> dict[str, list[str]]:
+    """Test the newest stable patch from each of the three most recent release months."""
+    selected = {}
+    for version in stable_releases(fetch_metadata("homeassistant")):
+        if HA_VERSION.fullmatch(version):
+            month = tuple(map(int, version.split(".")[:2]))
+            selected.setdefault(month, version)
+            if len(selected) == 3:
+                break
+    if len(selected) != 3:
+        raise ValueError("Need three published stable Home Assistant release months")
+    return {"homeassistant": list(selected.values())}
 
 
 def fetch_metadata(package: str, version: str | None = None) -> dict:
@@ -65,16 +86,32 @@ def python_minor(*metadata: dict) -> str:
 
 
 def validate_environment(value: dict) -> dict[str, str]:
-    if not isinstance(value, dict) or set(value) != {"homeassistant", "harness", "python"} or not all(isinstance(v, str) for v in value.values()):
+    if not isinstance(value, dict) or set(value) not in ({"homeassistant", "harness", "python"},
+            {"homeassistant", "harness", "python", "harness_package"}) or not all(isinstance(v, str) for v in value.values()):
         raise ValueError("Invalid resolved test environment")
     if not HA_VERSION.fullmatch(value["homeassistant"]) or not STABLE.fullmatch(value["harness"]):
         raise ValueError("Test environments require exact stable package versions")
+    package = value.get("harness_package", HARNESS)
+    if package not in (HARNESS, OFFICIAL_HARNESS):
+        raise ValueError("Unknown test harness package")
+    if package == OFFICIAL_HARNESS and value["harness"] != value["homeassistant"]:
+        raise ValueError("Official harness version must match Home Assistant")
     if not re.fullmatch(r"3\.\d+", value["python"]):
         raise ValueError("Invalid resolved Python version")
     return value
 
 
-def _select_harness(ha: str, expected_harness: str | None = None) -> tuple[str, dict]:
+def _select_harness(ha: str, expected_harness: str | None = None,
+                    package: str = HARNESS) -> tuple[str, dict]:
+    if package == OFFICIAL_HARNESS:
+        if expected_harness is not None and expected_harness != ha:
+            raise ValueError(f"Requested harness does not match Home Assistant {ha}")
+        metadata = fetch_metadata(package, ha)
+        if not has_published_distribution(metadata):
+            raise ValueError(f"No published non-yanked distribution for {package}")
+        if harness_ha(metadata) != ha:
+            raise ValueError(f"Official harness does not match Home Assistant {ha}")
+        return ha, metadata
     if expected_harness is not None:
         if not isinstance(expected_harness, str) or not STABLE.fullmatch(expected_harness):
             raise ValueError("Requested harness must be an exact stable version")
@@ -108,20 +145,7 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         not isinstance(expected_harness, str) or not STABLE.fullmatch(expected_harness)
     ):
         raise ValueError("Requested harness must be an exact stable version")
-    if target == "default":
-        requirements = (ROOT / "requirements_test.txt").read_text()
-        matches = re.findall(rf"^{re.escape(HARNESS)}==([^\s#]+)$", requirements, re.M)
-        if len(matches) != 1 or not STABLE.fullmatch(matches[0]):
-            raise ValueError("Default test harness requires an exact pin")
-        harness = matches[0]
-        if expected_harness is not None and expected_harness != harness:
-            raise ValueError("Requested harness does not match the default pin")
-        harness_metadata = fetch_metadata(HARNESS, harness)
-        ha = harness_ha(harness_metadata)
-        core_metadata = fetch_metadata("homeassistant", ha)
-        if not has_published_distribution(core_metadata):
-            raise ValueError("No published non-yanked distribution for homeassistant")
-    elif target == "latest":
+    if target in ("default", "latest"):
         core_index = fetch_metadata("homeassistant")
         versions = [v for v in stable_releases(core_index) if HA_VERSION.fullmatch(v)]
         if not versions:
@@ -130,7 +154,8 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         core_metadata = fetch_metadata("homeassistant", ha)
         if not has_published_distribution(core_metadata):
             raise ValueError("No published non-yanked distribution for homeassistant")
-        harness, harness_metadata = _select_harness(ha)
+        package = harness_package(ha)
+        harness, harness_metadata = _select_harness(ha, package=package)
         if expected_harness is not None and expected_harness != harness:
             raise ValueError("Requested harness does not match latest stable Home Assistant")
     elif isinstance(target, str) and HA_VERSION.fullmatch(target):
@@ -138,15 +163,18 @@ def resolve_environment(target: str, expected_harness: str | None = None) -> dic
         core_metadata = fetch_metadata("homeassistant", ha)
         if not has_published_distribution(core_metadata):
             raise ValueError("No published non-yanked distribution for homeassistant")
-        harness, harness_metadata = _select_harness(ha, expected_harness)
+        package = harness_package(ha)
+        harness, harness_metadata = _select_harness(ha, expected_harness, package)
     else:
         raise ValueError("Unknown test target; use an exact stable Home Assistant version, default, or latest")
     if not has_published_distribution(harness_metadata):
-        raise ValueError(f"No published non-yanked distribution for {HARNESS}")
+        raise ValueError(f"No published non-yanked distribution for {package}")
     if harness_ha(harness_metadata) != ha:
         raise ValueError("The selected test harness does not match Home Assistant")
-    return validate_environment({"homeassistant": ha, "harness": harness,
-                                 "python": python_minor(core_metadata, harness_metadata)})
+    environment = {"homeassistant": ha, "harness": harness,
+                   "python": python_minor(core_metadata, harness_metadata)}
+    environment["harness_package"] = package
+    return validate_environment(environment)
 
 
 def install_environment(environment: dict) -> None:
@@ -155,13 +183,19 @@ def install_environment(environment: dict) -> None:
     if sys.version_info[:2] != required_python:
         raise ValueError(f"Use Python {environment['python']} for this resolved test environment")
     lines = (ROOT / "requirements_test.txt").read_text().splitlines()
-    common = [line for line in lines if not line.startswith(HARNESS + "==")]
+    package = environment.get("harness_package", HARNESS)
+    other_package = HARNESS if package == OFFICIAL_HARNESS else OFFICIAL_HARNESS
+    common = [line for line in lines
+              if not re.match(rf"^(?:{HARNESS}|{OFFICIAL_HARNESS})(?:[<>=!~;\s\[]|$)", line)]
+    # The plugins supply overlapping fixtures and must never be loaded together.
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "--yes", other_package],
+                   check=True)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt") as requirements:
         requirements.write("\n".join(common) + "\n")
         requirements.flush()
         subprocess.run([sys.executable, "-m", "pip", "install", "-r", requirements.name,
                         f"homeassistant=={environment['homeassistant']}",
-                        f"{HARNESS}=={environment['harness']}"], check=True)
+                        f"{package}=={environment['harness']}"], check=True)
     spec = importlib.util.find_spec("homeassistant")
     if spec is None or spec.origin is None:
         raise ValueError("Installed Home Assistant package was not found")
@@ -173,10 +207,9 @@ def install_environment(environment: dict) -> None:
         subprocess.run([sys.executable, "-m", "pip", "install", *conversation_requirements], check=True)
     subprocess.run([sys.executable, "-m", "pip", "check"], check=True)
     from homeassistant.const import __version__ as actual_ha
-    from pytest_homeassistant_custom_component import const
-    harness_ha_version = f"{const.MAJOR_VERSION}.{const.MINOR_VERSION}.{const.PATCH_VERSION}"
-    if (actual_ha != environment["homeassistant"] or harness_ha_version != actual_ha
-            or importlib.metadata.version(HARNESS) != environment["harness"]):
+    installed_metadata = {"info": {"requires_dist": importlib.metadata.requires(package)}}
+    if (actual_ha != environment["homeassistant"] or harness_ha(installed_metadata) != actual_ha
+            or importlib.metadata.version(package) != environment["harness"]):
         raise ValueError("Installed HA and test harness do not match the resolved environment")
     print(f"Verified Home Assistant {actual_ha} with harness {environment['harness']}")
 
@@ -189,10 +222,19 @@ def main() -> None:
     resolve.add_argument("--expected-harness")
     resolve.add_argument("--output", type=Path)
     resolve.add_argument("--github-output", type=Path)
+    matrix = subparsers.add_parser("matrix")
+    matrix.add_argument("--github-output", type=Path)
     install = subparsers.add_parser("install")
     install.add_argument("--environment", type=Path, required=True)
     args = parser.parse_args()
     try:
+        if args.command == "matrix":
+            serialized = json.dumps(release_matrix(), separators=(",", ":"))
+            if args.github_output:
+                with args.github_output.open("a") as output:
+                    output.write(f"matrix={serialized}\n")
+            print(serialized)
+            return
         if args.command == "install":
             install_environment(json.loads(args.environment.read_text()))
             return
