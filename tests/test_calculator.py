@@ -96,3 +96,34 @@ def test_evaluate_expression_rejects_unsupported_names(calculator: CalculatorToo
 
     assert result.startswith("Error:")
     assert "not supported" in result
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit", "expected"),
+    [
+        ("MW", "kW", "1000 kW"),
+        ("mA", "A", "0.001 A"),
+        ("MHz", "kHz", "1000 kHz"),
+        ("ms", "s", "0.001 s"),
+        ("MB", "kB", "1000 KB"),
+    ],
+)
+def test_convert_unit_keeps_canonical_si_case(
+    calculator: CalculatorTool, from_unit: str, to_unit: str, expected: str
+) -> None:
+    """Correctly cased SI symbols should still convert."""
+    result = calculator._execute(
+        "convert_unit", {"value": 1, "from_unit": from_unit, "to_unit": to_unit}
+    )
+    assert result == expected
+
+
+@pytest.mark.parametrize("unit", ["mW", "mJ", "Ms", "MA", "MV", "mHz", "Mb", "Gb"])
+def test_convert_unit_rejects_case_colliding_si_symbols(
+    calculator: CalculatorTool, unit: str
+) -> None:
+    """mW must not silently convert as megawatt (or Mb as megabyte)."""
+    result = calculator._execute(
+        "convert_unit", {"value": 1, "from_unit": unit, "to_unit": "W"}
+    )
+    assert result == f"Error: unsupported from_unit '{unit}'"

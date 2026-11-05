@@ -4656,18 +4656,26 @@ async def test_fetch_http_image_url_uses_validated_absolute_request_url(
         lambda *args, **kwargs: "http://ha.local:8123",
     )
 
+    class _FakeImageContent:
+        def __init__(self) -> None:
+            self._chunks = [b"image-", b"bytes"]
+
+        async def read(self, n: int = -1) -> bytes:
+            return self._chunks.pop(0) if self._chunks else b""
+
     class _FakeImageResponse:
         status = 200
         headers = {"Content-Type": "image/png"}
+        content_length = None
+
+        def __init__(self) -> None:
+            self.content = _FakeImageContent()
 
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             return None
-
-        async def read(self) -> bytes:
-            return b"image-bytes"
 
     class _FakeImageSession:
         def __init__(self, **kwargs):
@@ -4982,3 +4990,189 @@ async def test_actual_tool_schemas_are_compatible_with_anthropic(hass, profile_e
     assert any(tool["name"] == "perform_action" for tool in payload["tools"])
     for tool in payload["tools"]:
         assert not {"anyOf", "allOf", "oneOf"} & tool["input_schema"].keys(), tool["name"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "window",
+    [
+        {"end_datetime": "not-a-date"},
+        {"start_datetime": "2026-01-01T00:00:00+00:00", "end_datetime": "garbage"},
+        {"start_datetime": "junk"},
+        {
+            "start_datetime": "2026-01-02T00:00:00+00:00",
+            "end_datetime": "2026-01-01T00:00:00+00:00",
+        },
+    ],
+)
+async def test_entity_history_rejects_invalid_time_windows(
+    hass, profile_entry_factory, system_entry_factory, window
+) -> None:
+    """Bad datetimes must return a tool error, not crash or silently query 'now'."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("sensor.example", "1")
+    server._fetch_entity_history_states = AsyncMock(return_value=[])
+
+    result = await server.tool_get_entity_history({"entity_id": "sensor.example", **window})
+
+    assert result["isError"] is True
+    assert result["content"][0]["text"].startswith("Error: ")
+    server._fetch_entity_history_states.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("selector", ["entity_id", "area_id", "device_id"])
+async def test_perform_action_data_cannot_add_targets_beside_target(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, selector
+) -> None:
+    """Target selectors in data would bypass the exposure-resolved target."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    monkeypatch.setattr(server, "validate_service", lambda *a: "unlock")
+    call = AsyncMock()
+    monkeypatch.setattr(type(hass.services), "async_call", call)
+
+    result = await server.tool_perform_action(
+        {
+            "domain": "lock",
+            "action": "unlock",
+            "target": {"entity_id": "lock.exposed"},
+            "data": {selector: "lock.not_exposed"},
+        }
+    )
+
+    assert result.get("isError") is True
+    call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_perform_action_moves_data_only_selectors_through_exposure_check(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Selectors given only in data are resolved like a target, not passed raw."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("light.exposed", "on")
+    monkeypatch.setattr(
+        mcp_server_module,
+        "async_should_expose",
+        lambda hass_obj, assistant, entity_id: entity_id == "light.exposed",
+    )
+    monkeypatch.setattr(server, "validate_service", lambda *a: "turn_off")
+    call = AsyncMock()
+    monkeypatch.setattr(type(hass.services), "async_call", call)
+
+    blocked = await server.tool_perform_action(
+        {"domain": "light", "action": "turn_off", "data": {"entity_id": "light.hidden"}}
+    )
+    assert "light.hidden" in blocked["content"][0]["text"]
+    call.assert_not_awaited()
+
+    await server.tool_perform_action(
+        {"domain": "light", "action": "turn_off", "data": {"entity_id": "light.exposed"}}
+    )
+    call.assert_awaited_once()
+    assert call.await_args.kwargs["service_data"]["entity_id"] == ["light.exposed"]
+
+
+@pytest.mark.asyncio
+async def test_call_service_with_response_routes_data_selectors_through_target(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """data.entity_id must not reach a response service without exposure checks."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    server._get_response_service_info = AsyncMock(return_value=({}, None))
+    server.resolve_target = AsyncMock(side_effect=ValueError("calendar.private is not exposed"))
+    call = AsyncMock()
+    monkeypatch.setattr(type(hass.services), "async_call", call)
+
+    result = await server.tool_call_service_with_response(
+        {
+            "domain": "calendar",
+            "service": "get_events",
+            "data": {"entity_id": "calendar.private", "duration": {"hours": 24}},
+        }
+    )
+
+    server.resolve_target.assert_awaited_once_with({"entity_id": "calendar.private"})
+    assert "not exposed" in result["content"][0]["text"]
+    call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_call_service_with_response_blocks_unexposed_scripts(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """script.<name> response services must honor the same exposure rule as run_script."""
+    import custom_components.mcp_assist.tools.packages.response_service.service_calls as calls
+
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.services.async_register(
+        "script",
+        "open_garage",
+        AsyncMock(return_value={}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        "script",
+        "morning_brief",
+        AsyncMock(return_value={}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    monkeypatch.setattr(
+        calls,
+        "async_should_expose",
+        lambda hass_obj, assistant, entity_id: entity_id == "script.morning_brief",
+    )
+
+    result = await server.tool_call_service_with_response(
+        {"domain": "script", "service": "open_garage"}
+    )
+    catalog = await server._get_response_service_catalog()
+
+    assert "script.open_garage is not exposed" in result["content"][0]["text"]
+    assert "open_garage" not in catalog.get("script", {})
+    assert "morning_brief" in catalog["script"]
+
+
+def test_local_image_read_rejects_non_image_files(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch, tmp_path
+) -> None:
+    """Extensionless config files such as .storage/auth must not be read as JPEGs."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    storage = tmp_path / ".storage"
+    storage.mkdir()
+    (storage / "auth").write_text('{"refresh_token": "example"}')
+    (tmp_path / "notes.txt").write_text("hello")
+    monkeypatch.setattr(
+        hass.config, "path", lambda *parts: str(tmp_path.joinpath(*parts))
+    )
+
+    for reference in (".storage/auth", "notes.txt"):
+        with pytest.raises(ValueError, match="image file extension"):
+            server._load_local_image(reference)
+
+
+@pytest.mark.asyncio
+async def test_image_tools_reject_unexposed_entities(
+    hass, profile_entry_factory, system_entry_factory, monkeypatch
+) -> None:
+    """Camera snapshots and entity pictures require Assist exposure."""
+    system_entry_factory()
+    server = MCPServer(hass, 8099, profile_entry_factory())
+    hass.states.async_set("camera.bedroom", "idle")
+    hass.states.async_set(
+        "person.guest", "home", {"entity_picture": "/local/guest.png"}
+    )
+    monkeypatch.setattr(
+        mcp_server_module, "async_should_expose", lambda *args: False
+    )
+
+    with pytest.raises(ValueError, match="not exposed"):
+        await server._capture_camera_image("camera.bedroom")
+    with pytest.raises(ValueError, match="not exposed"):
+        await server._resolve_entity_image("person.guest")

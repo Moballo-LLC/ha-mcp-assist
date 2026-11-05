@@ -56,7 +56,11 @@ from .tools.builtin_catalog import (
 )
 from .openapi import to_openapi
 from .request_context import current_ha_context
-from .targeting import apply_target_exclusions, target_schema
+from .targeting import (
+    apply_target_exclusions,
+    split_data_target_selectors,
+    target_schema,
+)
 from .registry_compat import device_effective_area_id, entity_display_name
 from .llm_tool_result import normalize_llm_tool_result
 from .model_selection import (
@@ -235,6 +239,19 @@ def _safe_json_rpc_id(value: Any) -> Any:
         return value if redact_secrets(value) == value else None
     except Exception:
         return None
+
+
+async def _read_bounded_body(response: Any, limit: int) -> bytes:
+    """Read at most ``limit`` bytes so oversized bodies fail the later size check."""
+    chunks: list[bytes] = []
+    total = 0
+    while total < limit:
+        chunk = await response.content.read(limit - total)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    return b"".join(chunks)
 
 
 def _migrate_deprecated_light_color_temp(data: dict[str, Any]) -> str | None:
@@ -2978,10 +2995,16 @@ class MCPServer(
             },
         )
 
+    def _require_image_entity_exposed(self, entity_id: str) -> None:
+        """Reject image reads from entities that are not exposed to Assist."""
+        if not async_should_expose(self.hass, "conversation", entity_id):
+            raise ValueError(f"{entity_id} is not exposed to the assistant.")
+
     async def _capture_camera_image(self, entity_id: str) -> tuple[bytes, str]:
         """Capture a camera snapshot using Home Assistant's native camera helper."""
         if not entity_id.startswith("camera."):
             raise ValueError("camera_entity_id must reference a camera entity.")
+        self._require_image_entity_exposed(entity_id)
 
         from homeassistant.components.camera import async_get_image
 
@@ -2997,6 +3020,7 @@ class MCPServer(
         entity_id: str,
     ) -> tuple[bytes, str, str]:
         """Resolve an image from a supported image-like entity."""
+        self._require_image_entity_exposed(entity_id)
         state = self.hass.states.get(entity_id)
         if state is None:
             raise ValueError(f"Entity {entity_id!r} was not found.")
@@ -3072,7 +3096,14 @@ class MCPServer(
                             f"Unable to fetch image URL {current_url!s}: HTTP {response.status}"
                         )
 
-                    image_bytes = await response.read()
+                    if (response.content_length or 0) > _MAX_INLINE_IMAGE_BYTES:
+                        raise ValueError(
+                            f"Image source {current_url!s} is too large "
+                            f"({response.content_length} bytes)."
+                        )
+                    image_bytes = await _read_bounded_body(
+                        response, _MAX_INLINE_IMAGE_BYTES + 1
+                    )
                     mime_type = response.headers.get("Content-Type")
                     return self._normalize_image_payload(
                         image_bytes,
@@ -3379,8 +3410,14 @@ class MCPServer(
 
     def _read_local_image_path(self, path: Path) -> tuple[bytes, str]:
         """Read and validate a local image file."""
-        image_bytes = path.read_bytes()
         mime_type = mimetypes.guess_type(path.name)[0]
+        if not mime_type or not mime_type.startswith("image/"):
+            # Without this, extensionless files such as .storage/auth fall back
+            # to image/jpeg and would be returned to the model.
+            raise ValueError(
+                f"Local file {path.name!r} does not have an image file extension."
+            )
+        image_bytes = path.read_bytes()
         return self._normalize_image_payload(image_bytes, mime_type, str(path))
 
     def _load_local_image(self, reference: str) -> tuple[Path, bytes, str]:
@@ -4555,13 +4592,9 @@ class MCPServer(
                 ]
             }
 
-        if "exclude" in target and set(data).intersection(
-            {"entity_id", "device_id", "area_id", "floor_id", "label_id", "exclude"}
-        ):
-            return self._build_text_tool_result(
-                "Put all target selectors in target; data cannot override target exclusions.",
-                is_error=True,
-            )
+        target, data, selector_error = split_data_target_selectors(target, data)
+        if selector_error:
+            return self._build_text_tool_result(selector_error, is_error=True)
 
         _LOGGER.info(
             "🎯 Performing action: %s.%s (target_count=%d, data_count=%d, target_bytes=%d, data_bytes=%d)",

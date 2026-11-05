@@ -525,6 +525,12 @@ class ReadUrlTool:
         if 'text/plain' in content_type:
             return html
 
+        # Parsing up to the response size cap is CPU-bound; keep it off the loop.
+        return await self.hass.async_add_executor_job(self._extract_html_text, html)
+
+    @classmethod
+    def _extract_html_text(cls, html: str) -> str:
+        """Extract main-content text from HTML, falling back to tag stripping."""
         try:
             parser = _MainContentParser()
             parser.feed(html)
@@ -535,7 +541,7 @@ class ReadUrlTool:
         except Exception as err:
             _LOGGER.debug("HTML main-content parsing failed: %s", err)
 
-        return self._strip_tags_fallback(html)
+        return cls._strip_tags_fallback(html)
 
     @staticmethod
     def _strip_tags_fallback(html: str) -> str:
@@ -614,6 +620,7 @@ class _MainContentParser(HTMLParser):
         self._preferred_depth = 0
         self._literal_depth = 0
         self._tag_stack: List[Tuple[str, bool, bool, bool, bool]] = []
+        self._open_tag_counts: Dict[str, int] = {}
         self._preferred_parts: List[Tuple[str, bool]] = []
         self._body_parts: List[Tuple[str, bool]] = []
 
@@ -639,6 +646,7 @@ class _MainContentParser(HTMLParser):
         )
 
         self._tag_stack.append((tag, is_skip, is_boilerplate, is_preferred, is_literal))
+        self._open_tag_counts[tag] = self._open_tag_counts.get(tag, 0) + 1
 
         if is_skip:
             self._skip_depth += 1
@@ -667,6 +675,12 @@ class _MainContentParser(HTMLParser):
         """Leave tracked tag scopes."""
         tag = tag.lower()
         matching_index = -1
+        # Unmatched end tags must not rescan the whole stack; repeated stray
+        # closers on a page with many unclosed tags would otherwise be quadratic.
+        if not self._open_tag_counts.get(tag):
+            if tag in self._BLOCK_TAGS:
+                self._append_separator()
+            return
         for index in range(len(self._tag_stack) - 1, -1, -1):
             if self._tag_stack[index][0] == tag:
                 matching_index = index
@@ -710,7 +724,8 @@ class _MainContentParser(HTMLParser):
 
     def _pop_tag_scope(self) -> None:
         """Pop one tracked tag scope and update active depths."""
-        _, is_skip, is_boilerplate, is_preferred, is_literal = self._tag_stack.pop()
+        tag, is_skip, is_boilerplate, is_preferred, is_literal = self._tag_stack.pop()
+        self._open_tag_counts[tag] -= 1
         if is_skip and self._skip_depth > 0:
             self._skip_depth -= 1
         if is_boilerplate and self._boilerplate_depth > 0:

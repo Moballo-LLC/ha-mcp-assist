@@ -34,6 +34,21 @@ Recommendations:
   safety-sensitive entities.
 - Consider separate profiles for read-only and control-capable use cases.
 
+The same exposure check applies to:
+
+- Target selectors (`entity_id`, `device_id`, `area_id`, `floor_id`,
+  `label_id`, `exclude`) in `perform_action` and `call_service_with_response`.
+  Put them in `target`. Selectors that appear only in `data` are checked as
+  if they were the target. Selectors in both places are rejected.
+- `script.<name>` services called through `call_service_with_response`. They
+  need the script entity to be exposed, as `run_script` does.
+- Camera snapshots and entity pictures read by `get_image` and
+  `analyze_image`.
+
+Local image paths only accept files that have an image file extension inside
+the Home Assistant config directory. This keeps the image tools from returning
+other config or `.storage` files.
+
 ## Maintenance Status Data
 
 The optional `get_maintenance_status` tool scans current states only when called

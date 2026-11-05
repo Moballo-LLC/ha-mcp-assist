@@ -57,3 +57,24 @@ def apply_target_exclusions(hass: Any, entity_ids: set[str], target: dict) -> se
         if hass.states.get(entity_id) is not None
         and async_should_expose(hass, "conversation", entity_id)
     }
+
+
+def split_data_target_selectors(
+    target: dict[str, Any], data: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+    """Move target selectors out of service data so exposure checks always apply.
+
+    Home Assistant treats selector keys in service data as targets, so merging
+    them after the exposure-resolved target would bypass the exposure check.
+    """
+    selector_keys = [key for key in data if key in (*TARGET_KEYS, "exclude")]
+    if not selector_keys:
+        return target, data, None
+    if target:
+        return target, data, (
+            "Put all target selectors in target; data cannot override or add "
+            "target selectors."
+        )
+    moved = {key: data[key] for key in selector_keys}
+    remaining = {key: value for key, value in data.items() if key not in moved}
+    return moved, remaining, None

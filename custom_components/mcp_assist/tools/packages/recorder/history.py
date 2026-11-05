@@ -88,10 +88,13 @@ class RecorderToolsMixin:
         friendly_name = current_state.attributes.get("friendly_name", entity_id)
 
         # 2. Calculate time range (UTC)
-        query_start_time, query_end_time, window_label, _ = self._history_query_window(
-            args,
-            default_hours=hours,
-        )
+        try:
+            query_start_time, query_end_time, window_label, _ = self._history_query_window(
+                args,
+                default_hours=hours,
+            )
+        except ValueError as err:
+            return {"content": [{"type": "text", "text": f"Error: {err}"}], "isError": True}
         try:
             entity_states = await self._fetch_entity_history_states(
                 entity_id,
@@ -358,10 +361,13 @@ class RecorderToolsMixin:
         hours = self._coerce_int_arg(
             args.get("hours"), default=default_hours, minimum=1, maximum=8760
         )
-        query_start_time, query_end_time, window_label, hours = self._history_query_window(
-            args,
-            default_hours=hours,
-        )
+        try:
+            query_start_time, query_end_time, window_label, hours = self._history_query_window(
+                args,
+                default_hours=hours,
+            )
+        except ValueError as err:
+            return {"content": [{"type": "text", "text": f"Error: {err}"}], "isError": True}
         history_candidates = self._history_resolution_candidates(
             entity_id,
             args.get("state"),
@@ -2134,6 +2140,12 @@ class RecorderToolsMixin:
         if start_arg or end_arg or raw_period == "custom":
             end_time = self._parse_history_datetime(end_arg) if end_arg else now_utc
             start_time = self._parse_history_datetime(start_arg) if start_arg else None
+            if end_arg and end_time is None:
+                raise ValueError(f"Invalid end_datetime {end_arg!r}; use ISO 8601.")
+            if start_arg and start_time is None:
+                raise ValueError(f"Invalid start_datetime {start_arg!r}; use ISO 8601.")
+            if start_time is not None and start_time >= end_time:
+                raise ValueError("start_datetime must be before end_datetime.")
             if start_time is None:
                 hours = self._coerce_int_arg(
                     args.get("hours"),

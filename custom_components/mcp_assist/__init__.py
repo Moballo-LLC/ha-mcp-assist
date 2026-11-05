@@ -671,6 +671,19 @@ async def ensure_system_entry(hass: HomeAssistant) -> ConfigEntry:
     return system_entry
 
 
+async def _async_cleanup_failed_shared_start(
+    hass: HomeAssistant, index_manager: IndexManager, mcp_server: MCPServer
+) -> None:
+    """Release shared resources created by a shared-server start that failed."""
+    if hass.data[DOMAIN].get("index_manager") is index_manager:
+        hass.data[DOMAIN].pop("index_manager")
+    for cleanup in (mcp_server.stop, index_manager.async_stop):
+        try:
+            await cleanup()
+        except Exception:  # keep the original setup error
+            _LOGGER.debug("Cleanup after failed MCP server start raised", exc_info=True)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MCP Assist from a config entry."""
     await async_load_localizations(hass)
@@ -717,8 +730,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 mcp_server = MCPServer(hass, mcp_port, entry)
                 try:
                     await mcp_server.start()
-                except OSError as e:
-                    if "Address already in use" in str(e):
+                except BaseException as e:
+                    # Setup retries would otherwise leak the index manager's
+                    # listeners and the half-started server's runner.
+                    await _async_cleanup_failed_shared_start(
+                        hass, index_manager, mcp_server
+                    )
+                    if isinstance(e, OSError) and "Address already in use" in str(e):
                         _LOGGER.error(
                             "Port %d is already in use. Either change CONF_MCP_PORT in your "
                             "configuration or stop the service using port %d.",
