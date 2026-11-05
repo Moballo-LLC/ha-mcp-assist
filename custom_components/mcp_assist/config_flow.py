@@ -1285,6 +1285,11 @@ def validate_allowed_ips(allowed_ips_str: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _profile_unique_id(server_type: str, profile_name: str) -> str:
+    """Return the config entry unique ID for a profile."""
+    return f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
+
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PROFILE_NAME): str,
@@ -1331,6 +1336,15 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not profile_name:
                 errors[CONF_PROFILE_NAME] = "profile_name_required"
             else:
+                # Reject a duplicate profile before later steps can write shared
+                # MCP settings to the system entry.
+                await self.async_set_unique_id(
+                    _profile_unique_id(
+                        user_input.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE),
+                        user_input[CONF_PROFILE_NAME],
+                    )
+                )
+                self._abort_if_unique_id_configured()
                 # Store data and move to step 2
                 self.step1_data = user_input
                 return await self.async_step_server()
@@ -1758,8 +1772,9 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                     server_display = _provider_display_name(server_type)
 
-                    unique_id = f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
-                    await self.async_set_unique_id(unique_id)
+                    await self.async_set_unique_id(
+                        _profile_unique_id(server_type, profile_name)
+                    )
                     self._abort_if_unique_id_configured()
 
                     return self.async_create_entry(
@@ -1978,6 +1993,23 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _validate_shared_google_maps_settings(user_input, built_in_specs, errors)
 
             if not errors:
+                # Combine data from steps 1-4 (profile settings only, no shared settings)
+                combined_data = {
+                    **self.step1_data,
+                    **self.step2_data,
+                    **self.step3_data,
+                    **self.step4_data,
+                }
+                profile_name = combined_data[CONF_PROFILE_NAME]
+                server_type = combined_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
+
+                # Re-check for a duplicate created while this flow was open, before
+                # shared settings are written to the system entry.
+                await self.async_set_unique_id(
+                    _profile_unique_id(server_type, profile_name)
+                )
+                self._abort_if_unique_id_configured()
+
                 # Create/update system entry with shared settings
                 from . import get_system_entry
 
@@ -2000,25 +2032,8 @@ class MCPAssistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "Updated existing system entry with shared MCP settings"
                     )
 
-                # Combine data from steps 1-4 (profile settings only, no shared settings)
-                combined_data = {
-                    **self.step1_data,
-                    **self.step2_data,
-                    **self.step3_data,
-                    **self.step4_data,
-                }
-
                 # Create profile config entry
-                profile_name = combined_data[CONF_PROFILE_NAME]
-                server_type = combined_data.get(CONF_SERVER_TYPE, DEFAULT_SERVER_TYPE)
-
                 server_display = _provider_display_name(server_type)
-
-                unique_id = (
-                    f"{DOMAIN}_{server_type}_{profile_name.lower().replace(' ', '_')}"
-                )
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(
                     title=f"{server_display} - {profile_name}",

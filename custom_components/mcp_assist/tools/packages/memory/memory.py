@@ -16,7 +16,11 @@ from ....const import (
     DEFAULT_MEMORY_MAX_ITEMS,
     DEFAULT_MEMORY_MAX_TTL_DAYS,
 )
-from ....memory_manager import MemoryManager
+from ....memory_manager import (
+    MAX_MEMORY_CATEGORY_CHARS,
+    MAX_MEMORY_TEXT_CHARS,
+    MemoryManager,
+)
 from ...tool_runtime import HomeAssistantToolRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,6 +54,7 @@ MEMORY_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "memory": {
                     "type": "string",
                     "description": "The fact, preference, or instruction to store.",
+                    "maxLength": MAX_MEMORY_TEXT_CHARS,
                 },
                 "category": {
                     "type": "string",
@@ -59,6 +64,7 @@ MEMORY_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "'automation_note', 'baseline', 'correction', 'maintenance', "
                         "or 'household'."
                     ),
+                    "maxLength": MAX_MEMORY_CATEGORY_CHARS,
                 },
                 "ttl_days": {
                     "type": "integer",

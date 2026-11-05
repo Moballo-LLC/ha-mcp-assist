@@ -242,6 +242,14 @@ _KNOWN_TOKEN_RE = re.compile(
     r")\b"
 )
 _OPAQUE_HEX_RE = re.compile(r"(?i)^[0-9a-f]{32,}$")
+# Encoded binary such as inline image data, optionally as a base64 data URL.
+# The credential patterns below cannot match inside it except by chance (where
+# they would corrupt the payload), and scanning megabytes of it with every
+# pattern blocks the event loop for seconds.
+_BASE64_BLOB_MIN_CHARS = 1024
+_BASE64_BLOB_RE = re.compile(
+    r"(?:data:[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+;base64,)?[A-Za-z0-9+/\r\n]+={0,2}"
+)
 _PRIVATE_KEY_PEM_RE = re.compile(
     r"-----BEGIN (?P<label>(?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?)-----"
     r".*?"
@@ -519,6 +527,8 @@ def redact_secret_text(
         text = str(value)
     except Exception:
         return f"[{type(value).__name__} omitted]"
+    if len(text) >= _BASE64_BLOB_MIN_CHARS and _BASE64_BLOB_RE.fullmatch(text):
+        return text
     text = _PRIVATE_KEY_PEM_RE.sub(REDACTION_MARKER, text)
     text = _URL_USERINFO_RE.sub(
         lambda match: (

@@ -16,6 +16,10 @@ from .const import DOMAIN
 _STORAGE_VERSION = 1
 _STORAGE_KEY = f"{DOMAIN}_memory_store"
 _INVALID_CATEGORY_FILTER = "\0invalid_category_filter"
+# Memories are short durable facts. Bounding each entry keeps the store file,
+# which is rewritten on every save, and every recall from growing without limit.
+MAX_MEMORY_TEXT_CHARS = 1000
+MAX_MEMORY_CATEGORY_CHARS = 64
 
 MEMORY_CATEGORY_PRESETS: dict[str, str] = {
     "preference": "User or household preferences and preferred settings.",
@@ -95,8 +99,17 @@ class MemoryManager:
         normalized_text = self._normalize_text(text)
         if not normalized_text:
             raise ValueError("memory text is required")
+        if len(normalized_text) > MAX_MEMORY_TEXT_CHARS:
+            raise ValueError(
+                f"memory text is {len(normalized_text)} characters; store a shorter "
+                f"summary of at most {MAX_MEMORY_TEXT_CHARS} characters"
+            )
 
         normalized_category = self._normalize_category(category)
+        if normalized_category and len(normalized_category) > MAX_MEMORY_CATEGORY_CHARS:
+            raise ValueError(
+                f"memory category must be at most {MAX_MEMORY_CATEGORY_CHARS} characters"
+            )
         effective_max_ttl = max(1, int(max_ttl_days))
         effective_default_ttl = max(1, min(int(default_ttl_days), effective_max_ttl))
         effective_ttl = effective_default_ttl if ttl_days is None else int(ttl_days)

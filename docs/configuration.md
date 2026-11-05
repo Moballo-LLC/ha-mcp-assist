@@ -382,6 +382,10 @@ stable categories such as `preference`, `routine`, `device_alias`,
 `automation_note`, `baseline`, `correction`, `maintenance`, and `household`, but
 custom categories are still accepted for existing workflows.
 
+Each memory can be up to 1,000 characters, and each category name up to 64
+characters. The tool rejects longer values. It does not truncate them, so the
+model can save a shorter summary instead.
+
 Memories are shared across MCP Assist profiles. See
 [Security and Privacy](security-and-privacy.md#memory).
 

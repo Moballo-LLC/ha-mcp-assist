@@ -8,7 +8,10 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.mcp_assist.memory_manager import MemoryManager
+from custom_components.mcp_assist.memory_manager import (
+    MAX_MEMORY_TEXT_CHARS,
+    MemoryManager,
+)
 
 
 @pytest.mark.asyncio
@@ -189,3 +192,21 @@ async def test_memory_manager_prunes_to_max_items(hass) -> None:
 
     assert third["pruned_count"] == 1
     assert [item["text"] for item in items] == ["third", "second"]
+
+
+@pytest.mark.asyncio
+async def test_memory_manager_rejects_oversized_text_and_category(hass) -> None:
+    """Each memory is bounded so the persisted store cannot grow without limit."""
+    manager = MemoryManager(hass)
+    await manager.async_initialize()
+    limits = {"default_ttl_days": 30, "max_ttl_days": 365, "max_items": 100}
+
+    at_limit = await manager.remember("x" * MAX_MEMORY_TEXT_CHARS, **limits)
+    assert len(at_limit["text"]) == MAX_MEMORY_TEXT_CHARS
+
+    with pytest.raises(ValueError, match="shorter summary"):
+        await manager.remember("x" * (MAX_MEMORY_TEXT_CHARS + 1), **limits)
+    with pytest.raises(ValueError, match="category"):
+        await manager.remember("ok", category="c" * 65, **limits)
+
+    assert (await manager.recall(limit=10))["total_found"] == 1
