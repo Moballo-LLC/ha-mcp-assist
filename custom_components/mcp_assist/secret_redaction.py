@@ -271,10 +271,12 @@ def _is_base64_data_url(text: str) -> bool:
 
 def _is_binary_block_payload(mapping: Mapping, key: Any, item: Any) -> bool:
     """Return whether item is the base64 payload of an image/audio block."""
+    block_type = mapping.get("type")
     return (
         key == "data"
         and isinstance(item, str)
-        and mapping.get("type") in _BINARY_BLOCK_TYPES
+        and isinstance(block_type, str)
+        and block_type in _BINARY_BLOCK_TYPES
         and _is_base64_payload(item)
     )
 
