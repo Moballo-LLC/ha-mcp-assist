@@ -632,3 +632,35 @@ def test_redact_secrets_still_scans_long_non_base64_text() -> None:
 
     assert "sk-abcdefghijklmnop12345" not in redacted
     assert len(text) > 1024
+
+
+def test_redact_secrets_scans_base64_alphabet_text_outside_binary_fields() -> None:
+    """Text that merely looks like base64 (e.g. a list of keys) is still redacted."""
+    keys = "\n".join("AIza" + chr(ord("A") + index % 26) * 35 for index in range(40))
+    assert len(keys) > 1024
+
+    for value in (
+        keys,
+        {"type": "text", "text": keys},
+        {"type": "text", "data": keys},
+        {"result": {"data": keys}},
+    ):
+        assert "AIza" not in json.dumps(redact_secrets(value))
+
+
+def test_redact_secrets_passes_identified_binary_payloads_in_order() -> None:
+    """Image/audio block data and Anthropic base64 sources keep their shape and order."""
+    blob = "iVBORw0KGgo" + "A" * 64 + "/AKIAABCDEFGHIJKLMNOP/" + "=="
+    payload = {
+        "content": [
+            {"type": "image", "data": blob, "mimeType": "image/png"},
+            {"type": "audio", "mimeType": "audio/wav", "data": blob},
+        ],
+        "source": {"type": "base64", "media_type": "image/png", "data": blob},
+    }
+
+    redacted = redact_secrets(payload)
+
+    assert redacted == payload
+    assert list(redacted["content"][0]) == ["type", "data", "mimeType"]
+    assert list(redacted["content"][1]) == ["type", "mimeType", "data"]
