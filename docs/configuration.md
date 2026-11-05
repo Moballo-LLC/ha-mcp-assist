@@ -382,6 +382,13 @@ The shared settings form shows currently registered third-party LLM APIs beside
 the allowlist field. Copy the API ID from that list when enabling an installed
 integration.
 
+For Home Assistant 2026.11 troubleshooting, add `homeassistant` to the allowlist
+only if it appears among the registered APIs. An authenticated administrator
+must start the Assist conversation. The API can read sensitive system logs and
+perform actions or reload integrations; review its discovered tool schemas
+before enabling it for a profile. External MCP bearer access does not grant
+administrator identity. The bridge remains optional and disabled by default.
+
 The built-in Home Assistant `assist` API remains on the separate Assist Bridge.
 Do not add third-party API IDs unless you trust the integration that registered
 them. See [Security and Privacy](security-and-privacy.md#third-party-llm-apis).

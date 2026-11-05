@@ -14,6 +14,8 @@ from homeassistant.helpers import (
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from ..targeting import apply_target_exclusions
+from ..registry_compat import device_effective_area_id
 from ..discovery import EntityDiscovery
 
 try:
@@ -228,6 +230,7 @@ class HomeAssistantToolRuntime:
 
             resolved_entities.update(combined_matches)
 
+        resolved_entities = apply_target_exclusions(self.hass, resolved_entities, target)
         if not resolved_entities:
             raise ValueError(
                 "Target did not resolve to any exposed entities. Use discover_entities first."
@@ -271,8 +274,8 @@ class HomeAssistantToolRuntime:
             area_id = None
             if entity_entry and entity_entry.area_id:
                 area_id = entity_entry.area_id
-            elif device_entry and device_entry.area_id:
-                area_id = device_entry.area_id
+            elif device_entry:
+                area_id = device_effective_area_id(self.hass, device_entry)
 
             floor_id = area_floor_ids.get(area_id)
 

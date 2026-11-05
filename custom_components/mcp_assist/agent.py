@@ -22,7 +22,7 @@ from homeassistant.components.conversation import (
 )
 from homeassistant.components.conversation import chat_log
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import (
     intent,
     area_registry as ar,
@@ -78,6 +78,7 @@ from .hermes_client import (
     HermesSessionError,
 )
 from .localization import get_language_instruction, get_spoken_symbols
+from .request_context import REQUEST_HA_CONTEXT
 from .const import (
     CONF_OPENCLAW_AGENT_ID,
     CONF_OPENCLAW_SESSION_MODE,
@@ -3649,6 +3650,19 @@ class MCPAssistConversationEntity(ConversationEntity):
                 },
                 "id": request_id,
             }
+            if get_optional_tool_family(tool_name) == TOOL_FAMILY_LLM_API_BRIDGE:
+                server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
+                if server is not None:
+                    # Keep HA identity in process; MCP JSON and bearer tokens
+                    # cannot assert a user ID or administrator authority.
+                    context = getattr(tool_user_input, "context", None)
+                    token = REQUEST_HA_CONTEXT.set(context if isinstance(context, Context) else None)
+                    try:
+                        async with asyncio.timeout(10):
+                            result = await server.handle_tool_call(payload["params"])
+                        return redact_secrets(self._normalize_mcp_tool_response(result))
+                    finally:
+                        REQUEST_HA_CONTEXT.reset(token)
             post_kwargs = self._mcp_post_kwargs(payload)
             snapshot = REQUEST_MODEL_SELECTION.get()
             if snapshot is not None and snapshot[0] is self.entry:

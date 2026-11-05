@@ -1,4 +1,4 @@
-"""Built-in third-party Home Assistant LLM API bridge tools."""
+"""Built-in Home Assistant LLM API bridge tools."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components import conversation
-from homeassistant.core import Context
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 
@@ -25,25 +24,26 @@ from ....const import (
     parse_llm_api_allowlist,
 )
 from ....openapi import to_openapi
+from ....request_context import current_ha_context
 from ...tool_runtime import HomeAssistantToolRuntime
 from ....llm_tool_result import normalize_llm_tool_result
 
 _LOGGER = logging.getLogger(__name__)
 
 _API_ID_DESCRIPTION = (
-    "Third-party Home Assistant LLM API id shown by list_llm_apis, "
-    "for example 'llm_intents'."
+    "Home Assistant LLM API id shown by list_llm_apis, such as 'homeassistant' "
+    "for administrator troubleshooting when registered and allowlisted."
 )
 
 LLM_API_BRIDGE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "list_llm_apis",
         "description": (
-            "List registered third-party Home Assistant LLM APIs and whether "
+            "List registered Home Assistant LLM APIs and whether "
             "each is allowlisted for MCP Assist. The built-in Assist API is "
             "handled by Assist Bridge tools and is not included here."
         ),
-        "llmDescription": "List allowlisted third-party Home Assistant LLM APIs.",
+        "llmDescription": "List allowlisted Home Assistant LLM APIs.",
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
@@ -59,7 +59,7 @@ LLM_API_BRIDGE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "Assistant LLM API. Use this before calling call_llm_api_tool."
         ),
         "llmDescription": (
-            "List tools from an allowlisted third-party Home Assistant LLM API."
+            "List tools from an allowlisted Home Assistant LLM API."
         ),
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -82,7 +82,7 @@ LLM_API_BRIDGE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "list_llm_api_tools."
         ),
         "llmDescription": (
-            "Call a tool on an allowlisted third-party Home Assistant LLM API."
+            "Call a tool on an allowlisted Home Assistant LLM API."
         ),
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -136,7 +136,7 @@ LLM_API_BRIDGE_TOOL_NAMES = {
 
 
 class LLMApiBridgeTool(HomeAssistantToolRuntime):
-    """Expose allowlisted third-party Home Assistant LLM API tools."""
+    """Expose allowlisted Home Assistant LLM API tools."""
 
     async def initialize(self) -> None:
         """Initialize the bridge tool package."""
@@ -171,7 +171,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         raise ValueError(f"Unknown LLM API bridge tool: {tool_name}")
 
     async def tool_list_llm_apis(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List registered third-party Home Assistant LLM APIs."""
+        """List registered Home Assistant LLM APIs."""
         del args
 
         allowed_api_ids = self._allowed_llm_api_ids()
@@ -190,6 +190,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
                 "id": api.id,
                 "name": api.name,
                 "allowed": api.id in allowed_api_id_set,
+                "requires_admin": bool(getattr(api, "requires_admin", False)),
             }
             for api in registered_apis
         ]
@@ -204,7 +205,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
             "apis": apis_payload,
         }
         header = (
-            f"Found {len(apis_payload)} third-party Home Assistant LLM APIs; "
+            f"Found {len(apis_payload)} registered Home Assistant LLM APIs; "
             f"{allowed_count} are allowlisted for MCP Assist."
         )
         if missing_allowed_api_ids:
@@ -281,7 +282,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         llm_api = await self._get_llm_api_bridge_api_instance(args.get("api_id"))
         prompt = llm_api.api_prompt or ""
         description = (
-            f"Prompt for third-party Home Assistant LLM API "
+            f"Prompt for registered Home Assistant LLM API "
             f"{llm_api.api.name} ({llm_api.api.id})"
         )
         text = description + (
@@ -373,7 +374,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         self,
         api_id: object,
     ) -> llm.APIInstance:
-        """Get an allowlisted third-party Home Assistant LLM API instance."""
+        """Get an allowlisted Home Assistant LLM API instance."""
         validated_api_id = self._validate_llm_api_bridge_api_id(api_id)
         try:
             return await llm.async_get_api(
@@ -390,7 +391,7 @@ class LLMApiBridgeTool(HomeAssistantToolRuntime):
         """Create an LLM context compatible with Home Assistant LLM APIs."""
         kwargs: dict[str, Any] = {
             "platform": DOMAIN,
-            "context": Context(),
+            "context": current_ha_context(),
             "language": "*",
             "assistant": conversation.DOMAIN,
             "device_id": None,

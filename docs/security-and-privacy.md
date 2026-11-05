@@ -243,6 +243,15 @@ Recommendations:
 The built-in Home Assistant `assist` API is handled by the separate Assist
 Bridge tools and is not allowlisted through this feature.
 
+The `homeassistant` API on newer Core releases includes administrator-only
+troubleshooting tools. Its logs and system information may contain private data,
+and some tools can call actions or reload integrations. Allowlisting an API
+does not bypass Core’s authorization: authenticated Assist calls carry the
+requesting user’s real context in process, isolated per asynchronous task.
+External MCP request JSON and bearer tokens cannot assert that identity.
+Results may be sent to the selected model provider, so enable this API only
+when that data flow and its write capabilities are appropriate for the profile.
+
 ## Memory
 
 When enabled, memory tools can store user-approved facts and preferences with a
