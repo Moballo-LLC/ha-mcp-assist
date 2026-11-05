@@ -146,6 +146,11 @@ server.
 
 See [Configuration](configuration.md) for the full settings reference.
 
+Newer Home Assistant setup forms reveal dependent fields as you change a
+choice—for example, selecting Brave shows its API key field. Older releases
+show the complete form. See [Conditional Setup Forms](configuration.md#conditional-setup-forms)
+for the fields that adapt and how saved settings are retained.
+
 ## Set as a Voice Assistant
 
 1. Go to **Settings** -> **Voice Assistants**.

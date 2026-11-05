@@ -58,6 +58,7 @@ class ProviderConfigField:
     options: tuple[str, ...] = ()
     translation_key: str | None = None
     custom_value: bool = False
+    visible_when: tuple[tuple[str, str | bool], ...] = ()
 
 
 @dataclass(frozen=True)

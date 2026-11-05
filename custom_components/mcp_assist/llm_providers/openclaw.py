@@ -73,6 +73,7 @@ class OpenClawProvider(LLMProvider):
             CONF_OPENCLAW_SESSION_KEY,
             default=DEFAULT_OPENCLAW_SESSION_KEY,
             required=False,
+            visible_when=((CONF_OPENCLAW_SESSION_MODE, OPENCLAW_SESSION_MODE_FIXED),),
         ),
         ProviderConfigField(CONF_SYSTEM_PROMPT, default="", required=False),
     )

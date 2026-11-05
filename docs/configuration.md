@@ -7,6 +7,25 @@ MCP Assist configuration has two layers:
 
 This guide explains the main settings and when to change them.
 
+## Conditional Setup Forms
+
+On Home Assistant releases with conditional form support, setup and options
+show dependent fields only when they apply:
+
+- Web search reveals its provider selector when enabled, the Brave API key for
+  Brave, and the SearXNG URL for SearXNG.
+- Google Maps reveals its API key when enabled.
+- LLM API Bridge reveals its allowlist when enabled.
+- Index auto-refresh reveals its delay when enabled.
+- Response mode **None** hides follow-up phrases and end words.
+- OpenClaw’s fixed session key appears only in **Fixed** session mode.
+
+Turning a feature off keeps its previously saved credentials, provider choice,
+allowlist, and custom phrases for later reuse. Hidden form input is omitted by
+Home Assistant’s validation. On older releases, the same fields remain visible
+and use their existing defaults and validation. The configuration keys and
+runtime support floor are unchanged.
+
 ## Profile Settings
 
 Profile settings are independent per conversation agent.
