@@ -1,4 +1,4 @@
 # The installer resolves current stable Core and its matching harness from PyPI metadata.
 pytest-homeassistant
-ruff>=0.17.3,<1.0
+ruff>=0.17.4,<1.0
 # Core conversation dependencies are installed from the selected Core manifest.
