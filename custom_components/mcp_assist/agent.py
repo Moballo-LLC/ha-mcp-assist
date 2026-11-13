@@ -60,7 +60,7 @@ from .tool_schema import (
     tool_definition_name,
 )
 from .tool_effects import ToolEffect, get_tool_effect
-from .deferred_actions import REQUEST_DEFERRED_ACTION, REQUEST_TOOL_CALL_ID
+from .trusted_context import REQUEST_TRUSTED_SCOPE, new_dispatch_scope
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
@@ -3652,35 +3652,30 @@ class MCPAssistConversationEntity(ConversationEntity):
                 "id": request_id,
             }
             loader = self._get_shared_tools_loader()
-            needs_principal = getattr(loader, "requires_deferred_action_context", None)
-            deferred = bool(callable(needs_principal) and needs_principal(tool_name) is True)
-            if deferred or get_optional_tool_family(tool_name) == TOOL_FAMILY_LLM_API_BRIDGE:
+            needs_context = getattr(loader, "requires_trusted_call_context", None)
+            trusted = bool(callable(needs_context) and needs_context(tool_name) is True)
+            if trusted or get_optional_tool_family(tool_name) == TOOL_FAMILY_LLM_API_BRIDGE:
                 server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
                 if server is not None:
-                    # Keep HA identity in process; MCP JSON and bearer tokens
-                    # cannot assert a user ID or administrator authority.
                     context = getattr(tool_user_input, "context", None)
                     token = REQUEST_HA_CONTEXT.set(context if isinstance(context, Context) else None)
-                    deferred_token = REQUEST_DEFERRED_ACTION.set(
-                        (self.entry, tool_name, REQUEST_TOOL_CALL_ID.get(), context)
-                        if deferred else None
-                    )
+                    scope = new_dispatch_scope(self.entry, tool_name, context) if trusted else None
+                    scope_token = REQUEST_TRUSTED_SCOPE.set(scope)
                     try:
                         try:
                             async with asyncio.timeout(10):
                                 result = await server.handle_tool_call(payload["params"])
                         except TimeoutError:
-                            call_id = REQUEST_TOOL_CALL_ID.get()
-                            if not deferred or not isinstance(context, Context) or not context.user_id or not isinstance(call_id, str):
+                            if scope is None or not scope.acquired:
                                 raise
-                            recovery_id = hashlib.sha256((context.id + ":" + call_id).encode()).hexdigest()
                             return {"isError": True, "content": [{"type": "text", "text": json.dumps({
-                                "error": "deferred_result_uncertain", "recovery_id": recovery_id,
-                                "instruction": "Recover this owner-scoped request or list pending tasks before retrying; never repeat an immediate action blindly.",
+                                "error": "tool_result_uncertain", "dispatch_id": scope.dispatch_id,
                             })}]}
                         return redact_secrets(self._normalize_mcp_tool_response(result))
                     finally:
-                        REQUEST_DEFERRED_ACTION.reset(deferred_token)
+                        if scope is not None:
+                            scope.active = False
+                        REQUEST_TRUSTED_SCOPE.reset(scope_token)
                         REQUEST_HA_CONTEXT.reset(token)
             post_kwargs = self._mcp_post_kwargs(payload)
             snapshot = REQUEST_MODEL_SELECTION.get()
@@ -4008,9 +4003,6 @@ class MCPAssistConversationEntity(ConversationEntity):
         _LOGGER.info(f"📞 Processing tool call {tool_call_id}: {tool_name}")
 
         tool_entry: dict[str, Any] | None = None
-        # A provider's stable tool-call ID is scoped to this authenticated HA
-        # request. A missing ID is not invented for durable creation identity.
-        logical_token = REQUEST_TOOL_CALL_ID.set(tool_call.get("id"))
         try:
             arguments = self._parse_tool_arguments(arguments_str)
             tool_entry = self._start_persistent_tool_log(
@@ -4073,8 +4065,6 @@ class MCPAssistConversationEntity(ConversationEntity):
                 tool_name=tool_name,
                 content=error_content,
             )
-        finally:
-            REQUEST_TOOL_CALL_ID.reset(logical_token)
 
     @property
     def tool_call_budget(self) -> int:

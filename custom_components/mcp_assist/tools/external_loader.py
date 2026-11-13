@@ -297,6 +297,13 @@ class ExternalCustomToolLoader:
             if str(item).strip()
         )
 
+        api = raw_manifest.get("api", {})
+        if (not isinstance(api, dict) or any(
+            key != "trusted_call_context" or type(value) is not int or value != 1
+            for key, value in api.items()
+        )):
+            raise ValueError("manifest api contains an unsupported API or version")
+
         prompt_append_file = raw_manifest.get("prompt_append_file")
         if prompt_append_file is not None:
             prompt_append_file = str(prompt_append_file).strip() or None
@@ -309,6 +316,7 @@ class ExternalCustomToolLoader:
             version=version,
             entrypoint=entrypoint,
             capabilities=capabilities,
+            api=dict(api),
             prompt_append_file=prompt_append_file,
         )
 

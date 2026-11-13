@@ -558,31 +558,37 @@ Check:
 
 Yes. Declare `get_settings_schema()` and use the shared/profile JSON settings paths described above.
 
-## Deferred action authorization
+## Trusted call context
 
-Packages that schedule later effects can opt into `deferred_actions_v1` in their
-manifest capabilities. Only those loaded external packages use authenticated
-in-process conversation dispatch. `async_get_deferred_action_principal(hass)`
-returns the trusted HA user, live profile ID and a creation key scoped to the
-actual HA request and provider tool-call ID. Missing native identity or call ID
-fails closed. Neither tool arguments nor MCP JSON context supplies this identity.
+External packages can opt in to native in-process conversation dispatch with
+`"api": {"trusted_call_context": 1}` in their manifest. Other external tools
+continue to use HTTP. The `api` object accepts only supported names and versions;
+`capabilities` remains descriptive. The supported `custom_tool_api` exports
+`TRUSTED_CALL_CONTEXT_API_VERSION`, `TrustedCallContext`, and synchronous
+`get_trusted_call_context(hass)`. The frozen result contains `user_id`,
+`profile_entry_id`, `dispatch_id`, and the original `ha_context`. A fresh UUID
+identifies each dispatch, independent of provider call IDs. JSON arguments and
+metadata cannot assert this identity. Voice and satellite requests must have a
+native HA user; no administrator identity is inferred.
 
-Before every later effect, call `async_authorize_deferred_action(hass, owner,
-entity_ids, tool_name=...)` from `custom_tool_api`. It checks the current active
-user, loaded enabled MCP Assist profile, profile/shared external-tool settings,
-control policy, current entity exposure and HA permissions. Its returned HA
-Context is valid for that check only; repeat authorization after waits and
-immediately before service dispatch. This API performs no service action and
-provides no persistence, scheduler, retry or exactly-once effect guarantee.
-Consumers own deterministic target binding, service validation, durable intent,
-transaction fencing, cancellation and uncertain-outcome handling.
+The context is available only during the active dispatch. Child tasks inherit
+its scope but it is revoked when the dispatch returns, is cancelled, or times
+out. Calling another tool through `call_mcp_tool` does not delegate identity;
+packages must explicitly design any delegation they need. The loader also clears
+identity on nested or mismatched tool dispatch. External packages are trusted
+Python code; this boundary is not a sandbox against code that accesses internals.
+A timeout after the
+identity was acquired can return `tool_result_uncertain` with `dispatch_id`.
+This indicates an unknown result, not persistence or recovery. Use an inner
+deadline if a package needs time to record its own outcome before the outer
+dispatch deadline. Consumers own durable retry mapping and reconciliation.
 
-Pass observation-only trigger entities in `read_entity_ids=[...]`; these require
-read permission, while action targets always require control permission. Missing
-loaded dependencies raise `DeferredActionUnavailable` (`dependency_unavailable`)
-without granting authority; consumers may retry only within stored grace.
-
-An in-process timeout returns `deferred_result_uncertain` and the original
-owner-scoped `recovery_id`. Consumers must support reconciliation under that
-identity or listing before a fresh attempt. A new provider call has a new
-creation key, so repeating a timed-out create blindly can duplicate effects.
+For stored owner records, call `async_check_profile_entity_access(hass, *,
+user_id, profile_entry_id, entity_ids=(), permission="control", package_id=None)`
+immediately before an action. It checks current user and profile state, external
+settings, exposure, and HA permissions, and returns a fresh HA Context. Set
+`permission="read"` for observations; control must be enabled only for control.
+Optionally require a currently loaded external package by its stable manifest ID.
+`ToolAccessDenied` signals revocation or invalid access; `ToolAccessUnavailable`
+with code `dependency_unavailable` signals a temporary dependency failure. These
+checks do not persist records, schedule work, or guarantee effects.

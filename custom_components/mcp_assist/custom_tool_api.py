@@ -29,12 +29,10 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .const import CUSTOM_TOOL_SHARED_DIRECTORY, CUSTOM_TOOLS_DIRECTORY, DOMAIN
-from .deferred_actions import (  # noqa: F401 - supported external tool API exports
-    DEFERRED_ACTION_API_VERSION,
-    DeferredActionAuthorizationError,
-    DeferredActionUnavailable,
-    async_authorize_deferred_action,
-    async_get_deferred_action_principal,
+from .trusted_context import (  # noqa: F401 - supported external tool API exports
+    TRUSTED_CALL_CONTEXT_API_VERSION, TrustedCallContext, ToolAccessDenied,
+    ToolAccessUnavailable, async_check_profile_entity_access, get_trusted_call_context,
+    REQUEST_TRUSTED_SCOPE,
 )
 
 _T = TypeVar("_T")
@@ -78,6 +76,7 @@ class MCPAssistCustomToolManifest:
     version: str
     entrypoint: str
     capabilities: tuple[str, ...] = field(default_factory=tuple)
+    api: dict[str, int] = field(default_factory=dict)
     prompt_append_file: str | None = None
 
 
@@ -393,13 +392,17 @@ async def call_mcp_tool(
             "This MCP Assist build does not support tool invocation from external packages."
         )
 
-    return await handle_tool_call(
-        {
-            "name": tool_name,
-            "arguments": dict(arguments or {}),
-            "context": dict(context or {}),
-        }
-    )
+    token = REQUEST_TRUSTED_SCOPE.set(None)
+    try:
+        return await handle_tool_call(
+            {
+                "name": tool_name,
+                "arguments": dict(arguments or {}),
+                "context": dict(context or {}),
+            }
+        )
+    finally:
+        REQUEST_TRUSTED_SCOPE.reset(token)
 
 
 def mcp_text_result(
