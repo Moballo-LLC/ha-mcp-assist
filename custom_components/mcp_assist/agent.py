@@ -60,6 +60,7 @@ from .tool_schema import (
     tool_definition_name,
 )
 from .tool_effects import ToolEffect, get_tool_effect
+from .trusted_context import REQUEST_TRUSTED_SCOPE, new_dispatch_scope
 from .llm_providers import (
     LLMProvider,
     ProviderSettings,
@@ -78,7 +79,7 @@ from .hermes_client import (
     HermesSessionError,
 )
 from .localization import get_language_instruction, get_spoken_symbols
-from .request_context import REQUEST_HA_CONTEXT
+from .request_context import HAContextScope, REQUEST_HA_CONTEXT
 from .const import (
     CONF_OPENCLAW_AGENT_ID,
     CONF_OPENCLAW_SESSION_MODE,
@@ -3650,18 +3651,37 @@ class MCPAssistConversationEntity(ConversationEntity):
                 },
                 "id": request_id,
             }
-            if get_optional_tool_family(tool_name) == TOOL_FAMILY_LLM_API_BRIDGE:
+            loader = self._get_shared_tools_loader()
+            needs_context = getattr(loader, "requires_trusted_call_context", None)
+            trusted = bool(callable(needs_context) and needs_context(tool_name) is True)
+            if trusted or get_optional_tool_family(tool_name) == TOOL_FAMILY_LLM_API_BRIDGE:
                 server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
                 if server is not None:
-                    # Keep HA identity in process; MCP JSON and bearer tokens
-                    # cannot assert a user ID or administrator authority.
                     context = getattr(tool_user_input, "context", None)
-                    token = REQUEST_HA_CONTEXT.set(context if isinstance(context, Context) else None)
+                    bridge_scope = (
+                        HAContextScope(context, tool_name)
+                        if not trusted and isinstance(context, Context) else None
+                    )
+                    token = REQUEST_HA_CONTEXT.set(bridge_scope)
+                    scope = new_dispatch_scope(self.entry, tool_name, context) if trusted else None
+                    scope_token = REQUEST_TRUSTED_SCOPE.set(scope)
                     try:
-                        async with asyncio.timeout(10):
-                            result = await server.handle_tool_call(payload["params"])
+                        try:
+                            async with asyncio.timeout(10):
+                                result = await server.handle_tool_call(payload["params"])
+                        except TimeoutError:
+                            if scope is None or not scope.acquired:
+                                raise
+                            return {"isError": True, "content": [{"type": "text", "text": json.dumps({
+                                "error": "tool_result_uncertain", "dispatch_id": scope.dispatch_id,
+                            })}]}
                         return redact_secrets(self._normalize_mcp_tool_response(result))
                     finally:
+                        if scope is not None:
+                            scope.active = False
+                        REQUEST_TRUSTED_SCOPE.reset(scope_token)
+                        if bridge_scope is not None:
+                            bridge_scope.active = False
                         REQUEST_HA_CONTEXT.reset(token)
             post_kwargs = self._mcp_post_kwargs(payload)
             snapshot = REQUEST_MODEL_SELECTION.get()

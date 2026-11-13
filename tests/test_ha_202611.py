@@ -115,7 +115,7 @@ async def test_admin_llm_api_keeps_cores_real_authorization(hass, monkeypatch):
     from homeassistant.core import Context
     from homeassistant.exceptions import HomeAssistantError
     from homeassistant.helpers import llm
-    from custom_components.mcp_assist.request_context import REQUEST_HA_CONTEXT
+    from custom_components.mcp_assist.request_context import HAContextScope, REQUEST_HA_CONTEXT
     from custom_components.mcp_assist.tools.packages.llm_api_bridge.llm_api_bridge import LLMApiBridgeTool
 
     if not hasattr(llm.API, "requires_admin"):
@@ -130,7 +130,7 @@ async def test_admin_llm_api_keeps_cores_real_authorization(hass, monkeypatch):
     tool = LLMApiBridgeTool(hass)
     monkeypatch.setattr(tool, "_allowed_llm_api_ids", lambda: ("homeassistant",))
     for user_id in (None, member.id, admin.id):
-        token = REQUEST_HA_CONTEXT.set(Context(user_id=user_id))
+        token = REQUEST_HA_CONTEXT.set(HAContextScope(Context(user_id=user_id), "call_llm_api_tool"))
         try:
             if user_id == admin.id:
                 instance = await tool._get_llm_api_bridge_api_instance("homeassistant")

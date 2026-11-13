@@ -32,6 +32,9 @@ from .external_loader import (
 )
 from .schema_utils import SchemaValidationError, validate_and_normalize_json_value
 
+from ..request_context import REQUEST_HA_CONTEXT
+from ..trusted_context import ACTIVE_LOADER_TOOL, ACTIVE_TRUSTED_INSTANCE, REQUEST_TRUSTED_SCOPE
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -264,7 +267,29 @@ class CustomToolsLoader:
         *,
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Handle a custom tool call."""
+        """Handle a custom tool call without implicitly delegating native identity."""
+        scope = REQUEST_TRUSTED_SCOPE.get()
+        nested = ACTIVE_LOADER_TOOL.get() is not None
+        scope_token = None
+        if scope is not None and (nested or scope.tool_name != tool_name):
+            scope_token = REQUEST_TRUSTED_SCOPE.set(None)
+        ha_scope = REQUEST_HA_CONTEXT.get()
+        ha_token = None
+        if ha_scope is not None and (nested or ha_scope.tool_name != tool_name):
+            ha_token = REQUEST_HA_CONTEXT.set(None)
+        marker_token = ACTIVE_LOADER_TOOL.set(tool_name)
+        try:
+            return await self._handle_tool_call(tool_name, arguments, context=context)
+        finally:
+            ACTIVE_LOADER_TOOL.reset(marker_token)
+            if ha_token is not None:
+                REQUEST_HA_CONTEXT.reset(ha_token)
+            if scope_token is not None:
+                REQUEST_TRUSTED_SCOPE.reset(scope_token)
+
+    async def _handle_tool_call(
+        self, tool_name: str, arguments: dict[str, Any], *, context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         registry_entry = self._tool_registry.get(tool_name)
         if registry_entry is None:
             raise ValueError(f"Unknown custom tool: {tool_name}")
@@ -297,6 +322,33 @@ class CustomToolsLoader:
         """Check if a tool name comes from an external custom tool package."""
         registry_entry = self._tool_registry.get(tool_name)
         return bool(registry_entry and registry_entry.is_external)
+
+    def external_tools_enabled(self) -> bool:
+        """Return the current shared external-tools setting."""
+        return self._external_custom_tools_enabled()
+
+    def external_tools_ready(self) -> bool:
+        """Return whether the loaded tool registry is ready for access checks."""
+        return self._tool_registry_ready
+
+    def is_external_package_enabled(self, package_id: str) -> bool | None:
+        """Return whether an external package is currently loaded."""
+        if not self.external_tools_enabled():
+            return False
+        if not self._tool_registry_ready:
+            return None
+        return any(
+            entry.is_external and entry.loaded_tool_package is not None
+            and entry.loaded_tool_package.manifest.tool_id == package_id
+            for entry in self._tool_registry.values()
+        )
+
+    def requires_trusted_call_context(self, tool_name: str) -> bool:
+        """Return whether a loaded external tool opts into trusted dispatch."""
+        entry = self._tool_registry.get(tool_name)
+        package = entry.loaded_tool_package if entry is not None else None
+        return bool(entry and entry.is_external and package is not None
+                    and ("trusted_call_context", 1) in package.manifest.api)
 
     def is_builtin_custom_tool(self, tool_name: str) -> bool:
         """Check if a tool name comes from a built-in packaged tool."""
@@ -700,6 +752,12 @@ class CustomToolsLoader:
         )
 
         token = instance._push_call_context(call_context)
+        scope = REQUEST_TRUSTED_SCOPE.get()
+        trusted_token = ACTIVE_TRUSTED_INSTANCE.set(
+            instance if scope is not None and registry_entry.is_external
+            and scope.tool_name == tool_name and self.requires_trusted_call_context(tool_name)
+            else None
+        )
         try:
             return await instance.handle_call(tool_name, arguments)
         except Exception as err:
@@ -710,6 +768,7 @@ class CustomToolsLoader:
             )
             return self._build_error_result(safe_error)
         finally:
+            ACTIVE_TRUSTED_INSTANCE.reset(trusted_token)
             instance._reset_call_context(token)
 
     @staticmethod
