@@ -316,7 +316,7 @@ class ExternalCustomToolLoader:
             version=version,
             entrypoint=entrypoint,
             capabilities=capabilities,
-            api=dict(api),
+            api=tuple(sorted(api.items())),
             prompt_append_file=prompt_append_file,
         )
 

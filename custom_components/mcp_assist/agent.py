@@ -79,7 +79,7 @@ from .hermes_client import (
     HermesSessionError,
 )
 from .localization import get_language_instruction, get_spoken_symbols
-from .request_context import REQUEST_HA_CONTEXT
+from .request_context import HAContextScope, REQUEST_HA_CONTEXT
 from .const import (
     CONF_OPENCLAW_AGENT_ID,
     CONF_OPENCLAW_SESSION_MODE,
@@ -3658,7 +3658,11 @@ class MCPAssistConversationEntity(ConversationEntity):
                 server = self.hass.data.get(DOMAIN, {}).get("shared_mcp_server")
                 if server is not None:
                     context = getattr(tool_user_input, "context", None)
-                    token = REQUEST_HA_CONTEXT.set(context if isinstance(context, Context) else None)
+                    bridge_scope = (
+                        HAContextScope(context, tool_name)
+                        if not trusted and isinstance(context, Context) else None
+                    )
+                    token = REQUEST_HA_CONTEXT.set(bridge_scope)
                     scope = new_dispatch_scope(self.entry, tool_name, context) if trusted else None
                     scope_token = REQUEST_TRUSTED_SCOPE.set(scope)
                     try:
@@ -3676,6 +3680,8 @@ class MCPAssistConversationEntity(ConversationEntity):
                         if scope is not None:
                             scope.active = False
                         REQUEST_TRUSTED_SCOPE.reset(scope_token)
+                        if bridge_scope is not None:
+                            bridge_scope.active = False
                         REQUEST_HA_CONTEXT.reset(token)
             post_kwargs = self._mcp_post_kwargs(payload)
             snapshot = REQUEST_MODEL_SELECTION.get()

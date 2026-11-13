@@ -8,7 +8,8 @@ from uuid import uuid4
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import Context
+from homeassistant.core import Context, valid_entity_id
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_CONTROL_HA, CONF_PROFILE_ENABLE_EXTERNAL_CUSTOM_TOOLS,
@@ -54,6 +55,10 @@ class _DispatchScope:
 
 ACTIVE_LOADER_TOOL: ContextVar[str | None] = ContextVar("mcp_assist_active_loader_tool", default=None)
 
+ACTIVE_TRUSTED_INSTANCE: ContextVar[object | None] = ContextVar(
+    "mcp_assist_trusted_instance", default=None
+)
+
 REQUEST_TRUSTED_SCOPE: ContextVar[_DispatchScope | None] = ContextVar(
     "mcp_assist_trusted_scope", default=None
 )
@@ -63,10 +68,11 @@ def new_dispatch_scope(entry, tool_name, context):
     return _DispatchScope(entry, tool_name, context, str(uuid4()))
 
 
-def get_trusted_call_context(hass) -> TrustedCallContext:
+def _get_trusted_call_context(hass, instance) -> TrustedCallContext:
     """Return native identity only during its opted-in dispatch's lifetime."""
     scope = REQUEST_TRUSTED_SCOPE.get()
-    if scope is None or not scope.active:
+    if (scope is None or not scope.active or instance is None
+            or ACTIVE_TRUSTED_INSTANCE.get() is not instance):
         raise ToolAccessDenied()
     context = scope.context
     if (not isinstance(context, Context) or not context.user_id
@@ -124,11 +130,20 @@ async def async_check_profile_entity_access(
     if user is None or not user.is_active:
         raise ToolAccessDenied()
     policy = POLICY_CONTROL if permission == "control" else POLICY_READ
+    registry = er.async_get(hass)
     for entity_id in entity_ids:
         if (not isinstance(entity_id, str) or not 0 < len(entity_id) <= 255
-                or not async_should_expose(hass, "conversation", entity_id)
+                or not valid_entity_id(entity_id)):
+            raise ToolAccessDenied()
+        state = hass.states.get(entity_id)
+        entity = registry.async_get(entity_id)
+        if entity is not None and entity.disabled_by is not None:
+            raise ToolAccessDenied()
+        if state is None:
+            if entity is None:
+                raise ToolAccessDenied()
+            raise ToolAccessUnavailable()
+        if (not async_should_expose(hass, "conversation", entity_id)
                 or not user.permissions.check_entity(entity_id, policy)):
             raise ToolAccessDenied()
-        if hass.states.get(entity_id) is None:
-            raise ToolAccessUnavailable()
     return Context(user_id=user_id)

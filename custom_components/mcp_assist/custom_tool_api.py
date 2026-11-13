@@ -29,9 +29,10 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .const import CUSTOM_TOOL_SHARED_DIRECTORY, CUSTOM_TOOLS_DIRECTORY, DOMAIN
+from .request_context import REQUEST_HA_CONTEXT
 from .trusted_context import (  # noqa: F401 - supported external tool API exports
     TRUSTED_CALL_CONTEXT_API_VERSION, TrustedCallContext, ToolAccessDenied,
-    ToolAccessUnavailable, async_check_profile_entity_access, get_trusted_call_context,
+    ToolAccessUnavailable, async_check_profile_entity_access, _get_trusted_call_context,
     REQUEST_TRUSTED_SCOPE,
 )
 
@@ -76,8 +77,8 @@ class MCPAssistCustomToolManifest:
     version: str
     entrypoint: str
     capabilities: tuple[str, ...] = field(default_factory=tuple)
-    api: dict[str, int] = field(default_factory=dict)
     prompt_append_file: str | None = None
+    api: tuple[tuple[str, int], ...] = field(default_factory=tuple, kw_only=True)
 
 
 class MCPAssistExternalTool:
@@ -174,6 +175,10 @@ class MCPAssistExternalTool:
         if isinstance(profile_settings, dict):
             return dict(profile_settings)
         return {}
+
+    def get_trusted_call_context(self) -> TrustedCallContext:
+        """Return native identity for this package's active trusted dispatch."""
+        return _get_trusted_call_context(self.hass, self)
 
     def get_call_context(self) -> dict[str, Any]:
         """Return MCP Assist metadata for the current tool call."""
@@ -393,6 +398,7 @@ async def call_mcp_tool(
         )
 
     token = REQUEST_TRUSTED_SCOPE.set(None)
+    ha_token = REQUEST_HA_CONTEXT.set(None)
     try:
         return await handle_tool_call(
             {
@@ -402,6 +408,7 @@ async def call_mcp_tool(
             }
         )
     finally:
+        REQUEST_HA_CONTEXT.reset(ha_token)
         REQUEST_TRUSTED_SCOPE.reset(token)
 
 

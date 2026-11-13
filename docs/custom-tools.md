@@ -564,9 +564,10 @@ External packages can opt in to native in-process conversation dispatch with
 `"api": {"trusted_call_context": 1}` in their manifest. Other external tools
 continue to use HTTP. The `api` object accepts only supported names and versions;
 `capabilities` remains descriptive. The supported `custom_tool_api` exports
-`TRUSTED_CALL_CONTEXT_API_VERSION`, `TrustedCallContext`, and synchronous
-`get_trusted_call_context(hass)`. The frozen result contains `user_id`,
-`profile_entry_id`, `dispatch_id`, and the original `ha_context`. A fresh UUID
+`TRUSTED_CALL_CONTEXT_API_VERSION` and `TrustedCallContext`. Use synchronous
+`self.get_trusted_call_context()` on the loaded package instance. The frozen result
+contains `user_id`, `profile_entry_id`, `dispatch_id`, and the original
+`ha_context`. A fresh UUID
 identifies each dispatch, independent of provider call IDs. JSON arguments and
 metadata cannot assert this identity. Voice and satellite requests must have a
 native HA user; no administrator identity is inferred.
@@ -577,8 +578,7 @@ out. Calling another tool through `call_mcp_tool` does not delegate identity;
 packages must explicitly design any delegation they need. The loader also clears
 identity on nested or mismatched tool dispatch. External packages are trusted
 Python code; this boundary is not a sandbox against code that accesses internals.
-A timeout after the
-identity was acquired can return `tool_result_uncertain` with `dispatch_id`.
+A timeout after identity was acquired can return `tool_result_uncertain` with `dispatch_id`.
 This indicates an unknown result, not persistence or recovery. Use an inner
 deadline if a package needs time to record its own outcome before the outer
 dispatch deadline. Consumers own durable retry mapping and reconciliation.

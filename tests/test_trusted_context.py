@@ -14,6 +14,15 @@ from custom_components.mcp_assist.const import DOMAIN
 from custom_components.mcp_assist.custom_tool_api import call_mcp_tool
 from custom_components.mcp_assist.tools.external_loader import ExternalCustomToolLoader
 
+_TEST_INSTANCE = object()
+
+
+@pytest.fixture(autouse=True)
+def fake_instance_binding():
+    token = api.ACTIVE_TRUSTED_INSTANCE.set(_TEST_INSTANCE)
+    yield
+    api.ACTIVE_TRUSTED_INSTANCE.reset(token)
+
 
 @pytest.fixture
 def authority(hass, monkeypatch):
@@ -59,14 +68,14 @@ async def test_scope_revocation_and_nested_call(hass, authority):
     async def child():
         await gate.wait()
         with pytest.raises(api.ToolAccessDenied):
-            api.get_trusted_call_context(hass)
+            api._get_trusted_call_context(hass, _TEST_INSTANCE)
     try:
-        first = api.get_trusted_call_context(hass)
-        assert first == api.get_trusted_call_context(hass)
+        first = api._get_trusted_call_context(hass, _TEST_INSTANCE)
+        assert first == api._get_trusted_call_context(hass, _TEST_INSTANCE)
         assert first.dispatch_id != api.new_dispatch_scope(authority[0], "example", scope.context).dispatch_id
         async def nested(_):
             with pytest.raises(api.ToolAccessDenied):
-                api.get_trusted_call_context(hass)
+                api._get_trusted_call_context(hass, _TEST_INSTANCE)
             return {}
         hass.data[DOMAIN]["shared_mcp_server"].handle_tool_call = nested
         await call_mcp_tool(hass, "nested", context={"user_id": "spoofed"})
@@ -77,7 +86,7 @@ async def test_scope_revocation_and_nested_call(hass, authority):
     finally:
         api.REQUEST_TRUSTED_SCOPE.reset(token)
     with pytest.raises(api.ToolAccessDenied):
-        api.get_trusted_call_context(hass)
+        api._get_trusted_call_context(hass, _TEST_INSTANCE)
 
 
 @pytest.mark.parametrize("api_value", [{"other": 1}, {"trusted_call_context": True},
@@ -98,7 +107,7 @@ def test_manifest_accepts_opt_in(hass, tmp_path):
     manifest = {"schema_version": 1, "id": "example", "name": "Example", "description": "Example",
                 "version": "1", "entrypoint": "tool:Tool", "api": {"trusted_call_context": 1}}
     (directory / "mcp_tool.json").write_text(json.dumps(manifest))
-    assert ExternalCustomToolLoader(hass)._load_manifest_from_disk(directory).api == manifest["api"]
+    assert ExternalCustomToolLoader(hass)._load_manifest_from_disk(directory).api == (("trusted_call_context", 1),)
 
 
 @pytest.mark.asyncio
@@ -121,10 +130,10 @@ async def test_agent_revokes_inherited_scope(hass, profile_entry_factory, monkey
     async def child():
         await gate.wait()
         with pytest.raises(api.ToolAccessDenied):
-            api.get_trusted_call_context(hass)
+            api._get_trusted_call_context(hass, _TEST_INSTANCE)
 
     async def handle(_):
-        identity = api.get_trusted_call_context(hass)
+        identity = api._get_trusted_call_context(hass, _TEST_INSTANCE)
         assert identity.user_id == "native-user"
         dispatch_ids.append(identity.dispatch_id)
         children.append(asyncio.create_task(child()))
@@ -178,22 +187,30 @@ async def test_real_external_loader_registry_and_nested_scope(hass, tmp_path, au
     registry_entry.is_external = False
     assert not loader.requires_trusted_call_context("example_status")
     registry_entry.is_external = True
-    registry_entry.loaded_tool_package.manifest.api.clear()
-    assert not loader.requires_trusted_call_context("example_status")
-    registry_entry.loaded_tool_package.manifest.api["trusted_call_context"] = 1
     assert loader.is_external_package_enabled("example")
     assert not loader.is_external_package_enabled("unknown")
     calls = []
+    other_instance = type(packages[0].instance)(
+        hass, packages[0].manifest, packages[0].instance.tool_dir
+    )
+    service_checks = []
+    async def other_service(_call):
+        with pytest.raises(api.ToolAccessDenied):
+            other_instance.get_trusted_call_context()
+        service_checks.append(True)
+    hass.services.async_register("test", "other_package", other_service)
 
     async def handle(name, arguments):
         calls.append(name)
         if len(calls) == 1:
-            assert api.get_trusted_call_context(hass).user_id == "user"
+            assert packages[0].instance.get_trusted_call_context().user_id == "user"
+            await hass.services.async_call("test", "other_package", blocking=True)
+            assert service_checks == [True]
             await loader.handle_tool_call(name, arguments)
-            assert api.get_trusted_call_context(hass).user_id == "user"
+            assert packages[0].instance.get_trusted_call_context().user_id == "user"
         else:
             with pytest.raises(api.ToolAccessDenied):
-                api.get_trusted_call_context(hass)
+                packages[0].instance.get_trusted_call_context()
         return {"content": [{"type": "text", "text": "ok"}]}
 
     monkeypatch.setattr(packages[0].instance, "handle_call", handle)
@@ -227,12 +244,12 @@ async def test_concurrent_provider_calls_have_isolated_native_identity_and_uniqu
     barrier = asyncio.Event()
 
     async def handle(_):
-        identity = api.get_trusted_call_context(hass)
+        identity = api._get_trusted_call_context(hass, _TEST_INSTANCE)
         identities.append(identity)
         if len(identities) == 4:
             barrier.set()
         await barrier.wait()
-        assert api.get_trusted_call_context(hass) == identity
+        assert api._get_trusted_call_context(hass, _TEST_INSTANCE) == identity
         return {"content": [{"type": "text", "text": "ok"}]}
 
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(handle_tool_call=handle)
@@ -266,7 +283,7 @@ async def test_timeout_without_native_identity_has_no_dispatch_id(hass, profile_
     monkeypatch.setattr(agent, "_build_mcp_tool_call_context", AsyncMock(return_value={"user_id": "spoof"}))
     async def handle(_):
         with pytest.raises(api.ToolAccessDenied):
-            api.get_trusted_call_context(hass)
+            api._get_trusted_call_context(hass, _TEST_INSTANCE)
         await asyncio.Event().wait()
     hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(handle_tool_call=handle)
     real_timeout = asyncio.timeout
@@ -293,7 +310,7 @@ async def test_ordinary_external_tool_uses_http_without_native_scope(hass, profi
         status = 200
         async def __aenter__(self):
             with pytest.raises(api.ToolAccessDenied):
-                api.get_trusted_call_context(hass)
+                api._get_trusted_call_context(hass, _TEST_INSTANCE)
             return self
         async def __aexit__(self, *args):
             return False
@@ -313,3 +330,161 @@ async def test_ordinary_external_tool_uses_http_without_native_scope(hass, profi
     result = await agent._call_mcp_tool("example", {}, SimpleNamespace(context=Context(user_id="native")))
     assert result["content"][0]["text"] == "ok"
     assert captured[0]["params"]["context"]["user_id"] == "spoof"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["return", "cancel", "timeout"])
+@pytest.mark.parametrize("direct_bridge", [False, True])
+async def test_real_bridge_identity_is_not_delegated_or_inherited_after_dispatch(
+    hass, profile_entry_factory, monkeypatch, outcome, direct_bridge,
+):
+    from homeassistant.helpers import llm
+    from custom_components.mcp_assist import agent as agent_module
+    from custom_components.mcp_assist.agent import MCPAssistConversationEntity
+    from custom_components.mcp_assist.request_context import current_ha_context
+    from custom_components.mcp_assist.tools import CustomToolsLoader
+    from custom_components.mcp_assist.tools.packages.llm_api_bridge.llm_api_bridge import LLMApiBridgeTool
+
+    agent = MCPAssistConversationEntity(hass, profile_entry_factory())
+    monkeypatch.setattr(agent, "_get_shared_tools_loader", lambda: SimpleNamespace(
+        requires_trusted_call_context=lambda name: name == "example_status"))
+    monkeypatch.setattr(agent, "_is_tool_configured_for_profile", lambda _: True)
+    monkeypatch.setattr(agent, "_build_mcp_tool_call_context", AsyncMock(return_value={"user_id": "spoof"}))
+    bridge = LLMApiBridgeTool(hass)
+    monkeypatch.setattr(bridge, "_allowed_llm_api_ids", lambda: ("example_api",))
+    observed = []
+    async def get_api(hass_arg, api_id, llm_context):
+        observed.append(llm_context.context.user_id)
+        async def invoke(tool_input):
+            return {"ok": True}
+        return SimpleNamespace(api=SimpleNamespace(id=api_id), async_call_tool=invoke)
+    monkeypatch.setattr(llm, "async_get_api", get_api)
+    args = {"api_id": "example_api", "tool_name": "Example", "arguments": {}}
+    loader = CustomToolsLoader(hass)
+    async def loader_call(name, arguments, *, context=None):
+        return await bridge.handle_call(name, arguments)
+    monkeypatch.setattr(loader, "_handle_tool_call", loader_call)
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    children = []
+    async def invoke_bridge():
+        return await bridge.handle_call("call_llm_api_tool", args)
+    async def child():
+        await gate.wait()
+        if not direct_bridge:
+            with pytest.raises(api.ToolAccessDenied):
+                api._get_trusted_call_context(hass, _TEST_INSTANCE)
+        await invoke_bridge()
+    async def server_call(params):
+        if params["name"] == "call_llm_api_tool" and not direct_bridge:
+            return await loader.handle_tool_call(params["name"], params["arguments"])
+        if direct_bridge:
+            await invoke_bridge()
+        else:
+            assert api._get_trusted_call_context(hass, _TEST_INSTANCE).user_id == "native"
+            assert current_ha_context().user_id is None
+            await call_mcp_tool(hass, "call_llm_api_tool", args, context={"user_id": "spoof"})
+            # Also exercise direct loader dispatch from the external tool.
+            await loader.handle_tool_call("call_llm_api_tool", args)
+        children.append(asyncio.create_task(child()))
+        entered.set()
+        if outcome != "return":
+            await asyncio.Event().wait()
+        return {"content": [{"type": "text", "text": "ok"}]}
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(handle_tool_call=server_call)
+    if outcome == "timeout":
+        real_timeout = asyncio.timeout
+        monkeypatch.setattr(agent_module.asyncio, "timeout", lambda _: real_timeout(0.01))
+    name = "call_llm_api_tool" if direct_bridge else "example_status"
+    task = asyncio.create_task(agent._call_mcp_tool(name, args, SimpleNamespace(context=Context(user_id="native"))))
+    await entered.wait()
+    if outcome == "cancel":
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        await task
+    gate.set()
+    await asyncio.gather(*children)
+    assert observed == (["native", None] if direct_bridge else [None, None, None])
+
+
+@pytest.mark.asyncio
+async def test_nested_bridge_calls_clear_active_legacy_identity(hass, monkeypatch):
+    from homeassistant.helpers import llm
+    from custom_components.mcp_assist.request_context import HAContextScope, REQUEST_HA_CONTEXT
+    from custom_components.mcp_assist.tools import CustomToolsLoader
+    from custom_components.mcp_assist.tools.packages.llm_api_bridge.llm_api_bridge import LLMApiBridgeTool
+
+    bridge = LLMApiBridgeTool(hass)
+    monkeypatch.setattr(bridge, "_allowed_llm_api_ids", lambda: ("example_api",))
+    observed = []
+    async def get_api(hass_arg, api_id, llm_context):
+        observed.append(llm_context.context.user_id)
+        async def invoke(tool_input):
+            return {"ok": True}
+        return SimpleNamespace(api=SimpleNamespace(id=api_id), async_call_tool=invoke)
+    monkeypatch.setattr(llm, "async_get_api", get_api)
+    loader = CustomToolsLoader(hass)
+    args = {"api_id": "example_api", "tool_name": "Example", "arguments": {}}
+    depth = 0
+    async def loader_call(name, arguments, *, context=None):
+        nonlocal depth
+        depth += 1
+        try:
+            if depth == 1:
+                await bridge.handle_call(name, arguments)
+                await call_mcp_tool(hass, name, arguments)
+                await loader.handle_tool_call(name, arguments)
+                await bridge.handle_call(name, arguments)
+                return {}
+            return await bridge.handle_call(name, arguments)
+        finally:
+            depth -= 1
+    monkeypatch.setattr(loader, "_handle_tool_call", loader_call)
+    async def server_call(params):
+        return await loader.handle_tool_call(params["name"], params["arguments"])
+    hass.data.setdefault(DOMAIN, {})["shared_mcp_server"] = SimpleNamespace(handle_tool_call=server_call)
+    scope = HAContextScope(Context(user_id="native"), "call_llm_api_tool")
+    token = REQUEST_HA_CONTEXT.set(scope)
+    try:
+        await loader.handle_tool_call("call_llm_api_tool", args)
+    finally:
+        scope.active = False
+        REQUEST_HA_CONTEXT.reset(token)
+    assert observed == ["native", None, None, "native"]
+
+
+def test_manifest_preserves_positional_construction_and_hashability():
+    from custom_components.mcp_assist.custom_tool_api import MCPAssistCustomToolManifest
+    old = MCPAssistCustomToolManifest(1, "example", "Example", "Description", "1", "tool:Tool",
+                                     ("description",), "prompt.md")
+    assert old.prompt_append_file == "prompt.md"
+    assert old.api == ()
+    opted = MCPAssistCustomToolManifest(1, "example", "Example", "Description", "1", "tool:Tool",
+                                       ("description",), "prompt.md",
+                                       api=(("trusted_call_context", 1),))
+    assert isinstance(hash(old), int)
+    assert isinstance(hash(opted), int)
+
+
+@pytest.mark.asyncio
+async def test_entity_validation_precedes_exposure_and_distinguishes_unavailable(hass, authority, monkeypatch):
+    from homeassistant.helpers import entity_registry as er
+    entry, _, _ = authority
+    exposure = Mock(return_value=True)
+    monkeypatch.setattr(api, "async_should_expose", exposure)
+    kwargs = dict(user_id="user", profile_entry_id=entry.entry_id)
+    for entity_id in ("invalid", "light.invalid name", "light.absent"):
+        with pytest.raises(api.ToolAccessDenied):
+            await api.async_check_profile_entity_access(hass, entity_ids=[entity_id], **kwargs)
+        exposure.assert_not_called()
+    registry = er.async_get(hass)
+    registered = registry.async_get_or_create("light", "test", "example-id", suggested_object_id="registered")
+    with pytest.raises(api.ToolAccessUnavailable):
+        await api.async_check_profile_entity_access(hass, entity_ids=[registered.entity_id], **kwargs)
+    exposure.assert_not_called()
+    registry.async_update_entity(registered.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+    with pytest.raises(api.ToolAccessDenied):
+        await api.async_check_profile_entity_access(hass, entity_ids=[registered.entity_id], **kwargs)
+    exposure.assert_not_called()

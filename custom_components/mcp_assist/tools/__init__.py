@@ -32,7 +32,8 @@ from .external_loader import (
 )
 from .schema_utils import SchemaValidationError, validate_and_normalize_json_value
 
-from ..trusted_context import ACTIVE_LOADER_TOOL, REQUEST_TRUSTED_SCOPE
+from ..request_context import REQUEST_HA_CONTEXT
+from ..trusted_context import ACTIVE_LOADER_TOOL, ACTIVE_TRUSTED_INSTANCE, REQUEST_TRUSTED_SCOPE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -272,11 +273,17 @@ class CustomToolsLoader:
         scope_token = None
         if scope is not None and (nested or scope.tool_name != tool_name):
             scope_token = REQUEST_TRUSTED_SCOPE.set(None)
+        ha_scope = REQUEST_HA_CONTEXT.get()
+        ha_token = None
+        if ha_scope is not None and (nested or ha_scope.tool_name != tool_name):
+            ha_token = REQUEST_HA_CONTEXT.set(None)
         marker_token = ACTIVE_LOADER_TOOL.set(tool_name)
         try:
             return await self._handle_tool_call(tool_name, arguments, context=context)
         finally:
             ACTIVE_LOADER_TOOL.reset(marker_token)
+            if ha_token is not None:
+                REQUEST_HA_CONTEXT.reset(ha_token)
             if scope_token is not None:
                 REQUEST_TRUSTED_SCOPE.reset(scope_token)
 
@@ -341,7 +348,7 @@ class CustomToolsLoader:
         entry = self._tool_registry.get(tool_name)
         package = entry.loaded_tool_package if entry is not None else None
         return bool(entry and entry.is_external and package is not None
-                    and package.manifest.api.get("trusted_call_context") == 1)
+                    and ("trusted_call_context", 1) in package.manifest.api)
 
     def is_builtin_custom_tool(self, tool_name: str) -> bool:
         """Check if a tool name comes from a built-in packaged tool."""
@@ -745,6 +752,12 @@ class CustomToolsLoader:
         )
 
         token = instance._push_call_context(call_context)
+        scope = REQUEST_TRUSTED_SCOPE.get()
+        trusted_token = ACTIVE_TRUSTED_INSTANCE.set(
+            instance if scope is not None and registry_entry.is_external
+            and scope.tool_name == tool_name and self.requires_trusted_call_context(tool_name)
+            else None
+        )
         try:
             return await instance.handle_call(tool_name, arguments)
         except Exception as err:
@@ -755,6 +768,7 @@ class CustomToolsLoader:
             )
             return self._build_error_result(safe_error)
         finally:
+            ACTIVE_TRUSTED_INSTANCE.reset(trusted_token)
             instance._reset_call_context(token)
 
     @staticmethod
