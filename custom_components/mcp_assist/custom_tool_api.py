@@ -29,6 +29,13 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .const import CUSTOM_TOOL_SHARED_DIRECTORY, CUSTOM_TOOLS_DIRECTORY, DOMAIN
+from .deferred_actions import (  # noqa: F401 - supported external tool API exports
+    DEFERRED_ACTION_API_VERSION,
+    DeferredActionAuthorizationError,
+    DeferredActionUnavailable,
+    async_authorize_deferred_action,
+    async_get_deferred_action_principal,
+)
 
 _T = TypeVar("_T")
 

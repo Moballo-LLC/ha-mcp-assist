@@ -298,6 +298,13 @@ class CustomToolsLoader:
         registry_entry = self._tool_registry.get(tool_name)
         return bool(registry_entry and registry_entry.is_external)
 
+    def requires_deferred_action_context(self, tool_name: str) -> bool:
+        """Whether a loaded external package opts into trusted local dispatch."""
+        entry = self._tool_registry.get(tool_name)
+        package = entry.loaded_tool_package if entry is not None else None
+        return bool(entry and entry.is_external and package is not None
+                    and "deferred_actions_v1" in package.manifest.capabilities)
+
     def is_builtin_custom_tool(self, tool_name: str) -> bool:
         """Check if a tool name comes from a built-in packaged tool."""
         registry_entry = self._tool_registry.get(tool_name)

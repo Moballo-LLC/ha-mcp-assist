@@ -557,3 +557,32 @@ Check:
 ### Can packages add profile-specific settings?
 
 Yes. Declare `get_settings_schema()` and use the shared/profile JSON settings paths described above.
+
+## Deferred action authorization
+
+Packages that schedule later effects can opt into `deferred_actions_v1` in their
+manifest capabilities. Only those loaded external packages use authenticated
+in-process conversation dispatch. `async_get_deferred_action_principal(hass)`
+returns the trusted HA user, live profile ID and a creation key scoped to the
+actual HA request and provider tool-call ID. Missing native identity or call ID
+fails closed. Neither tool arguments nor MCP JSON context supplies this identity.
+
+Before every later effect, call `async_authorize_deferred_action(hass, owner,
+entity_ids, tool_name=...)` from `custom_tool_api`. It checks the current active
+user, loaded enabled MCP Assist profile, profile/shared external-tool settings,
+control policy, current entity exposure and HA permissions. Its returned HA
+Context is valid for that check only; repeat authorization after waits and
+immediately before service dispatch. This API performs no service action and
+provides no persistence, scheduler, retry or exactly-once effect guarantee.
+Consumers own deterministic target binding, service validation, durable intent,
+transaction fencing, cancellation and uncertain-outcome handling.
+
+Pass observation-only trigger entities in `read_entity_ids=[...]`; these require
+read permission, while action targets always require control permission. Missing
+loaded dependencies raise `DeferredActionUnavailable` (`dependency_unavailable`)
+without granting authority; consumers may retry only within stored grace.
+
+An in-process timeout returns `deferred_result_uncertain` and the original
+owner-scoped `recovery_id`. Consumers must support reconciliation under that
+identity or listing before a fresh attempt. A new provider call has a new
+creation key, so repeating a timed-out create blindly can duplicate effects.
