@@ -526,7 +526,9 @@ async def test_transit_route_returns_stop_times_and_walk_estimates(
         else "2026-12-01T12:00:00Z"
     )
     mask = captured["sessions"][0]["headers"]["X-Goog-FieldMask"]
-    assert "routes.legs.steps.transitDetails.stopDetails" in mask
+    assert "routes.legs.steps.transitDetails.stopDetails.departureTime" in mask.split(",")
+    assert "routes.legs.steps.transitDetails.stopDetails.arrivalTime" in mask.split(",")
+    assert "routes.legs.steps.transitDetails.stopDetails" not in mask.split(",")
     route = result["structuredContent"]["route"]
     assert route["transit_steps"][0]["departure_time"] == "2026-12-01T12:15:00Z"
     assert route["transit_steps"][0]["arrival_time"] == "2026-12-01T12:35:00Z"
@@ -534,6 +536,30 @@ async def test_transit_route_returns_stop_times_and_walk_estimates(
     assert route["estimated_destination_arrival_time"] == "2026-12-01T12:38:00Z"
     assert "Estimated" in result["content"][0]["text"]
     assert "leave_by" not in route
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("travel_mode", ["drive", "walk", "bicycle", "transit"])
+@pytest.mark.parametrize("timing", [{}, {"departure_time": "now"}])
+async def test_google_route_defaults_to_departing_now(
+    hass, system_entry_factory, monkeypatch, travel_mode, timing
+) -> None:
+    """Omitted times and explicit now use Google's request-time departure default."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    captured = {}
+    monkeypatch.setattr(
+        google_maps_module.aiohttp, "ClientSession",
+        _google_client_session(_FakeGoogleResponse(json_data={"routes": [{"duration": "600s"}]}),
+                               captured),
+    )
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route", {"origin": "Origin", "destination": "Destination",
+                             "travel_mode": travel_mode, **timing}
+    )
+    assert result["isError"] is False
+    body = captured["calls"][0][2]["json"]
+    assert "departureTime" not in body
+    assert "arrivalTime" not in body
 
 
 @pytest.mark.asyncio
@@ -556,6 +582,23 @@ async def test_transit_arrival_without_stop_times_does_not_invent_departure(
     assert "leave_by" not in route
     assert "estimated_origin_departure_time" not in route
     assert "Leave by" not in result["content"][0]["text"]
+
+
+@pytest.mark.parametrize("invalid_time", ["bad timestamp", "2026-12-01T12:15:00", 123, {}, None])
+def test_transit_stop_times_must_be_valid_rfc3339(invalid_time) -> None:
+    route = {"legs": [{"steps": [{
+        "travelMode": "TRANSIT", "transitDetails": {"stopDetails": {
+            "departureTime": invalid_time, "arrivalTime": invalid_time,
+        }},
+    }]}]}
+    payload = google_maps_module.GoogleMapsTool._normalize_transit_steps(route)
+    assert payload["transit_steps"] == [{"departure_time": None, "arrival_time": None}]
+    text = google_maps_module.GoogleMapsTool._format_route_text({
+        "origin": "Origin", "destination": "Destination", "travel_mode": "transit", **payload,
+    })
+    assert "Estimated transit" not in text
+    assert "estimated_origin_departure_time" not in payload
+    assert "estimated_destination_arrival_time" not in payload
 
 
 def test_transit_walk_estimates_require_complete_steps() -> None:

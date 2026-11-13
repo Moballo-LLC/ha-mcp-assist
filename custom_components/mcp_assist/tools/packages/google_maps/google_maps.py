@@ -65,7 +65,8 @@ GOOGLE_TRANSIT_ROUTES_FIELD_MASK = ",".join(
         GOOGLE_ROUTES_FIELD_MASK,
         "routes.legs.steps.travelMode",
         "routes.legs.steps.staticDuration",
-        "routes.legs.steps.transitDetails.stopDetails",
+        "routes.legs.steps.transitDetails.stopDetails.departureTime",
+        "routes.legs.steps.transitDetails.stopDetails.arrivalTime",
     )
 )
 
@@ -830,9 +831,18 @@ class GoogleMapsTool:
             stops = details.get("stopDetails") or {} if isinstance(details, dict) else {}
             if not isinstance(stops, dict):
                 stops = {}
+            times: dict[str, str | None] = {}
+            for field in ("departureTime", "arrivalTime"):
+                value = stops.get(field)
+                parsed = dt_util.parse_datetime(value) if isinstance(value, str) else None
+                times[field] = (
+                    GoogleMapsTool._format_route_time(parsed)
+                    if parsed is not None and parsed.tzinfo is not None
+                    else None
+                )
             transit_steps.append({
-                "departure_time": stops.get("departureTime"),
-                "arrival_time": stops.get("arrivalTime"),
+                "departure_time": times["departureTime"],
+                "arrival_time": times["arrivalTime"],
             })
         result: dict[str, Any] = {"transit_steps": transit_steps}
         for name, timestamp, walking, sign in (

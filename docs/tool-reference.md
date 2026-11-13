@@ -354,7 +354,9 @@ Home Assistant home latitude and longitude only when **Share Home Location with
 MCP Tools** is enabled. Use regular web search for broad location research that
 is not a place lookup or route question.
 
-For transit, provide either a departure time or an arrival time. When Google
+When both times are omitted, routing defaults to leaving now; setting
+`departure_time` to `"now"` has the same behavior. For transit, provide a future departure
+time or an arrival time to plan ahead. When Google
 returns transit stop times, the result identifies them as estimates. Origin
 departure and destination arrival estimates also account for walking steps when
 their durations are available; a route duration alone does not provide a
