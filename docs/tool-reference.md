@@ -354,6 +354,12 @@ Home Assistant home latitude and longitude only when **Share Home Location with
 MCP Tools** is enabled. Use regular web search for broad location research that
 is not a place lookup or route question.
 
+For transit, provide either a departure time or an arrival time. When Google
+returns transit stop times, the result identifies them as estimates. Origin
+departure and destination arrival estimates also account for walking steps when
+their durations are available; a route duration alone does not provide a
+transit departure time.
+
 ## Wikipedia Search
 
 Wikipedia Search is an optional lightweight reference tool.

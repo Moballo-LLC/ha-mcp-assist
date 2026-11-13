@@ -489,3 +489,122 @@ async def test_search_google_places_rejects_invalid_location_bias(
 
     assert result["isError"] is True
     assert "location_bias must be" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("time_field", ["arrival_time", "departure_time"])
+async def test_transit_route_returns_stop_times_and_walk_estimates(
+    hass, system_entry_factory, monkeypatch, time_field
+) -> None:
+    """Transit results distinguish provider stop times from walking estimates."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    captured = {}
+    steps = [
+        {"travelMode": "WALK", "staticDuration": "300s"},
+        {"travelMode": "TRANSIT", "transitDetails": {"stopDetails": {
+            "departureTime": "2026-12-01T12:15:00Z",
+            "arrivalTime": "2026-12-01T12:35:00Z",
+        }}},
+        {"travelMode": "WALK", "staticDuration": "180s"},
+    ]
+    monkeypatch.setattr(
+        google_maps_module.aiohttp, "ClientSession",
+        _google_client_session(_FakeGoogleResponse(json_data={"routes": [{
+            "duration": "1800s", "legs": [{"steps": steps}],
+        }]}), captured),
+    )
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route", {"origin": "Origin", "destination": "Destination",
+                             "travel_mode": "transit", time_field: (
+                                 "2026-12-01T13:00:00Z" if time_field == "arrival_time"
+                                 else "2026-12-01T12:00:00Z"
+                             )}
+    )
+    body = captured["calls"][0][2]["json"]
+    assert body["arrivalTime" if time_field == "arrival_time" else "departureTime"] == (
+        "2026-12-01T13:00:00Z" if time_field == "arrival_time"
+        else "2026-12-01T12:00:00Z"
+    )
+    mask = captured["sessions"][0]["headers"]["X-Goog-FieldMask"]
+    assert "routes.legs.steps.transitDetails.stopDetails" in mask
+    route = result["structuredContent"]["route"]
+    assert route["transit_steps"][0]["departure_time"] == "2026-12-01T12:15:00Z"
+    assert route["transit_steps"][0]["arrival_time"] == "2026-12-01T12:35:00Z"
+    assert route["estimated_origin_departure_time"] == "2026-12-01T12:10:00Z"
+    assert route["estimated_destination_arrival_time"] == "2026-12-01T12:38:00Z"
+    assert "Estimated" in result["content"][0]["text"]
+    assert "leave_by" not in route
+
+
+@pytest.mark.asyncio
+async def test_transit_arrival_without_stop_times_does_not_invent_departure(
+    hass, system_entry_factory, monkeypatch
+) -> None:
+    """A route duration alone cannot identify a transit departure."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    monkeypatch.setattr(
+        google_maps_module.aiohttp, "ClientSession",
+        _google_client_session(_FakeGoogleResponse(json_data={"routes": [{
+            "duration": "1800s"
+        }]}), {}),
+    )
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route", {"origin": "Origin", "destination": "Destination",
+                             "travel_mode": "transit", "arrival_time": "2026-12-01T12:00:00Z"}
+    )
+    route = result["structuredContent"]["route"]
+    assert "leave_by" not in route
+    assert "estimated_origin_departure_time" not in route
+    assert "Leave by" not in result["content"][0]["text"]
+
+
+def test_transit_walk_estimates_require_complete_steps() -> None:
+    """Unknown access and egress durations cannot produce endpoint times."""
+    route = {"legs": [{"steps": [
+        {"travelMode": "WALK"},
+        {"travelMode": "TRANSIT", "transitDetails": {"stopDetails": {
+            "departureTime": "2026-12-01T12:15:00Z",
+            "arrivalTime": "2026-12-01T12:35:00Z",
+        }}},
+        {"travelMode": "WALK", "staticDuration": "invalid"},
+    ]}]}
+    result = google_maps_module.GoogleMapsTool._normalize_transit_steps(route)
+    assert result["transit_steps"][0]["departure_time"] == "2026-12-01T12:15:00Z"
+    assert "estimated_origin_departure_time" not in result
+    assert "estimated_destination_arrival_time" not in result
+
+
+@pytest.mark.asyncio
+async def test_google_route_rejects_both_transit_times(hass, system_entry_factory, monkeypatch):
+    """Conflicting time constraints are rejected before making a request."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    def no_session(**kwargs):
+        raise AssertionError("Unexpected HTTP request")
+    monkeypatch.setattr(google_maps_module.aiohttp, "ClientSession", no_session)
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route", {"origin": "Origin", "destination": "Destination",
+                             "travel_mode": "transit", "arrival_time": "2026-12-01T12:00:00Z",
+                             "departure_time": "2026-12-01T11:00:00Z"}
+    )
+    assert result["isError"] is True
+    assert "either departure_time or arrival_time" in result["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_google_drive_route_preserves_future_departure(hass, system_entry_factory, monkeypatch):
+    """Future driving departures continue to be sent to Routes."""
+    system_entry_factory(data={CONF_GOOGLE_MAPS_API_KEY: "maps-key"})
+    captured = {}
+    monkeypatch.setattr(
+        google_maps_module.aiohttp, "ClientSession",
+        _google_client_session(_FakeGoogleResponse(json_data={"routes": [{"duration": "600s"}]}),
+                               captured),
+    )
+    result = await google_maps_module.GoogleMapsTool(hass).handle_call(
+        "get_google_route", {"origin": "Origin", "destination": "Destination",
+                             "departure_time": "2026-12-01T12:00:00Z"}
+    )
+    assert result["isError"] is False
+    assert captured["calls"][0][2]["json"]["departureTime"] == "2026-12-01T12:00:00Z"
+    assert "transit_steps" not in result["structuredContent"]["route"]
+    assert "transitDetails" not in captured["sessions"][0]["headers"]["X-Goog-FieldMask"]

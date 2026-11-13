@@ -60,6 +60,14 @@ GOOGLE_ROUTES_FIELD_MASK = ",".join(
         "routes.legs.localizedValues",
     )
 )
+GOOGLE_TRANSIT_ROUTES_FIELD_MASK = ",".join(
+    (
+        GOOGLE_ROUTES_FIELD_MASK,
+        "routes.legs.steps.travelMode",
+        "routes.legs.steps.staticDuration",
+        "routes.legs.steps.transitDetails.stopDetails",
+    )
+)
 
 MAX_GOOGLE_PLACE_RESULTS = 10
 _LAT_LNG_RE = re.compile(
@@ -452,7 +460,11 @@ class GoogleMapsTool:
                 "POST",
                 GOOGLE_ROUTES_URL,
                 api_key=api_key,
-                field_mask=GOOGLE_ROUTES_FIELD_MASK,
+                field_mask=(
+                    GOOGLE_TRANSIT_ROUTES_FIELD_MASK
+                    if travel_mode == "TRANSIT"
+                    else GOOGLE_ROUTES_FIELD_MASK
+                ),
                 json_body=body,
             )
         except asyncio.TimeoutError:
@@ -475,11 +487,8 @@ class GoogleMapsTool:
         route["travel_mode"] = travel_mode.lower()
         if desired_arrival_time is not None:
             route["desired_arrival_time"] = self._format_route_time(desired_arrival_time)
-            if route.get("duration_seconds") is not None:
-                leave_by = desired_arrival_time - timedelta(
-                    seconds=route["duration_seconds"]
-                )
-                route["leave_by"] = self._format_route_time(leave_by)
+        if travel_mode == "TRANSIT":
+            route.update(self._normalize_transit_steps(routes[0]))
         return self._text_result(
             self._format_route_text(route),
             structured_content={"route": route},
@@ -800,6 +809,54 @@ class GoogleMapsTool:
         }
 
     @staticmethod
+    def _normalize_transit_steps(route: dict[str, Any]) -> dict[str, Any]:
+        """Extract Google's estimated stop times and walking-based endpoint estimates."""
+        legs = route.get("legs")
+        if not isinstance(legs, list) or not legs:
+            return {}
+        steps = []
+        for leg in legs:
+            if not isinstance(leg, dict) or not isinstance(leg.get("steps"), list):
+                return {}
+            steps.extend(leg["steps"])
+        if any(not isinstance(step, dict) for step in steps):
+            return {}
+        transit_indices = [i for i, step in enumerate(steps) if step.get("travelMode") == "TRANSIT"]
+        if not transit_indices:
+            return {}
+        transit_steps = []
+        for index in transit_indices:
+            details = steps[index].get("transitDetails") or {}
+            stops = details.get("stopDetails") or {} if isinstance(details, dict) else {}
+            if not isinstance(stops, dict):
+                stops = {}
+            transit_steps.append({
+                "departure_time": stops.get("departureTime"),
+                "arrival_time": stops.get("arrivalTime"),
+            })
+        result: dict[str, Any] = {"transit_steps": transit_steps}
+        for name, timestamp, walking, sign in (
+            ("estimated_origin_departure_time", transit_steps[0]["departure_time"],
+             steps[:transit_indices[0]], -1),
+            ("estimated_destination_arrival_time", transit_steps[-1]["arrival_time"],
+             steps[transit_indices[-1] + 1:], 1),
+        ):
+            durations = [GoogleMapsTool._duration_to_seconds(step.get("staticDuration"))
+                         for step in walking if step.get("travelMode") == "WALK"]
+            if not isinstance(timestamp, str) or len(durations) != len(walking) or any(
+                duration is None or duration < 0 for duration in durations
+            ):
+                continue
+            try:
+                parsed = GoogleMapsTool._parse_route_time(timestamp)
+            except ValueError:
+                continue
+            result[name] = GoogleMapsTool._format_route_time(
+                parsed + timedelta(seconds=sign * sum(durations))
+            )
+        return result
+
+    @staticmethod
     def _duration_to_seconds(value: Any) -> int | None:
         """Parse a Google duration string like '123s'."""
         if not isinstance(value, str) or not value.endswith("s"):
@@ -858,8 +915,15 @@ class GoogleMapsTool:
         if route.get("traffic_delay_seconds") is not None:
             minutes = round(route["traffic_delay_seconds"] / 60)
             lines.append(f"- Traffic delay: about {minutes} minute{'s' if minutes != 1 else ''}")
-        if route.get("leave_by"):
-            lines.append(f"- Leave by: {route['leave_by']}")
+        for step in route.get("transit_steps", []):
+            if step.get("departure_time"):
+                lines.append(f"- Estimated transit departure: {step['departure_time']}")
+            if step.get("arrival_time"):
+                lines.append(f"- Estimated transit arrival: {step['arrival_time']}")
+        if route.get("estimated_origin_departure_time"):
+            lines.append(f"- Estimated origin departure: {route['estimated_origin_departure_time']}")
+        if route.get("estimated_destination_arrival_time"):
+            lines.append(f"- Estimated destination arrival: {route['estimated_destination_arrival_time']}")
         if route.get("warnings"):
             lines.append("- Warnings: " + "; ".join(str(item) for item in route["warnings"]))
         return "\n".join(lines)
